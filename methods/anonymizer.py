@@ -1,0 +1,26 @@
+from typing import Union, List, Optional
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass
+class AnonymizationResult:
+    text: str
+    metadata: Optional[dict] = None
+
+
+class Anonymizer(ABC):
+    def __init__(self, *args, **kwargs):
+        # lightweight base init for debugging; concrete implementations may extend
+        self._init_args = args
+        self._init_kwargs = kwargs
+        print(f"Initialized {self.__class__.__name__} with args: {args}, kwargs: {kwargs}")
+
+    @abstractmethod
+    def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
+        """Anonymize the provided text and return an AnonymizationResult.
+
+        Implementations should override this method and may accept extra
+        parameters (k, epsilon, etc.) specific to the algorithm.
+        """
+        raise NotImplementedError()
