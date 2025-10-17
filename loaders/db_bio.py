@@ -8,7 +8,7 @@ from typing import Iterable, Optional, Union
 
 from datasets import Dataset, load_dataset
 
-from .base import DatasetAdapter, DatasetRecord
+from dp.loaders.base import DatasetAdapter, DatasetRecord
 
 class DBBioDatasetAdapter(DatasetAdapter):
     """Adapter for the DB-Bio legal dataset."""

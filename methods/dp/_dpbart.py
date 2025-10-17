@@ -1,6 +1,6 @@
 from typing import Union, List
-from ..anonymizer import AnonymizationResult
-from ..dp import DPAnonymizer
+from dp.methods.anonymizer import AnonymizationResult
+from dp.methods.dp import DPAnonymizer
 
 
 class DPBartAnonymizer(DPAnonymizer):

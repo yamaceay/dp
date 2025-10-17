@@ -17,10 +17,17 @@ The goal is to build a baseline for all methods such that they can be compared i
 
 ## Quickstart
 
-Make sure to set your `PYTHONPATH` to the root directory of the repo, e.g.,
+### Setup
 
 ```bash
-export PYTHONPATH="/path/to/dir:$PYTHONPATH" # adjust
+# Install package in editable mode
+pip install -e .
+
+# Install dependencies
+pip install -r requirements.txt
+
+# (Optional) Install spaCy model for NER
+python -m spacy download en_core_web_sm
 ```
 
 ## Datasets

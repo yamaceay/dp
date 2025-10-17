@@ -7,8 +7,8 @@ from typing import Iterable, Optional
 
 from datasets import load_dataset
 
-from .base import DatasetAdapter, DatasetRecord
-from .utils import recode_text
+from dp.loaders.base import DatasetAdapter, DatasetRecord
+from dp.loaders.utils import recode_text
 
 class TrustpilotDatasetAdapter(DatasetAdapter):
     """Adapter for Trustpilot review data."""

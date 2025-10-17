@@ -41,8 +41,8 @@ class SpacyAnonymizer(SimpleAnonymizer):
             last = ent.end_char
         out_parts.append(text[last:])
         anonymized = "".join(out_parts)
-        metadata = {"method": "spacy", "spans": spans}
-        return AnonymizationResult(text=anonymized, metadata=metadata)
+        metadata = {"method": "spacy"}
+        return AnonymizationResult(text=anonymized, spans=spans, metadata=metadata)
     
     def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize with text for SpacyAnonymizer.")

@@ -5,10 +5,10 @@ Adapters provide a consistent way to access dataset records with a unique
 identifier, raw text, optional annotations, and optional utility metadata.
 """
 
-from .base import DatasetAdapter, DatasetRecord, TextAnnotation
-from .trustpilot import TrustpilotDatasetAdapter
-from .tab import TabDatasetAdapter
-from .db_bio import DBBioDatasetAdapter
+from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
+from dp.loaders.trustpilot import TrustpilotDatasetAdapter
+from dp.loaders.tab import TabDatasetAdapter
+from dp.loaders.db_bio import DBBioDatasetAdapter
 
 
 ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {

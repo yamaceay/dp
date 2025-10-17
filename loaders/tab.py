@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from .base import DatasetAdapter, DatasetRecord, TextAnnotation
+from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
 
 class TabDatasetAdapter(DatasetAdapter):
     """Adapter for the TAB anonymisation dataset."""

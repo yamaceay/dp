@@ -1,0 +1,11 @@
+# Core dependencies
+datasets
+pyyaml
+
+# Optional dependencies for specific anonymizers
+# SpaCy NER
+spacy
+
+# Presidio PII detection
+presidio-analyzer
+presidio-anonymizer

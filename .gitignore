@@ -1,6 +1,74 @@
+# Python
 **/__pycache__/**
 *.pyc
 *.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
 
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Model files (large)
+models/
+*.pt
+*.pth
+*.bin
+*.h5
+*.ckpt
+*.safetensors
+
+# Data files (private/large)
 data/trustpilot/trustpilot_reviews_2005.csv
+# data/trustpilot/**/*.csv
+# data/trustpilot/**/*.json
+# data/db_bio/**/*.arrow
+# data/Wiki/*.json
+# data/TAB/*.json
+# data/TAB/splitted/*.json
+# outputs/
+
+# Keep metadata files
+# !data/**/dataset_dict.json
+# !data/**/dataset_info.json
+# !data/**/state.json
+
+# Config / Secrets
+.env
+.env.local
+*.key
+*.pem
+secrets.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+.cache/
