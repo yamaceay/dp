@@ -6,6 +6,9 @@ pyyaml
 torch
 transformers
 
+# NLP utilities
+nltk
+
 # Optional dependencies for specific anonymizers
 # SpaCy NER
 spacy
