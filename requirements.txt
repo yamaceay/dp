@@ -2,6 +2,10 @@
 datasets
 pyyaml
 
+# ML/DL frameworks
+torch
+transformers
+
 # Optional dependencies for specific anonymizers
 # SpaCy NER
 spacy
