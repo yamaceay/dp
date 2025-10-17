@@ -11,7 +11,7 @@ class ManualAnonymizer(SimpleAnonymizer):
         print("Initialized ManualAnonymizer")
         dataset = get_adapter(data, data_in=data_in, max_records=max_records)
         self.texts = [record.text for record in dataset]
-        self.annotations = [self._deduplicate_annotations(record.annotations) for record in dataset]
+        self.annotations = [self._deduplicate_annotations(record.spans) for record in dataset]
 
     def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize_from_dataset with an index for ManualAnonymizer.")
@@ -23,8 +23,10 @@ class ManualAnonymizer(SimpleAnonymizer):
         for annotation in self.annotations[idx]:
             text = text.replace(annotation.text, f"[{annotation.label}]")
 
-        return AnonymizationResult(text=text)
-    
+        spans = [ann.__dict__ for ann in self.annotations[idx]]
+        metadata = {"method": "manual"}
+        return AnonymizationResult(text=text, spans=spans, metadata=metadata)
+
     def _deduplicate_annotations(self, annotations: List[TextAnnotation]) -> List[TextAnnotation]:
         last_end = -1
         deduped = []

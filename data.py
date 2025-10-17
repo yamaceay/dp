@@ -26,4 +26,4 @@ if __name__ == "__main__":
     dataset = load_data(args.data, args.data_in, args.max_records)
 
     for record in dataset:
-        print(f"ID: {record.uid}\nText: {record.text[:100]}...\nAnnotations: {record.annotations}\nUtilities: {record.utilities}\n")
+        print(f"ID: {record.uid}\nText: {record.text[:100]}...\nAnnotations: {record.spans}\nUtilities: {record.utilities}\n")

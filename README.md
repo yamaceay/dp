@@ -34,3 +34,14 @@ python3 data.py --data db_bio --data_in data/db_bio/test/data-00000-of-00001.arr
 ```
 
 ## Models
+
+You can run different models using `model.py`. Example commands for simple PII redactors:
+
+```bash
+python3 model.py --data tab --data_in data/TAB/splitted/test.json --model spacy --model_in configs/model/spacy.yaml --runtime_in configs/runtime/simple.yaml # SpaCy PII Redactor
+
+python3 model.py --data tab --data_in data/TAB/splitted/test.json --model presidio --model_in configs/model/presidio.yaml --runtime_in configs/runtime/simple.yaml # Presidio PII Redactor
+
+python3 model.py --data tab --data_in data/TAB/splitted/test.json --model manual --model_in configs/model/manual.yaml --runtime_in configs/runtime/simple.yaml # Manual PII Redactor
+```
+

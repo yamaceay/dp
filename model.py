@@ -51,7 +51,7 @@ def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_
     model = model_cls(**model_config, **model_kwargs, **data_kwargs)
     return model
 
-def requires_idx(model_config: dict, data_kwargs: dict, length: int) -> bool:
+def use_idx(model_config: dict, data_kwargs: dict, length: int) -> bool:
     if "requires_idx" not in model_config or not model_config["requires_idx"]:
         return False
     length = min(length, data_kwargs.get("max_records", 0))
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     model = load_model(model_config, model_kwargs, data_kwargs)
 
     runtime_config = load_config(args.runtime_in)
-    if requires_idx(model_config, data_kwargs, len(dataset)):
+    if use_idx(model_config, data_kwargs, len(dataset)):
         result = model.anonymize_from_dataset(idx=args.idx, **runtime_config)
     else:
         result = model.anonymize(text=args.text, **runtime_config)

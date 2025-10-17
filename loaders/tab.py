@@ -31,7 +31,7 @@ class TabDatasetAdapter(DatasetAdapter):
             uid = str(row.get("doc_id", idx))
             text = row.get("text", "")
             annotations_raw = row.get("annotations")
-            annotations = self._read_annotations(annotations_raw)
+            spans = self._read_annotations(annotations_raw)
             
             utilities = {
                 "country": row.get("meta", {}).get("countries"),
@@ -49,7 +49,7 @@ class TabDatasetAdapter(DatasetAdapter):
                 uid=uid,
                 text=text,
                 name=name,
-                annotations=annotations,
+                spans=spans,
                 utilities=utilities,
                 metadata=metadata,
             )

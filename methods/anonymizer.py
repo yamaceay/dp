@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -6,6 +6,7 @@ from dataclasses import dataclass
 @dataclass
 class AnonymizationResult:
     text: str
+    spans: Optional[List] = None
     metadata: Optional[dict] = None
 
 

@@ -38,8 +38,8 @@ class PresidioAnonymizer(SimpleAnonymizer):
             last = end
         out_parts.append((text or "")[last:])
         anonymized = "".join(out_parts)
-        metadata = {"method": "presidio", "spans": spans}
-        return AnonymizationResult(text=anonymized, metadata=metadata)
+        metadata = {"method": "presidio"}
+        return AnonymizationResult(text=anonymized, spans=spans, metadata=metadata)
     
     def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize with text for PresidioAnonymizer.")

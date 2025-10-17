@@ -25,7 +25,7 @@ class DatasetRecord:
     uid: str
     text: str
     name: str = ""
-    annotations: Optional[list[TextAnnotation]] = None
+    spans: Optional[list[TextAnnotation]] = None
     utilities: Dict[str, Optional[Any]] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
