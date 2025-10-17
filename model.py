@@ -6,6 +6,10 @@ from dp.methods.anonymizer import Anonymizer
 from dp.methods.registry import MODEL_REGISTRY
 from dp.loaders import ADAPTER_REGISTRY, DatasetRecord
 
+from dp.utils.pii_detector import PIIDetector
+from dp.utils.selector.pii_only_selector import PIIOnlySelector
+from dp.utils.explainer import UniformExplainer, GreedyExplainer, ShapExplainer
+
 available_models = list(MODEL_REGISTRY.keys())
 available_datasets = list(ADAPTER_REGISTRY.keys())
 
@@ -75,6 +79,29 @@ if __name__ == "__main__":
 
     model_config = load_config(args.model_in)
     model = load_model(model_config, model_kwargs, data_kwargs)
+
+    if args.model == "dpmlm":
+        pii_annotator_path = model_config.get("pii_annotator", None)
+        threshold = model_config.get("pii_threshold", None)
+        if pii_annotator_path is not None:
+            pii_annotator = PIIDetector(model_name=pii_annotator_path)
+            selector = PIIOnlySelector(pii_detector=pii_annotator, threshold=threshold)
+            model.set_filtering_strategy(selector)
+
+        explainer_path = model_config.get("explainer_path", None)
+        explainability = model_config.get("explainability", None)
+        if explainability is None:
+            explainability = "uniform"
+        if explainability == "uniform":
+            explainer = UniformExplainer()
+        elif explainer_path is not None:
+            if explainability == "greedy":
+                explainer = GreedyExplainer(model_name=explainer_path)
+            elif explainability == "shap":
+                explainer = ShapExplainer(model_name=explainer_path)
+            else:
+                raise ValueError(f"Unknown explainability method: {explainability}")
+            model.set_scoring_strategy(explainer)
 
     runtime_config = load_config(args.runtime_in)
     if use_idx(model_config, data_kwargs, len(dataset)):

@@ -1,1 +1,11 @@
 requires_idx: false
+
+pii_annotator: models/pii_detectors/20251017_185749
+pii_threshold: 0.9999
+
+# Model parameters (can be overridden in code)
+# model_checkpoint: "roberta-base"
+# clip_min: -3.2093127
+# clip_max: 16.304797887802124
+# k_candidates: 5
+# use_temperature: true
