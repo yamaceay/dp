@@ -1,4 +1,4 @@
-from loaders import ADAPTER_REGISTRY
+from dp.loaders import ADAPTER_REGISTRY
 import argparse
 import os
 

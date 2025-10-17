@@ -11,14 +11,14 @@ from .base import DatasetAdapter, DatasetRecord, TextAnnotation
 class TabDatasetAdapter(DatasetAdapter):
     """Adapter for the TAB anonymisation dataset."""
 
-    def __init__(self, path: Optional[str] = None, max_records: Optional[int] = None):
-        self.path = Path(path)
+    def __init__(self, data: Optional[str] = None, data_in: Optional[str] = None, max_records: Optional[int] = None):
+        self.data_in = Path(data_in)
         self.max_records = max_records
         try:
-            with self.path.open("r", encoding="utf-8") as handle:
+            with self.data_in.open("r", encoding="utf-8") as handle:
                 self._records: List[dict] = json.load(handle)
         except Exception as exc:  # pragma: no cover - IO safety
-            raise RuntimeError(f"Failed to load TAB dataset from {self.path}") from exc
+            raise RuntimeError(f"Failed to load TAB dataset from {self.data_in}") from exc
 
     def __len__(self) -> int:
         return len(self._records)

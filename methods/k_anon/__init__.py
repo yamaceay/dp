@@ -1,5 +1,5 @@
 from typing import Union, List
-from ..anonymizer import Anonymizer, AnonymizationResult
+from dp.methods.anonymizer import Anonymizer, AnonymizationResult
 
 
 class KAnonymizer(Anonymizer):
@@ -8,6 +8,9 @@ class KAnonymizer(Anonymizer):
         print("Initialized KAnonymizer")
 
     def anonymize(self, text: str, k: Union[int, List[int]], *args, **kwargs) -> AnonymizationResult:
-        # placeholder for k-anonymization
-        return AnonymizationResult(text="[K-ANONYMIZED TEXT]")
+        raise NotImplementedError("Use anonymize_from_dataset with idx for KAnonymizer.")
+    
+    def anonymize_from_dataset(self, idx: int, k: Union[int, List[int]], *args, **kwargs) -> AnonymizationResult:
+        # placeholder for k-anonymization by index
+        return AnonymizationResult(text=f"[K-ANONYMIZED TEXT BY IDX {idx} WITH K {k}]")
     

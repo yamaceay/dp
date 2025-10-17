@@ -15,16 +15,17 @@ class DBBioDatasetAdapter(DatasetAdapter):
 
     def __init__(
         self,
-        path: Optional[str] = None,
+        data: Optional[str] = None,
+        data_in: Optional[str] = None,
         max_records: Optional[int] = None,
     ):
-        self.path = Path(path)
+        self.data_in = Path(data_in)
         self.max_records = max_records
 
         try:
-            self._dataset = load_dataset("arrow", data_files={"data": str(self.path)})["data"]
+            self._dataset = load_dataset("arrow", data_files={"data": str(self.data_in)})["data"]
         except Exception as exc:  # pragma: no cover
-            raise RuntimeError(f"Failed to load DB-Bio dataset from {self.path}") from exc
+            raise RuntimeError(f"Failed to load DB-Bio dataset from {self.data_in}") from exc
 
     def __len__(self) -> int:
         if isinstance(self._dataset, Dataset):

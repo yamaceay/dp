@@ -33,8 +33,10 @@ class DatasetRecord:
 class DatasetAdapter:
     """Base adapter providing a unified interface across datasets."""
 
-    path: Optional[str] = None
+    data: Optional[str] = None
+    data_in: Optional[str] = None
     max_records: Optional[int] = None
+
 
     def __iter__(self) -> Iterator[DatasetRecord]:
         return iter(self.iter_records())

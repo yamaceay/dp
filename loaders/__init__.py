@@ -5,7 +5,7 @@ Adapters provide a consistent way to access dataset records with a unique
 identifier, raw text, optional annotations, and optional utility metadata.
 """
 
-from .base import DatasetAdapter, DatasetRecord
+from .base import DatasetAdapter, DatasetRecord, TextAnnotation
 from .trustpilot import TrustpilotDatasetAdapter
 from .tab import TabDatasetAdapter
 from .db_bio import DBBioDatasetAdapter
@@ -36,5 +36,6 @@ __all__ = [
     "TrustpilotDatasetAdapter",
     "TabDatasetAdapter",
     "DBBioDatasetAdapter",
+    "TextAnnotation",
     "get_adapter",
 ]

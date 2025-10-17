@@ -1,23 +1,30 @@
-from typing import Optional
-import yaml
+from typing import Optional, List, Tuple
 import argparse
+import yaml
 
-from data import load_data, add_data_args
-
-from methods.anonymizer import Anonymizer
-from methods.registry import MODEL_REGISTRY
+from dp.methods.anonymizer import Anonymizer
+from dp.methods.registry import MODEL_REGISTRY
+from dp.loaders import ADAPTER_REGISTRY, DatasetRecord
 
 available_models = list(MODEL_REGISTRY.keys())
+available_datasets = list(ADAPTER_REGISTRY.keys())
 
-def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+def add_data_args(parser: argparse.ArgumentParser) -> Tuple[argparse.ArgumentParser, List[str]]:
+    parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name (trustpilot, tab, db_bio)')
+    parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
+    parser.add_argument('--max_records', type=int, default=1, help='Maximum number of records to load')
+    return parser, ['data', 'data_in', 'max_records']
+
+def add_model_args(parser: argparse.ArgumentParser) -> Tuple[argparse.ArgumentParser, List[str]]:
     parser.add_argument('--model', type=str, required=True, choices=available_models, help='Anonymization model/method to evaluate')
     parser.add_argument('--model_in', type=str, default=None, help='Path to the method configuration')
-    return parser
+    return parser, ['model', 'model_in']
 
-def add_runtime_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+def add_runtime_args(parser: argparse.ArgumentParser) -> Tuple[argparse.ArgumentParser, List[str]]:
     parser.add_argument('--runtime_in', type=str, default=None, help='Path to the runtime configuration')
     parser.add_argument('--text', type=str, default="Kurt Edward Fishback is an American photographer noted for his portraits of other artists and photographers. Kurt was born in Sacramento, CA in 1942. Son of photographer Glen Fishback and namesake of photographer Edward Weston, he was exposed to art photography at an early age as his father's friends included Edward Weston, Ansel Adams and Wynn Bullock. Kurt studied art at Sacramento City College, SFAI, Cornell University and UC Davis where he received his Master of Fine Arts Degree studying with Robert Arneson, Roy DeForest, William Wiley and Manuel Neri. Ceramic Sculpture was the first medium that gained him high visibility in the Art World. Kurt took up photography in 1962 when he asked his Father to teach him. After finishing graduate work and teaching fine art media at several colleges, Kurt was asked to teach at his father's school of photography in Sacramento. The series of artist portraits which now number over 250 were begun in 1979. Since 1963 Kurt has been involved in many solo and group exhibitions including; SFMOMA, and Crocker Art Museum. His work is represented in many public, private and corporate collections including; SFMOMA, SFAI, and Museum of Contemporary Crafts, New York, NY. Today, Kurt lives in Sacramento, California with his wife Cassandra Reeves. He exhibits at galleries and museums, teaches photography at American River College, and has published several books including a book of portraits of California artists entitled, Art in Residence: West Coast Artists in Their Space (see illustration). The book includes portraits of 74 artists, including Ansel Adams, Wayne Thiebaud, Judy Chicago, Brett Weston, and Jock Sturges. Other artist portraits made by Kurt include Cornell Capa, André Kertész, Mary Ellen Mark, Chuck Close and Robert Mapplethorpe. Kurt is represented by Appel Photography Gallery in Sacramento, CA and The Camera Obscura Gallery in Denver, CO.", help='Text to anonymize')
-    return parser
+    parser.add_argument('--idx', type=int, default=0, help='Index of the record to anonymize (for datasets with multiple records)')
+    return parser, ['runtime_in', 'text', 'idx']
 
 def load_config(sth_in: Optional[str]) -> dict:
     config = {}
@@ -26,29 +33,55 @@ def load_config(sth_in: Optional[str]) -> dict:
             config = yaml.safe_load(f)
     return config
 
-def load_model(model: str, config: Optional[dict]) -> Anonymizer:
+def load_data(data_kwargs: Optional[dict]) -> List[DatasetRecord]:
+    data = data_kwargs.get("data")
+    adapter = ADAPTER_REGISTRY.get(data)
+    if adapter is None:
+        raise ValueError(f"Adapter '{data}' not found.")
+
+    dataset = adapter(**data_kwargs)
+    return dataset
+
+def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_kwargs: Optional[dict]) -> Anonymizer:
+    model = model_kwargs.get("model")
     model_cls = MODEL_REGISTRY.get(model)
     if model_cls is None:
         raise ValueError(f"Model '{model}' not found.")
-    model = model_cls(**config)
+
+    model = model_cls(**model_config, **model_kwargs, **data_kwargs)
     return model
 
+def requires_idx(model_config: dict, data_kwargs: dict, length: int) -> bool:
+    if "requires_idx" not in model_config or not model_config["requires_idx"]:
+        return False
+    length = min(length, data_kwargs.get("max_records", 0))
+    idx = data_kwargs.get("idx", 0)
+    if idx < 0 or idx >= length:
+        raise ValueError(f"Index {idx} is out of bounds for dataset of length {length}.")
+    return True
+        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load and Evaluate Anonymization Models")
-    parser = add_data_args(parser)
-    parser = add_model_args(parser)
-    parser = add_runtime_args(parser)
+    parser, data_keys = add_data_args(parser)
+    parser, model_keys = add_model_args(parser)
+    parser, runtime_keys = add_runtime_args(parser)
+    
     args = parser.parse_args()
+    data_kwargs = {k: getattr(args, k) for k in data_keys}
+    model_kwargs = {k: getattr(args, k) for k in model_keys}
+    runtime_kwargs = {k: getattr(args, k) for k in runtime_keys}
 
-    dataset = load_data(args.data, args.data_in, args.max_records)
+    dataset = load_data(data_kwargs)
 
     model_config = load_config(args.model_in)
+    model = load_model(model_config, model_kwargs, data_kwargs)
+
     runtime_config = load_config(args.runtime_in)
+    if requires_idx(model_config, data_kwargs, len(dataset)):
+        result = model.anonymize_from_dataset(idx=args.idx, **runtime_config)
+    else:
+        result = model.anonymize(text=args.text, **runtime_config)
 
-    model = load_model(args.model, model_config)
-
-    result = model.anonymize(args.text, **runtime_config)
-    
     print("Anonymized Text:", result.text)
     print("Metadata:", result.metadata)
     

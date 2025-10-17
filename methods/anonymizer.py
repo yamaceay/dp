@@ -1,4 +1,4 @@
-from typing import Union, List, Optional
+from typing import Optional
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -19,6 +19,15 @@ class Anonymizer(ABC):
     @abstractmethod
     def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
         """Anonymize the provided text and return an AnonymizationResult.
+
+        Implementations should override this method and may accept extra
+        parameters (k, epsilon, etc.) specific to the algorithm.
+        """
+        raise NotImplementedError()
+    
+    @abstractmethod
+    def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
+        """Anonymize the text at the specified index in the dataset and return an AnonymizationResult.
 
         Implementations should override this method and may accept extra
         parameters (k, epsilon, etc.) specific to the algorithm.
