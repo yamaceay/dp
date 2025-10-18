@@ -80,13 +80,18 @@ class PIIDetector:
         if labels is not None:
             self.labels = labels
             self._initialize_model_and_tokenizer(labels)
+        else:
+            try:
+                self._load_pretrained_model()
+            except:
+                pass
         
         self.train_records: Optional[List[DatasetRecord]] = None
         self.val_records: Optional[List[DatasetRecord]] = None
         self.test_records: Optional[List[DatasetRecord]] = None
 
-        if labels is not None:
-            print(f"✓ PIIDetector initialized with {len(labels)} labels on {self.device}")
+        if self.labels:
+            print(f"✓ PIIDetector initialized with {len(self.labels)} labels on {self.device}")
         else:
             print(f"✓ PIIDetector initialized without labels on {self.device}")
     
@@ -139,6 +144,26 @@ class PIIDetector:
         else:
             device = torch.device(device)
         return device
+
+    def _load_pretrained_model(self) -> None:
+        import os
+        
+        model_path = self.model_name
+        if os.path.isdir(model_path):
+            checkpoints = [d for d in os.listdir(model_path) if d.startswith('checkpoint-')]
+            if checkpoints:
+                latest_checkpoint = sorted(checkpoints, key=lambda x: int(x.split('-')[1]))[-1]
+                model_path = os.path.join(model_path, latest_checkpoint)
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.model = AutoModelForTokenClassification.from_pretrained(model_path)
+        self.model.to(self.device)
+        
+        config = self.model.config
+        if hasattr(config, 'id2label') and config.id2label:
+            self.id_to_label = config.id2label
+            self.label_to_id = {v: k for k, v in self.id_to_label.items()}
+            self.labels = [self.id_to_label[i] for i in sorted(self.id_to_label.keys())]
 
     def _initialize_model_and_tokenizer(self, labels: List[str]) -> None:
         self.labels = labels
@@ -241,9 +266,8 @@ class PIIDetector:
         if not records:
             return []
         
-        if self.labels is None:
-            self.labels = self._get_labels(records)
-            self._initialize_model_and_tokenizer(self.labels)
+        if not self.labels or self.model is None:
+            raise ValueError("PIIDetector must be initialized with labels or loaded from trained model")
         
         pipe = pipeline(
             "token-classification",

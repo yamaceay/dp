@@ -136,6 +136,18 @@ class DPMlmAnonymizer(DPAnonymizer):
     def _tokenize(self, text: str) -> List[str]:
         return nltk.word_tokenize(text)
 
+    def _get_token_offsets(self, text: str, tokens: List[str]) -> List[tuple]:
+        offsets = []
+        pos = 0
+        for token in tokens:
+            start = text.find(token, pos)
+            if start == -1:
+                offsets.append((pos, pos))
+            else:
+                offsets.append((start, start + len(token)))
+                pos = start + len(token)
+        return offsets
+
     def _sentence_enum(self, tokens: List[str]) -> List[int]:
         counts = Counter()
         occurrences = []
@@ -206,6 +218,7 @@ class DPMlmAnonymizer(DPAnonymizer):
             )
 
         tokens = self._tokenize(text)
+        offsets = self._get_token_offsets(text, tokens)
         occurrences = self._sentence_enum(tokens)
 
         pii_spans = []
@@ -215,39 +228,35 @@ class DPMlmAnonymizer(DPAnonymizer):
         perturbed = 0
         total = 0
         replaced_tokens = []
-        current_position = 0
 
-        for token, occurrence in zip(tokens, occurrences):
+        for token, (token_start, token_end), occurrence in zip(tokens, offsets, occurrences):
             if token in string.punctuation:
                 replaced_tokens.append(token)
                 total += 1
-                current_position += len(token)
                 continue
 
-            # Check if this token is within any PII span
-            token_start = text.find(token, current_position)
-            token_end = token_start + len(token) if token_start >= 0 else current_position
-            current_position = token_end
-
-            # If PII detector is active and this token overlaps with a PII span, skip it
+            is_pii = False
             if pii_spans:
                 is_pii = any(
-                    span.start <= token_start < span.end or span.start < token_end <= span.end
+                    not (token_end <= span.start or token_start >= span.end)
                     for span in pii_spans
                 )
-                if is_pii:
-                    replaced_tokens.append(token)
-                    total += 1
-                    continue
+            
+            if pii_spans and not is_pii:
+                replaced_tokens.append(token)
+                total += 1
+                continue
 
-            # Privatize the token
             private_token = self._privatize_token(text, token, occurrence, epsilon)
 
-            # Preserve capitalization
-            if token and token[0].isupper():
-                private_token = private_token.capitalize() if private_token else token
-            elif token and token[0].islower():
-                private_token = private_token.lower() if private_token else token
+            original_text = text[token_start:token_end]
+            if len(private_token) == len(original_text):
+                private_token = ''.join(
+                    p.upper() if o.isupper() else p.lower()
+                    for p, o in zip(private_token, original_text)
+                )
+            elif original_text and original_text[0].isupper():
+                private_token = private_token.capitalize()
 
             replaced_tokens.append(private_token)
 

@@ -59,15 +59,6 @@ class PIIOnlySelector(TokenSelector):
         self.threshold = threshold
     
     def select(self, text: str) -> List[TextAnnotation]:
-        """
-        Identify PII spans in the input text.
-        
-        Args:
-            text: Input text to analyze
-            
-        Returns:
-            List of TextAnnotation objects marking PII spans above threshold
-        """
         if not text or not text.strip():
             return []
         
