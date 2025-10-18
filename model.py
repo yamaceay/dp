@@ -9,6 +9,7 @@ from dp.loaders import ADAPTER_REGISTRY, DatasetRecord
 from dp.utils.pii_detector import PIIDetector
 from dp.utils.selector.pii_only_selector import PIIOnlySelector
 from dp.utils.explainer import UniformExplainer, GreedyExplainer, ShapExplainer
+from dp.utils.chunking import TruncateChunker, SlidingWindowChunker, TokenAwareChunker
 
 available_models = list(MODEL_REGISTRY.keys())
 available_datasets = list(ADAPTER_REGISTRY.keys())
@@ -78,29 +79,43 @@ if __name__ == "__main__":
     dataset = load_data(data_kwargs)
 
     model_config = load_config(args.model_in)
+    
+    pii_chunking = model_config.get("pii_chunking", {})
+    tri_chunking = model_config.get("tri_chunking", {})
+    dpmlm_chunking = model_config.get("dpmlm_chunking", {})
+    
     model = load_model(model_config, model_kwargs, data_kwargs)
 
     if args.model == "dpmlm":
         pii_annotator_path = model_config.get("pii_annotator", None)
         threshold = model_config.get("pii_threshold", None)
+        pii_use_chunking = pii_chunking.get("enabled", False)
         if pii_annotator_path is not None:
-            pii_annotator = PIIDetector(model_name=pii_annotator_path)
+            pii_annotator = PIIDetector(model_name=pii_annotator_path, use_chunking=pii_use_chunking)
+            if pii_use_chunking:
+                pii_max_length = pii_chunking.get("max_length", 512)
+                pii_overlap = pii_chunking.get("overlap", 50)
+                pii_annotator.chunker = SlidingWindowChunker(max_length=pii_max_length, overlap=pii_overlap)
             selector = PIIOnlySelector(pii_detector=pii_annotator, threshold=threshold)
             model.set_filtering_strategy(selector)
 
         explainer_path = model_config.get("explainer_path", None)
         explainability = model_config.get("explainability", None)
+        tri_use_chunking = tri_chunking.get("enabled", False)
         if explainability is None:
             explainability = "uniform"
         if explainability == "uniform":
             explainer = UniformExplainer()
         elif explainer_path is not None:
             if explainability == "greedy":
-                explainer = GreedyExplainer(model_name=explainer_path)
+                explainer = GreedyExplainer(model_name=explainer_path, use_chunking=tri_use_chunking)
             elif explainability == "shap":
-                explainer = ShapExplainer(model_name=explainer_path)
+                explainer = ShapExplainer(model_name=explainer_path, use_chunking=tri_use_chunking)
             else:
                 raise ValueError(f"Unknown explainability method: {explainability}")
+            if tri_use_chunking:
+                tri_max_length = tri_chunking.get("max_length", 512)
+                explainer.tri_detector.chunker = TruncateChunker(max_length=tri_max_length)
             model.set_scoring_strategy(explainer)
 
     runtime_config = load_config(args.runtime_in)

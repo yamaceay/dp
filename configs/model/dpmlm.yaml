@@ -6,6 +6,19 @@ pii_threshold: 0.7
 explainability: uniform
 explainer: models/tri_pipelines
 
+pii_chunking:
+  enabled: false
+  max_length: 512
+  overlap: 50
+
+tri_chunking:
+  enabled: false
+  max_length: 512
+
+dpmlm_chunking:
+  enabled: false
+  max_length: 512
+
 # Model parameters (can be overridden in code)
 # model_checkpoint: "roberta-base"
 # clip_min: -3.2093127

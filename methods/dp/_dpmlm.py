@@ -176,7 +176,7 @@ class DPMlmAnonymizer(DPAnonymizer):
     ) -> str:
         masked_sentence = self._nth_replace(sentence, token, self.tokenizer.mask_token, occurrence)
         
-        input_ids = self.tokenizer.encode(masked_sentence, add_special_tokens=True)
+        input_ids = self.tokenizer.encode(masked_sentence, add_special_tokens=True, truncation=True, max_length=512)
         
         try:
             mask_pos = input_ids.index(self.tokenizer.mask_token_id)
@@ -225,11 +225,44 @@ class DPMlmAnonymizer(DPAnonymizer):
         if self.pii_detector is not None:
             pii_spans = self.pii_detector.select(text)
 
+        critical_indices = []
+        critical_tokens = []
+        for i, (token, (token_start, token_end)) in enumerate(zip(tokens, offsets)):
+            if token in string.punctuation:
+                continue
+            
+            is_pii = False
+            if pii_spans:
+                is_pii = any(
+                    not (token_end <= span.start or token_start >= span.end)
+                    for span in pii_spans
+                )
+            
+            if pii_spans and not is_pii:
+                continue
+            
+            critical_indices.append(i)
+            critical_tokens.append(token)
+
+        epsilon_values = [epsilon] * len(critical_indices)
+        
+        if self.explainer is not None and critical_tokens:
+            try:
+                scores = self.explainer.explain(text, critical_tokens)
+                if scores is not None and len(scores) == len(critical_tokens):
+                    positive_scores = np.maximum(scores, 1e-6)
+                    weights = positive_scores / positive_scores.sum()
+                    epsilon_values = [epsilon / (w * len(weights)) for w in weights]
+                    epsilon_values = np.clip(epsilon_values, 1e-6, epsilon * len(weights))
+            except Exception as e:
+                print(f"Warning: Explainer failed ({e}), using uniform epsilon")
+
         perturbed = 0
         total = 0
         replaced_tokens = []
+        critical_map = {idx: eps for idx, eps in zip(critical_indices, epsilon_values)}
 
-        for token, (token_start, token_end), occurrence in zip(tokens, offsets, occurrences):
+        for i, (token, (token_start, token_end), occurrence) in enumerate(zip(tokens, offsets, occurrences)):
             if token in string.punctuation:
                 replaced_tokens.append(token)
                 total += 1
@@ -247,7 +280,8 @@ class DPMlmAnonymizer(DPAnonymizer):
                 total += 1
                 continue
 
-            private_token = self._privatize_token(text, token, occurrence, epsilon)
+            token_epsilon = critical_map.get(i, epsilon)
+            private_token = self._privatize_token(text, token, occurrence, token_epsilon)
 
             original_text = text[token_start:token_end]
             if len(private_token) == len(original_text):
@@ -276,5 +310,8 @@ class DPMlmAnonymizer(DPAnonymizer):
         if self.pii_detector is not None:
             metadata["pii_detection"] = "enabled"
             metadata["pii_spans_count"] = len(pii_spans)
+        if self.explainer is not None:
+            metadata["explainer"] = self.explainer.__class__.__name__
+            metadata["critical_tokens"] = len(critical_tokens)
 
         return AnonymizationResult(text=private_text, metadata=metadata)

@@ -65,9 +65,12 @@ class PIIDetector:
         labels: Optional[List[str]] = None,
         max_length: int = 512,
         device: str = "auto",
+        use_chunking: bool = False,
     ):
         self.model_name = model_name
         self.max_length = max_length
+        self.use_chunking = use_chunking
+        self.chunker = None
         
         self.device = self.resolve_device(device)
         
@@ -280,19 +283,46 @@ class PIIDetector:
         results = []
         
         for record in records:
-            predictions = pipe(record.text)
-            
-            spans = []
-            for pred in predictions:
-                spans.append(
+            if self.use_chunking and self.chunker is not None:
+                from dp.utils.chunking import SpanMergeAggregator, process_with_chunking
+                aggregator = SpanMergeAggregator()
+                
+                def detect(text):
+                    preds = pipe(text)
+                    return [
+                        {
+                            "start": p["start"],
+                            "end": p["end"],
+                            "label": p["entity_group"],
+                            "score": p["score"]
+                        }
+                        for p in preds
+                    ]
+                
+                span_dicts = process_with_chunking(record.text, self.chunker, detect, aggregator)
+                spans = [
                     TextAnnotation(
-                        start=pred["start"],
-                        end=pred["end"],
-                        label=pred["entity_group"],
-                        text=record.text[pred["start"]:pred["end"]],
-                        confidence=pred["score"],
+                        start=s["start"],
+                        end=s["end"],
+                        label=s["label"],
+                        text=record.text[s["start"]:s["end"]],
+                        confidence=s["score"],
                     )
-                )
+                    for s in span_dicts
+                ]
+            else:
+                predictions = pipe(record.text)
+                spans = []
+                for pred in predictions:
+                    spans.append(
+                        TextAnnotation(
+                            start=pred["start"],
+                            end=pred["end"],
+                            label=pred["entity_group"],
+                            text=record.text[pred["start"]:pred["end"]],
+                            confidence=pred["score"],
+                        )
+                    )
             
             new_record = DatasetRecord(
                 uid=record.uid,
@@ -304,7 +334,7 @@ class PIIDetector:
             )
             results.append(new_record)
         
-        print(f"✓ Predicted spans for {len(results)} records")
+        print(f"✓ Predicted spans for {len(records)} records")
         return results
     
     def evaluate(self, records: List[DatasetRecord]) -> Dict[str, Any]:

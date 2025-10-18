@@ -68,7 +68,8 @@ class PIIOnlySelector(TokenSelector):
             spans=[]
         )
         
-        predictions = self.pii_detector.predict([temp_record])
+        use_chunking = getattr(self.pii_detector, 'use_chunking', False)
+        predictions = self.pii_detector.predict([temp_record], use_chunking=use_chunking)
         
         if not predictions or not predictions[0].spans:
             return []
