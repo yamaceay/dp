@@ -42,13 +42,39 @@ python3 data.py --data db_bio --data_in data/db_bio/test/data-00000-of-00001.arr
 
 ## Models
 
-You can run different models using `model.py`. Example commands for simple PII redactors:
+### Simple PII Redactors
 
 ```bash
-python3 model.py --data tab --data_in data/TAB/splitted/test.json --model spacy --model_in configs/model/spacy.yaml --runtime_in configs/runtime/simple.yaml # SpaCy PII Redactor
+python3 model.py --data tab --data_in data/TAB/splitted/test.json --model spacy --model_in configs/model/spacy.yaml --runtime_in configs/runtime/simple.yaml
 
-python3 model.py --data tab --data_in data/TAB/splitted/test.json --model presidio --model_in configs/model/presidio.yaml --runtime_in configs/runtime/simple.yaml # Presidio PII Redactor
+python3 model.py --data tab --data_in data/TAB/splitted/test.json --model presidio --model_in configs/model/presidio.yaml --runtime_in configs/runtime/simple.yaml
 
-python3 model.py --data tab --data_in data/TAB/splitted/test.json --model manual --model_in configs/model/manual.yaml --runtime_in configs/runtime/simple.yaml # Manual PII Redactor
+python3 model.py --data tab --data_in data/TAB/splitted/test.json --model manual --model_in configs/model/manual.yaml --runtime_in configs/runtime/simple.yaml
+```
+
+### PII Detection (Token Classification)
+
+```bash
+# Train PII detector
+python3 pii.py --dataset tab --data-path data/TAB/splitted --mode train --epochs 3 --batch-size 8 --use-nervaluate --evaluation-mode partial
+
+# Evaluate PII detector
+python3 pii.py --dataset tab --data-path data/TAB/splitted --mode evaluate --model-path models/pii_detectors/tab/20231025_143022 --use-nervaluate
+
+# Predict with PII detector
+python3 pii.py --dataset tab --data-path data/TAB/splitted --mode predict --model-path models/pii_detectors/tab/20231025_143022
+```
+
+### TRI (Text Re-Identification)
+
+```bash
+# Train TRI model
+python3 tri.py --dataset tab --data-path data/TAB/tab.json --mode train --finetuning-epochs 15 --use-pretraining --annotation-folder /Users/yay/work/DPMLM/outputs/tab/samples/train_100/annotations/simple --best-metric-dataset spacy
+
+# Evaluate TRI model
+python3 tri.py --dataset tab --data-path data/TAB/tab.json --mode evaluate --model-path models/tri_pipelines/tab/20231025_143022 --annotation-folder /Users/yay/work/DPMLM/outputs/tab/samples/train_100/annotations/simple
+
+# Predict with TRI model
+python3 tri.py --dataset tab --data-path data/TAB/tab.json --mode predict --model-path models/tri_pipelines/tab/20231025_143022
 ```
 

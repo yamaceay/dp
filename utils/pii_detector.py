@@ -1,10 +1,3 @@
-"""
-PII Detector for identifying personally identifiable information in text.
-
-This module provides a PIIDetector class that can train, predict, and evaluate
-PII detection models using transformer-based token classification.
-"""
-
 from typing import List, Optional, Dict, Any
 import torch
 import numpy as np
@@ -19,46 +12,16 @@ from transformers import (
 from torch.utils.data import Dataset
 from sklearn.metrics import precision_recall_fscore_support, classification_report
 
+try:
+    from nervaluate import Evaluator
+    NERVALUATE_AVAILABLE = True
+except ImportError:
+    NERVALUATE_AVAILABLE = False
+
 from dp.loaders.base import DatasetRecord, TextAnnotation
 
 
 class PIIDetector:
-    """
-    PII Detector for training and using token classification models.
-    
-    This class provides a complete pipeline for PII detection:
-    - Training on labeled datasets
-    - Prediction on unlabeled text
-    - Evaluation against ground truth
-    
-    Usage:
-        # Initialize detector
-        detector = PIIDetector(
-            model_name="distilbert-base-uncased",
-            labels=["O", "B-PERSON", "I-PERSON", "B-EMAIL", "I-EMAIL"]
-        )
-        
-        # Set datasets
-        detector.set_train_dataset(train_records)
-        detector.set_val_dataset(val_records)
-        detector.set_test_dataset(test_records)
-        
-        # Train
-        detector.train(epochs=3, output_dir="./pii_model")
-        
-        # Predict
-        predictions = detector.predict(unlabeled_records)
-        
-        # Evaluate
-        metrics = detector.evaluate(test_records)
-    
-    Args:
-        model_name: HuggingFace model name (default: "distilbert-base-uncased")
-        labels: List of BIO labels (default: basic PII labels)
-        max_length: Maximum sequence length (default: 512)
-        device: Device to use ("auto", "cpu", "cuda", "mps")
-    """
-    
     def __init__(
         self,
         model_name: str = "distilbert-base-uncased",
@@ -80,14 +43,12 @@ class PIIDetector:
         self.tokenizer = None
         self.model = None
 
-        if labels is not None:
+        import os
+        if os.path.isdir(model_name) and os.path.exists(os.path.join(model_name, "config.json")):
+            self._load_pretrained_model()
+        elif labels is not None:
             self.labels = labels
             self._initialize_model_and_tokenizer(labels)
-        else:
-            try:
-                self._load_pretrained_model()
-            except:
-                pass
         
         self.train_records: Optional[List[DatasetRecord]] = None
         self.val_records: Optional[List[DatasetRecord]] = None
@@ -99,7 +60,6 @@ class PIIDetector:
             print(f"✓ PIIDetector initialized without labels on {self.device}")
     
     def set_train_dataset(self, records: List[DatasetRecord]) -> None:
-        """Set training dataset."""
         self.train_records = records
         if not self.labels:
             self.labels = self._get_labels(records)
@@ -107,7 +67,6 @@ class PIIDetector:
         print(f"✓ Training dataset set: {len(records)} records")
     
     def set_val_dataset(self, records: List[DatasetRecord]) -> None:
-        """Set validation dataset."""
         self.val_records = records
         if not self.labels:
             self.labels = self._get_labels(records)
@@ -115,7 +74,6 @@ class PIIDetector:
         print(f"✓ Validation dataset set: {len(records)} records")
     
     def set_test_dataset(self, records: List[DatasetRecord]) -> None:
-        """Set test dataset."""
         self.test_records = records
         if not self.labels:
             self.labels = self._get_labels(records)
@@ -123,15 +81,17 @@ class PIIDetector:
         print(f"✓ Test dataset set: {len(records)} records")
     
     def _get_labels(self, records: List[DatasetRecord]) -> List[str]:
-        """Extract unique BIO labels from dataset records."""
         labels = set()
         for record in records:
             spans = record.spans or []
             for span in spans:
-                labels.add(span.label)
-        if None in labels:
-            labels.remove(None)
-        labels = list(labels)
+                if span.label:
+                    label = span.label
+                    if label.startswith("B-") or label.startswith("I-"):
+                        label = label[2:]
+                    labels.add(label)
+        
+        labels = sorted(list(labels))
         b_labels = [f"B-{label}" for label in labels]
         i_labels = [f"I-{label}" for label in labels]
         return ["O"] + b_labels + i_labels
@@ -188,18 +148,10 @@ class PIIDetector:
         output_dir: str = "./pii_model_output",
         batch_size: int = 8,
         learning_rate: float = 2e-5,
+        use_nervaluate: bool = True,
+        nervaluate_mode: str = "partial",
         **kwargs
     ) -> None:
-        """
-        Train the PII detection model.
-        
-        Args:
-            epochs: Number of training epochs
-            output_dir: Directory to save model checkpoints
-            batch_size: Training batch size
-            learning_rate: Learning rate
-            **kwargs: Additional training arguments
-        """
         if self.train_records is None:
             raise ValueError("Training dataset not set. Use set_train_dataset() first.")
         
@@ -233,11 +185,18 @@ class PIIDetector:
             save_strategy="steps",
             save_steps=250,
             load_best_model_at_end=True if eval_dataset else False,
-            metric_for_best_model="f1" if eval_dataset else None,
+            metric_for_best_model=f"{nervaluate_mode}_f1" if (eval_dataset and use_nervaluate and NERVALUATE_AVAILABLE) else "f1" if eval_dataset else None,
             report_to="none",
             fp16=torch.cuda.is_available(),
             **kwargs,
         )
+        
+        compute_metrics_fn = None
+        if eval_dataset:
+            if use_nervaluate and NERVALUATE_AVAILABLE:
+                compute_metrics_fn = lambda eval_pred: self._compute_metrics_ner(eval_pred, mode=nervaluate_mode)
+            else:
+                compute_metrics_fn = self._compute_metrics
         
         trainer = Trainer(
             model=self.model,
@@ -246,7 +205,7 @@ class PIIDetector:
             eval_dataset=eval_dataset,
             tokenizer=self.tokenizer,
             data_collator=data_collator,
-            compute_metrics=self._compute_metrics,
+            compute_metrics=compute_metrics_fn,
         )
         
         print(f"Starting training for {epochs} epochs...")
@@ -257,15 +216,6 @@ class PIIDetector:
         print(f"Training complete! Model saved to {output_dir}")
     
     def predict(self, records: List[DatasetRecord]) -> List[DatasetRecord]:
-        """
-        Predict PII spans for records with empty spans.
-        
-        Args:
-            records: List of DatasetRecord with empty spans
-        
-        Returns:
-            List of DatasetRecord with predicted spans filled in
-        """
         if not records:
             return []
         
@@ -337,16 +287,7 @@ class PIIDetector:
         print(f"✓ Predicted spans for {len(records)} records")
         return results
     
-    def evaluate(self, records: List[DatasetRecord]) -> Dict[str, Any]:
-        """
-        Evaluate model performance against ground truth.
-        
-        Args:
-            records: List of DatasetRecord with ground truth spans
-        
-        Returns:
-            Dictionary containing evaluation metrics
-        """
+    def evaluate(self, records: List[DatasetRecord], use_nervaluate: bool = True, modes: Optional[List[str]] = None) -> Dict[str, Any]:
         if not records:
             raise ValueError("No records provided for evaluation")
 
@@ -370,42 +311,104 @@ class PIIDetector:
             all_true_labels.extend(true_labels)
             all_pred_labels.extend(pred_labels)
         
-        unique_labels = [l for l in self.labels if l != "O"]
+        unique_entity_types = sorted(list(set([
+            label[2:] for label in self.labels 
+            if label.startswith('B-')
+        ])))
         
-        precision, recall, f1, support = precision_recall_fscore_support(
-            all_true_labels,
-            all_pred_labels,
-            labels=unique_labels,
-            average="micro",
-            zero_division=0,
-        )
+        unique_bio_labels = [l for l in self.labels if l != "O"]
         
-        report = classification_report(
-            all_true_labels,
-            all_pred_labels,
-            labels=unique_labels,
-            zero_division=0,
-            output_dict=True,
-        )
+        metrics = {}
         
-        metrics = {
-            "precision": float(precision) if precision is not None else 0.0,
-            "recall": float(recall) if recall is not None else 0.0,
-            "f1": float(f1) if f1 is not None else 0.0,
-            "support": int(support) if support is not None else 0,
-            "detailed_report": report,
-        }
+        if use_nervaluate and NERVALUATE_AVAILABLE:
+            if modes is None:
+                modes = ["strict", "partial", "exact"]
+            
+            true_labels_seq = []
+            pred_labels_seq = []
+            
+            for true_record, pred_record in zip(records, predicted_records):
+                true_bio = self._spans_to_char_labels(true_record.text, true_record.spans or [])
+                pred_bio = self._spans_to_char_labels(pred_record.text, pred_record.spans or [])
+                true_labels_seq.append(true_bio)
+                pred_labels_seq.append(pred_bio)
+            
+            evaluator = Evaluator(
+                true_labels_seq,
+                pred_labels_seq,
+                tags=unique_entity_types,
+                loader="list"
+            )
+            
+            results, results_per_tag, _, _ = evaluator.evaluate()
+            
+            for mode in modes:
+                if mode in results:
+                    metrics[f"{mode}_precision"] = float(results[mode].get("precision", 0.0))
+                    metrics[f"{mode}_recall"] = float(results[mode].get("recall", 0.0))
+                    metrics[f"{mode}_f1"] = float(results[mode].get("f1", 0.0))
+            
+            if results_per_tag:
+                metrics["per_category"] = {}
+                for mode in modes:
+                    if mode in results_per_tag:
+                        metrics["per_category"][mode] = {}
+                        for tag, tag_metrics in results_per_tag[mode].items():
+                            metrics["per_category"][mode][tag] = {
+                                "precision": float(tag_metrics.get("precision", 0.0)),
+                                "recall": float(tag_metrics.get("recall", 0.0)),
+                                "f1": float(tag_metrics.get("f1", 0.0)),
+                                "support": int(tag_metrics.get("support", 0))
+                            }
+            
+            print(f"NER Evaluation Results (nervaluate):")
+            for mode in modes:
+                if f"{mode}_f1" in metrics:
+                    print(f"\n  {mode.upper()} mode:")
+                    print(f"    Precision: {metrics[f'{mode}_precision']:.4f}")
+                    print(f"    Recall:    {metrics[f'{mode}_recall']:.4f}")
+                    print(f"    F1 Score:  {metrics[f'{mode}_f1']:.4f}")
+            
+            if "per_category" in metrics:
+                print(f"\n  Per-category results (partial mode):")
+                if "partial" in metrics["per_category"]:
+                    for tag, tag_metrics in metrics["per_category"]["partial"].items():
+                        print(f"    {tag}: P={tag_metrics['precision']:.4f}, R={tag_metrics['recall']:.4f}, F1={tag_metrics['f1']:.4f}, Support={tag_metrics['support']}")
         
-        print(f"📊 Evaluation Results:")
-        print(f"  Precision: {precision:.4f}")
-        print(f"  Recall: {recall:.4f}")
-        print(f"  F1 Score: {f1:.4f}")
-        print(f"  Support: {support}")
+        else:
+            precision, recall, f1, support = precision_recall_fscore_support(
+                all_true_labels,
+                all_pred_labels,
+                labels=unique_bio_labels,
+                average="micro",
+                zero_division=0,
+            )
+            
+            report = classification_report(
+                all_true_labels,
+                all_pred_labels,
+                labels=unique_bio_labels,
+                zero_division=0,
+                output_dict=True,
+            )
+            
+            metrics = {
+                "precision": float(precision) if precision is not None else 0.0,
+                "recall": float(recall) if recall is not None else 0.0,
+                "f1": float(f1) if f1 is not None else 0.0,
+                "support": int(support) if support is not None else 0,
+                "detailed_report": report,
+            }
+            
+            print(f"Evaluation Results:")
+            print(f"  Precision: {precision:.4f}")
+            print(f"  Recall: {recall:.4f}")
+            print(f"  F1 Score: {f1:.4f}")
+            print(f"  Support: {support}")
         
         return metrics
     
     def _compute_metrics(self, eval_pred):
-        """Compute metrics during training."""
         predictions, labels = eval_pred
         predictions = np.argmax(predictions, axis=2)
         
@@ -418,12 +421,12 @@ class PIIDetector:
                     true_predictions.append(self.id_to_label[pred])
                     true_labels.append(self.id_to_label[label])
         
-        unique_labels = [l for l in self.labels if l != "O"]
+        unique_bio_labels = [l for l in self.labels if l != "O"]
         
         precision, recall, f1, _ = precision_recall_fscore_support(
             true_labels,
             true_predictions,
-            labels=unique_labels,
+            labels=unique_bio_labels,
             average="micro",
             zero_division=0,
         )
@@ -434,10 +437,57 @@ class PIIDetector:
             "f1": float(f1),
         }
     
+    def _get_preds_and_labels_for_nervaluate(self, predictions, labels):
+        predictions = np.argmax(predictions, axis=2)
+        
+        true_preds = []
+        true_labels = []
+        
+        for pred_batch, label_batch in zip(predictions, labels):
+            pred_seq = []
+            label_seq = []
+            for pred, label in zip(pred_batch, label_batch):
+                if label != -100:
+                    pred_seq.append(self.id_to_label[pred])
+                    label_seq.append(self.id_to_label[label])
+            true_preds.append(pred_seq)
+            true_labels.append(label_seq)
+        
+        return true_preds, true_labels
+    
+    def _compute_metrics_ner(self, eval_pred, mode="partial"):
+        if not NERVALUATE_AVAILABLE:
+            print("WARNING: nervaluate not available, falling back to standard metrics")
+            return self._compute_metrics(eval_pred)
+        
+        predictions, labels = eval_pred
+        true_preds, true_labels = self._get_preds_and_labels_for_nervaluate(predictions, labels)
+        
+        unique_entity_types = sorted(list(set([
+            label[2:] for label in self.labels 
+            if label.startswith('B-')
+        ])))
+        
+        evaluator = Evaluator(
+            true_labels,
+            true_preds,
+            tags=unique_entity_types,
+            loader="list"
+        )
+        
+        results, _, _, _ = evaluator.evaluate()
+        
+        metrics = {}
+        if mode in results:
+            for metric in ["precision", "recall", "f1"]:
+                if metric in results[mode]:
+                    metrics[f"{mode}_{metric}"] = float(results[mode][metric])
+        
+        return metrics
+    
     def _spans_to_char_labels(
         self, text: str, spans: List[TextAnnotation]
     ) -> List[str]:
-        """Convert span annotations to character-level BIO labels."""
         labels = ["O"] * len(text)
         
         for span in sorted(spans, key=lambda s: s.start):
@@ -445,12 +495,10 @@ class PIIDetector:
                 continue
             
             label = span.label or "ENTITY"
-            
             if label.startswith("B-") or label.startswith("I-"):
                 label = label[2:]
             
             labels[span.start] = f"B-{label}"
-            
             for i in range(span.start + 1, min(span.end, len(text))):
                 labels[i] = f"I-{label}"
         
@@ -458,8 +506,6 @@ class PIIDetector:
 
 
 class PIIDataset(Dataset):
-    """PyTorch Dataset for PII detection."""
-    
     def __init__(
         self,
         records: List[DatasetRecord],
@@ -510,7 +556,6 @@ class PIIDataset(Dataset):
     def _spans_to_char_labels(
         self, text: str, spans: List[TextAnnotation]
     ) -> List[str]:
-        """Convert span annotations to character-level BIO labels."""
         labels = ["O"] * len(text)
         
         for span in sorted(spans, key=lambda s: s.start):
@@ -518,12 +563,10 @@ class PIIDataset(Dataset):
                 continue
             
             label = span.label or "ENTITY"
-            
             if label.startswith("B-") or label.startswith("I-"):
                 label = label[2:]
             
             labels[span.start] = f"B-{label}"
-            
             for i in range(span.start + 1, min(span.end, len(text))):
                 labels[i] = f"I-{label}"
         

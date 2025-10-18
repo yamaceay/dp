@@ -8,6 +8,7 @@ transformers
 
 # NLP utilities
 nltk
+nervaluate
 
 # Optional dependencies for specific anonymizers
 # SpaCy NER

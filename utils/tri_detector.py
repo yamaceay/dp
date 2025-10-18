@@ -148,7 +148,7 @@ class TRIDetector:
         if best_metric_dataset:
             if eval_datasets_dict and best_metric_dataset in eval_datasets_dict:
                 metric_for_best = f"eval_{best_metric_dataset}_Accuracy"
-                print(f"📊 Using {best_metric_dataset} dataset for best model selection")
+                print(f"Using {best_metric_dataset} dataset for best model selection")
             else:
                 available = list(eval_datasets_dict.keys()) if eval_datasets_dict else []
                 raise ValueError(f"Best metric dataset '{best_metric_dataset}' not found in eval datasets: {available}")
@@ -156,7 +156,7 @@ class TRIDetector:
             first_eval_name = list(eval_datasets_dict.keys())[0] if eval_datasets_dict else None
             metric_for_best = f"eval_{first_eval_name}_Accuracy" if first_eval_name else None
             if first_eval_name:
-                print(f"📊 Using {first_eval_name} dataset for best model selection (default)")
+                print(f"Using {first_eval_name} dataset for best model selection (default)")
         
         training_args = TrainingArguments(
             output_dir=f"{output_dir}/finetuning",
@@ -201,9 +201,9 @@ class TRIDetector:
     
     def _pretrain(self, epochs: int, batch_size: int, learning_rate: float, output_dir: str):
         """Perform MLM pretraining and update the base model."""
-        print(f"📚 Creating MLM model for pretraining...")
-        mlm_model = AutoModelForMaskedLM.from_pretrained(self.model_name)
         
+        print(f"Creating MLM model for pretraining...")
+        mlm_model = AutoModelForMaskedLM.from_pretrained(self.model_name)        
         if hasattr(self.model, 'distilbert'):
             mlm_model.distilbert = self.model.distilbert
         elif hasattr(self.model, 'bert'):
@@ -233,7 +233,7 @@ class TRIDetector:
             data_collator=data_collator,
         )
         
-        print(f"🔄 Running MLM pretraining for {epochs} epochs...")
+        print(f"Running MLM pretraining for {epochs} epochs...")
         trainer.train()
         
         if hasattr(self.model, 'distilbert'):
