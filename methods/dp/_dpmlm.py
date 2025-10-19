@@ -66,6 +66,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         clip_max: float = 16.304797887802124,
         k_candidates: int = 5,
         use_temperature: bool = True,
+        compensate_epsilon: bool = False,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -76,6 +77,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         self.sensitivity = abs(clip_max - clip_min)
         self.k_candidates = k_candidates
         self.use_temperature = use_temperature
+        self.compensate_epsilon = compensate_epsilon
 
         self.pii_detector = None
         self.explainer = None
@@ -244,7 +246,15 @@ class DPMlmAnonymizer(DPAnonymizer):
             critical_indices.append(i)
             critical_tokens.append(token)
 
-        epsilon_values = [epsilon] * len(critical_indices)
+        perturbation_ratio = 1.0
+        if self.compensate_epsilon and critical_indices:
+            non_punctuation_total = sum(1 for t in tokens if t not in string.punctuation)
+            if non_punctuation_total > 0:
+                perturbation_ratio = len(critical_indices) / non_punctuation_total
+                perturbation_ratio = max(perturbation_ratio, 1e-6)
+
+        compensated_epsilon = epsilon * perturbation_ratio
+        epsilon_values = [compensated_epsilon] * len(critical_indices)
         
         if self.explainer is not None and critical_tokens:
             try:
@@ -252,8 +262,8 @@ class DPMlmAnonymizer(DPAnonymizer):
                 if scores is not None and len(scores) == len(critical_tokens):
                     positive_scores = np.maximum(scores, 1e-6)
                     weights = positive_scores / positive_scores.sum()
-                    epsilon_values = [epsilon / (w * len(weights)) for w in weights]
-                    epsilon_values = np.clip(epsilon_values, 1e-6, epsilon * len(weights))
+                    epsilon_values = [compensated_epsilon / (w * len(weights)) for w in weights]
+                    epsilon_values = np.clip(epsilon_values, 1e-6, compensated_epsilon * len(weights))
             except Exception as e:
                 print(f"Warning: Explainer failed ({e}), using uniform epsilon")
 
@@ -302,11 +312,15 @@ class DPMlmAnonymizer(DPAnonymizer):
 
         metadata = {
             "epsilon": epsilon,
+            "compensated_epsilon": compensated_epsilon,
             "method": "dpmlm",
             "model": self.model_checkpoint,
             "perturbed": perturbed,
             "total": total,
         }
+        if self.compensate_epsilon:
+            metadata["compensation_factor"] = compensation_factor
+            metadata["effective_epsilon"] = compensated_epsilon
         if self.pii_detector is not None:
             metadata["pii_detection"] = "enabled"
             metadata["pii_spans_count"] = len(pii_spans)
