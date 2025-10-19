@@ -51,6 +51,9 @@ class DPMlmAnonymizer(DPAnonymizer):
         clip_max: Maximum logit value for clipping (default: 16.304797887802124)
         k_candidates: Number of top candidates to consider (default: 5)
         use_temperature: Whether to use temperature scaling (default: True)
+        compensate_epsilon: Whether to compensate epsilon based on perturbation ratio (default: False)
+        add_probability: Probability of adding an additional token after replacement (default: 0.0)
+        delete_probability: Probability of deleting a token instead of replacing (default: 0.0)
         **kwargs: Additional arguments passed to parent DPAnonymizer
     
     Attributes:
@@ -67,6 +70,8 @@ class DPMlmAnonymizer(DPAnonymizer):
         k_candidates: int = 5,
         use_temperature: bool = True,
         compensate_epsilon: bool = False,
+        add_probability: float = 0.0,
+        delete_probability: float = 0.0,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -78,6 +83,8 @@ class DPMlmAnonymizer(DPAnonymizer):
         self.k_candidates = k_candidates
         self.use_temperature = use_temperature
         self.compensate_epsilon = compensate_epsilon
+        self.add_probability = add_probability
+        self.delete_probability = delete_probability
 
         self.pii_detector = None
         self.explainer = None
@@ -207,6 +214,42 @@ class DPMlmAnonymizer(DPAnonymizer):
             top_tokens = torch.topk(torch.from_numpy(mask_logits), k=self.k_candidates, dim=0)[1]
             return self.tokenizer.decode(top_tokens[0].item()).strip()
 
+    def _generate_additional_token(
+        self,
+        text: str,
+        epsilon: float
+    ) -> str:
+        masked_text = text + " " + self.tokenizer.mask_token
+        
+        input_ids = self.tokenizer.encode(masked_text, add_special_tokens=True, truncation=True, max_length=512)
+        
+        try:
+            mask_pos = input_ids.index(self.tokenizer.mask_token_id)
+        except ValueError:
+            return ""
+        
+        model_input = torch.tensor(input_ids).reshape(1, -1).to(self.device)
+        
+        with torch.no_grad():
+            output = self.model(model_input)
+        
+        logits = output[0].squeeze().detach().cpu().numpy()
+        mask_logits = logits[mask_pos]
+        
+        if self.use_temperature:
+            temperature = 2 * self.sensitivity / epsilon
+            mask_logits = np.clip(mask_logits, self.clip_min, self.clip_max)
+            mask_logits = mask_logits / temperature
+            
+            scores = torch.softmax(torch.from_numpy(mask_logits), dim=0)
+            scores = scores / scores.sum()
+            
+            chosen_idx = np.random.choice(len(mask_logits), p=scores.numpy())
+            return self.tokenizer.decode(chosen_idx).strip()
+        else:
+            top_tokens = torch.topk(torch.from_numpy(mask_logits), k=self.k_candidates, dim=0)[1]
+            return self.tokenizer.decode(top_tokens[0].item()).strip()
+
     def batch_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
         if epsilon is None:
             epsilon = [100.0]
@@ -280,6 +323,8 @@ class DPMlmAnonymizer(DPAnonymizer):
             
             perturbed = 0
             total = 0
+            added = 0
+            deleted = 0
             replaced_tokens = []
             
             for i, (token, (token_start, token_end), occurrence) in enumerate(zip(tokens, offsets, occurrences)):
@@ -300,6 +345,13 @@ class DPMlmAnonymizer(DPAnonymizer):
                     total += 1
                     continue
 
+                is_last_token = (i == len(tokens) - 1)
+                delete_prob = np.random.rand()
+                
+                if delete_prob < self.delete_probability and not is_last_token:
+                    deleted += 1
+                    continue
+
                 token_epsilon = critical_map.get(i, compensated_epsilon)
                 private_token = self._privatize_token(text, token, occurrence, token_epsilon)
 
@@ -317,6 +369,16 @@ class DPMlmAnonymizer(DPAnonymizer):
                 if private_token != token:
                     perturbed += 1
                 total += 1
+                
+                add_prob = np.random.rand()
+                if add_prob < self.add_probability:
+                    additional_token = self._generate_additional_token(
+                        self.detokenizer.detokenize(replaced_tokens),
+                        token_epsilon
+                    )
+                    if additional_token:
+                        replaced_tokens.append(additional_token)
+                        added += 1
 
             private_text = self.detokenizer.detokenize(replaced_tokens)
 
@@ -326,6 +388,8 @@ class DPMlmAnonymizer(DPAnonymizer):
                 "model": self.model_checkpoint,
                 "perturbed": perturbed,
                 "total": total,
+                "added": added,
+                "deleted": deleted,
             }
             if self.compensate_epsilon:
                 metadata["effective_epsilon"] = compensated_epsilon
