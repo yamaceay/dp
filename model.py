@@ -4,6 +4,7 @@ import yaml
 
 from dp.methods.anonymizer import Anonymizer
 from dp.methods.registry import MODEL_REGISTRY
+from dp.methods.constants import get_capabilities
 from dp.loaders import ADAPTER_REGISTRY, DatasetRecord, read_annotations
 
 from dp.utils.pii_detector import PIIDetector
@@ -55,7 +56,9 @@ def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_
     if model_cls is None:
         raise ValueError(f"Model '{model}' not found.")
 
-    if model_config.get("requires_dataset", False):
+    capabilities = get_capabilities(model)
+    
+    if capabilities.requires_dataset:
         if dataset is None:
             raise ValueError(f"{model} requires dataset to be loaded")
         model_instance = model_cls(dataset_records=list(dataset.iter_records()), **model_config, **model_kwargs)
@@ -64,8 +67,9 @@ def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_
     
     return model_instance
 
-def use_idx(model_config: dict, data_kwargs: dict, length: int) -> bool:
-    if "requires_idx" not in model_config or not model_config["requires_idx"]:
+def use_idx(model_name: str, data_kwargs: dict, length: int) -> bool:
+    capabilities = get_capabilities(model_name)
+    if not capabilities.requires_dataset:
         return False
     length = min(length, data_kwargs.get("max_records", 0))
     idx = data_kwargs.get("idx", 0)
@@ -87,12 +91,13 @@ if __name__ == "__main__":
     dataset = load_data(data_kwargs)
 
     model_config = load_config(args.model_in)
+    capabilities = get_capabilities(args.model)
     
     pii_chunking = model_config.get("pii_chunking", {})
     tri_chunking = model_config.get("tri_chunking", {})
     dpmlm_chunking = model_config.get("dpmlm_chunking", {})
 
-    if model_config.get("uses_annotations", False):
+    if capabilities.uses_annotations:
         starting_annotations_path = model_config.get("starting_annotations", None)
         if starting_annotations_path:
             model_config["starting_annotations"] = read_annotations(starting_annotations_path)
@@ -101,7 +106,7 @@ if __name__ == "__main__":
     
     model = load_model(model_config, model_kwargs, data_kwargs, dataset)
 
-    if model_config.get("uses_filtering", False):
+    if capabilities.uses_filtering:
         pii_annotator_path = model_config.get("pii_annotator", None)
         threshold = model_config.get("pii_threshold", None)
         pii_use_chunking = pii_chunking.get("enabled", False)
@@ -114,13 +119,13 @@ if __name__ == "__main__":
             selector = PIIOnlySelector(pii_detector=pii_annotator, threshold=threshold)
             model.set_filtering_strategy(selector)
 
-    if model_config.get("uses_scoring", False):
+    if capabilities.uses_scoring:
         explainer_path = model_config.get("explainer_path", None)
         
         explainability = model_config.get("explainability", None)
         tri_use_chunking = tri_chunking.get("enabled", False)
         
-        if model_config.get("requires_non_uniform_explainer", False):
+        if capabilities.requires_non_uniform_explainer:
             if explainability is None or explainability == "uniform":
                 raise ValueError(f"{args.model} requires explainability to be 'greedy' or 'shap', not 'uniform'")
             if explainer_path is None:
@@ -145,12 +150,12 @@ if __name__ == "__main__":
             model.set_scoring_strategy(explainer)
 
     runtime_config = load_config(args.runtime_in)
-    if use_idx(model_config, data_kwargs, len(dataset)):
+    if use_idx(args.model, data_kwargs, len(dataset)):
         result = model.anonymize_from_dataset(idx=args.idx, **runtime_config)
     else:
         result = model.anonymize(text=args.text, **runtime_config)
 
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])
     output_handler = output_handler_cls()
-    output_handler.output(result, dataset=args.data, model=args.model, idx=args.idx if use_idx(model_config, data_kwargs, len(dataset)) else None)
+    output_handler.output(result, dataset=args.data, model=args.model, idx=args.idx if use_idx(args.model, data_kwargs, len(dataset)) else None)
     
