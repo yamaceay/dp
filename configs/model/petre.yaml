@@ -1,4 +1,9 @@
 requires_idx: true
+requires_dataset: true
+uses_annotations: true
+uses_scoring: true
+requires_non_uniform_explainer: true
+
 starting_annotations: null
 
 explainability: greedy

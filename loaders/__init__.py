@@ -9,6 +9,13 @@ from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
 from dp.loaders.trustpilot import TrustpilotDatasetAdapter
 from dp.loaders.tab import TabDatasetAdapter
 from dp.loaders.db_bio import DBBioDatasetAdapter
+from dp.loaders.annotations import (
+    read_annotations,
+    write_annotations,
+    apply_annotations,
+    annotations_to_spans,
+    spans_to_annotations
+)
 
 
 ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
@@ -38,4 +45,9 @@ __all__ = [
     "DBBioDatasetAdapter",
     "TextAnnotation",
     "get_adapter",
+    "read_annotations",
+    "write_annotations",
+    "apply_annotations",
+    "annotations_to_spans",
+    "spans_to_annotations",
 ]

@@ -28,6 +28,9 @@ ENV/
 .ipynb_checkpoints/
 *.ipynb
 
+# Output files (large)
+outputs/
+
 # Model files (large)
 models/
 *.pt

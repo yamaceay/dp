@@ -9,13 +9,14 @@ from transformers import pipeline
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.k_anon import KAnonymizer
 from dp.loaders.base import DatasetRecord, TextAnnotation
+from dp.loaders.annotations import read_annotations, annotations_to_spans, spans_to_annotations
 
 
 class PetreAnonymizer(KAnonymizer):
     def __init__(
         self,
         dataset_records: List[DatasetRecord],
-        starting_annotations: Optional[Dict[str, List]] = None,
+        starting_annotations: Optional[Dict[str, List[TextAnnotation]]] = None,
         mask_text: str = "[MASK]",
         device: str = "auto",
         *args,
@@ -34,7 +35,7 @@ class PetreAnonymizer(KAnonymizer):
         self._initialize_annotations(starting_annotations)
         
         self._k_cache: Dict[int, bool] = {}
-        self._annotation_history: Dict[int, Dict[str, List]] = {}
+        self._annotation_history: Dict[int, Dict[str, List[TextAnnotation]]] = {}
         
         print(f"✓ PetreAnonymizer initialized with {self.num_labels} individuals")
     
@@ -64,22 +65,13 @@ class PetreAnonymizer(KAnonymizer):
             truncation=True,
         )
     
-    def _initialize_annotations(self, starting_annotations: Optional[Dict[str, List]] = None):
-        self.annotations: Dict[str, List[List[int]]] = {}
+    def _initialize_annotations(self, starting_annotations: Optional[Dict[str, List[TextAnnotation]]] = None):
+        self.annotations: Dict[str, List[TextAnnotation]] = {}
         
         for record in self.dataset_records:
             uid = record.uid
             if starting_annotations and uid in starting_annotations:
-                spans = []
-                for annot in starting_annotations[uid]:
-                    if isinstance(annot, dict):
-                        start = annot.get('start', annot.get('start_offset'))
-                        end = annot.get('end', annot.get('end_offset'))
-                        if start is not None and end is not None:
-                            spans.append([int(start), int(end)])
-                    elif isinstance(annot, (list, tuple)) and len(annot) >= 2:
-                        spans.append([int(annot[0]), int(annot[1])])
-                self.annotations[uid] = spans
+                self.annotations[uid] = starting_annotations[uid]
             else:
                 self.annotations[uid] = []
     
@@ -98,29 +90,23 @@ class PetreAnonymizer(KAnonymizer):
             if current_k not in self._k_cache:
                 self._run_petre_for_k(current_k)
                 self._k_cache[current_k] = True
-                self._annotation_history[current_k] = {uid: list(spans) for uid, spans in self.annotations.items()}
+                self._annotation_history[current_k] = {uid: list(annots) for uid, annots in self.annotations.items()}
         
         record = self.dataset_records[idx]
         uid = record.uid
         text = record.text
         
         annotations = self.annotations.get(uid, [])
-        anonymized_text = self._apply_spans(text, annotations)
         
-        text_annotations = [
-            TextAnnotation(
-                start=span[0],
-                end=span[1],
-                text=text[span[0]:span[1]],
-                replacement=self.mask_text,
-                annotator="petre"
-            )
-            for span in annotations
-        ]
+        sorted_annots = sorted(annotations, key=lambda x: x.start, reverse=True)
+        anonymized_text = text
+        for ann in sorted_annots:
+            if 0 <= ann.start < ann.end <= len(anonymized_text):
+                anonymized_text = anonymized_text[:ann.start] + self.mask_text + anonymized_text[ann.end:]
         
         return AnonymizationResult(
             text=anonymized_text,
-            spans=text_annotations,
+            spans=annotations,
             metadata={
                 "k": max(k_values),
                 "perturbed_tokens": len(annotations),
@@ -201,10 +187,10 @@ class PetreAnonymizer(KAnonymizer):
         offset = split_start
         
         relevant_annotations = []
-        for start, end in annotations:
-            if split_start <= start < split_end or split_start < end <= split_end:
-                rel_start = max(0, start - offset)
-                rel_end = min(len(split_text), end - offset)
+        for ann in annotations:
+            if split_start <= ann.start < split_end or split_start < ann.end <= split_end:
+                rel_start = max(0, ann.start - offset)
+                rel_end = min(len(split_text), ann.end - offset)
                 relevant_annotations.append((rel_start, rel_end))
         
         masked_text = split_text
@@ -317,17 +303,20 @@ class PetreAnonymizer(KAnonymizer):
     def _add_annotation(self, uid: str, start: int, end: int):
         if uid not in self.annotations:
             self.annotations[uid] = []
-        self.annotations[uid].append([start, end])
+        
+        record = next((r for r in self.dataset_records if r.uid == uid), None)
+        text = record.text if record else ""
+        
+        self.annotations[uid].append(TextAnnotation(
+            start=start,
+            end=end,
+            text=text[start:end] if text and end <= len(text) else None,
+            replacement=self.mask_text,
+            annotator="petre"
+        ))
     
-    def _apply_spans(self, text: str, spans: List[List[int]]) -> str:
-        masked_text = text
-        for start, end in sorted(spans, key=lambda x: x[0], reverse=True):
-            if 0 <= start < end <= len(masked_text):
-                masked_text = masked_text[:start] + self.mask_text + masked_text[end:]
-        return masked_text
+    def get_annotations(self) -> Dict[str, List[TextAnnotation]]:
+        return {uid: list(annots) for uid, annots in self.annotations.items()}
     
-    def get_annotations(self) -> Dict[str, List]:
-        return self.annotations.copy()
-    
-    def get_annotation_history(self) -> Dict[int, Dict[str, List]]:
-        return {k: {uid: list(spans) for uid, spans in annots.items()} for k, annots in self._annotation_history.items()}
+    def get_annotation_history(self) -> Dict[int, Dict[str, List[TextAnnotation]]]:
+        return {k: {uid: list(annots) for uid, annots in hist.items()} for k, hist in self._annotation_history.items()}
