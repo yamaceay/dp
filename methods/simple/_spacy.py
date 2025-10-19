@@ -1,5 +1,6 @@
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.simple import SimpleAnonymizer
+from dp.loaders.base import TextAnnotation
 
 spacy_models = ["en_core_web_sm", "en_core_web_lg"]
 
@@ -35,7 +36,13 @@ class SpacyAnonymizer(SimpleAnonymizer):
         out_parts = []
         last = 0
         for ent in doc.ents:
-            spans.append({"start": ent.start_char, "end": ent.end_char, "label": ent.label_, "text": ent.text})
+            spans.append(TextAnnotation(
+                start=ent.start_char,
+                end=ent.end_char,
+                label=ent.label_,
+                text=ent.text,
+                annotator="spacy"
+            ))
             out_parts.append(text[last:ent.start_char])
             out_parts.append(f"[{ent.label_}]")
             last = ent.end_char

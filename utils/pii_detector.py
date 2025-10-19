@@ -24,7 +24,7 @@ from dp.loaders.base import DatasetRecord, TextAnnotation
 class PIIDetector:
     def __init__(
         self,
-        model_name: str = "distilbert-base-uncased",
+        model_name: str = "roberta-base",
         labels: Optional[List[str]] = None,
         max_length: int = 512,
         device: str = "auto",
@@ -144,12 +144,13 @@ class PIIDetector:
 
     def train(
         self,
-        epochs: int = 3,
+        epochs: int = 5,
         output_dir: str = "./pii_model_output",
         batch_size: int = 8,
         learning_rate: float = 2e-5,
         use_nervaluate: bool = True,
         nervaluate_mode: str = "partial",
+        metric_mode: str = "recall",
         **kwargs
     ) -> None:
         if self.train_records is None:
@@ -170,6 +171,12 @@ class PIIDetector:
             padding=True,
         )
         
+        metric_for_best_model=None
+        if eval_dataset and use_nervaluate and NERVALUATE_AVAILABLE:
+            metric_for_best_model=f"{nervaluate_mode}_{metric_mode}"
+        elif eval_dataset:
+            metric_for_best_model=metric_mode
+
         training_args = TrainingArguments(
             output_dir=output_dir,
             num_train_epochs=epochs,
@@ -185,7 +192,8 @@ class PIIDetector:
             save_strategy="steps",
             save_steps=250,
             load_best_model_at_end=True if eval_dataset else False,
-            metric_for_best_model=f"{nervaluate_mode}_f1" if (eval_dataset and use_nervaluate and NERVALUATE_AVAILABLE) else "f1" if eval_dataset else None,
+            metric_for_best_model=metric_for_best_model,
+            greater_is_better=True,
             report_to="none",
             fp16=torch.cuda.is_available(),
             **kwargs,
@@ -319,7 +327,7 @@ class PIIDetector:
         unique_bio_labels = [l for l in self.labels if l != "O"]
         
         metrics = {}
-        
+
         if use_nervaluate and NERVALUATE_AVAILABLE:
             if modes is None:
                 modes = ["strict", "partial", "exact"]

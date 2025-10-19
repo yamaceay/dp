@@ -47,14 +47,20 @@ def load_data(data_kwargs: Optional[dict]) -> List[DatasetRecord]:
     dataset = adapter(**data_kwargs)
     return dataset
 
-def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_kwargs: Optional[dict]) -> Anonymizer:
+def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_kwargs: Optional[dict], dataset: Optional[List[DatasetRecord]] = None) -> Anonymizer:
     model = model_kwargs.get("model")
     model_cls = MODEL_REGISTRY.get(model)
     if model_cls is None:
         raise ValueError(f"Model '{model}' not found.")
 
-    model = model_cls(**model_config, **model_kwargs, **data_kwargs)
-    return model
+    if model in ["petre"]:
+        if dataset is None:
+            raise ValueError("PETRE requires dataset to be loaded")
+        model_instance = model_cls(dataset_records=list(dataset.iter_records()), **model_config, **model_kwargs)
+    else:
+        model_instance = model_cls(**model_config, **model_kwargs, **data_kwargs)
+    
+    return model_instance
 
 def use_idx(model_config: dict, data_kwargs: dict, length: int) -> bool:
     if "requires_idx" not in model_config or not model_config["requires_idx"]:
@@ -83,10 +89,19 @@ if __name__ == "__main__":
     pii_chunking = model_config.get("pii_chunking", {})
     tri_chunking = model_config.get("tri_chunking", {})
     dpmlm_chunking = model_config.get("dpmlm_chunking", {})
-    
-    model = load_model(model_config, model_kwargs, data_kwargs)
 
-    if args.model == "dpmlm":
+    if args.model in ["petre"]:
+        starting_annotations = None
+        starting_annotations_path = model_config.get("starting_annotations", None)
+        if starting_annotations_path:
+            import json
+            with open(starting_annotations_path, 'r', encoding='utf-8') as f:
+                starting_annotations = json.load(f)
+        model_config["starting_annotations"] = starting_annotations
+    
+    model = load_model(model_config, model_kwargs, data_kwargs, dataset)
+
+    if args.model in ["dpmlm"]:
         pii_annotator_path = model_config.get("pii_annotator", None)
         threshold = model_config.get("pii_threshold", None)
         pii_use_chunking = pii_chunking.get("enabled", False)
@@ -99,13 +114,24 @@ if __name__ == "__main__":
             selector = PIIOnlySelector(pii_detector=pii_annotator, threshold=threshold)
             model.set_filtering_strategy(selector)
 
+    if args.model in ["dpmlm", "petre"]:
         explainer_path = model_config.get("explainer_path", None)
+        
         explainability = model_config.get("explainability", None)
         tri_use_chunking = tri_chunking.get("enabled", False)
+        
+        if args.model == "petre":
+            if explainability is None or explainability == "uniform":
+                raise ValueError("PETRE requires explainability to be 'greedy' or 'shap', not 'uniform'")
+            if explainer_path is None:
+                raise ValueError("PETRE requires explainer_path to be set")
+        
         if explainability is None:
             explainability = "uniform"
+        
         if explainability == "uniform":
             explainer = UniformExplainer()
+            model.set_scoring_strategy(explainer)
         elif explainer_path is not None:
             if explainability == "greedy":
                 explainer = GreedyExplainer(model_name=explainer_path, use_chunking=tri_use_chunking)
@@ -125,5 +151,6 @@ if __name__ == "__main__":
         result = model.anonymize(text=args.text, **runtime_config)
 
     print("Anonymized Text:", result.text)
+    print("Annotations:", result.spans)
     print("Metadata:", result.metadata)
     

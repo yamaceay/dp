@@ -13,9 +13,9 @@ def main():
                         help="Dataset name")
     parser.add_argument("--data-path", type=str, default="data/TAB/splitted",
                         help="Path to dataset file or directory")
-    parser.add_argument("--model-name", type=str, default="distilbert-base-uncased",
+    parser.add_argument("--model-name", type=str, default="roberta-base",
                         help="Base model name for PII detection")
-    parser.add_argument("--epochs", type=int, default=3,
+    parser.add_argument("--epochs", type=int, default=5,
                         help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=8,
                         help="Batch size for training")
@@ -26,6 +26,9 @@ def main():
     parser.add_argument("--evaluation-mode", type=str, default="partial", 
                         choices=["strict", "partial", "exact"],
                         help="Evaluation mode for nervaluate (strict, partial, exact)")
+    parser.add_argument("--metric-mode", type=str, default="recall", 
+                        choices=["precision", "recall", "f1"],
+                        help="Metric mode for selecting best model during training")
     parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate", "predict"],
                         help="Mode: train, evaluate, or predict")
     parser.add_argument("--model-path", type=str, default=None,
@@ -85,6 +88,7 @@ def main():
             output_dir=model_path,
             use_nervaluate=args.use_nervaluate,
             nervaluate_mode=args.evaluation_mode,
+            metric_mode=args.metric_mode,
         )
         
         print(f"\n✓ Model saved to {model_path}")
@@ -115,7 +119,7 @@ def main():
             use_nervaluate=args.use_nervaluate,
             modes=["strict", "partial", "exact"]
         )
-        
+
         print("\nEvaluation Results:")
         for key, value in metrics.items():
             if key != "per_category" and not isinstance(value, dict):

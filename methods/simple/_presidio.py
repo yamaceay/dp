@@ -1,5 +1,6 @@
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.simple import SimpleAnonymizer
+from dp.loaders.base import TextAnnotation
 
 class PresidioAnonymizer(SimpleAnonymizer):
     def __init__(self, *args, **kwargs):
@@ -32,7 +33,14 @@ class PresidioAnonymizer(SimpleAnonymizer):
             end = int(r.end)
             if start < last:
                 continue
-            spans.append({"start": start, "end": end, "label": r.entity_type, "text": (text or "")[start:end], "confidence": getattr(r, 'score', None)})
+            spans.append(TextAnnotation(
+                start=start,
+                end=end,
+                label=r.entity_type,
+                text=(text or "")[start:end],
+                confidence=getattr(r, 'score', None),
+                annotator="presidio"
+            ))
             out_parts.append((text or "")[last:start])
             out_parts.append(f"[{r.entity_type}]")
             last = end

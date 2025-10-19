@@ -17,13 +17,11 @@ class ManualAnonymizer(SimpleAnonymizer):
         raise NotImplementedError("Use anonymize_from_dataset with an index for ManualAnonymizer.")
 
     def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
-        # Manual anonymization logic goes here
-
         text = self.texts[idx]
         for annotation in self.annotations[idx]:
             text = text.replace(annotation.text, f"[{annotation.label}]")
 
-        spans = [ann.__dict__ for ann in self.annotations[idx]]
+        spans = self.annotations[idx]
         metadata = {"method": "manual"}
         return AnonymizationResult(text=text, spans=spans, metadata=metadata)
 

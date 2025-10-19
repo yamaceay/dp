@@ -9,6 +9,7 @@ transformers
 # NLP utilities
 nltk
 nervaluate
+scikit-learn
 
 # Optional dependencies for specific anonymizers
 # SpaCy NER
