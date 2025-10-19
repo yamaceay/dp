@@ -39,8 +39,8 @@ class TrustpilotDatasetAdapter(DatasetAdapter):
             metadata = dict(row)
 
             yield DatasetRecord(
-                uid=uid,
                 text=text,
+                uid=uid,
                 utilities=utilities,
                 metadata=metadata,
             )

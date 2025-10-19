@@ -22,8 +22,8 @@ class TextAnnotation:
 class DatasetRecord:
     """Normalized representation of a dataset record."""
 
-    uid: str
     text: str
+    uid: str = ""
     name: str = ""
     spans: Optional[list[TextAnnotation]] = None
     utilities: Dict[str, Optional[Any]] = field(default_factory=dict)

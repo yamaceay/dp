@@ -62,8 +62,8 @@ class DBBioDatasetAdapter(DatasetAdapter):
             }
 
             yield DatasetRecord(
-                uid=str(uid),
                 text=text,
+                uid=str(uid),
                 name=name,
                 utilities=utilities,
                 metadata=metadata,

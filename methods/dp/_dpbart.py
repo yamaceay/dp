@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import List
 import torch
 import numpy as np
 
@@ -50,19 +50,20 @@ class DPBartAnonymizer(DPAnonymizer):
         noise = torch.from_numpy(np.random.normal(0, scale, size=vector.shape)).float()
         return vector + noise.to(vector.device)
 
-    def anonymize(self, text: str, *args, epsilon: Union[float, List[float]] = 100.0, **kwargs) -> AnonymizationResult:
-        """Anonymize text using DP-BART mechanism."""
-        if isinstance(epsilon, list):
-            epsilon = epsilon[0] if epsilon else 100.0
+    def batch_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
+        if epsilon is None:
+            epsilon = [100.0]
         
-        epsilon = float(epsilon)
-        metadata = {"epsilon": epsilon, "delta": self.delta, "method": "dpbart"}
+        if not isinstance(epsilon, list):
+            epsilon = [float(epsilon)]
+        
+        epsilon = [float(e) for e in epsilon]
         
         if not text or not text.strip():
-            return AnonymizationResult(
+            return [AnonymizationResult(
                 text="",
-                metadata=metadata
-            )
+                metadata={"epsilon": e, "delta": self.delta, "method": "dpbart"}
+            ) for e in epsilon]
         
         inputs = self.tokenizer(
             text,
@@ -72,29 +73,40 @@ class DPBartAnonymizer(DPAnonymizer):
         ).to(self.device)
         
         if inputs["input_ids"].shape[-1] == 0:
-            return AnonymizationResult(
+            return [AnonymizationResult(
                 text="",
-                metadata=metadata
-            )
+                metadata={"epsilon": e, "delta": self.delta, "method": "dpbart"}
+            ) for e in epsilon]
         
         num_tokens = len(inputs["input_ids"][0])
         
         with torch.no_grad():
             enc_output = self.model.encoder(**inputs)
-            
             clipped = self._clip(enc_output["last_hidden_state"].cpu())
-            noisy = self._add_noise(clipped, epsilon).to(self.device)
-            enc_output["last_hidden_state"] = noisy
             
-            dec_out = self.decoder.generate(
-                encoder_outputs=enc_output,
-                max_new_tokens=num_tokens
-            )
-            
-            private_text = self.tokenizer.decode(dec_out[0], skip_special_tokens=True).strip()
-
-        metadata.update({
-            "model": self.model_name,
-        })
-
-        return AnonymizationResult(text=private_text, metadata=metadata)
+            results = []
+            for eps in epsilon:
+                noisy = self._add_noise(clipped.clone(), eps).to(self.device)
+                enc_output_copy = {k: v for k, v in enc_output.items()}
+                enc_output_copy["last_hidden_state"] = noisy
+                
+                dec_out = self.decoder.generate(
+                    encoder_outputs=enc_output_copy,
+                    max_new_tokens=num_tokens
+                )
+                
+                private_text = self.tokenizer.decode(dec_out[0], skip_special_tokens=True).strip()
+                
+                metadata = {
+                    "epsilon": eps,
+                    "delta": self.delta,
+                    "method": "dpbart",
+                    "model": self.model_name,
+                }
+                
+                results.append(AnonymizationResult(text=private_text, metadata=metadata))
+        
+        return results
+    
+    def anonymize(self, text: str, *args, epsilon: float = 100.0, **kwargs) -> AnonymizationResult:
+        return self.batch_anonymize(text, epsilon=[epsilon], **kwargs)[0]

@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import List
 import torch
 
 from dp.methods.anonymizer import AnonymizationResult
@@ -71,43 +71,54 @@ class DPParaphraseAnonymizer(DPAnonymizer):
             return input_ids[0]
         return input_ids or []
 
-    def anonymize(self, text: str, *args, epsilon: Union[float, List[float]] = 100.0, **kwargs) -> AnonymizationResult:
-        if isinstance(epsilon, list):
-            epsilon = epsilon[0] if epsilon else 100.0
+    def batch_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
+        if epsilon is None:
+            epsilon = [100.0]
         
-        epsilon = float(epsilon)
+        if not isinstance(epsilon, list):
+            epsilon = [float(epsilon)]
+        
+        epsilon = [float(e) for e in epsilon]
         
         if not text or not text.strip():
-            return AnonymizationResult(
+            return [AnonymizationResult(
                 text="",
-                metadata={"epsilon": epsilon, "method": "dpparaphrase"}
-            )
+                metadata={"epsilon": e, "method": "dpparaphrase"}
+            ) for e in epsilon]
         
-        temperature = 2 * self.sensitivity / epsilon
         prompt = text + " >>>>> "
         prompt_ids = self._encode_without_special(prompt)
         length = len(prompt_ids)
         
+        results = []
         with torch.no_grad():
-            generated = self.pipe(
-                prompt,
-                max_new_tokens=length,
-                temperature=temperature,
-            )[0]["generated_text"]
+            for eps in epsilon:
+                temperature = 2 * self.sensitivity / eps
+                
+                generated = self.pipe(
+                    prompt,
+                    max_new_tokens=length,
+                    temperature=temperature,
+                )[0]["generated_text"]
+                
+                private_text = (
+                    generated.replace(prompt, "")
+                    .replace(prompt.strip(), "")
+                    .replace("\xa0", " ")
+                    .replace(">", "")
+                    .strip()
+                )
+                
+                metadata = {
+                    "epsilon": eps,
+                    "method": "dpparaphrase",
+                    "model": self.model_checkpoint,
+                    "temperature": temperature,
+                }
+                
+                results.append(AnonymizationResult(text=private_text, metadata=metadata))
         
-        private_text = (
-            generated.replace(prompt, "")
-            .replace(prompt.strip(), "")
-            .replace("\xa0", " ")
-            .replace(">", "")
-            .strip()
-        )
-        
-        metadata = {
-            "epsilon": epsilon,
-            "method": "dpparaphrase",
-            "model": self.model_checkpoint,
-            "temperature": temperature,
-        }
-        
-        return AnonymizationResult(text=private_text, metadata=metadata)
+        return results
+    
+    def anonymize(self, text: str, *args, epsilon: float = 100.0, **kwargs) -> AnonymizationResult:
+        return self.batch_anonymize(text, epsilon=[epsilon], **kwargs)[0]

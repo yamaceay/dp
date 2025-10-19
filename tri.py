@@ -71,8 +71,8 @@ def create_eval_datasets(records: List[DatasetRecord],
             anonymized_text = anonymize_text(record.text, doc_annotations)
             
             eval_record = DatasetRecord(
-                uid=record.uid,
                 text=anonymized_text,
+                uid=record.uid,
                 name=record.name,
                 spans=record.spans,
                 utilities=record.utilities,

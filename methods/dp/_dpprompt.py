@@ -1,4 +1,4 @@
-from typing import Union, List, Optional
+from typing import List, Optional
 import torch
 
 from dp.methods.anonymizer import AnonymizationResult
@@ -56,19 +56,21 @@ class DPPromptAnonymizer(DPAnonymizer):
             return input_ids[0]
         return input_ids or []
 
-    def anonymize(self, text: str, *args, epsilon: Union[float, List[float]] = 100.0, **kwargs) -> AnonymizationResult:
-        if isinstance(epsilon, list):
-            epsilon = epsilon[0] if epsilon else 100.0
+    def batch_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
+        if epsilon is None:
+            epsilon = [100.0]
         
-        epsilon = float(epsilon)
+        if not isinstance(epsilon, list):
+            epsilon = [float(epsilon)]
+        
+        epsilon = [float(e) for e in epsilon]
         
         if not text or not text.strip():
-            return AnonymizationResult(
+            return [AnonymizationResult(
                 text="",
-                metadata={"epsilon": epsilon, "method": "dpprompt"}
-            )
+                metadata={"epsilon": e, "method": "dpprompt"}
+            ) for e in epsilon]
         
-        temperature = 2 * self.sensitivity / epsilon
         prompt = self._create_prompt(text)
         prompt_ids = self._encode_without_special(prompt)
         max_new_tokens = len(prompt_ids)
@@ -79,25 +81,34 @@ class DPPromptAnonymizer(DPAnonymizer):
             truncation=True,
         ).to(self.device)
         
+        results = []
         with torch.no_grad():
-            output = self.model.generate(
-                **model_inputs,
-                do_sample=True,
-                top_k=0,
-                top_p=1.0,
-                temperature=temperature,
-                max_new_tokens=max_new_tokens,
-                logits_processor=self.logits_processor,
-            )
+            for eps in epsilon:
+                temperature = 2 * self.sensitivity / eps
+                
+                output = self.model.generate(
+                    **model_inputs,
+                    do_sample=True,
+                    top_k=0,
+                    top_p=1.0,
+                    temperature=temperature,
+                    max_new_tokens=max_new_tokens,
+                    logits_processor=self.logits_processor,
+                )
+                
+                private_text = self.tokenizer.decode(output[0], skip_special_tokens=True).strip()
+                
+                metadata = {
+                    "epsilon": eps,
+                    "method": "dpprompt",
+                    "model": self.model_checkpoint,
+                    "temperature": temperature,
+                }
+                
+                results.append(AnonymizationResult(text=private_text, metadata=metadata))
         
-        private_text = self.tokenizer.decode(output[0], skip_special_tokens=True).strip()
-        
-        metadata = {
-            "epsilon": epsilon,
-            "method": "dpprompt",
-            "model": self.model_checkpoint,
-            "temperature": temperature,
-        }
-        
-        return AnonymizationResult(text=private_text, metadata=metadata)
+        return results
+    
+    def anonymize(self, text: str, *args, epsilon: float = 100.0, **kwargs) -> AnonymizationResult:
+        return self.batch_anonymize(text, epsilon=[epsilon], **kwargs)[0]
 

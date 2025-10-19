@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple
 import os
 import re
 import torch
@@ -80,11 +80,11 @@ class PetreAnonymizer(KAnonymizer):
         self.tri_pipeline_path = explainer.tri_detector.model_name
         self._load_tri_pipeline()
     
-    def anonymize(self, text: str, k: Union[int, List[int]], *args, **kwargs) -> AnonymizationResult:
+    def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize_from_dataset for PetreAnonymizer.")
     
-    def anonymize_from_dataset(self, idx: int, k: Union[int, List[int]], *args, **kwargs) -> AnonymizationResult:
-        k_values = [k] if isinstance(k, int) else sorted(k)
+    def batch_anonymize_from_dataset(self, idx: int, k: List[int], *args, **kwargs) -> List[AnonymizationResult]:
+        k_values = sorted(k)
         
         for current_k in k_values:
             if current_k not in self._k_cache:
@@ -96,24 +96,31 @@ class PetreAnonymizer(KAnonymizer):
         uid = record.uid
         text = record.text
         
-        annotations = self.annotations.get(uid, [])
+        results = []
+        for k_val in k_values:
+            annotations = self._annotation_history.get(k_val, {}).get(uid, [])
+            
+            sorted_annots = sorted(annotations, key=lambda x: x.start, reverse=True)
+            anonymized_text = text
+            for ann in sorted_annots:
+                if 0 <= ann.start < ann.end <= len(anonymized_text):
+                    anonymized_text = anonymized_text[:ann.start] + self.mask_text + anonymized_text[ann.end:]
+            
+            results.append(AnonymizationResult(
+                text=anonymized_text,
+                spans=annotations,
+                metadata={
+                    "k": k_val,
+                    "perturbed_tokens": len(annotations),
+                    "method": "petre",
+                    "uid": uid
+                }
+            ))
         
-        sorted_annots = sorted(annotations, key=lambda x: x.start, reverse=True)
-        anonymized_text = text
-        for ann in sorted_annots:
-            if 0 <= ann.start < ann.end <= len(anonymized_text):
-                anonymized_text = anonymized_text[:ann.start] + self.mask_text + anonymized_text[ann.end:]
-        
-        return AnonymizationResult(
-            text=anonymized_text,
-            spans=annotations,
-            metadata={
-                "k": max(k_values),
-                "perturbed_tokens": len(annotations),
-                "method": "petre",
-                "uid": uid
-            }
-        )
+        return results
+    
+    def anonymize_from_dataset(self, idx: int, k: int, *args, **kwargs) -> AnonymizationResult:
+        return self.batch_anonymize_from_dataset(idx, k=[k], *args, **kwargs)[0]
     
     def _run_petre_for_k(self, k: int):
         ranks = self._evaluate_all()

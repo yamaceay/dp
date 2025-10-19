@@ -46,8 +46,8 @@ class TabDatasetAdapter(DatasetAdapter):
             }
 
             yield DatasetRecord(
-                uid=uid,
                 text=text,
+                uid=uid,
                 name=name,
                 spans=spans,
                 utilities=utilities,

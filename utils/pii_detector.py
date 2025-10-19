@@ -283,8 +283,8 @@ class PIIDetector:
                     )
             
             new_record = DatasetRecord(
-                uid=record.uid,
                 text=record.text,
+                uid=record.uid,
                 name=record.name,
                 spans=spans,
                 utilities=record.utilities.copy(),

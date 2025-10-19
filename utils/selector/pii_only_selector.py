@@ -62,11 +62,7 @@ class PIIOnlySelector(TokenSelector):
         if not text or not text.strip():
             return []
         
-        temp_record = DatasetRecord(
-            uid="temp",
-            text=text,
-            spans=[]
-        )
+        temp_record = DatasetRecord(text=text)
         
         predictions = self.pii_detector.predict([temp_record])
         

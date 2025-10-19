@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import List
 import nltk
 import torch
 import numpy as np
@@ -207,17 +207,20 @@ class DPMlmAnonymizer(DPAnonymizer):
             top_tokens = torch.topk(torch.from_numpy(mask_logits), k=self.k_candidates, dim=0)[1]
             return self.tokenizer.decode(top_tokens[0].item()).strip()
 
-    def anonymize(self, text: str, *args, epsilon: Union[float, List[float]] = 100.0, **kwargs) -> AnonymizationResult:
-        if isinstance(epsilon, list):
-            epsilon = epsilon[0] if epsilon else 100.0
-
-        epsilon = float(epsilon)
+    def batch_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
+        if epsilon is None:
+            epsilon = [100.0]
+        
+        if not isinstance(epsilon, list):
+            epsilon = [float(epsilon)]
+        
+        epsilon = [float(e) for e in epsilon]
 
         if not text or not text.strip():
-            return AnonymizationResult(
+            return [AnonymizationResult(
                 text="",
-                metadata={"epsilon": epsilon, "method": "dpmlm"}
-            )
+                metadata={"epsilon": e, "method": "dpmlm"}
+            ) for e in epsilon]
 
         tokens = self._tokenize(text)
         offsets = self._get_token_offsets(text, tokens)
@@ -253,79 +256,89 @@ class DPMlmAnonymizer(DPAnonymizer):
                 perturbation_ratio = len(critical_indices) / non_punctuation_total
                 perturbation_ratio = max(perturbation_ratio, 1e-6)
 
-        compensated_epsilon = epsilon * perturbation_ratio
-        epsilon_values = [compensated_epsilon] * len(critical_indices)
-        
+        scores = None
+        weights = None
         if self.explainer is not None and critical_tokens:
             try:
                 scores = self.explainer.explain(text, critical_tokens)
                 if scores is not None and len(scores) == len(critical_tokens):
                     positive_scores = np.maximum(scores, 1e-6)
                     weights = positive_scores / positive_scores.sum()
-                    epsilon_values = [compensated_epsilon / (w * len(weights)) for w in weights]
-                    epsilon_values = np.clip(epsilon_values, 1e-6, compensated_epsilon * len(weights))
             except Exception as e:
                 print(f"Warning: Explainer failed ({e}), using uniform epsilon")
-
-        perturbed = 0
-        total = 0
-        replaced_tokens = []
-        critical_map = {idx: eps for idx, eps in zip(critical_indices, epsilon_values)}
-
-        for i, (token, (token_start, token_end), occurrence) in enumerate(zip(tokens, offsets, occurrences)):
-            if token in string.punctuation:
-                replaced_tokens.append(token)
-                total += 1
-                continue
-
-            is_pii = False
-            if pii_spans:
-                is_pii = any(
-                    not (token_end <= span.start or token_start >= span.end)
-                    for span in pii_spans
-                )
+        
+        results = []
+        for eps in epsilon:
+            compensated_epsilon = eps * perturbation_ratio
+            epsilon_values = [compensated_epsilon] * len(critical_indices)
             
-            if pii_spans and not is_pii:
-                replaced_tokens.append(token)
+            if weights is not None:
+                epsilon_values = [compensated_epsilon / (w * len(weights)) for w in weights]
+                epsilon_values = np.clip(epsilon_values, 1e-6, compensated_epsilon * len(weights))
+            
+            critical_map = {idx: eps_val for idx, eps_val in zip(critical_indices, epsilon_values)}
+            
+            perturbed = 0
+            total = 0
+            replaced_tokens = []
+            
+            for i, (token, (token_start, token_end), occurrence) in enumerate(zip(tokens, offsets, occurrences)):
+                if token in string.punctuation:
+                    replaced_tokens.append(token)
+                    total += 1
+                    continue
+
+                is_pii = False
+                if pii_spans:
+                    is_pii = any(
+                        not (token_end <= span.start or token_start >= span.end)
+                        for span in pii_spans
+                    )
+                
+                if pii_spans and not is_pii:
+                    replaced_tokens.append(token)
+                    total += 1
+                    continue
+
+                token_epsilon = critical_map.get(i, compensated_epsilon)
+                private_token = self._privatize_token(text, token, occurrence, token_epsilon)
+
+                original_text = text[token_start:token_end]
+                if len(private_token) == len(original_text):
+                    private_token = ''.join(
+                        p.upper() if o.isupper() else p.lower()
+                        for p, o in zip(private_token, original_text)
+                    )
+                elif original_text and original_text[0].isupper():
+                    private_token = private_token.capitalize()
+
+                replaced_tokens.append(private_token)
+
+                if private_token != token:
+                    perturbed += 1
                 total += 1
-                continue
 
-            token_epsilon = critical_map.get(i, epsilon)
-            private_token = self._privatize_token(text, token, occurrence, token_epsilon)
+            private_text = self.detokenizer.detokenize(replaced_tokens)
 
-            original_text = text[token_start:token_end]
-            if len(private_token) == len(original_text):
-                private_token = ''.join(
-                    p.upper() if o.isupper() else p.lower()
-                    for p, o in zip(private_token, original_text)
-                )
-            elif original_text and original_text[0].isupper():
-                private_token = private_token.capitalize()
+            metadata = {
+                "epsilon": eps,
+                "method": "dpmlm",
+                "model": self.model_checkpoint,
+                "perturbed": perturbed,
+                "total": total,
+            }
+            if self.compensate_epsilon:
+                metadata["effective_epsilon"] = compensated_epsilon
+            if self.pii_detector is not None:
+                metadata["pii_detection"] = "enabled"
+                metadata["pii_spans_count"] = len(pii_spans)
+            if self.explainer is not None:
+                metadata["explainer"] = self.explainer.__class__.__name__
+                metadata["critical_tokens"] = len(critical_tokens)
 
-            replaced_tokens.append(private_token)
-
-            if private_token != token:
-                perturbed += 1
-            total += 1
-
-        private_text = self.detokenizer.detokenize(replaced_tokens)
-
-        metadata = {
-            "epsilon": epsilon,
-            "compensated_epsilon": compensated_epsilon,
-            "method": "dpmlm",
-            "model": self.model_checkpoint,
-            "perturbed": perturbed,
-            "total": total,
-        }
-        if self.compensate_epsilon:
-            metadata["compensation_factor"] = compensation_factor
-            metadata["effective_epsilon"] = compensated_epsilon
-        if self.pii_detector is not None:
-            metadata["pii_detection"] = "enabled"
-            metadata["pii_spans_count"] = len(pii_spans)
-        if self.explainer is not None:
-            metadata["explainer"] = self.explainer.__class__.__name__
-            metadata["critical_tokens"] = len(critical_tokens)
-
-        return AnonymizationResult(text=private_text, metadata=metadata)
+            results.append(AnonymizationResult(text=private_text, metadata=metadata))
+        
+        return results
+    
+    def anonymize(self, text: str, *args, epsilon: float = 100.0, **kwargs) -> AnonymizationResult:
+        return self.batch_anonymize(text, epsilon=[epsilon], **kwargs)[0]

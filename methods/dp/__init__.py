@@ -1,5 +1,6 @@
 from typing import Union, List, Optional
 import torch
+from abc import abstractmethod
 from dp.methods.anonymizer import Anonymizer, AnonymizationResult
 
 class DPAnonymizer(Anonymizer):
@@ -9,11 +10,14 @@ class DPAnonymizer(Anonymizer):
         self.device = self._resolve_device(kwargs.get("device", None))
         print("Initialized DPAnonymizer")
 
-    def anonymize(self, text: str, epsilon: Union[float, List[float]], *args, **kwargs) -> AnonymizationResult:
-        # placeholder for DP anonymization
-        return AnonymizationResult(text="[DP ANONYMIZED TEXT]")
+    @abstractmethod
+    def batch_anonymize(self, text: str, epsilon: List[float], *args, **kwargs) -> List[AnonymizationResult]:
+        raise NotImplementedError()
     
-    def anonymize_from_dataset(self, idx: int, epsilon: Union[float, List[float]], *args, **kwargs) -> AnonymizationResult:
+    def anonymize(self, text: str, epsilon: float, *args, **kwargs) -> AnonymizationResult:
+        return self.batch_anonymize(text, epsilon=[epsilon], *args, **kwargs)[0]
+    
+    def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize with text for DPAnonymizer.")
 
     def _resolve_device(self, device: Optional[Union[str, int, torch.device]]) -> torch.device:
