@@ -40,7 +40,7 @@ class OutputHandler:
 class PrintOutputHandler(OutputHandler):
     def output(self, result: AnonymizationResult, dataset: str, model: str, **kwargs):
         print("Anonymized Text:", result.text)
-        print("Annotations:", result.spans)
+        print("# Annotations:", len(result.spans or []))
         print("Metadata:", result.metadata)
 
 

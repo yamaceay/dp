@@ -10,6 +10,7 @@ transformers
 nltk
 nervaluate
 scikit-learn
+bert-score
 
 # Optional dependencies for specific anonymizers
 # SpaCy NER
