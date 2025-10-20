@@ -144,7 +144,9 @@ class TRIDetector:
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         if self.model is None and self.num_labels > 0:
             self.model = AutoModelForSequenceClassification.from_pretrained(
-                self.model_name, num_labels=self.num_labels
+                self.model_name, 
+                num_labels=self.num_labels,
+                problem_type="single_label_classification"
             )
             self.model.to(self.device)
     
@@ -408,7 +410,7 @@ class TRIDataset(Dataset):
         )
         
         if use_labels:
-            self.labels = torch.tensor([name_to_label[r.name] for r in records], dtype=torch.float)
+            self.labels = torch.tensor([name_to_label[r.name] for r in records], dtype=torch.long)
     
     def __len__(self):
         return len(self.records)
