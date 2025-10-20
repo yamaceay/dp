@@ -1,6 +1,7 @@
 from typing import List
 import torch
 import numpy as np
+from transformers.modeling_outputs import BaseModelOutput
 
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.dp import DPAnonymizer
@@ -87,11 +88,11 @@ class DPBartAnonymizer(DPAnonymizer):
             results = []
             for eps in epsilon:
                 noisy = self._add_noise(clipped.clone(), eps).to(self.device)
-                enc_output_copy = {k: v for k, v in enc_output.items()}
-                enc_output_copy["last_hidden_state"] = noisy
+                
+                encoder_outputs_obj = BaseModelOutput(last_hidden_state=noisy)
                 
                 dec_out = self.decoder.generate(
-                    encoder_outputs=enc_output_copy,
+                    encoder_outputs=encoder_outputs_obj,
                     max_new_tokens=num_tokens
                 )
                 

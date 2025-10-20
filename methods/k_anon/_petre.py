@@ -140,30 +140,77 @@ class PetreAnonymizer(KAnonymizer):
         return self.grid_anonymize_from_dataset(idx, k=[k], *args, **kwargs)[0]
     
     def _run_petre_for_k(self, k: int):
+        print(f"\n{'='*60}")
+        print(f"Running PETRE for k={k}")
+        print(f"{'='*60}")
+        
+        print(f"Evaluating initial ranks for {len(self.dataset_records)} documents...")
         ranks = self._evaluate_all()
         
-        for idx, record in enumerate(self.dataset_records):
+        docs_needing_masking = sum(1 for rank in ranks if rank < k)
+        print(f"Found {docs_needing_masking} documents with rank < {k} that need masking")
+        
+        try:
+            from tqdm import tqdm
+            use_tqdm = True
+        except ImportError:
+            use_tqdm = False
+            print("Note: Install tqdm for progress bars (pip install tqdm)")
+        
+        iterator = enumerate(self.dataset_records)
+        if use_tqdm:
+            iterator = tqdm(list(iterator), desc=f"Processing docs (k={k})", unit="doc")
+        
+        for idx, record in iterator:
             rank = ranks[idx]
             
             if rank >= k:
+                if not use_tqdm:
+                    print(f"  Doc {idx} ({record.name}): rank={rank} >= k={k}, skipping")
                 continue
             
             label = self.name_to_label[record.name]
+            iteration = 0
+            
+            if not use_tqdm:
+                print(f"  Doc {idx} ({record.name}): initial rank={rank}, needs masking")
             
             while rank < k:
+                iteration += 1
+                if not use_tqdm:
+                    print(f"    Iteration {iteration}: rank={rank}, finding term to mask...")
+                
                 splits_probs = self._evaluate_document(idx)
                 masked = self._mask_most_disclosive_term(idx, splits_probs, label)
                 
                 if not masked:
+                    if not use_tqdm:
+                        print(f"    No more terms to mask, stopping")
                     break
                 
                 splits_probs = self._evaluate_document(idx)
                 rank = self._get_rank_from_probs(splits_probs, label)
+                
+                if not use_tqdm:
+                    print(f"    After masking: new rank={rank}")
+        
+        print(f"\nCompleted PETRE for k={k}")
+        print(f"{'='*60}\n")
     
     def _evaluate_all(self) -> np.ndarray:
         ranks = np.zeros(len(self.dataset_records))
         
-        for idx in range(len(self.dataset_records)):
+        try:
+            from tqdm import tqdm
+            use_tqdm = True
+        except ImportError:
+            use_tqdm = False
+        
+        iterator = range(len(self.dataset_records))
+        if use_tqdm:
+            iterator = tqdm(iterator, desc="Initial ranking", unit="doc")
+        
+        for idx in iterator:
             splits_probs = self._evaluate_document(idx)
             label = self.name_to_label[self.dataset_records[idx].name]
             ranks[idx] = self._get_rank_from_probs(splits_probs, label)
