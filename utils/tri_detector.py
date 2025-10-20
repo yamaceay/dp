@@ -13,6 +13,7 @@ from transformers import (
     AutoModelForMaskedLM,
     TrainingArguments,
     Trainer,
+    TrainerCallback,
     DataCollatorForLanguageModeling,
     get_constant_schedule,
     pipeline,
@@ -37,7 +38,7 @@ def compute_metrics(eval_pred):
     all_labels = torch.zeros(num_predictions, device="cpu")
     
     for idx, (label, summed_logits) in enumerate(logits_dict.items()):
-        all_labels[idx] = label
+        all_labels[idx] = torch.tensor(label)
         probabilities = F.softmax(summed_logits, dim=-1)
         all_predictions[idx] = torch.argmax(probabilities)
     
@@ -46,15 +47,50 @@ def compute_metrics(eval_pred):
     
     return {"Accuracy": accuracy}
 
+
+class MetricsPrintCallback(TrainerCallback):
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if not metrics:
+            return control
+        for key, value in metrics.items():
+            if isinstance(value, float):
+                print(f"{key}: {value:.4f}")
+            else:
+                print(f"{key}: {value}")
+        return control
+
+
+class EarlyStopCallback(TrainerCallback):
+    def __init__(self, min_accuracy: float = 100.0):
+        self.min_accuracy = min_accuracy
+    
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if not metrics:
+            return control
+        
+        accuracies = [v for k, v in metrics.items() if "Accuracy" in k and isinstance(v, (int, float))]
+        if not accuracies:
+            return control
+        
+        min_acc = min(accuracies)
+        if min_acc >= self.min_accuracy:
+            print(f"Minimum accuracy {min_acc:.2f} reached threshold {self.min_accuracy:.2f}, stopping training")
+            control.should_training_stop = True
+        
+        return control
+
 class TRIDetector:
     def __init__(
         self,
-        dataset_name: str = None,
+        dataset_name: Optional[str] = None,
         model_name: str = "distilbert-base-uncased",
         max_length: int = 512,
         device: str = "auto",
         use_chunking: bool = False,
     ):
+        if max_length <= 0:
+            raise ValueError(f"max_length must be positive, got {max_length}")
+        
         self.dataset_name = dataset_name
         self.model_name = model_name
         self.max_length = max_length
@@ -70,9 +106,6 @@ class TRIDetector:
         
         self.train_records: Optional[List[DatasetRecord]] = None
         self.eval_records_dict: Optional[Dict[str, List[DatasetRecord]]] = None
-        
-        if dataset_name is not None:
-            print(f"✓ TRIDetector initialized for dataset '{dataset_name}' on {self.device}")
     
     def resolve_device(self, device: str) -> torch.device:
         if device == "auto":
@@ -84,13 +117,18 @@ class TRIDetector:
         return torch.device(device)
     
     def set_train_dataset(self, records: List[DatasetRecord]) -> None:
+        if not records:
+            raise ValueError("Training records cannot be empty")
         self.train_records = records
         self._build_label_mappings()
-        print(f"✓ Training dataset set: {len(records)} records, {self.num_labels} individuals")
     
     def set_eval_datasets(self, records_dict: Dict[str, List[DatasetRecord]]) -> None:
+        if not records_dict:
+            raise ValueError("Evaluation records dict cannot be empty")
+        for name, records in records_dict.items():
+            if not records:
+                raise ValueError(f"Evaluation dataset '{name}' has no records")
         self.eval_records_dict = records_dict
-        print(f"✓ Evaluation datasets set: {list(records_dict.keys())}")
     
     def _build_label_mappings(self):
         if not self.train_records:
@@ -119,12 +157,25 @@ class TRIDetector:
         use_pretraining: bool = False,
         pretraining_epochs: int = 3,
         best_metric_dataset: Optional[str] = None,
+        early_stop_threshold: Optional[float] = None,
         **kwargs
     ) -> None:
         if not self.train_records:
-            raise ValueError("No training data set. Call set_train_dataset() first.")
+            raise ValueError("No training data set. Call set_train_dataset() first")
+        if epochs <= 0:
+            raise ValueError(f"epochs must be positive, got {epochs}")
+        if batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {batch_size}")
+        if learning_rate <= 0:
+            raise ValueError(f"learning_rate must be positive, got {learning_rate}")
+        if use_pretraining and pretraining_epochs <= 0:
+            raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
+        if early_stop_threshold is not None and (early_stop_threshold <= 0 or early_stop_threshold > 100):
+            raise ValueError(f"early_stop_threshold must be in (0, 100], got {early_stop_threshold}")
         
         if output_dir is None:
+            if not self.dataset_name:
+                raise ValueError("dataset_name must be set when output_dir is not provided")
             output_dir = f"models/tri_pipelines/{self.dataset_name}"
         
         os.makedirs(output_dir, exist_ok=True)
@@ -132,10 +183,8 @@ class TRIDetector:
         self._initialize_tokenizer_and_model()
         
         if use_pretraining:
-            print(f"Starting additional pretraining for {pretraining_epochs} epochs...")
             self._pretrain(pretraining_epochs, batch_size, learning_rate, output_dir)
         
-        print(f"Starting finetuning for {epochs} epochs...")
         train_dataset = TRIDataset(self.train_records, self.tokenizer, self.name_to_label, self.max_length)
         
         eval_datasets_dict = None
@@ -145,35 +194,44 @@ class TRIDetector:
                 for name, records in self.eval_records_dict.items()
             }
         
-        if best_metric_dataset:
-            if eval_datasets_dict and best_metric_dataset in eval_datasets_dict:
+        eval_kwargs = {}
+        if eval_datasets_dict:
+            if best_metric_dataset:
+                if best_metric_dataset not in eval_datasets_dict:
+                    available = list(eval_datasets_dict.keys())
+                    raise ValueError(f"best_metric_dataset '{best_metric_dataset}' not found in {available}")
                 metric_for_best = f"eval_{best_metric_dataset}_Accuracy"
-                print(f"Using {best_metric_dataset} dataset for best model selection")
             else:
-                available = list(eval_datasets_dict.keys()) if eval_datasets_dict else []
-                raise ValueError(f"Best metric dataset '{best_metric_dataset}' not found in eval datasets: {available}")
-        else:
-            first_eval_name = list(eval_datasets_dict.keys())[0] if eval_datasets_dict else None
-            metric_for_best = f"eval_{first_eval_name}_Accuracy" if first_eval_name else None
-            if first_eval_name:
-                print(f"Using {first_eval_name} dataset for best model selection (default)")
+                first_eval_name = list(eval_datasets_dict.keys())[0]
+                metric_for_best = f"eval_{first_eval_name}_Accuracy"
+            
+            eval_kwargs = {
+                "eval_strategy": "epoch",
+                "load_best_model_at_end": True,
+                "metric_for_best_model": metric_for_best,
+                "greater_is_better": True,
+            }
         
         training_args = TrainingArguments(
-            output_dir=f"{output_dir}/pretraining",
+            output_dir=f"{output_dir}/finetuning",
             num_train_epochs=epochs,
             per_device_train_batch_size=batch_size,
             per_device_eval_batch_size=batch_size,
             learning_rate=learning_rate,
             logging_strategy="epoch",
-            eval_strategy="no",
             save_strategy="epoch",
             save_total_limit=1,
             report_to="none",
             no_cuda=True,
+            **eval_kwargs,
         )
         
         optimizer = AdamW(self.model.parameters(), lr=learning_rate)
         scheduler = get_constant_schedule(optimizer)
+        
+        callbacks = [MetricsPrintCallback()]
+        if early_stop_threshold is not None:
+            callbacks.append(EarlyStopCallback(min_accuracy=early_stop_threshold))
         
         trainer = Trainer(
             model=self.model,
@@ -182,6 +240,7 @@ class TRIDetector:
             eval_dataset=eval_datasets_dict,
             optimizers=[optimizer, scheduler],
             compute_metrics=compute_metrics,
+            callbacks=callbacks,
         )
         
         trainer.train()
@@ -189,18 +248,16 @@ class TRIDetector:
         self.model.save_pretrained(output_dir)
         self.tokenizer.save_pretrained(output_dir)
         
-        os.makedirs(f"{output_dir}/finetuning", exist_ok=True)
-        
         label_mapping_path = Path(output_dir) / "label_mapping.json"
         with open(label_mapping_path, "w") as f:
             json.dump(self.name_to_label, f, indent=2)
-        
-        print(f"✓ Training complete! Model saved to {output_dir}")
     
-    def _pretrain(self, epochs: int, batch_size: int, learning_rate: float, output_dir: str):
-        """Perform MLM pretraining and update the base model."""
+    def _pretrain(self, epochs: int, batch_size: int, learning_rate: float, output_dir: str) -> None:
+        if not self.model:
+            raise ValueError("Model must be initialized before pretraining")
+        if not self.tokenizer:
+            raise ValueError("Tokenizer must be initialized before pretraining")
         
-        print(f"Creating MLM model for pretraining...")
         mlm_model = AutoModelForMaskedLM.from_pretrained(self.model_name)        
         if hasattr(self.model, 'distilbert'):
             mlm_model.distilbert = self.model.distilbert
@@ -208,6 +265,8 @@ class TRIDetector:
             mlm_model.bert = self.model.bert
         elif hasattr(self.model, 'roberta'):
             mlm_model.roberta = self.model.roberta
+        else:
+            raise ValueError(f"Unsupported model architecture: {self.model_name}")
         
         mlm_model.to(self.device)
         
@@ -231,17 +290,7 @@ class TRIDetector:
             data_collator=data_collator,
         )
         
-        print(f"Running MLM pretraining for {epochs} epochs...")
         trainer.train()
-        
-        if hasattr(self.model, 'distilbert'):
-            self.model.distilbert = mlm_model.distilbert
-        elif hasattr(self.model, 'bert'):
-            self.model.bert = mlm_model.bert
-        elif hasattr(self.model, 'roberta'):
-            self.model.roberta = mlm_model.roberta
-        
-        print(f"✓ Pretraining complete, weights transferred to classification model")
         
         if hasattr(mlm_model, 'distilbert'):
             self.model.distilbert.load_state_dict(mlm_model.distilbert.state_dict())
@@ -251,10 +300,11 @@ class TRIDetector:
             self.model.roberta.load_state_dict(base_dict, strict=False)
         elif hasattr(mlm_model, 'bert'):
             self.model.bert.load_state_dict(mlm_model.bert.state_dict())
+        else:
+            raise ValueError(f"Unable to transfer weights for {self.model_name}")
         
         del mlm_model
         torch.cuda.empty_cache()
-        print("✓ Pretraining complete")
     
     def predict(self, records: List[DatasetRecord]) -> Dict[str, float]:
         if self.model is None:
@@ -283,7 +333,11 @@ class TRIDetector:
     
     def evaluate(self, records: List[DatasetRecord]) -> Dict[str, Any]:
         if not records:
-            raise ValueError("No records provided for evaluation")
+            raise ValueError("records cannot be empty")
+        if not self.model:
+            raise ValueError("Model not initialized")
+        if not self.tokenizer:
+            raise ValueError("Tokenizer not initialized")
         
         pipe = pipeline("text-classification", model=self.model, tokenizer=self.tokenizer, device=self.device if self.device.type != "cpu" else -1, truncation=True, max_length=self.max_length)
         
@@ -301,17 +355,20 @@ class TRIDetector:
         
         accuracy = correct / total if total > 0 else 0
         
-        print(f"✓ Evaluation complete: {correct}/{total} correct ({accuracy:.2%})")
-        
         return {
             "accuracy": accuracy,
             "correct": correct,
             "total": total,
         }
     
-    def load(self, model_path: Optional[str] = None):
+    def load(self, model_path: Optional[str] = None) -> None:
         if model_path is None:
+            if not self.dataset_name:
+                raise ValueError("dataset_name must be set when model_path is not provided")
             model_path = f"models/tri_pipelines/{self.dataset_name}"
+        
+        if not Path(model_path).exists():
+            raise ValueError(f"Model path does not exist: {model_path}")
         
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
@@ -320,17 +377,22 @@ class TRIDetector:
         self.num_labels = self.model.config.num_labels
         
         label_mapping_path = Path(model_path) / "label_mapping.json"
-        if label_mapping_path.exists():
-            with open(label_mapping_path, "r") as f:
-                self.name_to_label = json.load(f)
-        else:
-            print(f"Warning: No label mapping found at {label_mapping_path}")
+        if not label_mapping_path.exists():
+            raise ValueError(f"Label mapping not found: {label_mapping_path}")
         
-        print(f"✓ Model loaded from {model_path}")
+        with open(label_mapping_path, "r") as f:
+            self.name_to_label = json.load(f)
+        
+        self.label_to_name = {v: k for k, v in self.name_to_label.items()}
 
 
 class TRIDataset(Dataset):
     def __init__(self, records: List[DatasetRecord], tokenizer, name_to_label: Dict[str, int], max_length: int, use_labels: bool = True):
+        if not records:
+            raise ValueError("records cannot be empty")
+        if max_length <= 0:
+            raise ValueError(f"max_length must be positive, got {max_length}")
+        
         self.records = records
         self.tokenizer = tokenizer
         self.name_to_label = name_to_label

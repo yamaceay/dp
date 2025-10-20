@@ -185,6 +185,8 @@ def main():
                         help="Path to load pretrained model (for evaluate/predict modes)")
     parser.add_argument("--device", type=str, default="cpu",
                         help="Device to use (auto, cuda, mps, cpu)")
+    parser.add_argument("--early-stop-threshold", type=float, default=None,
+                        help="Minimum accuracy threshold across all eval datasets to stop training early (0-100)")
     
     args = parser.parse_args()
     
@@ -236,6 +238,7 @@ def main():
             use_pretraining=args.use_pretraining,
             pretraining_epochs=args.pretraining_epochs,
             best_metric_dataset=args.best_metric_dataset,
+            early_stop_threshold=args.early_stop_threshold,
         )
         
         print(f"\n✓ Model saved to {model_path}")
