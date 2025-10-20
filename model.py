@@ -223,14 +223,14 @@ if __name__ == "__main__":
 
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])
     
-    if args.output in ["json", "jsonl"]:
+    if args.output in ["jsonl"]:
         output_handler = output_handler_cls(timestamp=batch_timestamp)
     else:
         output_handler = output_handler_cls()
     
     capabilities = get_capabilities(args.model)
     for i, result in enumerate(results):
-        if args.output not in ["json", "jsonl"]:
+        if args.output not in ["jsonl"]:
             print(f"\n{'='*80}")
             print(f"Result {i+1}/{len(results)}")
             print('='*80)

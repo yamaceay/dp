@@ -111,10 +111,6 @@ def read_batch_annotations(
     if jsonl_path.exists():
         return _read_jsonl_annotations(jsonl_path)
     
-    json_files = sorted(output_dir.glob(f"{timestamp}_idx*.json"))
-    if json_files:
-        return _read_json_annotations(json_files)
-    
     raise ValueError(f"No annotation files found for {dataset}/{model}/{timestamp}")
 
 
@@ -152,47 +148,6 @@ def _read_jsonl_annotations(jsonl_path: Path) -> List[List[TextAnnotation]]:
         result.append(annotations_by_idx.get(idx, []))
     
     return result
-
-
-def _read_json_annotations(json_files: List[Path]) -> List[List[TextAnnotation]]:
-    """Read annotations from separate JSON files."""
-    annotations_by_idx = {}
-    
-    for json_file in json_files:
-        filename = json_file.stem
-        if "_idx" in filename:
-            idx_str = filename.split("_idx")[-1]
-            try:
-                idx = int(idx_str)
-            except ValueError:
-                continue
-        else:
-            continue
-        
-        with open(json_file, 'r', encoding='utf-8') as f:
-            record = json.load(f)
-        
-        spans = record.get("spans", [])
-        if isinstance(spans, list) and spans:
-            if isinstance(spans[0], dict):
-                annotations = [TextAnnotation(**span) for span in spans]
-            else:
-                annotations = []
-        else:
-            annotations = []
-        
-        annotations_by_idx[idx] = annotations
-    
-    if not annotations_by_idx:
-        return []
-    
-    max_idx = max(annotations_by_idx.keys())
-    result = []
-    for idx in range(max_idx + 1):
-        result.append(annotations_by_idx.get(idx, []))
-    
-    return result
-
 
 def list_batch_timestamps(
     dataset: str,

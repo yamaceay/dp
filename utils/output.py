@@ -44,61 +44,6 @@ class PrintOutputHandler(OutputHandler):
         print("Metadata:", result.metadata)
 
 
-class JsonOutputHandler(OutputHandler):
-    def __init__(self, base_path: str = "outputs", timestamp: Optional[str] = None):
-        self.base_path = base_path
-        self.timestamp = timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    def output(self, result: AnonymizationResult, dataset: str, model: str, **kwargs):
-        output_dir = self._get_output_dir(dataset, model)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        idx = kwargs.get("idx", None)
-        if idx is not None:
-            filename = f"{self.timestamp}_idx{idx}.json"
-        else:
-            filename = f"{self.timestamp}.json"
-        
-        output_path = output_dir / filename
-        
-        data = {
-            "text": result.text,
-            "spans": [self._serialize_annotation_full(ann) for ann in (result.spans or [])],
-            "metadata": result.metadata
-        }
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
-        
-        print(f"Output written to: {output_path}")
-    
-    def _get_output_dir(self, dataset: str, model: str) -> Path:
-        pattern = OUTPUT_STRUCTURE.get(model, f"outputs/{{dataset}}/{model}")
-        path_str = pattern.format(dataset=dataset)
-        return Path(path_str)
-    
-    def _serialize_annotation_full(self, ann: TextAnnotation) -> Dict[str, Any]:
-        """Serialize annotation with full data, converting NumPy types"""
-        data = asdict(ann)
-        return self._convert_numpy_types(data)
-    
-    def _convert_numpy_types(self, obj):
-        """Recursively convert NumPy types to native Python types"""
-        if isinstance(obj, dict):
-            return {k: self._convert_numpy_types(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._convert_numpy_types(item) for item in obj]
-        elif isinstance(obj, (np.integer, np.int32, np.int64)):
-            return int(obj)
-        elif isinstance(obj, (np.floating, np.float32, np.float64)):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, np.bool_):
-            return bool(obj)
-        return obj
-
-
 class JsonlOutputHandler(OutputHandler):
     def __init__(self, base_path: str = "outputs", timestamp: Optional[str] = None):
         self.base_path = base_path
@@ -182,6 +127,5 @@ class JsonlOutputHandler(OutputHandler):
 
 OUTPUT_HANDLER_REGISTRY = {
     "print": PrintOutputHandler,
-    "json": JsonOutputHandler,
     "jsonl": JsonlOutputHandler,
 }

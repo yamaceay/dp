@@ -5,8 +5,37 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List
 
-from dp.loaders import get_adapter, DatasetRecord
+from dp.loaders import get_adapter, DatasetRecord, read_batch_annotations_from_path
 from dp.utils import TRIDetector
+
+
+def load_latest_annotations_from_dataset_folder(dataset_folder: str) -> Dict[str, List[List]]:
+    dataset_path = Path(dataset_folder)
+    
+    if not dataset_path.exists():
+        raise FileNotFoundError(f"Dataset folder not found: {dataset_folder}")
+    
+    model_annotations = {}
+    
+    for model_dir in dataset_path.iterdir():
+        if not model_dir.is_dir():
+            continue
+        
+        model_name = model_dir.name
+        jsonl_files = sorted(model_dir.glob("*.jsonl"))
+        
+        if not jsonl_files:
+            continue
+        
+        latest_file = jsonl_files[-1]
+        timestamp = latest_file.stem
+        
+        print(f"Loading {model_name} annotations from {timestamp}")
+        annotations_list = read_batch_annotations_from_path(str(latest_file))
+        model_annotations[model_name] = annotations_list
+        print(f"✓ Loaded {model_name}: {len(annotations_list)} records")
+    
+    return model_annotations
 
 
 def load_annotations_from_folder(folder_path: str, records: List[DatasetRecord]) -> Dict[str, Dict]:
@@ -57,6 +86,45 @@ def anonymize_text(text: str, annotations: List, mask_token: str = "[MASK]") -> 
             anonymized = anonymized[:start] + mask_token + anonymized[end:]
     
     return anonymized
+
+
+def create_eval_datasets_from_annotations_list(records: List[DatasetRecord], 
+                                               annotation_methods: Dict[str, List[List]]) -> Dict[str, List[DatasetRecord]]:
+    eval_datasets = {}
+    
+    for method_name, annotations_list in annotation_methods.items():
+        eval_records = []
+        for idx, record in enumerate(records):
+            if idx < len(annotations_list):
+                doc_annotations = annotations_list[idx]
+            else:
+                doc_annotations = []
+            
+            spans = []
+            for annot in doc_annotations:
+                if hasattr(annot, 'start') and hasattr(annot, 'end'):
+                    spans.append((annot.start, annot.end))
+            
+            spans.sort(reverse=True)
+            anonymized_text = record.text
+            for start, end in spans:
+                if 0 <= start < end <= len(anonymized_text):
+                    anonymized_text = anonymized_text[:start] + "[MASK]" + anonymized_text[end:]
+            
+            eval_record = DatasetRecord(
+                text=anonymized_text,
+                uid=record.uid,
+                name=record.name,
+                spans=record.spans,
+                utilities=record.utilities,
+                metadata=record.metadata
+            )
+            eval_records.append(eval_record)
+        
+        eval_datasets[method_name] = eval_records
+        print(f"✓ Created {method_name} eval dataset: {len(eval_records)} records")
+    
+    return eval_datasets
 
 
 def create_eval_datasets(records: List[DatasetRecord], 
@@ -115,15 +183,14 @@ def main():
                         help="Mode: train, evaluate, or predict")
     parser.add_argument("--model-path", type=str, default=None,
                         help="Path to load pretrained model (for evaluate/predict modes)")
+    parser.add_argument("--device", type=str, default="cpu",
+                        help="Device to use (auto, cuda, mps, cpu)")
     
     args = parser.parse_args()
     
     print(f"Loading {args.dataset} dataset from {args.data_path}...")
     
-    if args.dataset == "tab":
-        adapter = get_adapter(args.dataset, data_in=args.data_path, max_records=args.max_records)
-    else:
-        adapter = get_adapter(args.dataset, data_path=args.data_path, max_records=args.max_records)
+    adapter = get_adapter(args.dataset, data=args.dataset, data_in=args.data_path, max_records=args.max_records)
     
     records = list(adapter.iter_records())
     print(f"✓ Loaded {len(records)} records")
@@ -136,7 +203,8 @@ def main():
         tri = TRIDetector(
             dataset_name=args.dataset,
             model_name=args.model_name,
-            max_length=512
+            max_length=512,
+            device=args.device
         )
         
         tri.set_train_dataset(records)
@@ -144,8 +212,16 @@ def main():
         eval_datasets = {}
         if args.annotation_folder:
             print(f"\nLoading annotations from {args.annotation_folder}...")
-            annotation_methods = load_annotations_from_folder(args.annotation_folder, records)
-            eval_datasets = create_eval_datasets(records, annotation_methods)
+            if Path(args.annotation_folder).is_dir() and any(Path(args.annotation_folder).iterdir()):
+                first_item = next(Path(args.annotation_folder).iterdir())
+                if first_item.is_dir():
+                    annotation_methods = load_latest_annotations_from_dataset_folder(args.annotation_folder)
+                    eval_datasets = create_eval_datasets_from_annotations_list(records, annotation_methods)
+                else:
+                    annotation_methods = load_annotations_from_folder(args.annotation_folder, records)
+                    eval_datasets = create_eval_datasets(records, annotation_methods)
+            else:
+                raise ValueError(f"Invalid annotation folder: {args.annotation_folder}")
         else:
             print("\nNo annotation folder provided, using original texts for evaluation")
             eval_datasets = {"original": records}
@@ -169,14 +245,23 @@ def main():
         tri = TRIDetector(
             dataset_name=args.dataset,
             model_name=args.model_name,
-            max_length=512
+            max_length=512,
+            device=args.device
         )
         tri.load(model_path)
         
         if args.annotation_folder:
             print(f"\nLoading annotations from {args.annotation_folder}...")
-            annotation_methods = load_annotations_from_folder(args.annotation_folder, records)
-            eval_datasets = create_eval_datasets(records, annotation_methods)
+            if Path(args.annotation_folder).is_dir() and any(Path(args.annotation_folder).iterdir()):
+                first_item = next(Path(args.annotation_folder).iterdir())
+                if first_item.is_dir():
+                    annotation_methods = load_latest_annotations_from_dataset_folder(args.annotation_folder)
+                    eval_datasets = create_eval_datasets_from_annotations_list(records, annotation_methods)
+                else:
+                    annotation_methods = load_annotations_from_folder(args.annotation_folder, records)
+                    eval_datasets = create_eval_datasets(records, annotation_methods)
+            else:
+                raise ValueError(f"Invalid annotation folder: {args.annotation_folder}")
             
             for method_name, eval_records in eval_datasets.items():
                 print(f"\nEvaluating on {method_name}...")
@@ -192,7 +277,8 @@ def main():
         tri = TRIDetector(
             dataset_name=args.dataset,
             model_name=args.model_name,
-            max_length=512
+            max_length=512,
+            device=args.device
         )
         tri.load(model_path)
         

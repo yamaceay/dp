@@ -159,19 +159,17 @@ class TRIDetector:
                 print(f"Using {first_eval_name} dataset for best model selection (default)")
         
         training_args = TrainingArguments(
-            output_dir=f"{output_dir}/finetuning",
+            output_dir=f"{output_dir}/pretraining",
             num_train_epochs=epochs,
             per_device_train_batch_size=batch_size,
             per_device_eval_batch_size=batch_size,
             learning_rate=learning_rate,
             logging_strategy="epoch",
-            eval_strategy="epoch" if eval_datasets_dict else "no",
+            eval_strategy="no",
             save_strategy="epoch",
-            load_best_model_at_end=True if eval_datasets_dict else False,
-            metric_for_best_model=metric_for_best,
-            greater_is_better=True,
             save_total_limit=1,
             report_to="none",
+            no_cuda=True,
         )
         
         optimizer = AdamW(self.model.parameters(), lr=learning_rate)
@@ -348,13 +346,13 @@ class TRIDataset(Dataset):
         )
         
         if use_labels:
-            self.labels = torch.tensor([name_to_label[r.name] for r in records])
+            self.labels = torch.tensor([name_to_label[r.name] for r in records], dtype=torch.float)
     
     def __len__(self):
         return len(self.records)
     
     def __getitem__(self, idx):
-        item = {key: val[idx] for key, val in self.encodings.items()}
+        item = {key: val[idx].clone().detach() for key, val in self.encodings.items()}
         if self.use_labels:
-            item["labels"] = self.labels[idx]
+            item["labels"] = self.labels[idx].clone().detach()
         return item
