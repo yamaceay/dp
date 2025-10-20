@@ -80,10 +80,28 @@ class PetreAnonymizer(KAnonymizer):
         self.tri_pipeline_path = explainer.tri_detector.model_name
         self._load_tri_pipeline()
     
+    def set_annotations(self, annotations: Dict[str, List[TextAnnotation]]):
+        """
+        Set annotations from external source (e.g., loaded from file).
+        This replaces the current annotations and resets the cache.
+        """
+        self.annotations = {}
+        for record in self.dataset_records:
+            uid = record.uid
+            if annotations and uid in annotations:
+                self.annotations[uid] = annotations[uid]
+            else:
+                self.annotations[uid] = []
+        
+        self._k_cache: Dict[int, bool] = {}
+        self._annotation_history: Dict[int, Dict[str, List[TextAnnotation]]] = {}
+        
+        print(f"✓ Set annotations for {len([a for a in self.annotations.values() if a])} records")
+    
     def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize_from_dataset for PetreAnonymizer.")
     
-    def batch_anonymize_from_dataset(self, idx: int, k: List[int], *args, **kwargs) -> List[AnonymizationResult]:
+    def grid_anonymize_from_dataset(self, idx: int, k: List[int], *args, **kwargs) -> List[AnonymizationResult]:
         k_values = sorted(k)
         
         for current_k in k_values:
@@ -120,7 +138,7 @@ class PetreAnonymizer(KAnonymizer):
         return results
     
     def anonymize_from_dataset(self, idx: int, k: int, *args, **kwargs) -> AnonymizationResult:
-        return self.batch_anonymize_from_dataset(idx, k=[k], *args, **kwargs)[0]
+        return self.grid_anonymize_from_dataset(idx, k=[k], *args, **kwargs)[0]
     
     def _run_petre_for_k(self, k: int):
         ranks = self._evaluate_all()

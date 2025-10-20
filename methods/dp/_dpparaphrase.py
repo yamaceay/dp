@@ -71,7 +71,7 @@ class DPParaphraseAnonymizer(DPAnonymizer):
             return input_ids[0]
         return input_ids or []
 
-    def batch_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
+    def grid_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
         if epsilon is None:
             epsilon = [100.0]
         
@@ -121,4 +121,4 @@ class DPParaphraseAnonymizer(DPAnonymizer):
         return results
     
     def anonymize(self, text: str, *args, epsilon: float = 100.0, **kwargs) -> AnonymizationResult:
-        return self.batch_anonymize(text, epsilon=[epsilon], **kwargs)[0]
+        return self.grid_anonymize(text, epsilon=[epsilon], **kwargs)[0]

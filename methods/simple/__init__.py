@@ -1,3 +1,4 @@
+from typing import List
 from dp.methods.anonymizer import Anonymizer, AnonymizationResult
 
 class SimpleAnonymizer(Anonymizer):
@@ -6,13 +7,23 @@ class SimpleAnonymizer(Anonymizer):
         print("Initialized SimpleAnonymizer")
 
     def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
-        # placeholder simple anonymization
-
         text = "[SIMPLE ANONYMIZED TEXT]"
         return AnonymizationResult(text=text)
 
     def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
-        # placeholder simple anonymization by index
-        
         text = f"[SIMPLE ANONYMIZED TEXT BY IDX {idx}]"
         return AnonymizationResult(text=text)
+    
+    def anonymize_batch(self, texts: List[str], *args, **kwargs) -> List[AnonymizationResult]:
+        results = []
+        for text in texts:
+            result = self.anonymize(text, *args, **kwargs)
+            results.append(result)
+        return results
+    
+    def anonymize_from_dataset_batch(self, indices: List[int], *args, **kwargs) -> List[AnonymizationResult]:
+        results = []
+        for idx in indices:
+            result = self.anonymize_from_dataset(idx, *args, **kwargs)
+            results.append(result)
+        return results

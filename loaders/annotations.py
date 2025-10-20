@@ -75,3 +75,140 @@ def spans_to_annotations(spans: List[List[int]], text: str = "", **kwargs) -> Li
         )
         for span in spans
     ]
+
+
+def read_batch_annotations_from_path(path: str) -> List[List[TextAnnotation]]:
+    jsonl_path = Path(path)
+    
+    if not jsonl_path.exists():
+        raise ValueError(f"Annotation file not found: {path}")
+    
+    if jsonl_path.suffix == '.jsonl':
+        return _read_jsonl_annotations(jsonl_path)
+    
+    raise ValueError(f"Unsupported annotation file format: {jsonl_path.suffix}")
+
+
+def read_batch_annotations(
+    dataset: str,
+    model: str,
+    timestamp: str,
+    base_path: str = "outputs"
+) -> List[List[TextAnnotation]]:
+    """
+    Read batch annotations from file. Automatically detects format based on file extension.
+    Supports:
+    - .jsonl format (one JSON object per line)
+    - .json format (separate files per record)
+    """
+    from dp.utils.output import OUTPUT_STRUCTURE
+    
+    pattern = OUTPUT_STRUCTURE.get(model, f"outputs/{{dataset}}/{model}")
+    output_dir = Path(pattern.format(dataset=dataset))
+    
+    jsonl_path = output_dir / f"{timestamp}.jsonl"
+    
+    if jsonl_path.exists():
+        return _read_jsonl_annotations(jsonl_path)
+    
+    json_files = sorted(output_dir.glob(f"{timestamp}_idx*.json"))
+    if json_files:
+        return _read_json_annotations(json_files)
+    
+    raise ValueError(f"No annotation files found for {dataset}/{model}/{timestamp}")
+
+
+def _read_jsonl_annotations(jsonl_path: Path) -> List[List[TextAnnotation]]:
+    """Read annotations from a JSONL file."""
+    annotations_by_idx = {}
+    
+    with open(jsonl_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            if not line.strip():
+                continue
+            
+            record = json.loads(line)
+            idx = record.get("idx")
+            if idx is None:
+                continue
+            
+            spans = record.get("spans", [])
+            if isinstance(spans, list) and spans:
+                if isinstance(spans[0], dict):
+                    annotations = [TextAnnotation(**span) for span in spans]
+                else:
+                    annotations = []
+            else:
+                annotations = []
+            
+            annotations_by_idx[idx] = annotations
+    
+    if not annotations_by_idx:
+        return []
+    
+    max_idx = max(annotations_by_idx.keys())
+    result = []
+    for idx in range(max_idx + 1):
+        result.append(annotations_by_idx.get(idx, []))
+    
+    return result
+
+
+def _read_json_annotations(json_files: List[Path]) -> List[List[TextAnnotation]]:
+    """Read annotations from separate JSON files."""
+    annotations_by_idx = {}
+    
+    for json_file in json_files:
+        filename = json_file.stem
+        if "_idx" in filename:
+            idx_str = filename.split("_idx")[-1]
+            try:
+                idx = int(idx_str)
+            except ValueError:
+                continue
+        else:
+            continue
+        
+        with open(json_file, 'r', encoding='utf-8') as f:
+            record = json.load(f)
+        
+        spans = record.get("spans", [])
+        if isinstance(spans, list) and spans:
+            if isinstance(spans[0], dict):
+                annotations = [TextAnnotation(**span) for span in spans]
+            else:
+                annotations = []
+        else:
+            annotations = []
+        
+        annotations_by_idx[idx] = annotations
+    
+    if not annotations_by_idx:
+        return []
+    
+    max_idx = max(annotations_by_idx.keys())
+    result = []
+    for idx in range(max_idx + 1):
+        result.append(annotations_by_idx.get(idx, []))
+    
+    return result
+
+
+def list_batch_timestamps(
+    dataset: str,
+    model: str,
+    base_path: str = "outputs"
+) -> List[str]:
+    from dp.utils.output import OUTPUT_STRUCTURE
+    
+    pattern = OUTPUT_STRUCTURE.get(model, f"outputs/{{dataset}}/{model}")
+    output_dir = Path(pattern.format(dataset=dataset))
+    
+    if not output_dir.exists():
+        return []
+    
+    files = output_dir.glob("*.jsonl")
+    timestamps = [file_path.stem for file_path in files]
+    
+    return sorted(timestamps)
+

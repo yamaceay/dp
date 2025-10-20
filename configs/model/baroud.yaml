@@ -1,3 +1,2 @@
 pii_annotator: models/pii_detectors/tab/20251019_140402
 pii_threshold: 0.7
-mask_token: "[MASK]"

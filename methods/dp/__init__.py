@@ -11,11 +11,24 @@ class DPAnonymizer(Anonymizer):
         print("Initialized DPAnonymizer")
 
     @abstractmethod
-    def batch_anonymize(self, text: str, epsilon: List[float], *args, **kwargs) -> List[AnonymizationResult]:
+    def grid_anonymize(self, text: str, epsilon: List[float], *args, **kwargs) -> List[AnonymizationResult]:
         raise NotImplementedError()
     
     def anonymize(self, text: str, epsilon: float, *args, **kwargs) -> AnonymizationResult:
-        return self.batch_anonymize(text, epsilon=[epsilon], *args, **kwargs)[0]
+        return self.grid_anonymize(text, epsilon=[epsilon], *args, **kwargs)[0]
+    
+    def grid_anonymize_batch(self, texts: List[str], epsilon: List[float], batch_size: int, *args, **kwargs) -> List[List[AnonymizationResult]]:
+        batches = [texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
+        
+        all_results = [[] for _ in epsilon]
+        for i, batch in enumerate(batches):
+            batch_results = self.grid_anonymize(batch, epsilon=epsilon, *args, **kwargs)
+            for j, res in enumerate(batch_results):
+                all_results[j].extend(res)
+        return all_results
+    
+    def anonymize_batch(self, texts: List[str], epsilon: float, batch_size: int, *args, **kwargs) -> List[AnonymizationResult]:
+        return self.grid_anonymize_batch(texts, epsilon=[epsilon], batch_size=batch_size, *args, **kwargs)[0]
     
     def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize with text for DPAnonymizer.")

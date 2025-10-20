@@ -15,11 +15,11 @@ def add_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name (trustpilot, tab, db_bio)')
     parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
     parser.add_argument('--max_records', type=int, default=1, help='Maximum number of records to load')
-    return parser
+    return ['data', 'data_in', 'max_records']
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark Anonymization Tools")
-    parser = add_data_args(parser)
+    add_data_args(parser)
 
     args = parser.parse_args()
 

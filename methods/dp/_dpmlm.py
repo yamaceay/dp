@@ -250,7 +250,7 @@ class DPMlmAnonymizer(DPAnonymizer):
             top_tokens = torch.topk(torch.from_numpy(mask_logits), k=self.k_candidates, dim=0)[1]
             return self.tokenizer.decode(top_tokens[0].item()).strip()
 
-    def batch_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
+    def grid_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
         if epsilon is None:
             epsilon = [100.0]
         
@@ -405,4 +405,4 @@ class DPMlmAnonymizer(DPAnonymizer):
         return results
     
     def anonymize(self, text: str, *args, epsilon: float = 100.0, **kwargs) -> AnonymizationResult:
-        return self.batch_anonymize(text, epsilon=[epsilon], **kwargs)[0]
+        return self.grid_anonymize(text, epsilon=[epsilon], **kwargs)[0]

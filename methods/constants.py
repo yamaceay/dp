@@ -4,31 +4,31 @@ from typing import Dict
 
 @dataclass
 class ModelCapabilities:
-    requires_dataset: bool
-    uses_annotations: bool = False
-    uses_scoring: bool = False
-    uses_filtering: bool = False
-    requires_non_uniform_explainer: bool = False
+    must_use_dataset: bool = False
+    must_use_non_uniform_explainer: bool = False
+    can_use_annotations: bool = False
+    can_use_scoring: bool = False
+    can_use_filtering: bool = False
+    supports_batch_predict: bool = False
 
 
 MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
-    "spacy": ModelCapabilities(requires_dataset=False),
-    "presidio": ModelCapabilities(requires_dataset=False),
-    "manual": ModelCapabilities(requires_dataset=True),
-    "baroud": ModelCapabilities(requires_dataset=False),
+    "spacy": ModelCapabilities(),
+    "presidio": ModelCapabilities(),
+    "manual": ModelCapabilities(must_use_dataset=True),
+    "baroud": ModelCapabilities(supports_batch_predict=True),
     "petre": ModelCapabilities(
-        requires_dataset=True,
-        uses_annotations=True,
-        uses_scoring=True,
-        requires_non_uniform_explainer=True,
+        must_use_dataset=True,
+        must_use_non_uniform_explainer=True,
+        can_use_annotations=True,
+        can_use_scoring=True,
     ),
-    "dpbart": ModelCapabilities(requires_dataset=False),
-    "dpparaphrase": ModelCapabilities(requires_dataset=False),
-    "dpprompt": ModelCapabilities(requires_dataset=False),
+    "dpbart": ModelCapabilities(),
+    "dpparaphrase": ModelCapabilities(),
+    "dpprompt": ModelCapabilities(),
     "dpmlm": ModelCapabilities(
-        requires_dataset=False,
-        uses_filtering=True,
-        uses_scoring=True,
+        can_use_filtering=True,
+        can_use_scoring=True,
     ),
 }
 
@@ -40,4 +40,4 @@ def get_capabilities(model_name: str) -> ModelCapabilities:
 
 
 def requires_dataset(model_name: str) -> bool:
-    return get_capabilities(model_name).requires_dataset
+    return get_capabilities(model_name).must_use_dataset
