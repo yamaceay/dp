@@ -12,10 +12,14 @@ class AnonymizationResult:
 
 class Anonymizer(ABC):
     def __init__(self, *args, **kwargs):
-        # lightweight base init for debugging; concrete implementations may extend
         self._init_args = args
         self._init_kwargs = kwargs
+        self._model_name = kwargs.get('model', None)
         print(f"Initialized {self.__class__.__name__} with args: {args}, kwargs: {kwargs}")
+
+    def builder(self):
+        from dp.methods.builder import AnonymizationBuilder
+        return AnonymizationBuilder(self, self._model_name)
 
     @abstractmethod
     def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:

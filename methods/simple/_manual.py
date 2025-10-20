@@ -18,10 +18,17 @@ class ManualAnonymizer(SimpleAnonymizer):
 
     def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
         text = self.texts[idx]
-        for annotation in self.annotations[idx]:
-            text = text.replace(annotation.text, f"[{annotation.label}]")
-
         spans = self.annotations[idx]
+        
+        offset = 0
+        for annotation in spans:
+            start = annotation.start + offset
+            end = annotation.end + offset
+            replacement = f"[{annotation.label}]"
+            
+            text = text[:start] + replacement + text[end:]
+            offset += len(replacement) - (end - start)
+        
         metadata = {"method": "manual"}
         return AnonymizationResult(text=text, spans=spans, metadata=metadata)
 

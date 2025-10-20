@@ -71,7 +71,7 @@ def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_
     if capabilities.must_use_dataset:
         if dataset is None:
             raise ValueError(f"{model} requires dataset to be loaded")
-        model_instance = model_cls(dataset_records=list(dataset.iter_records()), **model_config, **model_kwargs)
+        model_instance = model_cls(dataset_records=list(dataset.iter_records()), **model_config, **model_kwargs, **data_kwargs)
     else:
         model_instance = model_cls(**model_config, **model_kwargs, **data_kwargs)
     
@@ -94,6 +94,23 @@ def use_indices(model_name: str, runtime_kwargs: dict, data_kwargs: dict, length
         max_records = length
     runtime_kwargs["indices"] = list(range(min(max_records, length)))
     return True
+
+def flatten_results(nested_results: List[List], indices: List[int]) -> Tuple[List, List[Optional[int]]]:
+    flat_results = []
+    flat_indices = []
+    for idx, idx_results in zip(indices, nested_results):
+        for result in idx_results:
+            flat_results.append(result)
+            flat_indices.append(idx)
+    return flat_results, flat_indices
+
+def output_results(results: List, text_indices: List[Optional[int]], output_handler, verbose: bool, **output_kwargs):
+    for i, (idx, result) in enumerate(zip(text_indices, results)):
+        if verbose:
+            print(f"\n{'='*80}")
+            print(f"Result {i+1}/{len(results)}")
+            print('='*80)
+        output_handler.output(result, idx=idx, **output_kwargs)
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Batch Anonymization - Process Multiple Records")
@@ -213,6 +230,8 @@ if __name__ == "__main__":
     if texts is not None and indices is not None:
         raise ValueError("Cannot specify both --texts and --indices")
     
+    builder = model.builder()
+
     if capabilities.must_use_dataset:
         if texts is not None:
             raise ValueError(f"{args.model} requires dataset records, cannot use --texts. Use --indices instead or omit both to process all records.")
@@ -225,45 +244,56 @@ if __name__ == "__main__":
                 if idx < 0 or idx >= len(dataset):
                     raise ValueError(f"Index {idx} is out of bounds for dataset of length {len(dataset)}.")
         
-        runtime_kwargs["indices"] = indices
-        
-        if capabilities.supports_batch_predict:
-            results = model.anonymize_from_dataset_batch(indices=indices, **runtime_config)
-        else:
-            results = [model.anonymize_from_dataset(idx=idx, **runtime_config) for idx in indices]
-        
-        for i, result in enumerate(results):
-            if args.output not in ["jsonl"]:
-                print(f"\n{'='*80}")
-                print(f"Result {i+1}/{len(results)}")
-                print('='*80)
-            output_handler.output(result, dataset=args.data, model=args.model, idx=indices[i])
+        builder.with_indices(indices)
+        text_indices = indices  # For dataset methods, use indices as text_indices
+    
     else:
         if texts is None:
             if indices is not None:
                 records = list(dataset.iter_records())
                 texts = [records[idx].text for idx in indices]
-                runtime_kwargs["text_indices"] = indices
+                text_indices = indices
             else:
                 max_records = data_kwargs.get("max_records", len(dataset))
                 records = list(dataset.iter_records())[:max_records]
                 texts = [record.text for record in records]
-                runtime_kwargs["text_indices"] = list(range(len(texts)))
+                text_indices = list(range(len(texts)))
         else:
-            runtime_kwargs["text_indices"] = [None] * len(texts)
+            text_indices = [None] * len(texts)
         
-        if capabilities.supports_batch_predict:
-            results = model.anonymize_batch(texts=texts, **runtime_config)
-        else:
-            results = [model.anonymize(text=text, **runtime_config) for text in texts]
+        builder.with_texts(texts)
+
+    if capabilities.requires_k:
+        k = runtime_config.get("k", 5)
+        if isinstance(k, list):
+            if len(k) > 1:
+                raise ValueError("Grid search over k values is not supported. Provide single k value.")
+            k = k[0]
         
-        for i, result in enumerate(results):
-            if args.output not in ["jsonl"]:
-                print(f"\n{'='*80}")
-                print(f"Result {i+1}/{len(results)}")
-                print('='*80)
-            idx = runtime_kwargs.get("text_indices", [None] * len(results))[i]
-            output_handler.output(result, dataset=args.data, model=args.model, idx=idx)
-    
+        builder.with_ks(k)
+
+    if capabilities.requires_epsilon:
+        epsilon = runtime_config.get("epsilon", 100.0)
+        if isinstance(epsilon, list):
+            if len(epsilon) > 1:
+                raise ValueError("Grid search over epsilon values is not supported. Provide single epsilon value.")
+            epsilon = epsilon[0]
+        
+        builder.with_epsilons(epsilon)
+
+    results = builder.anonymize(**runtime_config)
+
+    if capabilities.requires_k or capabilities.requires_epsilon:
+        results, text_indices = flatten_results(results, text_indices)
+
+    output_results(
+        results, 
+        text_indices, 
+        output_handler, 
+        verbose=args.output not in ["jsonl"],
+        dataset=args.data, 
+        model=args.model
+    )
+ 
     if hasattr(output_handler, 'close'):
         output_handler.close()

@@ -39,15 +39,3 @@ MODEL_REGISTRY: Dict[str, Type[Anonymizer]] = {
     **K_ANON_MODEL_REGISTRY,
     **DP_MODEL_REGISTRY,
 }
-
-
-def is_simple(AnonymizerClass: Type[Anonymizer]) -> bool:
-    return AnonymizerClass in SIMPLE_MODEL_REGISTRY.values()
-
-
-def is_k_anonymizer(AnonymizerClass: Type[Anonymizer]) -> bool:
-    return AnonymizerClass in K_ANON_MODEL_REGISTRY.values()
-
-
-def is_dp_anonymizer(AnonymizerClass: Type[Anonymizer]) -> bool:
-    return AnonymizerClass in DP_MODEL_REGISTRY.values()

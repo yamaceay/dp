@@ -71,13 +71,6 @@ def main():
     model_class = MODEL_REGISTRY[args.model]
     param_values_str = experiment_kwargs["parameters"]
     
-    if is_k_anonymizer(model_class):
-        parameter_values = parse_parameters(param_values_str, "int")
-    elif is_dp_anonymizer(model_class):
-        parameter_values = parse_parameters(param_values_str, "float")
-    else:
-        parameter_values = parse_parameters(param_values_str, "str")
-    
     experiment = ReidentificationRiskExperiment(
         dataset_records=test_split,
         train_records=train_split,

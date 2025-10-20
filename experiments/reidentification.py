@@ -127,11 +127,6 @@ class ReidentificationRiskExperiment(Experiment):
         from dp.methods.registry import is_k_anonymizer
         model_class = MODEL_REGISTRY[self.model_class_name]
         
-        if is_k_anonymizer(model_class):
-            results = model.anonymize_batch_from_dataset(indices, [param_value])
-        else:
-            results = [[model.anonymize_from_dataset(idx) for idx in indices]]
-        
         anonymized = []
         for idx, result in zip(indices, results[0]):
             record = idx_to_record[idx]
@@ -147,11 +142,6 @@ class ReidentificationRiskExperiment(Experiment):
         
         from dp.methods.registry import is_dp_anonymizer
         model_class = MODEL_REGISTRY[self.model_class_name]
-        
-        if is_dp_anonymizer(model_class):
-            results = model.anonymize_batch(texts, [param_value])
-        else:
-            results = [[model.anonymize(text) for text in texts]]
         
         anonymized = []
         for record, result in zip(self.dataset_records, results[0]):

@@ -14,6 +14,7 @@ scikit-learn
 # Optional dependencies for specific anonymizers
 # SpaCy NER
 spacy
+en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.0/en_core_web_lg-3.7.0-py3-none-any.whl
 
 # Presidio PII detection
 presidio-analyzer

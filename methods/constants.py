@@ -5,6 +5,8 @@ from typing import Dict
 @dataclass
 class ModelCapabilities:
     must_use_dataset: bool = False
+    requires_epsilon: bool = False
+    requires_k: bool = False
     must_use_non_uniform_explainer: bool = False
     can_use_annotations: bool = False
     can_use_scoring: bool = False
@@ -19,14 +21,16 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
     "baroud": ModelCapabilities(supports_batch_predict=True),
     "petre": ModelCapabilities(
         must_use_dataset=True,
+        requires_k=True,
         must_use_non_uniform_explainer=True,
         can_use_annotations=True,
         can_use_scoring=True,
     ),
-    "dpbart": ModelCapabilities(),
-    "dpparaphrase": ModelCapabilities(),
-    "dpprompt": ModelCapabilities(),
+    "dpbart": ModelCapabilities(requires_epsilon=True),
+    "dpparaphrase": ModelCapabilities(requires_epsilon=True),
+    "dpprompt": ModelCapabilities(requires_epsilon=True),
     "dpmlm": ModelCapabilities(
+        requires_epsilon=True,
         can_use_filtering=True,
         can_use_scoring=True,
     ),
