@@ -40,9 +40,9 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--texts', type=str, nargs='+', help='Texts to anonymize (space-separated)')
     parser.add_argument('--indices', type=int, nargs='+', help='Indices of records to anonymize (space-separated)')
     parser.add_argument('--output', type=str, default='print', choices=list(OUTPUT_HANDLER_REGISTRY.keys()), help='Output handler type')
-    parser.add_argument('--load_annotations', type=str, default=None, metavar='SOURCES', help='Load annotations from previous run (format: path/to/file.jsonl, comma-separated for multiple sources)')
+    parser.add_argument('--annotations_in', type=str, default=None, metavar='SOURCES', help='Load annotations from previous run (format: path/to/file.jsonl, comma-separated for multiple sources)')
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
-    return ['runtime_in', 'texts', 'indices', 'output', 'load_annotations', 'list_annotations']
+    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations']
 
 def load_config(sth_in: Optional[str]) -> dict:
     config = {}
@@ -130,11 +130,11 @@ if __name__ == "__main__":
     dpmlm_chunking = model_config.get("dpmlm_chunking", {})
 
     loaded_annotations = None
-    if capabilities.can_use_annotations and args.load_annotations:
+    if capabilities.can_use_annotations and args.annotations_in:
         records = list(dataset.iter_records())
         loaded_annotations = {}
         
-        for source in args.load_annotations.split(','):
+        for source in args.annotations_in.split(','):
             source = source.strip()
             print(f"Loading annotations from {source}")
             annotations_list = read_batch_annotations_from_path(source)
@@ -146,7 +146,7 @@ if __name__ == "__main__":
                         loaded_annotations[uid] = []
                     loaded_annotations[uid].extend(annotations)
         
-        print(f"✓ Loaded annotations for {len(loaded_annotations)} records from {len(args.load_annotations.split(','))} source(s)")
+        print(f"✓ Loaded annotations for {len(loaded_annotations)} records from {len(args.annotations_in.split(','))} source(s)")
     
     model = load_model(model_config, model_kwargs, data_kwargs, dataset)
     

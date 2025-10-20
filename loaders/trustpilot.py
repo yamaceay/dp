@@ -32,6 +32,7 @@ class TrustpilotDatasetAdapter(DatasetAdapter):
 
             uid = str(row.get("review_id", idx))
             text = recode_text(row.get("review", ""))
+            name = str(row.get("review_id", idx))
             utilities = {
                 "category": row.get("category"),
                 "stars": row.get("stars"),
@@ -41,6 +42,7 @@ class TrustpilotDatasetAdapter(DatasetAdapter):
             yield DatasetRecord(
                 text=text,
                 uid=uid,
+                name=name,
                 utilities=utilities,
                 metadata=metadata,
             )
