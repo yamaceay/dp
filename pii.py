@@ -101,9 +101,11 @@ def main():
                 modes=["strict", "partial", "exact"]
             )
             
-            print("\nFinal Test Results:")
+            print("\n" + "="*80)
+            print("Final Test Results:")
+            print("="*80)
             for key, value in metrics.items():
-                if key != "per_category" and not isinstance(value, dict):
+                if key != "per_category" and key != "detailed_report" and not isinstance(value, dict):
                     print(f"  {key}: {value}")
         
     elif args.mode == "evaluate":
@@ -120,9 +122,11 @@ def main():
             modes=["strict", "partial", "exact"]
         )
 
-        print("\nEvaluation Results:")
+        print("\n" + "="*80)
+        print("Final Evaluation Metrics:")
+        print("="*80)
         for key, value in metrics.items():
-            if key != "per_category" and not isinstance(value, dict):
+            if key != "per_category" and key != "detailed_report" and not isinstance(value, dict):
                 print(f"  {key}: {value}")
         
     elif args.mode == "predict":

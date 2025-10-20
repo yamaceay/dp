@@ -1,6 +1,7 @@
 from typing import Optional, List, Tuple
 import argparse
 import yaml
+import time
 from datetime import datetime
 
 from dp.methods.anonymizer import Anonymizer
@@ -237,7 +238,9 @@ if __name__ == "__main__":
             raise ValueError(f"{args.model} requires dataset records, cannot use --texts. Use --indices instead or omit both to process all records.")
         
         if indices is None:
-            max_records = data_kwargs.get("max_records", len(dataset))
+            max_records = data_kwargs.get("max_records", None)
+            if max_records is None:
+                max_records = len(dataset)
             indices = list(range(min(max_records, len(dataset))))
         else:
             for idx in indices:
@@ -281,7 +284,21 @@ if __name__ == "__main__":
         
         builder.with_epsilons(epsilon)
 
+    start_time = time.time()
     results = builder.anonymize(**runtime_config)
+    end_time = time.time()
+    
+    total_time = end_time - start_time
+    num_texts = len(texts) if not capabilities.must_use_dataset else len(indices)
+    avg_time = total_time / num_texts if num_texts > 0 else 0
+    
+    print(f"\n{'='*80}")
+    print(f"Anonymization Performance:")
+    print(f"  Total time: {total_time:.2f}s")
+    print(f"  Texts processed: {num_texts}")
+    print(f"  Average time per text: {avg_time:.2f}s")
+    print(f"  Throughput: {num_texts/total_time:.2f} texts/s" if total_time > 0 else "  Throughput: N/A")
+    print('='*80)
 
     if capabilities.requires_k or capabilities.requires_epsilon:
         results, text_indices = flatten_results(results, text_indices)

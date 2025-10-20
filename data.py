@@ -4,11 +4,11 @@ import os
 
 available_datasets = list(ADAPTER_REGISTRY.keys())
 
-def load_data(adapter_name: str, data_path: str, max_records: int = None):
-    adapter = ADAPTER_REGISTRY.get(adapter_name)
+def load_data(data: str, data_in: str, max_records: int = None):
+    adapter = ADAPTER_REGISTRY.get(data)
     if not adapter:
-        raise ValueError(f"Adapter '{adapter_name}' not found.")
-    dataset = adapter(path=data_path, max_records=max_records)
+        raise ValueError(f"Adapter '{data}' not found.")
+    dataset = adapter(data, data_in=data_in, max_records=max_records)
     return dataset
 
 def add_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:

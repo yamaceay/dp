@@ -1,4 +1,5 @@
 from typing import List, Optional, Dict, Any
+import os
 import torch
 import numpy as np
 from transformers import (
@@ -13,13 +14,13 @@ from torch.utils.data import Dataset
 from sklearn.metrics import precision_recall_fscore_support, classification_report
 
 try:
-    from nervaluate import Evaluator
+    from nervaluate import Evaluator, collect_named_entities
     NERVALUATE_AVAILABLE = True
 except ImportError:
     NERVALUATE_AVAILABLE = False
 
 from dp.loaders.base import DatasetRecord, TextAnnotation
-
+from dp.utils.chunking import SpanMergeAggregator, process_with_chunking
 
 class PIIDetector:
     def __init__(
@@ -44,7 +45,6 @@ class PIIDetector:
         self.model = None
         self.pipeline = None
 
-        import os
         if os.path.isdir(model_name) and os.path.exists(os.path.join(model_name, "config.json")):
             self._load_pretrained_model()
         elif labels is not None:
@@ -62,23 +62,14 @@ class PIIDetector:
     
     def set_train_dataset(self, records: List[DatasetRecord]) -> None:
         self.train_records = records
-        if not self.labels:
-            self.labels = self._get_labels(records)
-            self._initialize_model_and_tokenizer(self.labels)
         print(f"✓ Training dataset set: {len(records)} records")
     
     def set_val_dataset(self, records: List[DatasetRecord]) -> None:
         self.val_records = records
-        if not self.labels:
-            self.labels = self._get_labels(records)
-            self._initialize_model_and_tokenizer(self.labels)
         print(f"✓ Validation dataset set: {len(records)} records")
     
     def set_test_dataset(self, records: List[DatasetRecord]) -> None:
         self.test_records = records
-        if not self.labels:
-            self.labels = self._get_labels(records)
-            self._initialize_model_and_tokenizer(self.labels)
         print(f"✓ Test dataset set: {len(records)} records")
     
     def _get_labels(self, records: List[DatasetRecord]) -> List[str]:
@@ -129,11 +120,33 @@ class PIIDetector:
             self.label_to_id = {v: k for k, v in self.id_to_label.items()}
             self.labels = [self.id_to_label[i] for i in sorted(self.id_to_label.keys())]
 
+    def _late_initialize(self) -> None:
+        if not self.labels or self.model is None:
+            all_records = (
+                (self.train_records if self.train_records else []) +
+                (self.val_records if self.val_records else []) + 
+                (self.test_records if self.test_records else [])
+            )
+            self._initialize_labels(self._get_labels(all_records))
+            self._initialize_model_and_tokenizer(self.labels)
+
+    def _initialize_labels(self, labels: Optional[List[str]] = None) -> None:
+        if labels is not None:
+            self.labels = labels
+            self.label_to_id = {label: idx for idx, label in enumerate(labels)}
+            self.id_to_label = {idx: label for label, idx in self.label_to_id.items()}
+
+        elif self.model is not None:
+            config = self.model.config
+            if hasattr(config, 'id2label') and config.id2label:
+                self.id_to_label = config.id2label
+                self.label_to_id = {v: k for k, v in self.id_to_label.items()}
+                self.labels = [self.id_to_label[i] for i in sorted(self.id_to_label.keys())]
+
+        else:
+            raise ValueError("Labels must be provided or model must be loaded to initialize labels")
+
     def _initialize_model_and_tokenizer(self, labels: List[str]) -> None:
-        self.labels = labels
-        self.label_to_id = {label: idx for idx, label in enumerate(labels)}
-        self.id_to_label = {idx: label for label, idx in self.label_to_id.items()}
-        
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModelForTokenClassification.from_pretrained(
             self.model_name,
@@ -156,7 +169,9 @@ class PIIDetector:
     ) -> None:
         if self.train_records is None:
             raise ValueError("Training dataset not set. Use set_train_dataset() first.")
-        
+
+        self._late_initialize()
+
         train_dataset = PIIDataset(
             self.train_records, self.tokenizer, self.label_to_id, self.max_length
         )
@@ -172,11 +187,12 @@ class PIIDetector:
             padding=True,
         )
         
-        metric_for_best_model=None
-        if eval_dataset and use_nervaluate and NERVALUATE_AVAILABLE:
-            metric_for_best_model=f"{nervaluate_mode}_{metric_mode}"
-        elif eval_dataset:
-            metric_for_best_model=metric_mode
+        metric_for_best_model = None
+        if eval_dataset:
+            if use_nervaluate and NERVALUATE_AVAILABLE:
+                metric_for_best_model = metric_mode
+            else:
+                metric_for_best_model = metric_mode
 
         training_args = TrainingArguments(
             output_dir=output_dir,
@@ -228,8 +244,7 @@ class PIIDetector:
         if not records:
             return []
         
-        if not self.labels or self.model is None:
-            raise ValueError("PIIDetector must be initialized with labels or loaded from trained model")
+        self._late_initialize()
         
         if self.pipeline is None:
             self.pipeline = pipeline(
@@ -244,7 +259,6 @@ class PIIDetector:
         
         for record in records:
             if self.use_chunking and self.chunker is not None:
-                from dp.utils.chunking import SpanMergeAggregator, process_with_chunking
                 aggregator = SpanMergeAggregator()
                 
                 def detect(text):
@@ -301,9 +315,7 @@ class PIIDetector:
         if not records:
             raise ValueError("No records provided for evaluation")
 
-        if self.labels is None:
-            self.labels = self._get_labels(records)
-            self._initialize_model_and_tokenizer(self.labels)
+        self._late_initialize()
 
         predicted_records = self.predict(records)
 
@@ -338,52 +350,60 @@ class PIIDetector:
             pred_labels_seq = []
             
             for true_record, pred_record in zip(records, predicted_records):
-                true_bio = self._spans_to_char_labels(true_record.text, true_record.spans or [])
-                pred_bio = self._spans_to_char_labels(pred_record.text, pred_record.spans or [])
+                true_bio = self._spans_to_token_labels(true_record.text, true_record.spans or [])
+                pred_bio = self._spans_to_token_labels(pred_record.text, pred_record.spans or [])
                 true_labels_seq.append(true_bio)
                 pred_labels_seq.append(pred_bio)
             
-            evaluator = Evaluator(
-                true_labels_seq,
-                pred_labels_seq,
-                tags=unique_entity_types,
-                loader="list"
-            )
+            true_collected = [collect_named_entities(msg) for msg in true_labels_seq]
+            pred_collected = [collect_named_entities(msg) for msg in pred_labels_seq]
             
-            results, results_per_tag, _, _ = evaluator.evaluate()
+            evaluator = Evaluator(true_collected, pred_collected, unique_entity_types)
+            results_dict = evaluator.evaluate()
+            
+            overall_results = results_dict.get("overall", {})
+            entity_results = results_dict.get("entities", {})
             
             for mode in modes:
-                if mode in results:
-                    metrics[f"{mode}_precision"] = float(results[mode].get("precision", 0.0))
-                    metrics[f"{mode}_recall"] = float(results[mode].get("recall", 0.0))
-                    metrics[f"{mode}_f1"] = float(results[mode].get("f1", 0.0))
+                if mode in overall_results:
+                    result = overall_results[mode]
+                    metrics[f"{mode}_precision"] = float(result.precision)
+                    metrics[f"{mode}_recall"] = float(result.recall)
+                    metrics[f"{mode}_f1"] = float(result.f1)
             
-            if results_per_tag:
+            if entity_results:
                 metrics["per_category"] = {}
                 for mode in modes:
-                    if mode in results_per_tag:
-                        metrics["per_category"][mode] = {}
-                        for tag, tag_metrics in results_per_tag[mode].items():
+                    metrics["per_category"][mode] = {}
+                    for tag in unique_entity_types:
+                        if tag in entity_results and mode in entity_results[tag]:
+                            result = entity_results[tag][mode]
                             metrics["per_category"][mode][tag] = {
-                                "precision": float(tag_metrics.get("precision", 0.0)),
-                                "recall": float(tag_metrics.get("recall", 0.0)),
-                                "f1": float(tag_metrics.get("f1", 0.0)),
-                                "support": int(tag_metrics.get("support", 0))
+                                "precision": float(result.precision),
+                                "recall": float(result.recall),
+                                "f1": float(result.f1),
+                                "support": int(result.possible)
                             }
             
-            print(f"NER Evaluation Results (nervaluate):")
+            print(f"\nNER Evaluation Results (nervaluate):")
             for mode in modes:
                 if f"{mode}_f1" in metrics:
                     print(f"\n  {mode.upper()} mode:")
                     print(f"    Precision: {metrics[f'{mode}_precision']:.4f}")
                     print(f"    Recall:    {metrics[f'{mode}_recall']:.4f}")
                     print(f"    F1 Score:  {metrics[f'{mode}_f1']:.4f}")
+                else:
+                    print(f"\n  {mode.upper()} mode: No metrics available")
             
-            if "per_category" in metrics:
+            if "per_category" in metrics and metrics["per_category"]:
                 print(f"\n  Per-category results (partial mode):")
                 if "partial" in metrics["per_category"]:
                     for tag, tag_metrics in metrics["per_category"]["partial"].items():
                         print(f"    {tag}: P={tag_metrics['precision']:.4f}, R={tag_metrics['recall']:.4f}, F1={tag_metrics['f1']:.4f}, Support={tag_metrics['support']}")
+                else:
+                    print(f"    No partial mode results")
+            else:
+                print(f"\n  No per-category results available")
         
         else:
             precision, recall, f1, support = precision_recall_fscore_support(
@@ -410,11 +430,11 @@ class PIIDetector:
                 "detailed_report": report,
             }
             
-            print(f"Evaluation Results:")
+            print(f"\nEvaluation Results:")
             print(f"  Precision: {precision:.4f}")
-            print(f"  Recall: {recall:.4f}")
-            print(f"  F1 Score: {f1:.4f}")
-            print(f"  Support: {support}")
+            print(f"  Recall:    {recall:.4f}")
+            print(f"  F1 Score:  {f1:.4f}")
+            print(f"  Support:   {support}")
         
         return metrics
     
@@ -467,8 +487,9 @@ class PIIDetector:
     
     def _compute_metrics_ner(self, eval_pred, mode="partial"):
         if not NERVALUATE_AVAILABLE:
-            print("WARNING: nervaluate not available, falling back to standard metrics")
             return self._compute_metrics(eval_pred)
+        
+        from nervaluate import collect_named_entities
         
         predictions, labels = eval_pred
         true_preds, true_labels = self._get_preds_and_labels_for_nervaluate(predictions, labels)
@@ -478,20 +499,23 @@ class PIIDetector:
             if label.startswith('B-')
         ])))
         
-        evaluator = Evaluator(
-            true_labels,
-            true_preds,
-            tags=unique_entity_types,
-            loader="list"
-        )
+        true_collected = [collect_named_entities(msg) for msg in true_labels]
+        pred_collected = [collect_named_entities(msg) for msg in true_preds]
         
-        results, _, _, _ = evaluator.evaluate()
+        evaluator = Evaluator(true_collected, pred_collected, unique_entity_types)
+        results_dict = evaluator.evaluate()
+        
+        overall_results = results_dict.get("overall", {})
         
         metrics = {}
-        if mode in results:
-            for metric in ["precision", "recall", "f1"]:
-                if metric in results[mode]:
-                    metrics[f"{mode}_{metric}"] = float(results[mode][metric])
+        if mode in overall_results:
+            result = overall_results[mode]
+            metrics["precision"] = float(result.precision)
+            metrics["recall"] = float(result.recall)
+            metrics["f1"] = float(result.f1)
+            metrics[f"{mode}_precision"] = metrics["precision"]
+            metrics[f"{mode}_recall"] = metrics["recall"]
+            metrics[f"{mode}_f1"] = metrics["f1"]
         
         return metrics
     
@@ -511,6 +535,43 @@ class PIIDetector:
             labels[span.start] = f"B-{label}"
             for i in range(span.start + 1, min(span.end, len(text))):
                 labels[i] = f"I-{label}"
+        
+        return labels
+
+    def _spans_to_token_labels(
+        self, text: str, spans: List[TextAnnotation]
+    ) -> List[str]:
+        tokens = text.split()
+        labels = ["O"] * len(tokens)
+        
+        char_to_token = []
+        current_pos = 0
+        for token_idx, token in enumerate(tokens):
+            token_start = text.find(token, current_pos)
+            if token_start == -1:
+                continue
+            token_end = token_start + len(token)
+            for char_idx in range(token_start, token_end):
+                char_to_token.append(token_idx)
+            current_pos = token_end
+        
+        for span in sorted(spans, key=lambda s: s.start):
+            if span.start >= len(char_to_token):
+                continue
+            
+            label = span.label or "ENTITY"
+            if label.startswith("B-") or label.startswith("I-"):
+                label = label[2:]
+            
+            token_start = char_to_token[span.start] if span.start < len(char_to_token) else None
+            token_end = char_to_token[span.end - 1] if span.end > 0 and span.end - 1 < len(char_to_token) else None
+            
+            if token_start is not None:
+                labels[token_start] = f"B-{label}"
+                if token_end is not None and token_end > token_start:
+                    for token_idx in range(token_start + 1, token_end + 1):
+                        if token_idx < len(labels):
+                            labels[token_idx] = f"I-{label}"
         
         return labels
 
