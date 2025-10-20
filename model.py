@@ -38,7 +38,7 @@ def add_model_args(parser: argparse.ArgumentParser) -> List[str]:
 def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--runtime_in', type=str, default=None, help='Path to the runtime configuration')
     parser.add_argument('--texts', type=str, nargs='+', help='Texts to anonymize (space-separated)')
-    parser.add_argument('--indices', type=int, nargs='+', help='Indices of records to anonymize (space-separated)')
+    parser.add_argument('--indices', type=int, nargs='+', help='Indices of records to anonymize from dataset (space-separated)')
     parser.add_argument('--output', type=str, default='print', choices=list(OUTPUT_HANDLER_REGISTRY.keys()), help='Output handler type')
     parser.add_argument('--annotations_in', type=str, default=None, metavar='SOURCES', help='Load annotations from previous run (format: path/to/file.jsonl, comma-separated for multiple sources)')
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
@@ -83,16 +83,16 @@ def use_indices(model_name: str, runtime_kwargs: dict, data_kwargs: dict, length
         return False
     
     indices = runtime_kwargs.get("indices")
-    if indices is None:
-        max_records = data_kwargs.get("max_records")
-        if max_records is None:
-            max_records = length
-        runtime_kwargs["indices"] = list(range(min(max_records, length)))
+    if indices is not None:
+        for idx in indices:
+            if idx < 0 or idx >= length:
+                raise ValueError(f"Index {idx} is out of bounds for dataset of length {length}.")
         return True
     
-    for idx in indices:
-        if idx < 0 or idx >= length:
-            raise ValueError(f"Index {idx} is out of bounds for dataset of length {length}.")
+    max_records = data_kwargs.get("max_records")
+    if max_records is None:
+        max_records = length
+    runtime_kwargs["indices"] = list(range(min(max_records, length)))
     return True
         
 if __name__ == "__main__":
@@ -198,27 +198,6 @@ if __name__ == "__main__":
 
     runtime_config = load_config(args.runtime_in)
     
-    if use_indices(args.model, runtime_kwargs, data_kwargs, len(dataset)):
-        indices = runtime_kwargs["indices"]
-        if capabilities.supports_batch_predict:
-            results = model.anonymize_from_dataset_batch(indices=indices, **runtime_config)
-        else:
-            results = [model.anonymize_from_dataset(idx=idx, **runtime_config) for idx in indices]
-    else:
-        texts = runtime_kwargs.get("texts")
-        if texts is None:
-            max_records = data_kwargs.get("max_records")
-            if max_records is None:
-                max_records = len(dataset)
-            records = list(dataset.iter_records())[:max_records]
-            texts = [record.text for record in records]
-            runtime_kwargs["text_indices"] = list(range(len(texts)))
-        
-        if capabilities.supports_batch_predict:
-            results = model.anonymize_batch(texts=texts, **runtime_config)
-        else:
-            results = [model.anonymize(text=text, **runtime_config) for text in texts]
-    
     batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])
@@ -228,15 +207,61 @@ if __name__ == "__main__":
     else:
         output_handler = output_handler_cls()
     
-    capabilities = get_capabilities(args.model)
-    for i, result in enumerate(results):
-        if args.output not in ["jsonl"]:
-            print(f"\n{'='*80}")
-            print(f"Result {i+1}/{len(results)}")
-            print('='*80)
-        if capabilities.must_use_dataset:
-            output_handler.output(result, dataset=args.data, model=args.model, idx=runtime_kwargs["indices"][i])
+    texts = runtime_kwargs.get("texts")
+    indices = runtime_kwargs.get("indices")
+    
+    if texts is not None and indices is not None:
+        raise ValueError("Cannot specify both --texts and --indices")
+    
+    if capabilities.must_use_dataset:
+        if texts is not None:
+            raise ValueError(f"{args.model} requires dataset records, cannot use --texts. Use --indices instead or omit both to process all records.")
+        
+        if indices is None:
+            max_records = data_kwargs.get("max_records", len(dataset))
+            indices = list(range(min(max_records, len(dataset))))
         else:
+            for idx in indices:
+                if idx < 0 or idx >= len(dataset):
+                    raise ValueError(f"Index {idx} is out of bounds for dataset of length {len(dataset)}.")
+        
+        runtime_kwargs["indices"] = indices
+        
+        if capabilities.supports_batch_predict:
+            results = model.anonymize_from_dataset_batch(indices=indices, **runtime_config)
+        else:
+            results = [model.anonymize_from_dataset(idx=idx, **runtime_config) for idx in indices]
+        
+        for i, result in enumerate(results):
+            if args.output not in ["jsonl"]:
+                print(f"\n{'='*80}")
+                print(f"Result {i+1}/{len(results)}")
+                print('='*80)
+            output_handler.output(result, dataset=args.data, model=args.model, idx=indices[i])
+    else:
+        if texts is None:
+            if indices is not None:
+                records = list(dataset.iter_records())
+                texts = [records[idx].text for idx in indices]
+                runtime_kwargs["text_indices"] = indices
+            else:
+                max_records = data_kwargs.get("max_records", len(dataset))
+                records = list(dataset.iter_records())[:max_records]
+                texts = [record.text for record in records]
+                runtime_kwargs["text_indices"] = list(range(len(texts)))
+        else:
+            runtime_kwargs["text_indices"] = [None] * len(texts)
+        
+        if capabilities.supports_batch_predict:
+            results = model.anonymize_batch(texts=texts, **runtime_config)
+        else:
+            results = [model.anonymize(text=text, **runtime_config) for text in texts]
+        
+        for i, result in enumerate(results):
+            if args.output not in ["jsonl"]:
+                print(f"\n{'='*80}")
+                print(f"Result {i+1}/{len(results)}")
+                print('='*80)
             idx = runtime_kwargs.get("text_indices", [None] * len(results))[i]
             output_handler.output(result, dataset=args.data, model=args.model, idx=idx)
     

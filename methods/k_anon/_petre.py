@@ -1,6 +1,4 @@
 from typing import List, Dict, Optional, Tuple
-import os
-import re
 import torch
 import numpy as np
 from collections import OrderedDict
@@ -9,7 +7,7 @@ from transformers import pipeline
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.k_anon import KAnonymizer
 from dp.loaders.base import DatasetRecord, TextAnnotation
-from dp.loaders.annotations import read_annotations, annotations_to_spans, spans_to_annotations
+from dp.utils.splitter import TextSplitter
 
 
 class PetreAnonymizer(KAnonymizer):
@@ -30,6 +28,7 @@ class PetreAnonymizer(KAnonymizer):
         self.device = self._resolve_device(device)
         self.explainer = None
         self.tri_pipeline_path = None
+        self.splitter = TextSplitter()
         
         self._build_label_mappings()
         self._initialize_annotations(starting_annotations)
@@ -188,22 +187,7 @@ class PetreAnonymizer(KAnonymizer):
         return splits_probs
     
     def _get_splits(self, text: str) -> List[Tuple[int, int]]:
-        pattern = re.compile(r'[.!?]+\s+')
-        splits = []
-        start = 0
-        
-        for match in pattern.finditer(text):
-            end = match.end()
-            splits.append((start, end))
-            start = end
-        
-        if start < len(text):
-            splits.append((start, len(text)))
-        
-        if not splits:
-            splits.append((0, len(text)))
-        
-        return splits
+        return self.splitter.split_sentences(text)
     
     def _apply_annotations_to_split(self, text: str, uid: str, split_start: int, split_end: int) -> str:
         annotations = self.annotations.get(uid, [])
@@ -258,39 +242,45 @@ class PetreAnonymizer(KAnonymizer):
             split_start, split_end = splits[split_idx]
             split_text = text[split_start:split_end]
             
-            annotated_split = self._apply_annotations_to_split(text, uid, split_start, split_end)
-            original_terms = self._get_terms(split_text)
-            annotated_terms = self._get_terms(annotated_split)
+            terms = self._get_terms(split_text)
+            masked_term_idxs = self._get_masked_term_idxs(uid, split_start, split_end, terms)
+            unmasked_idxs = [i for i in range(len(terms)) if i not in masked_term_idxs]
             
-            if not annotated_terms:
+            if not unmasked_idxs:
                 continue
             
-            term_weights = self._compute_term_weights(annotated_split, annotated_terms, label)
-            most_disclosive_idx = self._get_most_disclosive_term_idx(term_weights)
+            annotated_split = self._apply_annotations_to_split(text, uid, split_start, split_end)
+            term_weights = self._compute_term_weights(annotated_split, terms, label)
+            
+            unmasked_weights = [(i, term_weights[i]) for i in unmasked_idxs]
+            most_disclosive_idx = self._get_most_disclosive_term_idx_from_list(unmasked_weights)
             
             if most_disclosive_idx >= 0:
-                annotated_term_text = annotated_terms[most_disclosive_idx][2]
-                
-                for orig_start, orig_end, orig_text in original_terms:
-                    if orig_text == annotated_term_text:
-                        global_start = split_start + orig_start
-                        global_end = split_start + orig_end
-                        self._add_annotation(uid, global_start, global_end)
-                        return True
+                term_start, term_end, _ = terms[most_disclosive_idx]
+                global_start = split_start + term_start
+                global_end = split_start + term_end
+                self._add_annotation(uid, global_start, global_end)
+                return True
         
         return False
     
     def _get_terms(self, text: str) -> List[Tuple[int, int, str]]:
-        pattern = re.compile(r'\b\w+\b')
-        terms = []
+        return self.splitter.tokenize_with_spans(text)
+    
+    def _get_masked_term_idxs(self, uid: str, split_start: int, split_end: int, terms: List[Tuple[int, int, str]]) -> List[int]:
+        annotations = self.annotations.get(uid, [])
+        masked_idxs = []
         
-        for match in pattern.finditer(text):
-            if match.group() != self.mask_text.strip('[]'):
-                start, end = match.span()
-                term_text = match.group()
-                terms.append((start, end, term_text))
+        for term_idx, (term_start, term_end, _) in enumerate(terms):
+            global_start = split_start + term_start
+            global_end = split_start + term_end
+            
+            for ann in annotations:
+                if not (ann.end <= global_start or ann.start >= global_end):
+                    masked_idxs.append(term_idx)
+                    break
         
-        return terms
+        return masked_idxs
     
     def _compute_term_weights(self, text: str, terms: List[Tuple[int, int, str]], label: int) -> np.ndarray:
         if self.explainer is not None:
@@ -313,15 +303,15 @@ class PetreAnonymizer(KAnonymizer):
         
         return term_weights
     
-    def _get_most_disclosive_term_idx(self, term_weights: np.ndarray) -> int:
-        if len(term_weights) == 0:
+    def _get_most_disclosive_term_idx_from_list(self, idx_weight_pairs: List[Tuple[int, float]]) -> int:
+        if not idx_weight_pairs:
             return -1
         
-        sorted_idxs = np.argsort(term_weights)[::-1]
+        sorted_pairs = sorted(idx_weight_pairs, key=lambda x: x[1], reverse=True)
         
-        for idx in sorted_idxs:
-            if term_weights[idx] > 0:
-                return int(idx)
+        for idx, weight in sorted_pairs:
+            if weight > 0:
+                return idx
         
         return -1
     

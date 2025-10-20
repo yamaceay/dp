@@ -42,6 +42,7 @@ class PIIDetector:
         self.id_to_label = {}
         self.tokenizer = None
         self.model = None
+        self.pipeline = None
 
         import os
         if os.path.isdir(model_name) and os.path.exists(os.path.join(model_name, "config.json")):
@@ -230,13 +231,14 @@ class PIIDetector:
         if not self.labels or self.model is None:
             raise ValueError("PIIDetector must be initialized with labels or loaded from trained model")
         
-        pipe = pipeline(
-            "token-classification",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            device=self.device,
-            aggregation_strategy="simple",
-        )
+        if self.pipeline is None:
+            self.pipeline = pipeline(
+                "token-classification",
+                model=self.model,
+                tokenizer=self.tokenizer,
+                device=self.device,
+                aggregation_strategy="simple",
+            )
         
         results = []
         
@@ -246,7 +248,7 @@ class PIIDetector:
                 aggregator = SpanMergeAggregator()
                 
                 def detect(text):
-                    preds = pipe(text)
+                    preds = self.pipeline(text)
                     return [
                         {
                             "start": p["start"],
@@ -269,7 +271,7 @@ class PIIDetector:
                     for s in span_dicts
                 ]
             else:
-                predictions = pipe(record.text)
+                predictions = self.pipeline(record.text)
                 spans = []
                 for pred in predictions:
                     spans.append(

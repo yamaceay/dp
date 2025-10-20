@@ -1,5 +1,4 @@
 from typing import List
-import nltk
 import torch
 import numpy as np
 import string
@@ -7,6 +6,7 @@ from collections import Counter
 
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.dp import DPAnonymizer
+from dp.utils.splitter import TextSplitter
 
 
 class DPMlmAnonymizer(DPAnonymizer):
@@ -88,12 +88,11 @@ class DPMlmAnonymizer(DPAnonymizer):
 
         self.pii_detector = None
         self.explainer = None
+        self.splitter = TextSplitter()
 
         try:
             from transformers import AutoTokenizer, AutoModelForMaskedLM
             from nltk.tokenize.treebank import TreebankWordDetokenizer
-
-            nltk.download('punkt', quiet=True)
 
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)
             self.model = AutoModelForMaskedLM.from_pretrained(self.model_checkpoint).to(self.device)
@@ -143,7 +142,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         self.explainer = explainer
 
     def _tokenize(self, text: str) -> List[str]:
-        return nltk.word_tokenize(text)
+        return [token for _, _, token in self.splitter.tokenize_with_spans(text)]
 
     def _get_token_offsets(self, text: str, tokens: List[str]) -> List[tuple]:
         offsets = []
