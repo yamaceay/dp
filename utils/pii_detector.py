@@ -25,11 +25,14 @@ from dp.utils.chunking import SpanMergeAggregator, process_with_chunking, TokenA
 class PIIDetector:
     def __init__(
         self,
+        # TODO: change default model to ModernBERT when available
         model_name: str = "roberta-base",
+        use_chunking: bool = True,
+        # model_name: str = "answerdotai/ModernBERT-large",
+        # use_chunking: bool = False,
         labels: Optional[List[str]] = None,
         max_length: int = 512,
         device: str = "auto",
-        use_chunking: bool = True,
     ):
         self.model_name = model_name
         self.max_length = max_length
