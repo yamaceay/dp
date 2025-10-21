@@ -41,9 +41,15 @@ class RedditDatasetAdapter(DatasetAdapter):
             text = (row.get("response") or "").strip()
             if not text:
                 continue
-            persona = row.get("personality") or {}
-            identity = self._identity_key(persona)
-            persona_hash = self._hash_persona(persona)
+            persona_raw = row.get("personality") or {}
+            identity = self._identity_key(persona_raw)
+            persona_hash = self._hash_persona(persona_raw)
+
+            persona = {}
+            if persona_raw:
+                for key, value in persona_raw.items():
+                    persona[f"persona_{key}"] = value
+
             utilities = {
                 "label": row.get("label"),
                 "feature": row.get("feature"),
@@ -51,9 +57,6 @@ class RedditDatasetAdapter(DatasetAdapter):
                 "question": row.get("question_asked"),
                 **persona,
             }
-            if persona:
-                for key, value in persona.items():
-                    utilities[f"persona_{key}"] = value
             metadata = {
                 "guess": row.get("guess"),
                 "guess_correctness": row.get("guess_correctness"),

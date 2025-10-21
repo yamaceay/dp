@@ -75,7 +75,7 @@ class EarlyStopCallback(TrainerCallback):
         
         min_acc = min(accuracies)
         if min_acc >= self.min_accuracy:
-            print(f"Minimum accuracy {min_acc:.2f} reached threshold {self.min_accuracy:.2f}, stopping training")
+            print(f"Minimum accuracy {min_acc:.2f} reached threshold {self.min_accuracy:.2f} for one metric, stopping training")
             control.should_training_stop = True
         
         return control
