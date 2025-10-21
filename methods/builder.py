@@ -1,5 +1,6 @@
 from typing import List, Optional, Union
 from dataclasses import dataclass
+from tqdm import tqdm
 
 from dp.methods.constants import get_capabilities
 from dp.methods.anonymizer import Anonymizer
@@ -71,13 +72,14 @@ class AnonymizationBuilder:
             raise ValueError("Model name not set in anonymizer")
         
         capabilities = get_capabilities(self.model_name)
+        name = self.anonymizer.__class__.__name__
         
         if self.request.has_texts() and self.request.has_indices():
             raise ValueError("Cannot specify both texts and indices")
         
         if capabilities.requires_k:
             if self.request.has_texts():
-                raise ValueError(f"{self.anonymizer.__class__.__name__} requires dataset indices, not texts")
+                raise ValueError(f"{name} requires dataset indices, not texts")
             if not self.request.has_indices():
                 raise ValueError("Must specify indices for k-anonymization methods")
             if not self.request.has_ks():
@@ -87,7 +89,7 @@ class AnonymizationBuilder:
         
         elif capabilities.requires_epsilon:
             if self.request.has_indices():
-                raise ValueError(f"{self.anonymizer.__class__.__name__} requires texts, not dataset indices")
+                raise ValueError(f"{name} requires texts, not dataset indices")
             if not self.request.has_texts():
                 raise ValueError("Must specify texts for DP methods")
             if not self.request.has_epsilons():
@@ -97,7 +99,7 @@ class AnonymizationBuilder:
         
         elif capabilities.must_use_dataset:
             if self.request.has_texts():
-                raise ValueError(f"{self.anonymizer.__class__.__name__} requires dataset indices, not texts")
+                raise ValueError(f"{name} requires dataset indices, not texts")
             if not self.request.has_indices():
                 raise ValueError("Must specify indices for dataset-based methods")
             
@@ -105,24 +107,29 @@ class AnonymizationBuilder:
         
         else:
             if self.request.has_indices():
-                raise ValueError(f"{self.anonymizer.__class__.__name__} requires texts, not dataset indices")
+                raise ValueError(f"{name} requires texts, not dataset indices")
             if not self.request.has_texts():
                 raise ValueError("Must specify texts for simple methods")
             
             return self._anonymize_simple(**kwargs)
-            
-    
-    def _anonymize_simple(self, **kwargs):
+
+    def _anonymize_simple(self, progress: bool = False, **kwargs):
         results = []
-        for text in self.request.texts:
+        texts_iter = self.request.texts
+        if progress:
+            texts_iter = tqdm(texts_iter, desc="Anonymizing texts")
+        for text in texts_iter:
             result = self.anonymizer.anonymize(text=text, **kwargs)
             results.append(result)
         return results
     
-    def _anonymize_dp(self, **kwargs):
+    def _anonymize_dp(self, progress: bool = False, **kwargs):
         filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'epsilon'}
         results = []
-        for text in self.request.texts:
+        texts_iter = self.request.texts
+        if progress:
+            texts_iter = tqdm(texts_iter, desc="Anonymizing texts with DP")
+        for text in texts_iter:
             text_results = self.anonymizer.grid_anonymize(
                 text=text, 
                 epsilon=self.request.epsilons, 
@@ -131,10 +138,13 @@ class AnonymizationBuilder:
             results.append(text_results)
         return results
     
-    def _anonymize_k_anon(self, **kwargs):
+    def _anonymize_k_anon(self, progress: bool = False, **kwargs):
         filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'k'}
         results = []
-        for idx in self.request.indices:
+        indices_iter = self.request.indices
+        if progress:
+            indices_iter = tqdm(indices_iter, desc="Anonymizing dataset with k-anonymity")
+        for idx in indices_iter:
             idx_results = self.anonymizer.grid_anonymize_from_dataset(
                 idx=idx,
                 k=self.request.ks,
@@ -142,10 +152,13 @@ class AnonymizationBuilder:
             )
             results.append(idx_results)
         return results
-    
-    def _anonymize_dataset(self, **kwargs):
+
+    def _anonymize_dataset(self, progress: bool = False, **kwargs):
         results = []
-        for idx in self.request.indices:
+        indices_iter = self.request.indices
+        if progress:
+            indices_iter = tqdm(indices_iter, desc="Anonymizing dataset")
+        for idx in indices_iter:
             result = self.anonymizer.anonymize_from_dataset(idx=idx, **kwargs)
             results.append(result)
         return results

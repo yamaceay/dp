@@ -1,3 +1,5 @@
 runtime: k-anon
 
 k: 2
+
+progress: true # slow runtime
