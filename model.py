@@ -26,7 +26,7 @@ available_models = list(MODEL_REGISTRY.keys())
 available_datasets = list(ADAPTER_REGISTRY.keys())
 
 def add_data_args(parser: argparse.ArgumentParser) -> List[str]:
-    parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name (trustpilot, tab, db_bio)')
+    parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
     parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load (default: None = all records)')
     return ['data', 'data_in', 'max_records']

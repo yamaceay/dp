@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Dict, Iterable, Optional
@@ -37,25 +38,29 @@ class RedditDatasetAdapter(DatasetAdapter):
         for idx, row in enumerate(self._records):
             if self.max_records is not None and count >= self.max_records:
                 break
-            text = self._compose_text(row)
+            text = (row.get("response") or "").strip()
             if not text:
                 continue
             persona = row.get("personality") or {}
             identity = self._identity_key(persona)
+            persona_hash = self._hash_persona(persona)
             utilities = {
                 "label": row.get("label"),
                 "feature": row.get("feature"),
                 "hardness": row.get("hardness"),
-            }
-            metadata = {
-                "personality": persona,
                 "question": row.get("question_asked"),
+                **persona,
+            }
+            if persona:
+                for key, value in persona.items():
+                    utilities[f"persona_{key}"] = value
+            metadata = {
                 "guess": row.get("guess"),
                 "guess_correctness": row.get("guess_correctness"),
             }
             yield DatasetRecord(
                 text=text,
-                uid=str(idx),
+                uid=persona_hash,
                 name=identity,
                 utilities=utilities,
                 metadata=metadata,
@@ -70,12 +75,14 @@ class RedditDatasetAdapter(DatasetAdapter):
         return "|".join(pairs)
 
     @staticmethod
-    def _compose_text(row: Dict) -> str:
-        question = row.get("question_asked") or ""
-        response = row.get("response") or ""
-        if question and response:
-            return question.strip() + "\n" + response.strip()
-        return (question or response or "").strip()
+    def _hash_persona(persona: Dict) -> str:
+        """Generate a deterministic hash from personality attributes."""
+        if not persona:
+            return hashlib.sha256(b"unknown_persona").hexdigest()[:16]
+        # Create a stable string representation
+        pairs = [f"{key}={persona.get(key)}" for key in sorted(persona.keys())]
+        persona_str = "|".join(pairs)
+        return hashlib.sha256(persona_str.encode("utf-8")).hexdigest()[:16]
 
 
 __all__ = ["RedditDatasetAdapter"]

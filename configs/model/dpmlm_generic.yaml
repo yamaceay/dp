@@ -1,0 +1,22 @@
+compensate_epsilon: false
+add_probability: 0.0
+delete_probability: 0.0
+
+pii_annotator: null
+pii_threshold: null
+
+explainability: uniform
+explainer_path: null
+
+pii_chunking:
+  enabled: false
+  max_length: 512
+  overlap: 50
+
+tri_chunking:
+  enabled: false
+  max_length: 512
+
+dpmlm_chunking:
+  enabled: true
+  max_length: 512

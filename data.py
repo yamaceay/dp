@@ -12,9 +12,9 @@ def load_data(data: str, data_in: str, max_records: int = None):
     return dataset
 
 def add_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name (trustpilot, tab, db_bio)')
+    parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
     parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
-    parser.add_argument('--max_records', type=int, default=1, help='Maximum number of records to load')
+    parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load')
     return ['data', 'data_in', 'max_records']
 
 if __name__ == "__main__":
@@ -25,5 +25,16 @@ if __name__ == "__main__":
 
     dataset = load_data(args.data, args.data_in, args.max_records)
 
-    for record in dataset:
-        print(f"ID: {record.uid}\nText: {record.text[:100]}...\nAnnotations: {record.spans}\nUtilities: {record.utilities}\n")
+    unique_uids = set()
+    texts = []
+
+    for record in dataset.iter_records():
+        unique_uids.add(record.uid)
+        texts.append(record.text[:100])
+        print(f"ID: {record.uid}\n"
+              f"Text: {record.text[:100]}...\n"
+            #   f"Annotations: {record.spans}\n"
+              f"Utilities: {record.utilities}\n")
+
+    print(f"Total individuals loaded: {len(unique_uids)}")
+    print(f"Total records loaded: {len(texts)}")
