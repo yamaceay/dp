@@ -5,9 +5,10 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List
 
-from dp.loaders import get_adapter, DatasetRecord, read_batch_annotations_from_path
+from dp.loaders import get_adapter, DatasetRecord, read_batch_annotations_from_path, ADAPTER_REGISTRY
 from dp.utils import TRIDetector
 
+available_datasets = list(ADAPTER_REGISTRY.keys())
 
 def load_latest_annotations_from_dataset_folder(dataset_folder: str) -> Dict[str, List[List]]:
     dataset_path = Path(dataset_folder)
@@ -156,7 +157,7 @@ def create_eval_datasets(records: List[DatasetRecord],
 
 def main():
     parser = argparse.ArgumentParser(description="Train and evaluate TRI model for re-identification")
-    parser.add_argument("--dataset", type=str, default="tab", choices=["tab", "trustpilot", "db_bio"], 
+    parser.add_argument("--dataset", type=str, default="tab", choices=available_datasets, 
                         help="Dataset name")
     parser.add_argument("--data-path", type=str, default="data/TAB/tab.json",
                         help="Path to dataset file")
@@ -182,7 +183,7 @@ def main():
     parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate", "predict"],
                         help="Mode: train, evaluate, or predict")
     parser.add_argument("--model-path", type=str, default=None,
-                        help="Path to load pretrained model (for evaluate/predict modes)")
+                        help="Path to an existing TRI model checkpoint (optional for train/evaluate/predict)")
     parser.add_argument("--device", type=str, default="cpu",
                         help="Device to use (auto, cuda, mps, cpu)")
     parser.add_argument("--early-stop-threshold", type=float, default=None,
@@ -208,6 +209,12 @@ def main():
             max_length=512,
             device=args.device
         )
+        if args.model_path:
+            model_path = Path(args.model_path)
+            if not model_path.exists():
+                raise ValueError(f"Model path not found: {model_path}")
+            print(f"\nLoading weights from {model_path}...")
+            tri.load(str(model_path))
         
         tri.set_train_dataset(records)
         

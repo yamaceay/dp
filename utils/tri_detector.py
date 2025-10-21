@@ -44,7 +44,7 @@ def compute_metrics(eval_pred):
         all_predictions[idx] = torch.argmax(probabilities)
     
     correct_predictions = torch.sum(all_predictions == all_labels)
-    accuracy = (float(correct_predictions) / num_predictions) * 100
+    accuracy = float(correct_predictions) / num_predictions
     
     return {"Accuracy": accuracy}
 
@@ -62,13 +62,13 @@ class MetricsPrintCallback(TrainerCallback):
 
 
 class EarlyStopCallback(TrainerCallback):
-    def __init__(self, min_accuracy: float = 100.0):
+    def __init__(self, min_accuracy: float = 1.0):
         self.min_accuracy = min_accuracy
     
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
         if not metrics:
             return control
-        
+
         accuracies = [v for k, v in metrics.items() if "Accuracy" in k and isinstance(v, (int, float))]
         if not accuracies:
             return control
@@ -136,6 +136,18 @@ class TRIDetector:
             return
         
         names = sorted(set(r.name for r in self.train_records))
+        if self.name_to_label:
+            existing = set(self.name_to_label.keys())
+            incoming = set(names)
+            if incoming != existing:
+                missing = incoming.difference(existing)
+                extra = existing.difference(incoming)
+                raise ValueError(
+                    "Existing TRI label mapping incompatible with training data. "
+                    f"Missing: {sorted(missing)} Extra: {sorted(extra)}"
+                )
+            self.num_labels = len(self.name_to_label)
+            return
         self.label_to_name = {idx: name for idx, name in enumerate(names)}
         self.name_to_label = {name: idx for idx, name in self.label_to_name.items()}
         self.num_labels = len(names)
