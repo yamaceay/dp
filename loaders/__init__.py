@@ -9,6 +9,7 @@ from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
 from dp.loaders.trustpilot import TrustpilotDatasetAdapter
 from dp.loaders.tab import TabDatasetAdapter
 from dp.loaders.db_bio import DBBioDatasetAdapter
+from dp.loaders.reddit import RedditDatasetAdapter
 from dp.loaders.annotations import (
     read_annotations,
     write_annotations,
@@ -25,6 +26,7 @@ ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "trustpilot": TrustpilotDatasetAdapter,
     "tab": TabDatasetAdapter,
     "db_bio": DBBioDatasetAdapter,
+    "reddit": RedditDatasetAdapter,
 }
 
 

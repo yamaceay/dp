@@ -20,7 +20,7 @@ except ImportError:
     NERVALUATE_AVAILABLE = False
 
 from dp.loaders.base import DatasetRecord, TextAnnotation
-from dp.utils.chunking import SpanMergeAggregator, process_with_chunking
+from dp.utils.chunking import SpanMergeAggregator, process_with_chunking, TokenAwareChunker
 
 class PIIDetector:
     def __init__(
@@ -29,7 +29,7 @@ class PIIDetector:
         labels: Optional[List[str]] = None,
         max_length: int = 512,
         device: str = "auto",
-        use_chunking: bool = False,
+        use_chunking: bool = True,
     ):
         self.model_name = model_name
         self.max_length = max_length
@@ -113,6 +113,10 @@ class PIIDetector:
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForTokenClassification.from_pretrained(model_path)
         self.model.to(self.device)
+        if self.max_length > 2:
+            self.chunker = TokenAwareChunker(self.tokenizer, self.max_length - 2)
+        else:
+            self.chunker = TokenAwareChunker(self.tokenizer, 1)
         
         config = self.model.config
         if hasattr(config, 'id2label') and config.id2label:
@@ -155,6 +159,10 @@ class PIIDetector:
             label2id=self.label_to_id,
             ignore_mismatched_sizes=True,
         ).to(self.device)
+        if self.max_length > 2:
+            self.chunker = TokenAwareChunker(self.tokenizer, self.max_length - 2)
+        else:
+            self.chunker = TokenAwareChunker(self.tokenizer, 1)
 
     def train(
         self,
@@ -584,44 +592,61 @@ class PIIDataset(Dataset):
         label_to_id: Dict[str, int],
         max_length: int = 512,
     ):
-        self.records = records
-        self.tokenizer = tokenizer
-        self.label_to_id = label_to_id
-        self.max_length = max_length
+        if not records:
+            raise ValueError("records cannot be empty")
+        if max_length <= 0:
+            raise ValueError(f"max_length must be positive, got {max_length}")
+        self.input_ids: List[torch.Tensor] = []
+        self.attention_masks: List[torch.Tensor] = []
+        self.labels: List[torch.Tensor] = []
+        stride_tokens = max(1, min(max_length - 1, int(max_length * 0.25)))
+        for record in records:
+            text = record.text
+            spans = record.spans or []
+            tokenized = tokenizer(
+                text,
+                truncation=True,
+                max_length=max_length,
+                padding="max_length",
+                return_offsets_mapping=True,
+                return_overflowing_tokens=True,
+                stride=stride_tokens,
+            )
+            char_labels = self._spans_to_char_labels(text, spans)
+            input_set = tokenized["input_ids"]
+            if isinstance(input_set[0], int):
+                input_set = [input_set]
+            mask_set = tokenized["attention_mask"]
+            if isinstance(mask_set[0], int):
+                mask_set = [mask_set]
+            offset_set = tokenized["offset_mapping"]
+            if isinstance(offset_set[0], tuple):
+                offset_set = [offset_set]
+            for ids, mask, offsets in zip(input_set, mask_set, offset_set):
+                label_ids = []
+                for start_char, end_char in offsets:
+                    if start_char == 0 and end_char == 0:
+                        label_ids.append(-100)
+                    else:
+                        if start_char < len(char_labels):
+                            label = char_labels[start_char]
+                            label_ids.append(label_to_id.get(label, label_to_id["O"]))
+                        else:
+                            label_ids.append(label_to_id["O"])
+                self.input_ids.append(torch.tensor(ids))
+                self.attention_masks.append(torch.tensor(mask))
+                self.labels.append(torch.tensor(label_ids))
+        if not self.input_ids:
+            raise ValueError("tokenization produced no samples")
     
     def __len__(self):
-        return len(self.records)
+        return len(self.input_ids)
     
     def __getitem__(self, idx):
-        record = self.records[idx]
-        text = record.text
-        spans = record.spans or []
-        
-        tokenized = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_offsets_mapping=True,
-        )
-        
-        char_labels = self._spans_to_char_labels(text, spans)
-        
-        token_labels = []
-        for start_char, end_char in tokenized["offset_mapping"]:
-            if start_char == 0 and end_char == 0:
-                token_labels.append(-100)
-            else:
-                if start_char < len(char_labels):
-                    label = char_labels[start_char]
-                    token_labels.append(self.label_to_id.get(label, self.label_to_id["O"]))
-                else:
-                    token_labels.append(self.label_to_id["O"])
-        
         return {
-            "input_ids": torch.tensor(tokenized["input_ids"]),
-            "attention_mask": torch.tensor(tokenized["attention_mask"]),
-            "labels": torch.tensor(token_labels),
+            "input_ids": self.input_ids[idx].clone().detach(),
+            "attention_mask": self.attention_masks[idx].clone().detach(),
+            "labels": self.labels[idx].clone().detach(),
         }
     
     def _spans_to_char_labels(

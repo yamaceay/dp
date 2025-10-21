@@ -21,6 +21,7 @@ from transformers import (
 from torch.optim import AdamW
 from collections import OrderedDict
 from dp.loaders.base import DatasetRecord
+from dp.utils.chunking import TokenAwareChunker
 
 
 def compute_metrics(eval_pred):
@@ -86,7 +87,7 @@ class TRIDetector:
         model_name: str = "distilbert-base-uncased",
         max_length: int = 512,
         device: str = "auto",
-        use_chunking: bool = False,
+        use_chunking: bool = True,
     ):
         if max_length <= 0:
             raise ValueError(f"max_length must be positive, got {max_length}")
@@ -142,6 +143,10 @@ class TRIDetector:
     def _initialize_tokenizer_and_model(self):
         if self.tokenizer is None:
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            if self.max_length > 2:
+                self.chunker = TokenAwareChunker(self.tokenizer, self.max_length - 2)
+            else:
+                self.chunker = TokenAwareChunker(self.tokenizer, 1)
         if self.model is None and self.num_labels > 0:
             self.model = AutoModelForSequenceClassification.from_pretrained(
                 self.model_name, 
@@ -315,21 +320,20 @@ class TRIDetector:
         pipe = pipeline("text-classification", model=self.model, tokenizer=self.tokenizer, device=self.device if self.device.type != "cpu" else -1, top_k=None, truncation=True, max_length=self.max_length)
         
         results = {}
-        for record in records:
-            if self.use_chunking and self.chunker is not None:
-                from dp.utils.chunking import ProbabilityAggregator, process_with_chunking
-                aggregator = ProbabilityAggregator()
-                
-                def classify(text):
-                    preds = pipe(text)[0]
-                    return {pred['label']: pred['score'] for pred in preds}
-                
+        if self.use_chunking and self.chunker is not None:
+            from dp.utils.chunking import ProbabilityAggregator, process_with_chunking
+            aggregator = ProbabilityAggregator()
+            def classify(text: str) -> Dict[str, float]:
+                preds = pipe(text)[0]
+                return {pred["label"]: pred["score"] for pred in preds}
+            for record in records:
                 pred_dict = process_with_chunking(record.text, self.chunker, classify, aggregator)
-            else:
+                results[record.uid] = pred_dict
+        else:
+            for record in records:
                 predictions = pipe(record.text)[0]
-                pred_dict = {pred['label']: pred['score'] for pred in predictions}
-            
-            results[record.uid] = pred_dict
+                pred_dict = {pred["label"]: pred["score"] for pred in predictions}
+                results[record.uid] = pred_dict
         
         return results
     
@@ -346,14 +350,27 @@ class TRIDetector:
         correct = 0
         total = 0
         
-        for record in records:
-            predictions = pipe(record.text)
-            predicted_label = predictions[0]['label']
-            true_label = f"LABEL_{self.name_to_label[record.name]}"
-            
-            if predicted_label == true_label:
-                correct += 1
-            total += 1
+        if self.use_chunking and self.chunker is not None:
+            from dp.utils.chunking import ProbabilityAggregator, process_with_chunking
+            aggregator = ProbabilityAggregator()
+            def classify(text: str) -> Dict[str, float]:
+                preds = pipe(text)[0]
+                return {pred["label"]: pred["score"] for pred in preds}
+            for record in records:
+                pred_dict = process_with_chunking(record.text, self.chunker, classify, aggregator)
+                predicted_label = max(pred_dict.items(), key=lambda item: item[1])[0]
+                true_label = f"LABEL_{self.name_to_label[record.name]}"
+                if predicted_label == true_label:
+                    correct += 1
+                total += 1
+        else:
+            for record in records:
+                predictions = pipe(record.text)
+                predicted_label = predictions[0]["label"]
+                true_label = f"LABEL_{self.name_to_label[record.name]}"
+                if predicted_label == true_label:
+                    correct += 1
+                total += 1
         
         accuracy = correct / total if total > 0 else 0
         
@@ -375,6 +392,10 @@ class TRIDetector:
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
         self.model.to(self.device)
+        if self.max_length > 2:
+            self.chunker = TokenAwareChunker(self.tokenizer, self.max_length - 2)
+        else:
+            self.chunker = TokenAwareChunker(self.tokenizer, 1)
         
         self.num_labels = self.model.config.num_labels
         
@@ -389,34 +410,49 @@ class TRIDetector:
 
 
 class TRIDataset(Dataset):
-    def __init__(self, records: List[DatasetRecord], tokenizer, name_to_label: Dict[str, int], max_length: int, use_labels: bool = True):
+    def __init__(self, records: List[DatasetRecord], tokenizer, name_to_label: Dict[str, int], max_length: int, use_labels: bool = True, stride_fraction: float = 0.25):
         if not records:
             raise ValueError("records cannot be empty")
         if max_length <= 0:
             raise ValueError(f"max_length must be positive, got {max_length}")
-        
-        self.records = records
-        self.tokenizer = tokenizer
-        self.name_to_label = name_to_label
-        self.max_length = max_length
+        if stride_fraction <= 0 or stride_fraction >= 1:
+            raise ValueError(f"stride_fraction must be in (0, 1), got {stride_fraction}")
+        self.input_ids: List[torch.Tensor] = []
+        self.attention_masks: List[torch.Tensor] = []
+        self.labels: List[torch.Tensor] = []
+        stride_tokens = max(1, min(max_length - 1, int(max_length * stride_fraction)))
+        for record in records:
+            encodings = tokenizer(
+                record.text,
+                truncation=True,
+                padding="max_length",
+                max_length=max_length,
+                return_overflowing_tokens=True,
+                stride=stride_tokens,
+            )
+            input_set = encodings["input_ids"]
+            if isinstance(input_set[0], int):
+                input_set = [input_set]
+            mask_set = encodings["attention_mask"]
+            if isinstance(mask_set[0], int):
+                mask_set = [mask_set]
+            for ids, mask in zip(input_set, mask_set):
+                self.input_ids.append(torch.tensor(ids))
+                self.attention_masks.append(torch.tensor(mask))
+                if use_labels:
+                    self.labels.append(torch.tensor(name_to_label[record.name], dtype=torch.long))
+        if not self.input_ids:
+            raise ValueError("tokenization produced no samples")
         self.use_labels = use_labels
-        
-        self.encodings = tokenizer(
-            [r.text for r in records],
-            truncation=True,
-            padding="max_length",
-            max_length=max_length,
-            return_tensors="pt"
-        )
-        
-        if use_labels:
-            self.labels = torch.tensor([name_to_label[r.name] for r in records], dtype=torch.long)
     
     def __len__(self):
-        return len(self.records)
+        return len(self.input_ids)
     
     def __getitem__(self, idx):
-        item = {key: val[idx].clone().detach() for key, val in self.encodings.items()}
+        item = {
+            "input_ids": self.input_ids[idx].clone().detach(),
+            "attention_mask": self.attention_masks[idx].clone().detach(),
+        }
         if self.use_labels:
             item["labels"] = self.labels[idx].clone().detach()
         return item

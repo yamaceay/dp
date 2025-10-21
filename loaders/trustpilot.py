@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Iterable, Optional
+import json
 
 from datasets import load_dataset
 
@@ -17,10 +18,11 @@ class TrustpilotDatasetAdapter(DatasetAdapter):
         self.data_in = Path(data_in)
         self.max_records = max_records
 
-        try:
+        if data_in.endswith(".json") or data_in.endswith(".jsonl"):
             self._dataset = load_dataset("json", data_files={"data": str(self.data_in)})["data"]
-        except Exception as exc:  # pragma: no cover - import/runtime safety
-            raise RuntimeError(f"Failed to load Trustpilot dataset from {self.data_in}") from exc
+        else:
+            raise RuntimeError(f"Failed to load Trustpilot dataset from {self.data_in}")
+
 
     def __len__(self) -> int:
         return len(self._dataset)
