@@ -6,12 +6,15 @@ from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.simple import SimpleAnonymizer
 
 class ManualAnonymizer(SimpleAnonymizer):
-    def __init__(self, data: str = None, data_in: str = None, max_records: int = None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         print("Initialized ManualAnonymizer")
-        dataset = get_adapter(data, data_in=data_in, max_records=max_records)
-        self.texts = [record.text for record in dataset]
-        self.annotations = [self._deduplicate_annotations(record.spans) for record in dataset]
+        self.texts: List[str] = []
+        self.annotations: List[List[TextAnnotation]] = []
+
+    def add_dataset_records(self, dataset_records):
+        self.texts += [record.text for record in dataset_records]
+        self.annotations += [self._deduplicate_annotations(record.spans) for record in dataset_records]
 
     def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize_from_dataset with an index for ManualAnonymizer.")

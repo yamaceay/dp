@@ -1,6 +1,23 @@
 from dataclasses import dataclass
 from typing import Dict
 
+SIMPLE_MODEL_LIST = [
+    "spacy",
+    "presidio",
+    "manual",
+    "baroud",
+]
+
+K_ANON_MODEL_LIST = [
+    "petre",
+]
+
+DP_MODEL_LIST = [
+    "dpbart",
+   "dpparaphrase",
+   "dpprompt",
+   "dpmlm",
+]
 
 @dataclass
 class ModelCapabilities:

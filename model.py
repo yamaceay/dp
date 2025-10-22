@@ -41,6 +41,7 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--texts', type=str, nargs='+', help='Texts to anonymize (space-separated)')
     parser.add_argument('--indices', type=int, nargs='+', help='Indices of records to anonymize from dataset (space-separated)')
     parser.add_argument('--output', type=str, default='print', choices=list(OUTPUT_HANDLER_REGISTRY.keys()), help='Output handler type')
+    parser.add_argument('--annotations', type=str, choices=['spacy', 'presidio', 'manual'], default=None, help='Type of starting annotations relevant for data preprocessing')
     parser.add_argument('--annotations_in', type=str, default=None, metavar='SOURCES', help='Load annotations from previous run (format: path/to/file.jsonl, comma-separated for multiple sources)')
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
     return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations']
@@ -72,7 +73,8 @@ def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_
     if capabilities.must_use_dataset:
         if dataset is None:
             raise ValueError(f"{model} requires dataset to be loaded")
-        model_instance = model_cls(dataset_records=list(dataset.iter_records()), **model_config, **model_kwargs, **data_kwargs)
+        model_instance = model_cls(**model_config, **model_kwargs, **data_kwargs)
+        model_instance.add_dataset_records(list(dataset.iter_records()))
     else:
         model_instance = model_cls(**model_config, **model_kwargs, **data_kwargs)
     
@@ -168,7 +170,7 @@ if __name__ == "__main__":
     model = load_model(model_config, model_kwargs, data_kwargs, dataset)
     
     if loaded_annotations is not None and hasattr(model, 'set_annotations'):
-        model.set_annotations(loaded_annotations)
+        model.set_annotations(loaded_annotations, name=args.annotations)
 
     if capabilities.can_use_filtering:
         pii_annotator_path = model_config.get("pii_annotator", None)
