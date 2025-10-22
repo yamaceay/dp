@@ -6,6 +6,9 @@ class SimpleAnonymizer(Anonymizer):
         super().__init__(*args, **kwargs)
         print("Initialized SimpleAnonymizer")
 
+    def add_dataset_records(self, dataset_records):
+        raise NotImplementedError("SimpleAnonymizer does not support dataset records.")
+
     def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
         text = "[SIMPLE ANONYMIZED TEXT]"
         return AnonymizationResult(text=text)

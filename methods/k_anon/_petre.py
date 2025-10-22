@@ -6,7 +6,6 @@ from collections import defaultdict
 import re
 import numpy as np
 import torch
-from tqdm import tqdm
 
 from transformers import pipeline
 
@@ -14,6 +13,7 @@ from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.k_anon import KAnonymizer
 from dp.loaders.base import DatasetRecord, TextAnnotation
 from dp.utils.splitter import TextSplitter
+from dp.utils.chunking import TokenAwareChunker
 from dp.methods.constants import SIMPLE_MODEL_LIST
 
 @dataclass
@@ -51,7 +51,7 @@ class PetreAnonymizer(KAnonymizer):
         self.tri_pipeline = None
         self._special_pattern = re.compile(r"[^\nA-Za-z0-9À-ÖØ-öø-ÿЀ-ӿ/]+")
         self._terms_to_ignore = set()
-        self._k_cache: Dict[int, bool] = {}
+        self._k_processed: Dict[int, Set[int]] = defaultdict(set)
         self._annotation_history: Dict[int, Dict[str, List[TextAnnotation]]] = {}
         self.dataset_records: List[DatasetRecord] = []
         self._records_by_idx: List[RecordState] = []
@@ -61,6 +61,8 @@ class PetreAnonymizer(KAnonymizer):
         self.num_labels: int = 0
         self._starting_annotations: Dict[str, List[TextAnnotation]] = {}
         self.annotations: Dict[str, List[TextAnnotation]] = {}
+        self._annotation_name: Optional[str] = None
+        self.tri_chunker: Optional[TokenAwareChunker] = None
 
     def add_dataset_records(self, dataset_records: List[DatasetRecord]):
         if not dataset_records:
@@ -70,8 +72,11 @@ class PetreAnonymizer(KAnonymizer):
         self._build_record_states(self.dataset_records)
         self._starting_annotations = {state.uid: [] for state in self._records_by_idx}
         self.annotations = {uid: [] for uid in self._starting_annotations}
-        self._k_cache.clear()
+        self._k_processed.clear()
         self._annotation_history.clear()
+        self._annotation_name = None
+        self.tri_chunker = None
+        self._terms_to_ignore = self._build_terms_to_ignore(self.annotations, self._annotation_name)
 
     def _build_terms_to_ignore(self, annotations: Dict[str, List[TextAnnotation]], name: Optional[str]) -> Set[str]:
         marks = {
@@ -89,7 +94,13 @@ class PetreAnonymizer(KAnonymizer):
                 for ann in anns:
                     if ann.label:
                         marks.add(ann.label)
-        return marks
+        normalized_marks: Set[str] = set()
+        for mark in marks:
+            if mark is None:
+                continue
+            normalized_marks.add(mark)
+            normalized_marks.add(mark.lower())
+        return normalized_marks
 
     def _build_label_mappings(self, dataset_records: List[DatasetRecord]) -> None:
         names: Set[str] = set()
@@ -141,6 +152,69 @@ class PetreAnonymizer(KAnonymizer):
             )
             self._records_by_idx.append(state)
             self._records_by_uid[uid] = state
+
+    def _tokenize_sentence(self, text: str) -> List[Tuple[int, int]]:
+        return [(start, end) for start, end, _ in self.splitter.tokenize_with_spans(text)]
+
+    def _expand_span_to_tokens(
+        self,
+        state: RecordState,
+        start: int,
+        end: int,
+    ) -> Tuple[int, int]:
+        expanded_start = start
+        expanded_end = end
+        matched = False
+        for token_start, token_end in state.term_spans:
+            if token_end <= start or token_start >= end:
+                continue
+            matched = True
+            if token_start < expanded_start:
+                expanded_start = token_start
+            if token_end > expanded_end:
+                expanded_end = token_end
+        if not matched:
+            for token_start, token_end in self._tokenize_sentence(state.text):
+                if token_end <= start or token_start >= end:
+                    continue
+                matched = True
+                if token_start < expanded_start:
+                    expanded_start = token_start
+                if token_end > expanded_end:
+                    expanded_end = token_end
+        if not matched or expanded_start >= expanded_end:
+            return start, end
+        return expanded_start, expanded_end
+
+    def _align_annotations(
+        self,
+        state: RecordState,
+        annotations: List[TextAnnotation],
+    ) -> List[TextAnnotation]:
+        if not annotations:
+            return []
+        aligned: List[TextAnnotation] = []
+        seen: Set[Tuple[int, int]] = set()
+        for annotation in annotations:
+            span_start, span_end = self._expand_span_to_tokens(state, annotation.start, annotation.end)
+            key = (span_start, span_end)
+            if key in seen:
+                continue
+            seen.add(key)
+            aligned.append(
+                TextAnnotation(
+                    start=span_start,
+                    end=span_end,
+                    label=annotation.label,
+                    text=state.text[span_start:span_end],
+                    replacement=annotation.replacement or self.mask_text,
+                    confidence=annotation.confidence,
+                    annotator=annotation.annotator,
+                    metadata=dict(annotation.metadata or {}),
+                )
+            )
+        aligned.sort(key=lambda ann: (ann.start, ann.end))
+        return aligned
 
     def _normalize_annotation_list(
         self,
@@ -248,23 +322,29 @@ class PetreAnonymizer(KAnonymizer):
             tokenizer=self.tri_pipeline_path,
             device=device_arg,
             top_k=self.num_labels,
-            max_length=512,
-            truncation=True,
+            truncation=False,
         )
+        tokenizer = getattr(self.tri_pipeline, "tokenizer", None)
+        if tokenizer is not None:
+            max_tokens = getattr(tokenizer, "model_max_length", 512)
+            if max_tokens is None or max_tokens <= 0:
+                max_tokens = 512
+            self.tri_chunker = TokenAwareChunker(tokenizer, max(max_tokens - 2, 1))
+        else:
+            self.tri_chunker = None
 
-    def set_annotations(self, annotations: Dict[str, List[TextAnnotation]], name: Optional[str]) -> None:
+    def set_annotations(self, annotations: Dict[str, List[TextAnnotation]], name: Optional[str] = None) -> None:
         if not self._records_by_idx:
             raise RuntimeError("Dataset records must be added before setting annotations")
-        normalized: Dict[str, List[TextAnnotation]] = {}
+        aligned: Dict[str, List[TextAnnotation]] = {}
         for state in self._records_by_idx:
             uid = state.uid
-            if annotations and uid in annotations:
-                normalized[uid] = self._normalize_annotation_list(annotations[uid])
-            else:
-                normalized[uid] = []
-        self._starting_annotations = self._clone_annotation_dict(normalized)
-        self.annotations = self._clone_annotation_dict(normalized)
-        self._k_cache.clear()
+            raw_items = annotations.get(uid, []) if annotations and uid in annotations else []
+            normalized = self._normalize_annotation_list(raw_items)
+            aligned[uid] = self._align_annotations(state, normalized)
+        self._starting_annotations = self._clone_annotation_dict(aligned)
+        self.annotations = self._clone_annotation_dict(aligned)
+        self._k_processed.clear()
         self._annotation_history.clear()
         if name:
             self._annotation_name = name
@@ -317,23 +397,32 @@ class PetreAnonymizer(KAnonymizer):
         spans: List[Tuple[int, int]],
     ) -> np.ndarray:
         unique_spans = sorted({(start, end) for start, end in spans})
-        split_texts: List[str] = []
+        pipeline_inputs: List[str] = []
         for sentence_span in state.sentence_spans:
             rendered = self._apply_spans_to_sentence(state.text, sentence_span, unique_spans)
-            if rendered.strip():
-                split_texts.append(rendered)
+            if not rendered.strip():
+                rendered = self.mask_text
+            if self.tri_chunker is not None:
+                chunks = self.tri_chunker.chunk(rendered)
+                if not chunks:
+                    pipeline_inputs.append(rendered)
+                else:
+                    for chunk in chunks:
+                        chunk_text = chunk.text
+                        pipeline_inputs.append(chunk_text if chunk_text.strip() else self.mask_text)
             else:
-                split_texts.append(self.mask_text)
-        if not split_texts:
-            split_texts = [self.mask_text]
-        results = self.tri_pipeline(split_texts, batch_size=self.batch_size)
+                pipeline_inputs.append(rendered)
+        if not pipeline_inputs:
+            pipeline_inputs = [self.mask_text]
+        results = self.tri_pipeline(pipeline_inputs, batch_size=self.batch_size)
         probs = np.zeros(self.num_labels, dtype=float)
         for split_result in results:
             for pred in split_result:
                 label_idx = self._parse_label(pred["label"])
                 if 0 <= label_idx < self.num_labels:
                     probs[label_idx] += float(pred["score"])
-        probs /= float(len(split_texts))
+        num_inputs = max(len(pipeline_inputs), 1)
+        probs /= float(num_inputs)
         return probs
 
     def _rank_from_probs(self, probs: np.ndarray, label_idx: int) -> int:
@@ -436,18 +525,34 @@ class PetreAnonymizer(KAnonymizer):
         best_k = max(eligible)
         return self._annotation_history[best_k]
 
-    def _run_petre_for_k(self, target_k: int, progress: bool = False) -> None:
+    def _ensure_annotations_for_k(
+        self,
+        target_k: int,
+        indices: List[int],
+    ) -> None:
+        if not indices:
+            return
         if self.tri_pipeline is None:
             raise RuntimeError("Scoring strategy must be set before running PETRE")
-        base = self._clone_annotation_dict(self._base_annotations_for(target_k))
-        self.annotations = self._clone_annotation_dict(base)
-        record_iter = self._records_by_idx
-        if progress:
-            record_iter = tqdm(record_iter, desc=f"Running PETRE for k={target_k}")
-        for state in record_iter:
+
+        if target_k not in self._annotation_history:
+            base = self._clone_annotation_dict(self._base_annotations_for(target_k))
+            aligned_base: Dict[str, List[TextAnnotation]] = {}
+            for state in self._records_by_idx:
+                aligned_base[state.uid] = self._align_annotations(state, base.get(state.uid, []))
+            self._annotation_history[target_k] = aligned_base
+            self._k_processed[target_k] = set()
+
+        pending = [idx for idx in indices if idx not in self._k_processed[target_k]]
+        if not pending:
+            return
+
+        self.annotations = self._clone_annotation_dict(self._annotation_history[target_k])
+        for idx in pending:
+            state = self._records_by_idx[idx]
             annotations = self.annotations[state.uid]
-            spans = [(ann.start, ann.end) for ann in annotations]
-            span_set = set(spans)
+            spans: List[Tuple[int, int]] = [(ann.start, ann.end) for ann in annotations]
+            span_set: Set[Tuple[int, int]] = set(spans)
             current_probs = self._evaluate_state(state, spans)
             while True:
                 rank = self._rank_from_probs(current_probs, state.label)
@@ -480,34 +585,29 @@ class PetreAnonymizer(KAnonymizer):
                 spans.extend(new_spans)
                 current_probs = candidate_probs
         self._annotation_history[target_k] = self._clone_annotation_dict(self.annotations)
+        self._k_processed[target_k].update(pending)
 
-    def grid_anonymize_from_dataset(
+    def _grid_anonymize_from_dataset(
         self,
         idx: int,
-        k: List[int],
-        *args,
-        progress: bool = False,
+        k_values: List[int],
         **kwargs,
-    ) -> List[AnonymizationResult]:
+    ) -> Dict[int, List[AnonymizationResult]]:
         if idx < 0 or idx >= len(self._records_by_idx):
             raise IndexError(f"Index {idx} is out of bounds")
-        requested_order = list(k)
-        unique_sorted_k = sorted(set(requested_order))
-        for current_k in unique_sorted_k:
-            if current_k not in self._k_cache:
-                self._run_petre_for_k(current_k, progress=progress)
-                self._k_cache[current_k] = True
+        ordered_k = list(dict.fromkeys(k_values))
+        for k_value in ordered_k:
+            self._ensure_annotations_for_k(k_value, [idx])
         state = self._records_by_idx[idx]
         record = self.dataset_records[idx]
-        uid = state.uid
         text = record.text or state.text
-        results: List[AnonymizationResult] = []
-        for k_value in requested_order:
-            annotations = self._annotation_history.get(k_value, {}).get(uid, [])
+        results: Dict[int, List[AnonymizationResult]] = {k_value: [] for k_value in ordered_k}
+        for k_value in ordered_k:
+            annotations = self._annotation_history.get(k_value, {}).get(state.uid, [])
             spans = [(ann.start, ann.end) for ann in annotations]
             masked_text = self._apply_spans_to_text(text, spans)
-            cloned_annotations = self._clone_annotation_dict({uid: annotations}).get(uid, [])
-            results.append(
+            cloned_annotations = self._clone_annotation_dict({state.uid: annotations}).get(state.uid, [])
+            results[k_value].append(
                 AnonymizationResult(
                     text=masked_text,
                     spans=cloned_annotations,
@@ -515,18 +615,87 @@ class PetreAnonymizer(KAnonymizer):
                         "k": k_value,
                         "perturbed_tokens": len(spans),
                         "method": "petre",
-                        "uid": uid,
+                        "uid": state.uid,
                     },
                 )
             )
         return results
 
+    def batch_grid_anonymize_from_dataset(
+        self,
+        indices: List[int],
+        k_values: List[int],
+        *,
+        progress: bool = False,
+        **kwargs,
+    ) -> Dict[int, List[List[AnonymizationResult]]]:
+        if isinstance(indices, int):
+            indices = [indices]
+        else:
+            indices = list(indices)
+        if not indices:
+            raise ValueError("indices cannot be empty")
+        if isinstance(k_values, int):
+            ordered_k = [k_values]
+        else:
+            ordered_k = list(dict.fromkeys(k_values))
+        for k_value in ordered_k:
+            self._ensure_annotations_for_k(k_value, ordered_indices)
+        results: Dict[int, List[List[AnonymizationResult]]] = {k_value: [] for k_value in ordered_k}
+        iterator = indices
+        if progress:
+            from tqdm import tqdm
+            iterator = tqdm(iterator, desc="PETRE batch anonymization")
+        for idx in iterator:
+            per_idx = self._grid_anonymize_from_dataset(idx, ordered_k, **kwargs)
+            for k_value in ordered_k:
+                results[k_value].append(per_idx[k_value])
+        return results
+
+    def batch_anonymize_from_dataset(
+        self,
+        indices: List[int],
+        k: List[int],
+        *,
+        progress: bool = False,
+        **kwargs,
+    ) -> List[List[AnonymizationResult]] | Dict[int, List[List[AnonymizationResult]]]:
+        if isinstance(indices, int):
+            indices = [indices]
+        else:
+            indices = list(indices)
+        if isinstance(k, int):
+            ordered_k = [k]
+        else:
+            ordered_k = list(dict.fromkeys(k))
+        if len(ordered_k) > 1:
+            return self.batch_grid_anonymize_from_dataset(
+                indices,
+                ordered_k,
+                progress=progress,
+                **kwargs,
+            )
+        single_k = ordered_k[0]
+        aggregated: List[List[AnonymizationResult]] = []
+        iterator = indices
+        if progress:
+            from tqdm import tqdm
+            iterator = tqdm(iterator, desc="PETRE batch anonymization")
+        for idx in iterator:
+            per_idx = self._grid_anonymize_from_dataset(idx, [single_k], **kwargs)
+            aggregated.append(per_idx[single_k])
+        return aggregated
+
     def anonymize_from_dataset(
         self,
         idx: int,
         k: int,
-        *args,
+        *,
         progress: bool = False,
         **kwargs,
     ) -> AnonymizationResult:
-        return self.grid_anonymize_from_dataset(idx, k=[k], *args, progress=progress, **kwargs)[0]
+        per_idx = self._grid_anonymize_from_dataset(idx, [k], **kwargs)
+        results = per_idx.get(k)
+        if not results:
+            raise ValueError(f"No anonymization result produced for k={k}")
+        return results[0]

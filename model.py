@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple
+from typing import Any, Dict, Optional, List, Tuple, Union
 import argparse
 import yaml
 import time
@@ -98,20 +98,61 @@ def use_indices(model_name: str, runtime_kwargs: dict, data_kwargs: dict, length
     runtime_kwargs["indices"] = list(range(min(max_records, length)))
     return True
 
-def flatten_results(nested_results: List[List], indices: List[int]) -> Tuple[List, List[Optional[int]]]:
-    flat_results = []
-    flat_indices = []
+def flatten_results(
+    nested_results: Any,
+    indices: List[int],
+) -> Union[Tuple[List[Any], List[Optional[int]]], Dict[Any, Tuple[List[Any], List[Optional[int]]]]]:
+    if isinstance(nested_results, dict):
+        flattened: Dict[Any, Tuple[List[Any], List[Optional[int]]]] = {}
+        for key, value in nested_results.items():
+            flattened[key] = flatten_results(value, indices)
+        return flattened
+
+    if not isinstance(nested_results, list):
+        idx = indices[0] if indices else None
+        return [nested_results], [idx]
+
+    if not nested_results:
+        return [], []
+
+    first = nested_results[0]
+    if not isinstance(first, list):
+        flat_indices = indices if len(indices) == len(nested_results) else [None] * len(nested_results)
+        return nested_results, flat_indices
+
+    flat_results: List[Any] = []
+    flat_indices: List[Optional[int]] = []
     for idx, idx_results in zip(indices, nested_results):
-        for result in idx_results:
-            flat_results.append(result)
+        if isinstance(idx_results, list):
+            for result in idx_results:
+                flat_results.append(result)
+                flat_indices.append(idx)
+        else:
+            flat_results.append(idx_results)
             flat_indices.append(idx)
     return flat_results, flat_indices
 
-def output_results(results: List, text_indices: List[Optional[int]], output_handler, verbose: bool, **output_kwargs):
-    for i, (idx, result) in enumerate(zip(text_indices, results)):
+
+def output_results(
+    results: List,
+    text_indices: List[Optional[int]],
+    output_handler,
+    verbose: bool,
+    header: Optional[str] = None,
+    **output_kwargs,
+):
+    total_results = len(results)
+    if verbose and header:
+        print(f"\n{'#'*80}")
+        print(header)
+        print(f"{'#'*80}")
+    count = min(total_results, len(text_indices))
+    for i in range(count):
+        idx = text_indices[i]
+        result = results[i]
         if verbose:
             print(f"\n{'='*80}")
-            print(f"Result {i+1}/{len(results)}")
+            print(f"Result {i+1}/{total_results}")
             print('='*80)
         output_handler.output(result, idx=idx, **output_kwargs)
         
@@ -295,17 +336,30 @@ if __name__ == "__main__":
     print(f"  Throughput: {num_texts/total_time:.2f} texts/s" if total_time > 0 else "  Throughput: N/A")
     print('='*80)
 
-    if capabilities.requires_k or capabilities.requires_epsilon:
-        results, text_indices = flatten_results(results, text_indices)
+    flattened = flatten_results(results, text_indices)
 
-    output_results(
-        results, 
-        text_indices, 
-        output_handler, 
-        verbose=args.output not in ["jsonl"],
-        dataset=args.data, 
-        model=args.model
-    )
+    if isinstance(flattened, dict):
+        for grid_value, (flat_res, flat_indices) in flattened.items():
+            header = f"Grid value: {grid_value}"
+            output_results(
+                flat_res,
+                flat_indices,
+                output_handler,
+                verbose=args.output not in ["jsonl"],
+                header=header,
+                dataset=args.data,
+                model=args.model,
+            )
+    else:
+        flat_res, flat_indices = flattened
+        output_results(
+            flat_res,
+            flat_indices,
+            output_handler,
+            verbose=args.output not in ["jsonl"],
+            dataset=args.data,
+            model=args.model,
+        )
  
     if hasattr(output_handler, 'close'):
         output_handler.close()

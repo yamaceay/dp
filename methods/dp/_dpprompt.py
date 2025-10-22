@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 import torch
 
 from dp.methods.anonymizer import AnonymizationResult
@@ -56,20 +56,20 @@ class DPPromptAnonymizer(DPAnonymizer):
             return input_ids[0]
         return input_ids or []
 
-    def grid_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
-        if epsilon is None:
-            epsilon = [100.0]
-        
-        if not isinstance(epsilon, list):
-            epsilon = [float(epsilon)]
-        
-        epsilon = [float(e) for e in epsilon]
-        
+    def _grid_anonymize(self, text: str, epsilon: List[float], *args, **kwargs) -> Dict[float, List[AnonymizationResult]]:
+        if not epsilon:
+            raise ValueError("epsilon must contain at least one value")
+        ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
         if not text or not text.strip():
-            return [AnonymizationResult(
-                text="",
-                metadata={"epsilon": e, "method": "dpprompt"}
-            ) for e in epsilon]
+            return {
+                eps: [
+                    AnonymizationResult(
+                        text="",
+                        metadata={"epsilon": eps, "method": "dpprompt"},
+                    )
+                ]
+                for eps in ordered_eps
+            }
         
         prompt = self._create_prompt(text)
         prompt_ids = self._encode_without_special(prompt)
@@ -81,9 +81,9 @@ class DPPromptAnonymizer(DPAnonymizer):
             truncation=True,
         ).to(self.device)
         
-        results = []
+        results: Dict[float, List[AnonymizationResult]] = {eps: [] for eps in ordered_eps}
         with torch.no_grad():
-            for eps in epsilon:
+            for eps in ordered_eps:
                 temperature = 2 * self.sensitivity / eps
                 
                 output = self.model.generate(
@@ -105,10 +105,6 @@ class DPPromptAnonymizer(DPAnonymizer):
                     "temperature": temperature,
                 }
                 
-                results.append(AnonymizationResult(text=private_text, metadata=metadata))
-        
-        return results
-    
-    def anonymize(self, text: str, *args, epsilon: float = 100.0, **kwargs) -> AnonymizationResult:
-        return self.grid_anonymize(text, epsilon=[epsilon], **kwargs)[0]
+                results[eps].append(AnonymizationResult(text=private_text, metadata=metadata))
 
+        return results

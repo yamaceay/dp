@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List
 import torch
 import numpy as np
 import string
@@ -249,21 +249,20 @@ class DPMlmAnonymizer(DPAnonymizer):
             top_tokens = torch.topk(torch.from_numpy(mask_logits), k=self.k_candidates, dim=0)[1]
             return self.tokenizer.decode(top_tokens[0].item()).strip()
 
-    def grid_anonymize(self, text: str, *args, epsilon: List[float] = None, **kwargs) -> List[AnonymizationResult]:
-        if epsilon is None:
-            epsilon = [100.0]
-        
-        if not isinstance(epsilon, list):
-            epsilon = [float(epsilon)]
-        
-        epsilon = [float(e) for e in epsilon]
-
+    def _grid_anonymize(self, text: str, epsilon: List[float], *args, **kwargs) -> Dict[float, List[AnonymizationResult]]:
+        if not epsilon:
+            raise ValueError("epsilon must contain at least one value")
+        ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
         if not text or not text.strip():
-            return [AnonymizationResult(
-                text="",
-                metadata={"epsilon": e, "method": "dpmlm"}
-            ) for e in epsilon]
-
+            return {
+                eps: [
+                    AnonymizationResult(
+                        text="",
+                        metadata={"epsilon": eps, "method": "dpmlm"},
+                    )
+                ]
+                for eps in ordered_eps
+            }
         tokens = self._tokenize(text)
         offsets = self._get_token_offsets(text, tokens)
         occurrences = self._sentence_enum(tokens)
@@ -309,8 +308,8 @@ class DPMlmAnonymizer(DPAnonymizer):
             except Exception as e:
                 print(f"Warning: Explainer failed ({e}), using uniform epsilon")
         
-        results = []
-        for eps in epsilon:
+        results: Dict[float, List[AnonymizationResult]] = {eps: [] for eps in ordered_eps}
+        for eps in ordered_eps:
             compensated_epsilon = eps * perturbation_ratio
             epsilon_values = [compensated_epsilon] * len(critical_indices)
             
@@ -399,9 +398,6 @@ class DPMlmAnonymizer(DPAnonymizer):
                 metadata["explainer"] = self.explainer.__class__.__name__
                 metadata["critical_tokens"] = len(critical_tokens)
 
-            results.append(AnonymizationResult(text=private_text, metadata=metadata))
-        
+            results[eps].append(AnonymizationResult(text=private_text, metadata=metadata))
+
         return results
-    
-    def anonymize(self, text: str, *args, epsilon: float = 100.0, **kwargs) -> AnonymizationResult:
-        return self.grid_anonymize(text, epsilon=[epsilon], **kwargs)[0]

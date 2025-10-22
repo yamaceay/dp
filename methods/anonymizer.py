@@ -168,32 +168,35 @@ class AnonymizationBuilder:
         return results
     
     def _anonymize_dp(self, progress: bool = False, **kwargs):
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'epsilon'}
-        results = []
-        texts_iter = self.request.texts
-        if progress:
-            texts_iter = tqdm(texts_iter, desc="Anonymizing texts with DP")
-        for text in texts_iter:
-            text_results = self.anonymizer.grid_anonymize(
-                text=text, 
-                epsilon=self.request.epsilons, 
-                **filtered_kwargs
-            )
-            results.append(text_results)
+        filtered_kwargs = {key: value for key, value in kwargs.items() if key != "epsilon"}
+        texts = list(self.request.texts or [])
+        epsilons = list(self.request.epsilons or [])
+        if not texts:
+            raise ValueError("No texts provided for DP anonymization")
+        if not epsilons:
+            raise ValueError("No epsilon values provided for DP anonymization")
+        results = self.anonymizer.batch_anonymize(
+            texts=texts,
+            epsilon=epsilons,
+            progress=progress,
+            **filtered_kwargs,
+        )
         return results
     
     def _anonymize_k_anon(self, progress: bool = False, **kwargs):
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'k'}
-        results = []
-        indices_iter = self.request.indices
-        for idx in indices_iter:
-            idx_results = self.anonymizer.grid_anonymize_from_dataset(
-                idx=idx,
-                k=self.request.ks,
-                progress=progress,
-                **filtered_kwargs
-            )
-            results.append(idx_results)
+        filtered_kwargs = {key: value for key, value in kwargs.items() if key != "k"}
+        indices = list(self.request.indices or [])
+        ks = list(self.request.ks or [])
+        if not indices:
+            raise ValueError("No indices provided for k-anonymization")
+        if not ks:
+            raise ValueError("No k values provided for k-anonymization")
+        results = self.anonymizer.batch_anonymize_from_dataset(
+            indices=indices,
+            k=ks,
+            progress=progress,
+            **filtered_kwargs,
+        )
         return results
 
     def _anonymize_dataset(self, progress: bool = False, **kwargs):

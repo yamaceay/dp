@@ -68,7 +68,11 @@ class TokenAwareChunker:
         
         pos = 0
         for token_chunk in token_chunks:
-            chunk_text = self.tokenizer.decode(token_chunk, skip_special_tokens=True)
+            chunk_text = self.tokenizer.decode(
+                token_chunk,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
+            )
             start = pos
             end = start + len(chunk_text)
             chunks.append(Chunk(text=chunk_text, start=start, end=end))

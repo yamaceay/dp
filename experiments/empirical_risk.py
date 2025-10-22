@@ -143,7 +143,8 @@ class ReidentificationRiskExperiment(Experiment):
         builder = self.anonymizer.builder()
         
         if self.capabilities.requires_k:
-            builder.with_indices(list(range(len(self.dataset_records)))).with_ks([param_value])
+            indices = list(range(len(self.dataset_records)))
+            builder.with_indices(indices).with_ks([param_value])
             results = builder.anonymize()
             return self._flatten_k_results(results)
         
@@ -154,7 +155,8 @@ class ReidentificationRiskExperiment(Experiment):
             return self._flatten_epsilon_results(results)
         
         elif self.capabilities.must_use_dataset:
-            builder.with_indices(list(range(len(self.dataset_records))))
+            indices = list(range(len(self.dataset_records)))
+            builder.with_indices(indices)
             results = builder.anonymize()
             return self._flatten_dataset_results(results)
         
