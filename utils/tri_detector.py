@@ -21,7 +21,7 @@ from transformers import (
 from torch.optim import AdamW
 from collections import OrderedDict
 from dp.loaders.base import DatasetRecord
-from dp.utils.chunking import TokenAwareChunker
+from dp.utils.chunking import TokenAwareChunker, ProbabilityAggregator, process_with_chunking
 
 
 def compute_metrics(eval_pred):
@@ -333,7 +333,6 @@ class TRIDetector:
         
         results = {}
         if self.use_chunking and self.chunker is not None:
-            from dp.utils.chunking import ProbabilityAggregator, process_with_chunking
             aggregator = ProbabilityAggregator()
             def classify(text: str) -> Dict[str, float]:
                 preds = pipe(text)[0]

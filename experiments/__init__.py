@@ -24,9 +24,3 @@ class Experiment(ABC):
     
     def cleanup(self):
         self.cleanup_complete = True
-    
-    def execute(self, *args, **kwargs) -> ExperimentResult:
-        self.setup(*args, **kwargs)
-        result = self.run(*args, **kwargs)
-        self.cleanup()
-        return result
