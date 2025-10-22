@@ -28,13 +28,16 @@ if __name__ == "__main__":
     unique_uids = set()
     texts = []
 
+    utility_keys = set()
+
     for record in dataset.iter_records():
         unique_uids.add(record.uid)
         texts.append(record.text[:100])
-        print(f"ID: {record.uid}\n"
-              f"Text: {record.text[:100]}...\n"
-            #   f"Annotations: {record.spans}\n"
-              f"Utilities: {record.utilities}\n")
+        utility_keys.update(record.utilities.keys())
+        # print(f"ID: {record.uid}\n"
+        #       f"Text: {record.text[:100]}...\n"
+        #       f"Utilities: {record.utilities}\n")
 
     print(f"Total individuals loaded: {len(unique_uids)}")
     print(f"Total records loaded: {len(texts)}")
+    print(f"Utility keys found: {', '.join(utility_keys)}")

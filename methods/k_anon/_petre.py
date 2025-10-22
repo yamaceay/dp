@@ -584,7 +584,14 @@ class PetreAnonymizer(KAnonymizer):
                     span_set.add((start, end))
                 spans.extend(new_spans)
                 current_probs = candidate_probs
-        self._annotation_history[target_k] = self._clone_annotation_dict(self.annotations)
+        aligned_history: Dict[str, List[TextAnnotation]] = {}
+        for idx in pending:
+            state = self._records_by_idx[idx]
+            aligned_history[state.uid] = self._align_annotations(state, self.annotations[state.uid])
+        self._annotation_history[target_k] = self._clone_annotation_dict({
+            uid: self._align_annotations(self._records_by_uid[uid], anns)
+            for uid, anns in self.annotations.items()
+        })
         self._k_processed[target_k].update(pending)
 
     def _grid_anonymize_from_dataset(
@@ -603,10 +610,11 @@ class PetreAnonymizer(KAnonymizer):
         text = record.text or state.text
         results: Dict[int, List[AnonymizationResult]] = {k_value: [] for k_value in ordered_k}
         for k_value in ordered_k:
-            annotations = self._annotation_history.get(k_value, {}).get(state.uid, [])
-            spans = [(ann.start, ann.end) for ann in annotations]
+            raw_annotations = self._annotation_history.get(k_value, {}).get(state.uid, [])
+            aligned_annotations = self._align_annotations(state, raw_annotations)
+            spans = [(ann.start, ann.end) for ann in aligned_annotations]
             masked_text = self._apply_spans_to_text(text, spans)
-            cloned_annotations = self._clone_annotation_dict({state.uid: annotations}).get(state.uid, [])
+            cloned_annotations = self._clone_annotation_dict({state.uid: aligned_annotations}).get(state.uid, [])
             results[k_value].append(
                 AnonymizationResult(
                     text=masked_text,
