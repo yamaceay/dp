@@ -9,7 +9,7 @@ from dp.loaders.base import DatasetRecord
 from dp.utils.tri_detector import TRIDetector
 
 
-class AnnotationPrivacyExperiment(Experiment):
+class TextPrivacyExperiment(Experiment):
     def __init__(
         self,
         dataset_name: str,

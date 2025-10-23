@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from statistics import mean, median
 from typing import Any, Dict, Iterable, List, Optional
+from bert_score import score
 
 from dp.experiments import Experiment, ExperimentResult
 
 
-class SemanticDivergenceExperiment(Experiment):
+class TextDivergenceExperiment(Experiment):
     def __init__(
         self,
         original_texts: Dict[str, str],
@@ -46,10 +47,6 @@ class SemanticDivergenceExperiment(Experiment):
         self.metric = metric
 
     def run(self, **kwargs: Any) -> ExperimentResult:
-        try:
-            from bert_score import score  # type: ignore
-        except ImportError as exc:  # pragma: no cover
-            raise RuntimeError("bert-score package is required for SemanticDivergenceExperiment") from exc
         evaluations: Dict[str, Dict[str, Any]] = {}
         divergence_means: List[float] = []
         config = self._build_score_kwargs()

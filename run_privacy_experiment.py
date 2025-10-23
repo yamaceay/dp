@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from dp.experiments import ExperimentResult
 from dp.experiments.io_utils import collect_jsonl_sources, uniquify_records
 from dp.experiments.output_utils import OutputCallback, build_output_sink
-from dp.experiments.privacy_annotations import AnnotationPrivacyExperiment
+from dp.experiments.privacy_annotations import TextPrivacyExperiment
 from dp.loaders import DatasetRecord, TextAnnotation, get_adapter
 from dp.loaders.annotations import apply_annotations, read_batch_annotations_from_path
 
@@ -324,7 +324,7 @@ def main() -> None:
         annotation_sources[name] = path
         evaluation_record_counts[name] = len(evaluation_dataset)
 
-    experiment = AnnotationPrivacyExperiment(
+    experiment = TextPrivacyExperiment(
         dataset_name=args.dataset,
         original_dataset=original_dataset,
         evaluation_datasets=evaluation_datasets,

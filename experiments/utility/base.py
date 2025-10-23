@@ -1,22 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
+from sklearn.model_selection import StratifiedShuffleSplit
 
 from experiments import Experiment, ExperimentResult
 from dp.loaders.base import DatasetRecord
-
-
-@dataclass
-class UtilityScores:
-    original: float
-    anonymized: float
-    loss: float
 
 
 def split_indices(size: int, test_size: float, random_state: int, labels: Sequence[str]) -> Tuple[np.ndarray, np.ndarray]:
@@ -33,7 +26,6 @@ def split_indices(size: int, test_size: float, random_state: int, labels: Sequen
         rng.shuffle(indices)
         split = int(size * (1 - test_size))
         return indices[:split], indices[split:]
-    from sklearn.model_selection import StratifiedShuffleSplit
 
     splitter = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
     try:
@@ -52,7 +44,7 @@ def split_indices(size: int, test_size: float, random_state: int, labels: Sequen
 class TextUtilityExperiment(Experiment):
     def __init__(
         self,
-        anonymize: Callable[[str], str],
+        records: List[DatasetRecord],
         max_records: Optional[int] = None,
         test_size: float = 0.2,
         random_state: int = 42,
@@ -60,24 +52,35 @@ class TextUtilityExperiment(Experiment):
         classifier: Optional[LogisticRegression] = None,
     ):
         super().__init__()
-        self.anonymize = anonymize
+        self.records = list(records)
         self.max_records = max_records
         self.test_size = test_size
         self.random_state = random_state
         self._vectorizer = vectorizer or TfidfVectorizer(ngram_range=(1, 2), max_features=20000, min_df=2)
         self._classifier = classifier or LogisticRegression(max_iter=1000, class_weight="balanced")
+        self.evaluation_texts: Dict[str, Dict[str, str]] = {}
+        self._texts: List[str] = []
+        self._labels: List[str] = []
+        self._keys: List[str] = []
+        self._train_idx: Optional[np.ndarray] = None
+        self._test_idx: Optional[np.ndarray] = None
+        self._baseline_score: Optional[float] = None
+        self._selected_records: List[DatasetRecord] = []
+        self.record_info: Dict[str, Dict[str, Any]] = {}
 
-    def load_records(self) -> Iterable[DatasetRecord]:
-        raise NotImplementedError
+    def set_evaluation_texts(self, evaluation_texts: Dict[str, Dict[str, str]]) -> None:
+        self.evaluation_texts = evaluation_texts or {}
 
     def get_label(self, record: DatasetRecord) -> Optional[str]:
         raise NotImplementedError
 
-    def filter_records(self, records: Iterable[DatasetRecord]) -> Tuple[List[str], List[str]]:
+    def filter_records(self, records: Iterable[DatasetRecord]) -> Tuple[List[str], List[str], List[str], List[DatasetRecord]]:
         texts: List[str] = []
         labels: List[str] = []
-        for idx, record in enumerate(records):
-            if self.max_records is not None and idx >= self.max_records:
+        keys: List[str] = []
+        selected: List[DatasetRecord] = []
+        for global_index, record in enumerate(records):
+            if self.max_records is not None and len(texts) >= self.max_records:
                 break
             label = self.get_label(record)
             if label is None:
@@ -86,9 +89,36 @@ class TextUtilityExperiment(Experiment):
                 continue
             texts.append(record.text)
             labels.append(label)
+            key = record.uid or f"record_{global_index}"
+            keys.append(key)
+            selected.append(record)
         if not texts:
             raise ValueError("No valid records")
-        return texts, labels
+        return texts, labels, keys, selected
+
+    def setup(self, **kwargs: Any) -> None:  # type: ignore[override]
+        texts, labels, keys, selected = self.filter_records(self.records)
+        self._texts = texts
+        self._labels = labels
+        self._keys = keys
+        self._selected_records = selected
+        train_idx, test_idx = split_indices(len(texts), self.test_size, self.random_state, labels)
+        self._train_idx = train_idx
+        self._test_idx = test_idx
+        train_texts = [texts[i] for i in train_idx]
+        test_texts = [texts[i] for i in test_idx]
+        train_labels = [labels[i] for i in train_idx]
+        test_labels = [labels[i] for i in test_idx]
+        self._baseline_score = self.fit_and_score(train_texts, train_labels, test_texts, test_labels)
+        self.record_info = {
+            key: {
+                "index": idx + 1,
+                "label": labels[idx],
+                "persona_uid": selected[idx].metadata.get("persona_uid"),
+            }
+            for idx, key in enumerate(keys)
+        }
+        super().setup(**kwargs)
 
     def fit_and_score(self, train_texts: Sequence[str], train_labels: Sequence[str], test_texts: Sequence[str], test_labels: Sequence[str]) -> float:
         vectorizer = self._clone_vectorizer()
@@ -99,21 +129,6 @@ class TextUtilityExperiment(Experiment):
         predictions = classifier.predict(x_test)
         return float(f1_score(test_labels, predictions, average="weighted"))
 
-    def compute_scores(self) -> Tuple[float, float]:
-        records = list(self.load_records())
-        texts, labels = self.filter_records(records)
-        train_idx, test_idx = split_indices(len(texts), self.test_size, self.random_state, labels)
-        train_texts = [texts[i] for i in train_idx]
-        test_texts = [texts[i] for i in test_idx]
-        train_labels = [labels[i] for i in train_idx]
-        test_labels = [labels[i] for i in test_idx]
-        original_score = self.fit_and_score(train_texts, train_labels, test_texts, test_labels)
-        anonymized_texts = [self.anonymize(text) for text in texts]
-        anonymized_train = [anonymized_texts[i] for i in train_idx]
-        anonymized_test = [anonymized_texts[i] for i in test_idx]
-        anonymized_score = self.fit_and_score(anonymized_train, train_labels, anonymized_test, test_labels)
-        return original_score, anonymized_score
-
     def _clone_vectorizer(self) -> TfidfVectorizer:
         params = self._vectorizer.get_params(deep=True)
         return TfidfVectorizer(**params)
@@ -122,13 +137,48 @@ class TextUtilityExperiment(Experiment):
         params = self._classifier.get_params(deep=True)
         return LogisticRegression(**params)
 
-    def run(self) -> ExperimentResult:
-        original_score, anonymized_score = self.compute_scores()
-        scores = UtilityScores(original=original_score, anonymized=anonymized_score, loss=original_score - anonymized_score)
+    def run(self, **kwargs: Any) -> ExperimentResult:  # type: ignore[override]
+        if self._baseline_score is None or self._train_idx is None or self._test_idx is None:
+            raise RuntimeError("setup must be completed before run")
+        if not self.evaluation_texts:
+            raise RuntimeError("No evaluation datasets provided")
+        evaluations: Dict[str, Dict[str, Any]] = {}
+        losses: List[float] = []
+        train_total = len(self._train_idx)
+        test_total = len(self._test_idx)
+        for name, texts_map in sorted(self.evaluation_texts.items()):
+            matched_train_idx = [idx for idx in self._train_idx if self._keys[idx] in texts_map]
+            matched_test_idx = [idx for idx in self._test_idx if self._keys[idx] in texts_map]
+            evaluation: Dict[str, Any] = {
+                "f1": None,
+                "loss": None,
+                "train_matched": len(matched_train_idx),
+                "test_matched": len(matched_test_idx),
+                "train_total": train_total,
+                "test_total": test_total,
+                "available": len(texts_map),
+                "valid": False,
+            }
+            if matched_train_idx and matched_test_idx:
+                train_texts = [texts_map[self._keys[idx]] for idx in matched_train_idx]
+                train_labels = [self._labels[idx] for idx in matched_train_idx]
+                test_texts = [texts_map[self._keys[idx]] for idx in matched_test_idx]
+                test_labels = [self._labels[idx] for idx in matched_test_idx]
+                score = self.fit_and_score(train_texts, train_labels, test_texts, test_labels)
+                loss = self._baseline_score - score
+                evaluation["f1"] = float(score)
+                evaluation["loss"] = float(loss)
+                evaluation["valid"] = True
+                losses.append(loss)
+            evaluations[name] = evaluation
         metrics = {
-            "original_f1": scores.original,
-            "anonymized_f1": scores.anonymized,
-            "utility_loss": scores.loss,
-            "loss": scores.loss,
+            "baseline": {
+                "f1": float(self._baseline_score),
+                "train_size": train_total,
+                "test_size": test_total,
+            },
+            "evaluations": evaluations,
+            "records": self.record_info,
         }
-        return ExperimentResult(score=scores.loss, metrics=metrics)
+        overall_loss = max(losses) if losses else 0.0
+        return ExperimentResult(score=float(overall_loss), metrics=metrics)

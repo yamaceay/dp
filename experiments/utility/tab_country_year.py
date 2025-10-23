@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Callable, Iterable, Optional
+from typing import List, Optional
 
-from dp.loaders import get_adapter
 from dp.loaders.base import DatasetRecord
 from experiments.utility.base import TextUtilityExperiment
 
@@ -16,7 +14,7 @@ REGION_GROUPS = {
     "eastern_europe": {"RUS", "UKR", "BLR", "MDA"},
     "balkans": {"ROU", "BGR", "SRB", "HRV", "BIH", "MKD", "MNE", "ALB", "KSV"},
     "caucasus": {"ARM", "AZE", "GEO"},
-    "middle_east": {"TUR"},
+    "anatolia": {"TUR"},
 }
 
 
@@ -44,22 +42,16 @@ def group_year(value: Optional[int]) -> Optional[str]:
 class TabMetadataExperiment(TextUtilityExperiment):
     def __init__(
         self,
-        data_file: str,
+        records: List[DatasetRecord],
         target: str,
-        anonymize: Callable[[str], str],
         max_records: Optional[int] = None,
         test_size: float = 0.2,
         random_state: int = 42,
     ):
         if target not in {"country_region", "year_decade"}:
             raise ValueError("Unsupported target")
-        super().__init__(anonymize, max_records=max_records, test_size=test_size, random_state=random_state)
-        self.data_file = Path(data_file)
+        super().__init__(records=records, max_records=max_records, test_size=test_size, random_state=random_state)
         self.target = target
-
-    def load_records(self) -> Iterable[DatasetRecord]:
-        adapter = get_adapter("tab", data_in=str(self.data_file))
-        yield from adapter.iter_records()
 
     def get_label(self, record: DatasetRecord) -> Optional[str]:
         meta = record.metadata.get("meta", {})
