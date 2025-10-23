@@ -325,13 +325,13 @@ class TRIDetector:
         del mlm_model
         torch.cuda.empty_cache()
     
-    def predict(self, records: List[DatasetRecord]) -> Dict[str, float]:
+    def predict(self, records: List[DatasetRecord]) -> Dict[str, Dict[str, float]]:
         if self.model is None:
             raise ValueError("Model not initialized. Train or load a model first.")
         
         pipe = pipeline("text-classification", model=self.model, tokenizer=self.tokenizer, device=self.device if self.device.type != "cpu" else -1, top_k=None, truncation=True, max_length=self.max_length)
         
-        results = {}
+        results: Dict[str, Dict[str, float]] = {}
         if self.use_chunking and self.chunker is not None:
             aggregator = ProbabilityAggregator()
             def classify(text: str) -> Dict[str, float]:

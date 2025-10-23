@@ -40,6 +40,8 @@ class AnnotationPrivacyExperiment(Experiment):
         self.tri_device = tri_device
         self.detector: Optional[TRIDetector] = None
         self.original_ranks: Dict[str, int] = {}
+        self.record_keys: List[str] = []
+        self.record_info: Dict[str, Dict[str, Any]] = {}
 
     def setup(self, **kwargs) -> None:
         self.detector = TRIDetector(
@@ -48,7 +50,23 @@ class AnnotationPrivacyExperiment(Experiment):
             device=self.tri_device,
         )
         self.detector.load(self.tri_pipeline)
-        self.original_ranks = self._compute_ranks(self.original_dataset, **kwargs)
+        self.record_keys = self._build_record_keys(self.original_dataset)
+        self.original_ranks = self._compute_ranks(
+            self.original_dataset,
+            keys=self.record_keys,
+            **kwargs,
+        )
+        self.record_info = {
+            key: {
+                "persona_uid": record.metadata.get("persona_uid", record.uid),
+                "name": record.name,
+                "index": record.metadata.get("record_index", idx),
+            }
+            for idx, (key, record) in enumerate(
+                zip(self.record_keys, self.original_dataset),
+                start=1,
+            )
+        }
         super().setup()
 
     def run(self, **kwargs) -> ExperimentResult:
@@ -56,7 +74,7 @@ class AnnotationPrivacyExperiment(Experiment):
             raise RuntimeError("setup must be completed before run")
         evaluations: Dict[str, Dict[str, Any]] = {}
         for name, records in self.evaluation_datasets.items():
-            ranks = self._compute_ranks(records, **kwargs)
+            ranks = self._compute_ranks(records, keys=self.record_keys, **kwargs)
             deltas = self._compute_rank_deltas(ranks)
             evaluations[name] = {
                 "ranks": ranks,
@@ -68,7 +86,7 @@ class AnnotationPrivacyExperiment(Experiment):
         metrics: Dict[str, Any] = {
             "original_ranks": self.original_ranks,
             "evaluations": evaluations,
-            "uids": {record.uid: record.name for record in self.original_dataset},
+            "records": self.record_info,
         }
         metadata = {
             "dataset": self.dataset_name,
@@ -82,36 +100,56 @@ class AnnotationPrivacyExperiment(Experiment):
         self.detector = None
         super().cleanup()
 
-    def _compute_ranks(self, records: List[DatasetRecord], **kwargs) -> Dict[str, int]:
+    def _build_record_keys(self, records: List[DatasetRecord]) -> List[str]:
+        counts: Dict[str, int] = {}
+        keys: List[str] = []
+        for record in records:
+            index = counts.get(record.uid, 0)
+            key = record.uid if index == 0 else f"{record.uid}#{index}"
+            counts[record.uid] = index + 1
+            keys.append(key)
+        return keys
+
+    def _compute_ranks(
+        self,
+        records: List[DatasetRecord],
+        keys: Optional[List[str]] = None,
+        **kwargs,
+    ) -> Dict[str, int]:
         if not self.detector:
             raise RuntimeError("detector is not initialized")
+        if keys is None:
+            keys = self._build_record_keys(records)
         predictions = self.detector.predict(records)
-        return self._extract_ranks(records, predictions, **kwargs)
+        return self._extract_ranks(records, keys, predictions, **kwargs)
 
     def _extract_ranks(
         self,
         records: List[DatasetRecord],
+        keys: List[str],
         predictions: Dict[str, Dict[str, float]],
         progress: bool = False,
     ) -> Dict[str, int]:
         if not self.detector:
             raise RuntimeError("detector is not initialized")
-        uid_to_name = {record.uid: record.name for record in records}
         ranks: Dict[str, int] = {}
-        iterator = predictions.items()
+        iterator = zip(keys, records)
         if progress:
-            iterator = tqdm(iterator, desc="Computing ranks")
-        for uid, scores in iterator:
-            name = uid_to_name.get(uid)
+            iterator = tqdm(iterator, total=len(keys), desc="Computing ranks")
+        for prediction_key, record in iterator:
+            name = record.name
             if not name:
                 continue
             if name not in self.detector.name_to_label:
+                continue
+            scores = predictions.get(prediction_key)
+            if not scores:
                 continue
             label_id = self.detector.name_to_label[name]
             ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
             rank = self._find_rank(label_id, ordered)
             if rank is not None:
-                ranks[uid] = rank
+                ranks[prediction_key] = rank
         return ranks
 
     def _find_rank(self, label_id: int, ordered: List[tuple[str, float]]) -> Optional[int]:
