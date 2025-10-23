@@ -1,58 +1,110 @@
 from __future__ import annotations
 
-from typing import Callable, Iterable, Optional
+from statistics import mean, median
+from typing import Any, Dict, Iterable, List, Optional
 
-from experiments import Experiment, ExperimentResult
-from dp.loaders.base import DatasetRecord
+from dp.experiments import Experiment, ExperimentResult
 
 
 class SemanticDivergenceExperiment(Experiment):
     def __init__(
         self,
-        records: Iterable[DatasetRecord],
-        anonymize: Callable[[str], str],
-        max_records: Optional[int] = None,
+        original_texts: Dict[str, str],
+        evaluation_datasets: Dict[str, Dict[str, Any]],
+        record_info: Dict[str, Dict[str, Any]],
         model_type: Optional[str] = None,
         language: Optional[str] = None,
         batch_size: int = 16,
         device: Optional[str] = None,
         rescale_with_baseline: bool = False,
+        metric: str = "bertscore",
     ):
         super().__init__()
-        self.anonymize = anonymize
-        self.max_records = max_records
+        if not original_texts:
+            raise ValueError("original_texts cannot be empty")
+        if not evaluation_datasets:
+            raise ValueError("evaluation_datasets cannot be empty")
+        if metric != "bertscore":
+            raise ValueError(f"Unsupported divergence metric '{metric}'")
+        self.original_texts = dict(original_texts)
+        self.evaluation_datasets = {
+            name: {
+                "texts": dict(payload.get("texts", {})),
+                "total": int(payload.get("total", len(payload.get("texts", {})))),
+            }
+            for name, payload in evaluation_datasets.items()
+            if payload.get("texts")
+        }
+        if not self.evaluation_datasets:
+            raise ValueError("evaluation_datasets must contain at least one non-empty dataset")
+        self.record_info = record_info
         self.model_type = model_type
         self.language = language
         self.batch_size = batch_size
         self.device = device
         self.rescale_with_baseline = rescale_with_baseline
-        self._texts = self._collect_texts(records)
+        self.metric = metric
 
-    def _collect_texts(self, records: Iterable[DatasetRecord]) -> list[str]:
-        texts: list[str] = []
-        count = 0
-        for record in records:
-            if self.max_records is not None and count >= self.max_records:
-                break
-            text = record.text if isinstance(record, DatasetRecord) else str(record)
-            if not text:
-                continue
-            texts.append(text)
-            count += 1
-        if not texts:
-            raise ValueError("No valid records")
-        if len(texts) < 2:
-            raise ValueError("At least two records required")
-        return texts
-
-    def run(self) -> ExperimentResult:
+    def run(self, **kwargs: Any) -> ExperimentResult:
         try:
-            from bert_score import score
+            from bert_score import score  # type: ignore
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError("bert-score package is required for SemanticDivergenceExperiment") from exc
-        original = list(self._texts)
-        anonymized = [self.anonymize(text) for text in original]
-        kwargs = {}
+        evaluations: Dict[str, Dict[str, Any]] = {}
+        divergence_means: List[float] = []
+        config = self._build_score_kwargs()
+        total_records = len(self.original_texts)
+        for name, payload in self.evaluation_datasets.items():
+            texts = payload["texts"]
+            total = payload.get("total", len(texts))
+            matched_keys = [key for key in self.original_texts if key in texts]
+            if not matched_keys:
+                evaluations[name] = {
+                    "similarity": {},
+                    "divergence": {},
+                    "summary": None,
+                    "matched": 0,
+                    "total": total,
+                }
+                continue
+            references = [self.original_texts[key] for key in matched_keys]
+            candidates = [texts[key] for key in matched_keys]
+            _, _, f1 = score(candidates, references, **config)
+            similarities = [float(value) for value in f1.tolist()]
+            divergence_values = [1.0 - value for value in similarities]
+            similarity_map = {key: sim for key, sim in zip(matched_keys, similarities)}
+            divergence_map = {key: div for key, div in zip(matched_keys, divergence_values)}
+            summary = self._summarize(similarities, divergence_values)
+            evaluations[name] = {
+                "similarity": similarity_map,
+                "divergence": divergence_map,
+                "summary": summary,
+                "matched": len(matched_keys),
+                "total": total,
+                "missing": max(total_records - len(matched_keys), 0),
+            }
+            if summary:
+                divergence_means.append(summary["divergence_mean"])
+        score_value = float(sum(divergence_means) / len(divergence_means)) if divergence_means else 0.0
+        metrics = {
+            "records": self.record_info,
+            "original": {
+                "count": total_records,
+            },
+            "evaluations": evaluations,
+        }
+        metadata = {
+            "metric": self.metric,
+            "model_type": self.model_type,
+            "language": self.language,
+            "batch_size": self.batch_size,
+            "device": self.device,
+            "rescale_with_baseline": self.rescale_with_baseline,
+        }
+        return ExperimentResult(score=score_value, metrics=metrics, metadata=metadata)
+
+    def _build_score_kwargs(self) -> Dict[str, Any]:
+        kwargs: Dict[str, Any] = {}
         if self.model_type is not None:
             kwargs["model_type"] = self.model_type
         if self.language is not None:
@@ -61,11 +113,25 @@ class SemanticDivergenceExperiment(Experiment):
         if self.device is not None:
             kwargs["device"] = self.device
         kwargs["rescale_with_baseline"] = self.rescale_with_baseline
-        _, _, f1 = score(anonymized, original, **kwargs)
-        divergence = 1.0 - float(f1.mean().item())
-        metrics = {
-            "semantic_similarity": 1.0 - divergence,
-            "divergence_loss": divergence,
-            "loss": divergence,
+        return kwargs
+
+    def _summarize(
+        self,
+        similarities: Iterable[float],
+        divergences: Iterable[float],
+    ) -> Optional[Dict[str, float]]:
+        similarity_values = list(similarities)
+        divergence_values = list(divergences)
+        if not similarity_values or not divergence_values:
+            return None
+        return {
+            "count": len(similarity_values),
+            "similarity_mean": float(mean(similarity_values)),
+            "similarity_median": float(median(similarity_values)),
+            "similarity_min": float(min(similarity_values)),
+            "similarity_max": float(max(similarity_values)),
+            "divergence_mean": float(mean(divergence_values)),
+            "divergence_median": float(median(divergence_values)),
+            "divergence_min": float(min(divergence_values)),
+            "divergence_max": float(max(divergence_values)),
         }
-        return ExperimentResult(score=divergence, metrics=metrics)

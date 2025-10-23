@@ -5,11 +5,11 @@ from __future__ import annotations
 import os
 from typing import Callable, Dict
 
-from experiments import ExperimentResult
-from experiments.reidentification import ReidentificationRiskExperiment
-from experiments.utility.db_bio_label import DBBioLabelExperiment
-from experiments.utility.tab_country_year import TabMetadataExperiment
-from experiments.utility.trustpilot_stars_category import TrustpilotStarsExperiment
+from dp.experiments import ExperimentResult
+from dp.experiments.reidentification import ReidentificationRiskExperiment
+from dp.experiments.utility.db_bio_label import DBBioLabelExperiment
+from dp.experiments.utility.tab_country_year import TabMetadataExperiment
+from dp.experiments.utility.trustpilot_stars_category import TrustpilotStarsExperiment
 
 
 def identity_anonymizer(text: str) -> str:
