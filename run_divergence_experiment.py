@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dp.experiments import ExperimentResult
-from dp.experiments.io_utils import collect_jsonl_sources, uniquify_records
-from dp.experiments.output_utils import OutputCallback, build_output_sink
+from dp.experiments.utils import collect_jsonl_sources, uniquify_records, OutputCallback, build_output_sink
 from dp.experiments.semantic_divergence import TextDivergenceExperiment
 from dp.loaders import DatasetRecord, get_adapter
 

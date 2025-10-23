@@ -33,10 +33,7 @@ if __name__ == "__main__":
     for record in dataset.iter_records():
         unique_uids.add(record.uid)
         texts.append(record.text[:100])
-        utility_keys.update(record.utilities.keys())
-        # print(f"ID: {record.uid}\n"
-        #       f"Text: {record.text[:100]}...\n"
-        #       f"Utilities: {record.utilities}\n")
+        utility_keys.update(record.metadata.keys())
 
     print(f"Total individuals loaded: {len(unique_uids)}")
     print(f"Total records loaded: {len(texts)}")

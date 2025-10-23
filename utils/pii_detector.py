@@ -314,7 +314,6 @@ class PIIDetector:
                 uid=record.uid,
                 name=record.name,
                 spans=spans,
-                utilities=record.utilities.copy(),
                 metadata={**record.metadata, "predicted": True},
             )
             results.append(new_record)

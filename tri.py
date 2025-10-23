@@ -117,7 +117,6 @@ def create_eval_datasets_from_annotations_list(records: List[DatasetRecord],
                 uid=record.uid,
                 name=record.name,
                 spans=record.spans,
-                utilities=record.utilities,
                 metadata=record.metadata
             )
             eval_records.append(eval_record)
@@ -144,7 +143,6 @@ def create_eval_datasets(records: List[DatasetRecord],
                 uid=record.uid,
                 name=record.name,
                 spans=record.spans,
-                utilities=record.utilities,
                 metadata=record.metadata
             )
             eval_records.append(eval_record)

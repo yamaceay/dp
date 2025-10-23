@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dp.experiments import ExperimentResult
-from dp.experiments.io_utils import collect_jsonl_sources, uniquify_records
-from dp.experiments.output_utils import OutputCallback, build_output_sink
+from dp.experiments.utils import collect_jsonl_sources, uniquify_records, OutputCallback, build_output_sink
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
 from dp.loaders import DatasetRecord, TextAnnotation, get_adapter
 from dp.loaders.annotations import apply_annotations, read_batch_annotations_from_path
@@ -282,7 +281,6 @@ def build_evaluation_dataset(
                 uid=record.uid,
                 name=record.name,
                 spans=record.spans,
-                utilities=dict(record.utilities),
                 metadata=dict(record.metadata),
             )
         )
