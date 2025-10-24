@@ -155,27 +155,30 @@ class TextUtilityExperiment(Experiment):
         self._records = filtered_records
         self._keys = keys
         self._labels = labels
-        train_idx, test_idx = split_indices(
+        self._train_idx, self._test_idx = split_indices(
             size=len(self._records),
             test_size=self.test_size,
             random_state=self.random_state,
             labels=self._labels,
             stratify=target.mode is not UtilityTarget.Mode.CARDINAL,
         )
-        self._train_idx = train_idx
-        self._test_idx = test_idx
-        self._train_keys = [self._keys[i] for i in train_idx]
-        self._test_keys = [self._keys[i] for i in test_idx]
+        self._train_keys = [self._keys[i] for i in self._train_idx]
+        self._test_keys = [self._keys[i] for i in self._test_idx]
         self._train_key_set = set(self._train_keys)
         self._test_key_set = set(self._test_keys)
+        self._train_texts = [self._records[i].text for i in self._train_idx]
+        self._test_texts = [self._records[i].text for i in self._test_idx]
+        self._train_labels = [self._labels[i] for i in self._train_idx]
+        self._test_labels = [self._labels[i] for i in self._test_idx]
         vectorizer = self._clone_vectorizer()
-        x_train = vectorizer.fit_transform([self._records[i].text for i in train_idx])
+        vectorizer.fit(self._train_texts)
+        x_train = vectorizer.transform(self._train_texts)
         model_instance = self._model
         if model_instance is None:
             raise RuntimeError("model is not initialized")
-        model_instance.fit(x_train, [self._labels[i] for i in train_idx])
-        x_test = vectorizer.transform([self._records[i].text for i in test_idx])
-        baseline_metrics = model_instance.evaluate(x_test, [self._labels[i] for i in test_idx])
+        model_instance.fit(x_train, self._train_labels)
+        x_test = vectorizer.transform(self._test_texts)
+        baseline_metrics = model_instance.evaluate(x_test, self._test_labels)
         self._baseline_metrics = baseline_metrics
         self._vectorizer = vectorizer
         self._label_by_key = {key: self._labels[idx] for idx, key in enumerate(self._keys)}

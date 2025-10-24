@@ -12,38 +12,45 @@ from dp.utils.tri_detector import TRIDetector
 class TextPrivacyExperiment(Experiment):
     def __init__(
         self,
-        dataset_name: str,
-        original_dataset: List[DatasetRecord],
-        evaluation_datasets: Dict[str, List[DatasetRecord]],
         tri_pipeline: str,
         tri_max_length: int = 512,
         tri_device: str = "auto",
     ):
         super().__init__()
+        if not tri_pipeline:
+            raise ValueError("tri_pipeline is required")
+        self.tri_pipeline = tri_pipeline
+        self.tri_max_length = tri_max_length
+        self.tri_device = tri_device
+        self.dataset_name: Optional[str] = None
+        self.original_dataset: List[DatasetRecord] = []
+        self.evaluation_datasets: Dict[str, List[DatasetRecord]] = {}
+        self.detector: Optional[TRIDetector] = None
+        self.original_ranks: Dict[str, int] = {}
+        self.record_keys: List[str] = []
+        self.record_info: Dict[str, Dict[str, Any]] = {}
+
+    def setup(
+        self,
+        dataset_name: str,
+        original_dataset: List[DatasetRecord],
+        evaluation_datasets: Dict[str, List[DatasetRecord]],
+        **kwargs,
+    ) -> None:
         if not dataset_name:
             raise ValueError("dataset_name is required")
         if not original_dataset:
             raise ValueError("original_dataset cannot be empty")
         if not evaluation_datasets:
             raise ValueError("evaluation_datasets cannot be empty")
-        if not tri_pipeline:
-            raise ValueError("tri_pipeline is required")
-        self.dataset_name = dataset_name
-        self.original_dataset = list(original_dataset)
-        self.evaluation_datasets = {
+        filtered_evaluations = {
             key: list(value) for key, value in evaluation_datasets.items() if value
         }
-        if not self.evaluation_datasets:
+        if not filtered_evaluations:
             raise ValueError("evaluation_datasets must contain at least one non-empty dataset")
-        self.tri_pipeline = tri_pipeline
-        self.tri_max_length = tri_max_length
-        self.tri_device = tri_device
-        self.detector: Optional[TRIDetector] = None
-        self.original_ranks: Dict[str, int] = {}
-        self.record_keys: List[str] = []
-        self.record_info: Dict[str, Dict[str, Any]] = {}
-
-    def setup(self, **kwargs) -> None:
+        self.dataset_name = dataset_name
+        self.original_dataset = list(original_dataset)
+        self.evaluation_datasets = filtered_evaluations
         self.detector = TRIDetector(
             dataset_name=self.dataset_name,
             max_length=self.tri_max_length,
@@ -67,7 +74,7 @@ class TextPrivacyExperiment(Experiment):
                 start=1,
             )
         }
-        super().setup()
+        super().setup(**kwargs)
 
     def run(self, **kwargs) -> ExperimentResult:
         if not self.detector or not self.original_ranks:
@@ -98,6 +105,12 @@ class TextPrivacyExperiment(Experiment):
 
     def cleanup(self) -> None:
         self.detector = None
+        self.dataset_name = None
+        self.original_dataset = []
+        self.evaluation_datasets = {}
+        self.original_ranks = {}
+        self.record_keys = []
+        self.record_info = {}
         super().cleanup()
 
     def _build_record_keys(self, records: List[DatasetRecord]) -> List[str]:

@@ -1,0 +1,5 @@
+runtime: dp
+
+epsilon: 10.0
+
+progress: true # slow runtime

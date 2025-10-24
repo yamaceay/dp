@@ -8,7 +8,6 @@ from sklearn.metrics import f1_score, mean_squared_error, r2_score
 
 from dp.experiments.utility.base import DownstreamModel
 
-
 class LogisticClassifier(DownstreamModel):
     def __init__(self, multi_class: str = "auto"):
         super().__init__(name="logistic_classifier", primary_metric="f1")

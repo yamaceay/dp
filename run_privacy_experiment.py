@@ -323,15 +323,17 @@ def main() -> None:
         evaluation_record_counts[name] = len(evaluation_dataset)
 
     experiment = TextPrivacyExperiment(
-        dataset_name=args.dataset,
-        original_dataset=original_dataset,
-        evaluation_datasets=evaluation_datasets,
         tri_pipeline=args.tri_pipeline,
         tri_max_length=args.tri_max_length,
         tri_device=args.tri_device,
     )
 
-    experiment.setup(progress=True)
+    experiment.setup(
+        dataset_name=args.dataset,
+        original_dataset=original_dataset,
+        evaluation_datasets=evaluation_datasets,
+        progress=True,
+    )
     result = experiment.run(progress=True)
     experiment.cleanup()
 

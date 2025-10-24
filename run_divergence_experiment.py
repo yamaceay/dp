@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from dp.experiments import ExperimentResult
 from dp.experiments.utils import collect_jsonl_sources, uniquify_reddit_records, OutputCallback, build_output_sink
-from dp.experiments.semantic_divergence import TextDivergenceExperiment
+from dp.experiments.semantic_divergence import BERTScoreDivergence, CosineSimilarityDivergence, TextDivergenceExperiment
 from dp.loaders import DatasetRecord, get_adapter
 
 
@@ -38,6 +38,8 @@ class DivergenceEvaluationReport:
 @dataclass(frozen=True)
 class DivergenceExperimentReport:
     score: float
+    metric_name: str
+    metric_metadata: Dict[str, Any]
     original_record_count: int
     evaluations: List[DivergenceEvaluationReport]
 
@@ -55,6 +57,12 @@ class TextExperimentResultOutputter(ExperimentResultOutputter):
     def output(self, report: DivergenceExperimentReport) -> None:
         lines: List[str] = []
         lines.append(f"Score: {report.score:.4f}")
+        if report.metric_name:
+            lines.append(f"Metric: {report.metric_name}")
+        if report.metric_metadata:
+            metadata_text = " ".join(f"{key}={value}" for key, value in sorted(report.metric_metadata.items()) if key != "name" and value is not None)
+            if metadata_text:
+                lines.append(f"Config: {metadata_text}")
         lines.append("")
         lines.append("Original dataset")
         lines.append(f"  records: {report.original_record_count}")
@@ -100,6 +108,10 @@ class JsonExperimentResultOutputter(ExperimentResultOutputter):
     def output(self, report: DivergenceExperimentReport) -> None:
         payload: Dict[str, Any] = {
             "score": report.score,
+            "metric": {
+                "name": report.metric_name,
+                "metadata": report.metric_metadata,
+            },
             "original": {
                 "record_count": report.original_record_count,
             },
@@ -135,6 +147,8 @@ class JsonLinesExperimentResultOutputter(ExperimentResultOutputter):
             {
                 "type": "experiment",
                 "score": report.score,
+                "metric_name": report.metric_name,
+                "metric_metadata": report.metric_metadata,
                 "original_record_count": report.original_record_count,
             }
         )
@@ -172,6 +186,8 @@ def build_experiment_report(
     evaluation_sources: Dict[str, Path],
 ) -> DivergenceExperimentReport:
     metrics = result.metrics or {}
+    metric_name = str(metrics.get("metric", ""))
+    metric_metadata = metrics.get("metric_metadata", {}) or {}
     record_info: Dict[str, Dict[str, Any]] = metrics.get("records", {})
     evaluation_metrics: Dict[str, Dict[str, Any]] = metrics.get("evaluations", {})
     evaluations: List[DivergenceEvaluationReport] = []
@@ -209,7 +225,9 @@ def build_experiment_report(
             )
         )
     return DivergenceExperimentReport(
-        score=result.score,
+        score=float(result.score),
+        metric_name=metric_name,
+        metric_metadata=metric_metadata,
         original_record_count=original_record_count,
         evaluations=evaluations,
     )
@@ -300,7 +318,7 @@ def main() -> None:
     parser.add_argument("--batch_size", type=int, default=16, help="BERTScore batch size")
     parser.add_argument("--device", type=str, default=None, help="Computation device for BERTScore")
     parser.add_argument("--rescale_with_baseline", action="store_true", help="Enable BERTScore baseline rescaling")
-    parser.add_argument("--metric", type=str, default="bertscore", choices=["bertscore"], help="Divergence metric to use")
+    parser.add_argument("--metric", type=str, default="bertscore", choices=["bertscore", "cosine"], help="Divergence metric to use")
     parser.add_argument("--output_format", type=str, default="text", choices=["text", "json", "jsonl"], help="Output format")
     parser.add_argument("--output_file", type=str, default=None, help="Path to output file (if omitted, prints to stdout)")
     args = parser.parse_args()
@@ -323,18 +341,23 @@ def main() -> None:
         raise RuntimeError("No anonymized outputs aligned with dataset records")
     record_info = build_record_info(original_dataset)
     original_texts = build_original_texts(original_dataset)
-    experiment = TextDivergenceExperiment(
+    if args.metric == "bertscore":
+        experiment: TextDivergenceExperiment = BERTScoreDivergence(
+            model_type=args.model_type,
+            language=args.language,
+            batch_size=args.batch_size,
+            device=args.device,
+            rescale_with_baseline=args.rescale_with_baseline,
+        )
+    elif args.metric == "cosine":
+        experiment = CosineSimilarityDivergence()
+    else:
+        raise RuntimeError(f"Unsupported divergence metric '{args.metric}'")
+    experiment.setup(
         original_texts=original_texts,
         evaluation_datasets=evaluation_inputs,
         record_info=record_info,
-        model_type=args.model_type,
-        language=args.language,
-        batch_size=args.batch_size,
-        device=args.device,
-        rescale_with_baseline=args.rescale_with_baseline,
-        metric=args.metric,
     )
-    experiment.setup()
     result = experiment.run()
     experiment.cleanup()
     report = build_experiment_report(
