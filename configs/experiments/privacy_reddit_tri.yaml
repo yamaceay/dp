@@ -1,0 +1,11 @@
+dataset: reddit
+data_in: data/reddit/train.jsonl
+annotations:
+  - outputs/reddit
+tri_pipeline: models/tri_pipelines/reddit/20251021_123112
+tri_max_length: 512
+tri_device: auto
+mask_token: "[MASK]"
+output:
+  format: jsonl
+  file: logs/priv_exp.jsonl

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Callable
+from typing import Dict, List, Tuple, Optional, Callable, Sequence, Any
 
 from dp.loaders import DatasetRecord
 
@@ -18,32 +18,66 @@ def build_output_sink(output_file: Optional[str]) -> OutputCallback:
         print(f"Report written to {path}")
     return sink
 
-def uniquify_reddit_records(records: List[DatasetRecord]) -> List[DatasetRecord]:
+def _first_text(*values: Any) -> str:
+    for value in values:
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                return text
+        elif isinstance(value, (list, tuple, set)):
+            nested = _first_text(*value)
+            if nested:
+                return nested
+        elif value is not None:
+            text = str(value).strip()
+            if text:
+                return text
+    return ""
+
+def uniquify_records(
+    records: Sequence[DatasetRecord],
+    *,
+    identity_fields: Sequence[str] = ("uid", "name"),
+    metadata_identity_keys: Sequence[str] = ("persona_uid", "uid", "name"),
+    fallback_prefix: str = "record",
+) -> List[DatasetRecord]:
     counts: Dict[str, int] = {}
-    unique_records: List[DatasetRecord] = []
+    output: List[DatasetRecord] = []
     for index, record in enumerate(records, start=1):
-        original_uid = record.uid or ""
-        base_uid = original_uid if original_uid else f"record_{index}"
-        occurrence = counts.get(base_uid, 0)
-        counts[base_uid] = occurrence + 1
-        unique_uid = base_uid if occurrence == 0 else f"{base_uid}#{occurrence}"
-        metadata = dict(record.metadata)
-        persona_uid = metadata.get("persona_uid", original_uid)
-        if not persona_uid:
-            persona_uid = base_uid
+        identity_sources: List[Any] = []
+        for field in identity_fields:
+            identity_sources.append(getattr(record, field, None))
+        metadata = dict(record.metadata or {})
+        for key in metadata_identity_keys:
+            identity_sources.append(metadata.get(key))
+        base = _first_text(*identity_sources)
+        if not base:
+            base = f"{fallback_prefix}_{index}"
+        occurrence = counts.get(base, 0)
+        counts[base] = occurrence + 1
+        uid = base if occurrence == 0 else f"{base}#{occurrence}"
+        persona_uid = _first_text(metadata.get("persona_uid"), base)
         metadata["persona_uid"] = persona_uid
         metadata["record_index"] = index
         spans = list(record.spans) if record.spans else None
-        unique_records.append(
+        output.append(
             DatasetRecord(
                 text=record.text,
-                uid=unique_uid,
+                uid=uid,
                 name=record.name,
                 spans=spans,
                 metadata=metadata,
             )
         )
-    return unique_records
+    return output
+
+def uniquify_reddit_records(records: Sequence[DatasetRecord]) -> List[DatasetRecord]:
+    return uniquify_records(
+        records,
+        identity_fields=("uid", "name"),
+        metadata_identity_keys=("persona_uid", "uid", "name"),
+        fallback_prefix="record",
+    )
 
 def collect_jsonl_sources(*paths: str) -> Dict[str, Path]:
     resolved_paths = [Path(p) for p in paths]

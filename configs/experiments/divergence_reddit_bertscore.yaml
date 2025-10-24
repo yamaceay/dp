@@ -1,0 +1,11 @@
+dataset: reddit
+data_in: data/reddit/train.jsonl
+annotations:
+  - logs/divergence/example.jsonl
+metric:
+  type: bertscore
+  model_type: roberta-large
+  batch_size: 8
+output:
+  format: json
+  file: logs/divergence_report.json

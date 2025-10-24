@@ -1,0 +1,8 @@
+add_probability: 0.0
+delete_probability: 0.0
+
+explainability: shap
+explainer_path: models/tri_pipelines/reddit/20251021_123112
+
+tri_chunking:
+  enabled: true

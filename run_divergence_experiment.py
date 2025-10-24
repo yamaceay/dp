@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from dp.experiments import ExperimentResult
 from dp.experiments.utils import collect_jsonl_sources, uniquify_reddit_records, OutputCallback, build_output_sink
-from dp.experiments.semantic_divergence import BERTScoreDivergence, CosineSimilarityDivergence, TextDivergenceExperiment
+from dp.experiments.divergence import BERTScoreDivergence, CosineSimilarityDivergence, TextDivergenceExperiment
 from dp.loaders import DatasetRecord, get_adapter
 
 

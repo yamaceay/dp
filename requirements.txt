@@ -11,6 +11,7 @@ nltk
 nervaluate
 scikit-learn
 bert-score
+shap
 
 # Optional dependencies for specific anonymizers
 # SpaCy NER

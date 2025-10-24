@@ -4,11 +4,6 @@ from abc import ABC, abstractmethod
 from statistics import mean, median
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-import numpy as np
-from bert_score import score
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-
 from dp.experiments import Experiment, ExperimentResult
 
 
@@ -51,7 +46,7 @@ class TextDivergenceExperiment(Experiment, ABC):
         original_texts: Dict[str, str],
         evaluation_datasets: Dict[str, Dict[str, Any]],
         record_info: Dict[str, Dict[str, Any]],
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         if not original_texts:
             raise ValueError("original_texts cannot be empty")
@@ -157,112 +152,3 @@ class TextDivergenceExperiment(Experiment, ABC):
             "divergence_min": float(min(divergence_values)),
             "divergence_max": float(max(divergence_values)),
         }
-
-
-class BERTScoreMetric(DivergenceMetric):
-    def __init__(
-        self,
-        model_type: Optional[str] = None,
-        language: Optional[str] = None,
-        batch_size: int = 16,
-        device: Optional[str] = None,
-        rescale_with_baseline: bool = False,
-    ):
-        super().__init__("bertscore")
-        self.model_type = model_type
-        self.language = language
-        self.batch_size = batch_size
-        self.device = device
-        self.rescale_with_baseline = rescale_with_baseline
-
-    def clone(self) -> "BERTScoreMetric":
-        return BERTScoreMetric(
-            model_type=self.model_type,
-            language=self.language,
-            batch_size=self.batch_size,
-            device=self.device,
-            rescale_with_baseline=self.rescale_with_baseline,
-        )
-
-    def similarities(self, references: Sequence[str], candidates: Sequence[str]) -> List[float]:
-        kwargs: Dict[str, Any] = {"batch_size": self.batch_size, "rescale_with_baseline": self.rescale_with_baseline}
-        if self.model_type is not None:
-            kwargs["model_type"] = self.model_type
-        if self.language is not None:
-            kwargs["lang"] = self.language
-        if self.device is not None:
-            kwargs["device"] = self.device
-        _, _, f1 = score(list(candidates), list(references), **kwargs)
-        return [float(value) for value in f1.tolist()]
-
-    def metadata(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "model_type": self.model_type,
-            "language": self.language,
-            "batch_size": self.batch_size,
-            "device": self.device,
-            "rescale_with_baseline": self.rescale_with_baseline,
-        }
-
-
-class CosineSimilarityMetric(DivergenceMetric):
-    def __init__(self, vectorizer: TfidfVectorizer):
-        super().__init__("cosine")
-        self._vectorizer_params = vectorizer.get_params(deep=False)
-        self._vectorizer: Optional[TfidfVectorizer] = None
-
-    def clone(self) -> "CosineSimilarityMetric":
-        return CosineSimilarityMetric(TfidfVectorizer(**self._vectorizer_params))
-
-    def prepare(self, references: Dict[str, str]) -> None:
-        vectorizer = TfidfVectorizer(**self._vectorizer_params)
-        vectorizer.fit(list(references.values()))
-        self._vectorizer = vectorizer
-
-    def similarities(self, references: Sequence[str], candidates: Sequence[str]) -> List[float]:
-        if self._vectorizer is None:
-            raise RuntimeError("cosine similarity metric is not prepared")
-        ref_matrix = self._vectorizer.transform(list(references))
-        cand_matrix = self._vectorizer.transform(list(candidates))
-        matrix = cosine_similarity(cand_matrix, ref_matrix)
-        diagonal = np.diag(matrix)
-        return [float(value) for value in diagonal.tolist()]
-
-    def metadata(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "vectorizer": {
-                "ngram_range": self._vectorizer_params.get("ngram_range"),
-                "max_features": self._vectorizer_params.get("max_features"),
-                "min_df": self._vectorizer_params.get("min_df"),
-            },
-        }
-
-    def cleanup(self) -> None:
-        self._vectorizer = None
-
-
-class BERTScoreDivergence(TextDivergenceExperiment):
-    def __init__(
-        self,
-        model_type: Optional[str] = None,
-        language: Optional[str] = None,
-        batch_size: int = 16,
-        device: Optional[str] = None,
-        rescale_with_baseline: bool = False,
-    ):
-        metric = BERTScoreMetric(
-            model_type=model_type,
-            language=language,
-            batch_size=batch_size,
-            device=device,
-            rescale_with_baseline=rescale_with_baseline,
-        )
-        super().__init__(metric)
-
-
-class CosineSimilarityDivergence(TextDivergenceExperiment):
-    def __init__(self, vectorizer: Optional[TfidfVectorizer] = None):
-        metric = CosineSimilarityMetric(vectorizer)
-        super().__init__(metric)

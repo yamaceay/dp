@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.tri_detector import TRIDetector
@@ -15,6 +15,8 @@ class ShapExplainer(TokenExplainer):
         self.shap_explainer = None
         self.splitter = TextSplitter()
         self.tri_detector = TRIDetector(model_name=model_name, device=device, use_chunking=use_chunking)
+        self.id_to_label: Dict[int, str] = {}
+        self.label_to_id: Dict[str, int] = {}
     
     def _resolve_device(self, device: str) -> str:
         if device == "auto":
@@ -32,14 +34,37 @@ class ShapExplainer(TokenExplainer):
             import shap
             self.pipeline = pipeline("text-classification", model=self.model_name, tokenizer=self.model_name, device=self.device if self.device != "cpu" else -1, top_k=None, max_length=512, truncation=True)
             self.shap_explainer = shap.Explainer(self.pipeline, silent=True)
-    
+            config = getattr(self.pipeline.model, "config", None)
+            if config is not None and hasattr(config, "id2label"):
+                self.id_to_label = dict(config.id2label)
+                self.label_to_id = {label: idx for idx, label in self.id_to_label.items()}
+
     def explain(self, text: str, tokens: Optional[List[str]] = None, target_label: Optional[str] = None) -> np.ndarray:
         self._load_pipeline()
         
-        if target_label is None:
-            raise ValueError("target_label required")
+        label_name = None
+        if target_label is not None:
+            label_name = str(target_label)
+        else:
+            predictions = self.pipeline(text)
+            if isinstance(predictions, list) and predictions:
+                if isinstance(predictions[0], dict):
+                    label_name = predictions[0].get("label")
+                elif isinstance(predictions[0], list) and predictions[0]:
+                    label_name = predictions[0][0].get("label")
+        if not label_name:
+            raise ValueError("target label is not defined for the provided text")
         
-        label_int = int(target_label.split("_")[1]) if "_" in target_label else int(target_label)
+        label_int: Optional[int] = None
+        if label_name in self.label_to_id:
+            label_int = self.label_to_id[label_name]
+        else:
+            try:
+                label_int = int(label_name.split("_")[-1])
+            except (ValueError, AttributeError):
+                pass
+        if label_int is None:
+            raise ValueError(f"target label '{label_name}' cannot be mapped to an output index")
         
         if tokens is None:
             raise ValueError("tokens required")

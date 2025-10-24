@@ -5,11 +5,11 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import StratifiedShuffleSplit
 
 from dp.experiments import Experiment, ExperimentResult
 from dp.loaders.base import DatasetRecord
+from dp.experiments.utility.vectorizer import TextVectorizer, TfidfTextVectorizer
 
 
 class DownstreamModel(ABC):
@@ -99,7 +99,7 @@ def split_indices(
 class TextUtilityExperiment(Experiment):
     def __init__(
         self,
-        vectorizer: Optional[TfidfVectorizer] = None,
+        vectorizer: Optional[TextVectorizer] = None,
         test_size: float = 0.2,
         random_state: int = 42,
     ):
@@ -108,8 +108,9 @@ class TextUtilityExperiment(Experiment):
             raise ValueError("test_size must be between 0 and 1")
         self.test_size = test_size
         self.random_state = random_state
-        self._vectorizer_template = vectorizer or TfidfVectorizer(ngram_range=(1, 2), max_features=20000, min_df=2)
-        self._vectorizer: Optional[TfidfVectorizer] = None
+        template = vectorizer.clone() if vectorizer else TfidfTextVectorizer()
+        self._vectorizer_template = template
+        self._vectorizer: Optional[TextVectorizer] = None
         self._model: Optional[DownstreamModel] = None
         self._target: Optional[UtilityTarget] = None
         self._records: List[DatasetRecord] = []
@@ -251,9 +252,8 @@ class TextUtilityExperiment(Experiment):
         self._record_info = {}
         super().cleanup()
 
-    def _clone_vectorizer(self) -> TfidfVectorizer:
-        params = self._vectorizer_template.get_params(deep=False)
-        return TfidfVectorizer(**params)
+    def _clone_vectorizer(self) -> TextVectorizer:
+        return self._vectorizer_template.clone()
 
     def _normalize_label(self, value: Any, mode: UtilityTarget.Mode) -> Optional[Any]:
         if value is None:
