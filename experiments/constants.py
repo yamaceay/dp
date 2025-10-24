@@ -1,108 +1,164 @@
-from typing import Dict
+from __future__ import annotations
 
-from dp.experiments import Experiment
-from dp.experiments.utility.base import TextUtilityExperiment, UtilityTarget, DownstreamModel
-from dp.experiments.privacy_annotations import TextPrivacyExperiment
-from dp.experiments.semantic_divergence import TextDivergenceExperiment
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
-UTILITY_EXPERIMENTS_REGISTRY: Dict[str, TextUtilityExperiment] = {
-    ...
-}
+from dp.experiments.utility.base import DownstreamModel, UtilityTarget
+from dp.experiments.utility.models import LinearRegressor, LogisticClassifier
+from dp.loaders.base import DatasetRecord
 
-PRIVACY_EXPERIMENTS_REGISTRY: Dict[str, TextPrivacyExperiment] = {
-    "annotation_privacy": TextPrivacyExperiment,
-}
 
-DIVERGENCE_EXPERIMENTS_REGISTRY: Dict[str, TextDivergenceExperiment] = {
-    "bertscore_divergence": TextDivergenceExperiment,
-}
+def _text_value(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            text = _text_value(item)
+            if text:
+                return text
+        return None
+    text = str(value).strip()
+    return text or None
 
-EXPERIMENTS_REGISTRY: Dict[str, Experiment] = {
-    **UTILITY_EXPERIMENTS_REGISTRY,
-    **PRIVACY_EXPERIMENTS_REGISTRY,
-    **DIVERGENCE_EXPERIMENTS_REGISTRY,
-}
 
-is_privacy_experiment = lambda name: name in PRIVACY_EXPERIMENTS_REGISTRY
-is_divergence_experiment = lambda name: name in DIVERGENCE_EXPERIMENTS_REGISTRY
-is_utility_experiment = lambda name: name in UTILITY_EXPERIMENTS_REGISTRY
+def _float_value(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
-def get_reddit_feature(info: Dict[str, Dict]) -> str:
-    return info.get("metadata", {}).get("feature", "")
 
-def get_reddit_label(info: Dict[str, Dict]) -> str:
-    return info.get("metadata", {}).get("personality", {}).get("label", "")
+def _reddit_feature(record: DatasetRecord) -> Optional[str]:
+    return _text_value(record.metadata.get("feature"))
 
-def get_reddit_age(info: Dict[str, Dict]) -> int:
-    return info.get("metadata", {}).get("personality", {}).get("age", 0)
 
-def get_reddit_age_group(info: Dict[str, Dict]) -> str:
-    age = get_reddit_age(info)
-    age_grouped = ""
+def _reddit_label(record: DatasetRecord) -> Optional[str]:
+    return _text_value(record.metadata.get("label"))
+
+
+def _reddit_age(record: DatasetRecord) -> Optional[float]:
+    return _float_value(record.metadata.get("persona_age"))
+
+
+def _reddit_age_group(record: DatasetRecord) -> Optional[str]:
+    age = _reddit_age(record)
+    if age is None:
+        return None
     if age < 18:
-        age_grouped = "under_18"
-    elif 18 <= age < 25:
-        age_grouped = "18_24"
-    elif 25 <= age < 35:
-        age_grouped = "25_34"
-    elif 35 <= age < 45:
-        age_grouped = "35_44"
-    elif 45 <= age < 55:
-        age_grouped = "45_54"
-    elif 55 <= age < 65:
-        age_grouped = "55_64"
-    else:
-        age_grouped = "65_plus"
-    return age_grouped
+        return "under_18"
+    if age < 25:
+        return "18_24"
+    if age < 35:
+        return "25_34"
+    if age < 45:
+        return "35_44"
+    if age < 55:
+        return "45_54"
+    if age < 65:
+        return "55_64"
+    return "65_plus"
 
-def get_reddit_sex(info: Dict[str, Dict]) -> str:
-    return info.get("metadata", {}).get("personality", {}).get("sex", "")
 
-def get_reddit_income_level(info: Dict[str, Dict]) -> str:
-    return info.get("metadata", {}).get("personality", {}).get("income_level", "")
+def _reddit_sex(record: DatasetRecord) -> Optional[str]:
+    return _text_value(record.metadata.get("persona_sex"))
 
-UTILITY_TARGETS_REGISTRY: Dict[str, UtilityTarget] = {
-    "reddit_feature": UtilityTarget(
-        source="reddit",
-        mode="nominal",
-        getter=get_reddit_feature,
-    ),
-    "reddit_label": UtilityTarget(
-        source="reddit",
-        mode="nominal",
-        getter=get_reddit_label,
-    ),
-    "reddit_age": UtilityTarget(
-        source="reddit",
-        mode="cardinal",
-        getter=get_reddit_age,
-    ),
-    "reddit_age_group": UtilityTarget(
-        source="reddit",
-        mode="nominal",
-        getter=get_reddit_age_group,
-    ),
-    "reddit_sex": UtilityTarget(
-        source="reddit",
-        mode="binary",
-        getter=get_reddit_sex,
-    ),
-    "reddit_income_level": UtilityTarget(
-        source="reddit",
-        mode="ordinal",
-        getter=get_reddit_income_level,
-    ),
+
+def _reddit_income(record: DatasetRecord) -> Optional[str]:
+    return _text_value(record.metadata.get("persona_income_level"))
+
+
+def _tab_country(record: DatasetRecord) -> Optional[str]:
+    return _text_value(record.metadata.get("country"))
+
+
+def _tab_year(record: DatasetRecord) -> Optional[float]:
+    value = record.metadata.get("years")
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            number = _float_value(item)
+            if number is not None:
+                return number
+        return None
+    return _float_value(value)
+
+
+def _db_bio_label(record: DatasetRecord) -> Optional[str]:
+    return _text_value(record.metadata.get("label"))
+
+
+def _trustpilot_category(record: DatasetRecord) -> Optional[str]:
+    return _text_value(record.metadata.get("category"))
+
+
+def _trustpilot_stars(record: DatasetRecord) -> Optional[float]:
+    return _float_value(record.metadata.get("stars"))
+
+
+DOWNSTREAM_MODELS: Dict[str, DownstreamModel] = {
+    "logistic_classifier": LogisticClassifier(),
+    "linear_regressor": LinearRegressor(),
 }
 
-class LogisticRegressionModel(DownstreamModel):
-    def __init__(self, **kwargs):
-        super().__init__(model_name="logistic_regression", **kwargs)
 
-class LinearRegressionModel(DownstreamModel):
-    def __init__(self, **kwargs):
-        super().__init__(model_name="linear_regression", **kwargs)
-
-DOWNSTREAM_MODELS_REGISTRY: Dict[str, DownstreamModel] = {
-    "logistic_regression": LogisticRegressionModel,
-    "linear_regression": LinearRegressionModel,
+MODE_TO_MODEL: Dict[UtilityTarget.Mode, str] = {
+    UtilityTarget.Mode.BINARY: "logistic_classifier",
+    UtilityTarget.Mode.NOMINAL: "logistic_classifier",
+    UtilityTarget.Mode.ORDINAL: "logistic_classifier",
+    UtilityTarget.Mode.CARDINAL: "linear_regressor",
 }
+
+
+UTILITY_TARGETS: Dict[str, Dict[str, UtilityTarget]] = {
+    "reddit": {
+        "feature": UtilityTarget(name="feature", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=_reddit_feature),
+        "label": UtilityTarget(name="label", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=_reddit_label),
+        "age": UtilityTarget(name="age", source="reddit", mode=UtilityTarget.Mode.CARDINAL, getter=_reddit_age),
+        "age_group": UtilityTarget(name="age_group", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=_reddit_age_group),
+        "sex": UtilityTarget(name="sex", source="reddit", mode=UtilityTarget.Mode.BINARY, getter=_reddit_sex),
+        "income_level": UtilityTarget(name="income_level", source="reddit", mode=UtilityTarget.Mode.ORDINAL, getter=_reddit_income),
+    },
+    "tab": {
+        "country": UtilityTarget(name="country", source="tab", mode=UtilityTarget.Mode.NOMINAL, getter=_tab_country),
+        "year": UtilityTarget(name="year", source="tab", mode=UtilityTarget.Mode.CARDINAL, getter=_tab_year),
+    },
+    "db_bio": {
+        "label": UtilityTarget(name="label", source="db_bio", mode=UtilityTarget.Mode.NOMINAL, getter=_db_bio_label),
+    },
+    "trustpilot": {
+        "category": UtilityTarget(name="category", source="trustpilot", mode=UtilityTarget.Mode.NOMINAL, getter=_trustpilot_category),
+        "stars": UtilityTarget(name="stars", source="trustpilot", mode=UtilityTarget.Mode.CARDINAL, getter=_trustpilot_stars),
+    },
+}
+
+
+@dataclass(frozen=True)
+class UtilitySpec:
+    dataset: str
+    target_key: str
+    target: UtilityTarget
+    model_name: str
+
+    def identifier(self) -> str:
+        return f"{self.dataset}_{self.target_key}"
+
+    def build_model(self) -> DownstreamModel:
+        prototype = DOWNSTREAM_MODELS[self.model_name]
+        return prototype.clone()
+
+
+def _build_registry(targets: Dict[str, Dict[str, UtilityTarget]]) -> Dict[str, UtilitySpec]:
+    registry: Dict[str, UtilitySpec] = {}
+    for dataset, mapping in targets.items():
+        for key, target in mapping.items():
+            model_name = MODE_TO_MODEL[target.mode]
+            spec = UtilitySpec(dataset=dataset, target_key=key, target=target, model_name=model_name)
+            registry[spec.identifier()] = spec
+    return registry
+
+
+UTILITY_EXPERIMENTS_REGISTRY: Dict[str, UtilitySpec] = _build_registry(UTILITY_TARGETS)

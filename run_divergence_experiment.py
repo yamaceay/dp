@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dp.experiments import ExperimentResult
-from dp.experiments.utils import collect_jsonl_sources, uniquify_records, OutputCallback, build_output_sink
+from dp.experiments.utils import collect_jsonl_sources, uniquify_reddit_records, OutputCallback, build_output_sink
 from dp.experiments.semantic_divergence import TextDivergenceExperiment
 from dp.loaders import DatasetRecord, get_adapter
 
@@ -308,7 +308,7 @@ def main() -> None:
     raw_original_dataset = load_dataset_records(args.dataset, args.data_in, args.max_records)
     if not raw_original_dataset:
         raise RuntimeError("No records loaded from dataset")
-    original_dataset = uniquify_records(raw_original_dataset)
+    original_dataset = uniquify_reddit_records(raw_original_dataset)
     original_record_count = len(original_dataset)
     if not args.annotations_in:
         raise RuntimeError("No anonymized outputs provided")

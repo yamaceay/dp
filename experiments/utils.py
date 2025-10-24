@@ -18,7 +18,7 @@ def build_output_sink(output_file: Optional[str]) -> OutputCallback:
         print(f"Report written to {path}")
     return sink
 
-def uniquify_records(records: List[DatasetRecord]) -> List[DatasetRecord]:
+def uniquify_reddit_records(records: List[DatasetRecord]) -> List[DatasetRecord]:
     counts: Dict[str, int] = {}
     unique_records: List[DatasetRecord] = []
     for index, record in enumerate(records, start=1):

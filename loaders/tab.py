@@ -32,13 +32,11 @@ class TabDatasetAdapter(DatasetAdapter):
             text = row.get("text", "")
             annotations_raw = row.get("annotations")
             spans = self._read_annotations(annotations_raw)
-            
-            utilities = {
-                "country": row.get("meta", {}).get("countries"),
-                "years": row.get("meta", {}).get("years"),
-            }
+
             name = row.get("meta", {}).get("applicant", "")
             metadata = {
+                "country": row.get("meta", {}).get("countries"),
+                "years": row.get("meta", {}).get("years"),
                 "quality_checked": row.get("quality_checked"),
                 "task": row.get("task"),
                 "dataset_type": row.get("dataset_type"),
@@ -50,7 +48,6 @@ class TabDatasetAdapter(DatasetAdapter):
                 uid=uid,
                 name=name,
                 spans=spans,
-                utilities=utilities,
                 metadata=metadata,
             )
 

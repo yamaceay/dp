@@ -50,13 +50,11 @@ class DBBioDatasetAdapter(DatasetAdapter):
             text = data.get("text", "")
             uid = data.get("wiki_name") or data.get("label") or str(idx)
             name = data.get("people")
-            utilities = {
+            metadata = {
                 "label": data.get("label"),
                 "l1": data.get("l1"),
                 "l2": data.get("l2"),
                 "l3": data.get("l3"),
-            }
-            metadata = {
                 "word_count": data.get("word_count"),
                 "wiki_name": data.get("wiki_name"),
             }
@@ -65,7 +63,6 @@ class DBBioDatasetAdapter(DatasetAdapter):
                 text=text,
                 uid=str(uid),
                 name=name,
-                utilities=utilities,
                 metadata=metadata,
             )
 

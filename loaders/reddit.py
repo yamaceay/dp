@@ -50,22 +50,19 @@ class RedditDatasetAdapter(DatasetAdapter):
                 for key, value in persona_raw.items():
                     persona[f"persona_{key}"] = value
 
-            utilities = {
+            metadata = {
                 "label": row.get("label"),
                 "feature": row.get("feature"),
                 "hardness": row.get("hardness"),
                 "question": row.get("question_asked"),
-                **persona,
-            }
-            metadata = {
                 "guess": row.get("guess"),
                 "guess_correctness": row.get("guess_correctness"),
+                **persona,
             }
             yield DatasetRecord(
                 text=text,
                 uid=persona_hash,
                 name=identity,
-                utilities=utilities,
                 metadata=metadata,
             )
             count += 1

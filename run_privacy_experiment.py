@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dp.experiments import ExperimentResult
-from dp.experiments.utils import collect_jsonl_sources, uniquify_records, OutputCallback, build_output_sink
+from dp.experiments.utils import collect_jsonl_sources, uniquify_reddit_records, OutputCallback, build_output_sink
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
 from dp.loaders import DatasetRecord, TextAnnotation, get_adapter
 from dp.loaders.annotations import apply_annotations, read_batch_annotations_from_path
@@ -304,7 +304,7 @@ def main() -> None:
     raw_original_dataset = load_dataset_records(args.dataset, args.data_in, args.max_records)
     if not raw_original_dataset:
         raise RuntimeError("No records loaded from dataset")
-    original_dataset = uniquify_records(raw_original_dataset)
+    original_dataset = uniquify_reddit_records(raw_original_dataset)
     original_record_count = len(original_dataset)
 
     evaluation_datasets: Dict[str, List[DatasetRecord]] = {}

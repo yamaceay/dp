@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dp.experiments import ExperimentResult
-from dp.experiments.utils import collect_jsonl_sources, uniquify_records, OutputCallback, build_output_sink
+from dp.experiments.utils import collect_jsonl_sources, uniquify_reddit_records, OutputCallback, build_output_sink
 from dp.experiments.utility.base import TextUtilityExperiment
-from dp.experiments.constants import UTILITY_EXPERIMENTS_REGISTRY 
-from dp.loaders import DatasetRecord, get_adapter
+from dp.experiments.constants import UTILITY_EXPERIMENTS_REGISTRY, UtilitySpec
+from dp.loaders import get_adapter
 
 
 @dataclass(frozen=True)
@@ -20,8 +20,8 @@ class UtilityEvaluationReport:
     name: str
     source: Optional[Path]
     valid: bool
-    f1: Optional[float]
-    loss: Optional[float]
+    metrics: Dict[str, float]
+    drops: Dict[str, float]
     train_matched: int
     train_total: int
     test_matched: int
@@ -32,7 +32,9 @@ class UtilityEvaluationReport:
 @dataclass(frozen=True)
 class UtilityExperimentReport:
     score: float
-    baseline_f1: float
+    model_name: str
+    primary_metric: str
+    baseline_metrics: Dict[str, float]
     baseline_train_size: int
     baseline_test_size: int
     evaluations: List[UtilityEvaluationReport]
@@ -49,12 +51,18 @@ class ExperimentResultOutputter:
 class TextExperimentResultOutputter(ExperimentResultOutputter):
     def output(self, report: UtilityExperimentReport) -> None:
         lines: List[str] = []
-        lines.append(f"Score: {report.score:.4f}")
+        lines.append(f"Score ({report.primary_metric}): {report.score:.4f}")
+        lines.append(f"Model: {report.model_name}")
         lines.append("")
         lines.append("Baseline")
-        lines.append(
-            f"  f1={report.baseline_f1:.4f} train={report.baseline_train_size} test={report.baseline_test_size}"
-        )
+        if report.baseline_metrics:
+            baseline_text = " ".join(
+                f"{name}={value:.4f}" for name, value in sorted(report.baseline_metrics.items())
+            )
+            lines.append(f"  {baseline_text}")
+        else:
+            lines.append("  none")
+        lines.append(f"  train={report.baseline_train_size} test={report.baseline_test_size}")
         lines.append("")
         lines.append("Evaluation datasets")
         if not report.evaluations:
@@ -62,8 +70,16 @@ class TextExperimentResultOutputter(ExperimentResultOutputter):
         else:
             for evaluation in report.evaluations:
                 prefix = f"  {evaluation.name}: "
-                if evaluation.valid and evaluation.f1 is not None and evaluation.loss is not None:
-                    prefix += f"f1={evaluation.f1:.4f} loss={evaluation.loss:.4f}"
+                if evaluation.valid and evaluation.metrics:
+                    metrics_text = " ".join(
+                        f"{name}={value:.4f}" for name, value in sorted(evaluation.metrics.items())
+                    )
+                    prefix += metrics_text
+                    if evaluation.drops:
+                        drops_text = " ".join(
+                            f"{name}={value:.4f}" for name, value in sorted(evaluation.drops.items())
+                        )
+                        prefix += f" drops[{drops_text}]"
                 else:
                     prefix += "insufficient coverage"
                 prefix += (
@@ -80,8 +96,10 @@ class JsonExperimentResultOutputter(ExperimentResultOutputter):
     def output(self, report: UtilityExperimentReport) -> None:
         payload: Dict[str, Any] = {
             "score": report.score,
+            "model": report.model_name,
+            "primary_metric": report.primary_metric,
             "baseline": {
-                "f1": report.baseline_f1,
+                "metrics": report.baseline_metrics,
                 "train_size": report.baseline_train_size,
                 "test_size": report.baseline_test_size,
             },
@@ -90,8 +108,8 @@ class JsonExperimentResultOutputter(ExperimentResultOutputter):
                     "name": evaluation.name,
                     "source": str(evaluation.source) if evaluation.source else None,
                     "valid": evaluation.valid,
-                    "f1": evaluation.f1,
-                    "loss": evaluation.loss,
+                    "metrics": evaluation.metrics,
+                    "drops": evaluation.drops,
                     "train_matched": evaluation.train_matched,
                     "train_total": evaluation.train_total,
                     "test_matched": evaluation.test_matched,
@@ -110,7 +128,9 @@ class JsonLinesExperimentResultOutputter(ExperimentResultOutputter):
             {
                 "type": "experiment",
                 "score": report.score,
-                "baseline_f1": report.baseline_f1,
+                "model": report.model_name,
+                "primary_metric": report.primary_metric,
+                "baseline_metrics": report.baseline_metrics,
                 "baseline_train_size": report.baseline_train_size,
                 "baseline_test_size": report.baseline_test_size,
             }
@@ -122,8 +142,8 @@ class JsonLinesExperimentResultOutputter(ExperimentResultOutputter):
                     "name": evaluation.name,
                     "source": str(evaluation.source) if evaluation.source else None,
                     "valid": evaluation.valid,
-                    "f1": evaluation.f1,
-                    "loss": evaluation.loss,
+                    "metrics": evaluation.metrics,
+                    "drops": evaluation.drops,
                     "train_matched": evaluation.train_matched,
                     "train_total": evaluation.train_total,
                     "test_matched": evaluation.test_matched,
@@ -181,21 +201,26 @@ def build_evaluation_texts(index_to_key: Dict[int, str], sources: Dict[str, Path
 
 def build_experiment_report(result: ExperimentResult, sources: Dict[str, Path]) -> UtilityExperimentReport:
     metrics = result.metrics or {}
-    baseline = metrics.get("baseline", {})
-    baseline_f1 = float(baseline.get("f1", 0.0))
-    baseline_train = int(baseline.get("train_size", 0))
-    baseline_test = int(baseline.get("test_size", 0))
+    model_name = str(metrics.get("model", ""))
+    primary_metric = str(metrics.get("primary_metric", ""))
+    baseline_payload = metrics.get("baseline", {}) or {}
+    baseline_metrics_raw = baseline_payload.get("metrics", {}) or {}
+    baseline_metrics = {name: float(value) for name, value in baseline_metrics_raw.items()}
+    baseline_train = int(baseline_payload.get("train_size", 0))
+    baseline_test = int(baseline_payload.get("test_size", 0))
     evaluation_metrics: Dict[str, Dict[str, Any]] = metrics.get("evaluations", {})
     evaluations: List[UtilityEvaluationReport] = []
     for name in sorted(evaluation_metrics.keys()):
         payload = evaluation_metrics.get(name) or {}
+        metrics_payload = payload.get("metrics", {}) or {}
+        drops_payload = payload.get("drops", {}) or {}
         evaluations.append(
             UtilityEvaluationReport(
                 name=name,
                 source=sources.get(name),
                 valid=bool(payload.get("valid")),
-                f1=payload.get("f1"),
-                loss=payload.get("loss"),
+                metrics={key: float(value) for key, value in metrics_payload.items()},
+                drops={key: float(value) for key, value in drops_payload.items()},
                 train_matched=int(payload.get("train_matched", 0)),
                 train_total=int(payload.get("train_total", 0)),
                 test_matched=int(payload.get("test_matched", 0)),
@@ -204,8 +229,10 @@ def build_experiment_report(result: ExperimentResult, sources: Dict[str, Path]) 
             )
         )
     return UtilityExperimentReport(
-        score=result.score,
-        baseline_f1=baseline_f1,
+        score=float(result.score),
+        model_name=model_name,
+        primary_metric=primary_metric,
+        baseline_metrics=baseline_metrics,
         baseline_train_size=baseline_train,
         baseline_test_size=baseline_test,
         evaluations=evaluations,
@@ -228,11 +255,29 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    raw_records = get_adapter(args.dataset, data=args.dataset, data_in=args.data_in, max_records=args.max_records)
+    adapter = get_adapter(args.dataset, data=args.dataset, data_in=args.data_in, max_records=args.max_records)
+    raw_records = list(adapter)
     if not raw_records:
         raise RuntimeError("No records loaded from dataset")
-    records = uniquify_records(raw_records)
-    experiment_adapter = UTILITY_EXPERIMENTS_REGISTRY.get(f"{args.dataset}_{args.target}")
+    records = uniquify_reddit_records(raw_records)
+    spec_key = f"{args.dataset}_{args.target}"
+    spec: Optional[UtilitySpec] = UTILITY_EXPERIMENTS_REGISTRY.get(spec_key)
+    if spec is None:
+        dataset_prefix = f"{args.dataset}_"
+        available = sorted(
+            key[len(dataset_prefix) :]
+            for key in UTILITY_EXPERIMENTS_REGISTRY.keys()
+            if key.startswith(dataset_prefix)
+        )
+        raise RuntimeError(
+            f"Unknown utility target '{args.target}' for dataset '{args.dataset}'."
+            f" Available targets: {', '.join(available)}"
+        )
+    if args.dry_run:
+        coverage = sum(1 for record in records if spec.target.value(record) is not None and record.text)
+        print(f"Records loaded: {len(records)}")
+        print(f"Target coverage: {coverage}")
+        return
     if not args.annotations_in:
         raise RuntimeError("No anonymized output files provided")
     index_to_key = {idx: record.uid for idx, record in enumerate(records)}
@@ -243,9 +288,11 @@ def main() -> None:
     evaluation_texts = {name: mapping for name, mapping in evaluation_texts.items() if mapping}
     if not evaluation_texts:
         raise RuntimeError("No anonymized texts aligned with dataset records")
-    experiment_adapter.setup(target=args.target, records=records, model=model)
-    result = experiment_adapter.run(evaluation_texts=evaluation_texts)
-    experiment_adapter.cleanup()
+    experiment = TextUtilityExperiment(test_size=args.test_size, random_state=args.random_state)
+    model = spec.build_model()
+    experiment.setup(target=spec.target, records=records, model=model)
+    result = experiment.run(evaluation_texts=evaluation_texts)
+    experiment.cleanup()
     report = build_experiment_report(result, sources)
     sink = build_output_sink(args.output_file)
     outputter = create_outputter(args.output_format, sink)
