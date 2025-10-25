@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from dp.experiments.utility.base import DownstreamModel, UtilityTarget
-from dp.experiments.utility.models import LinearRegressor, LogisticClassifier
+from dp.experiments.utility.base import UtilityTarget
 from dp.loaders.base import DatasetRecord
-
 
 def _text_value(value: Any) -> Optional[str]:
     if value is None:
@@ -98,21 +95,6 @@ def _trustpilot_category(record: DatasetRecord) -> Optional[str]:
 def _trustpilot_stars(record: DatasetRecord) -> Optional[float]:
     return _float_value(record.metadata.get("stars"))
 
-
-DOWNSTREAM_MODELS: Dict[str, DownstreamModel] = {
-    "logistic_classifier": LogisticClassifier(),
-    "linear_regressor": LinearRegressor(),
-}
-
-
-MODE_TO_MODEL: Dict[UtilityTarget.Mode, str] = {
-    UtilityTarget.Mode.BINARY: "logistic_classifier",
-    UtilityTarget.Mode.NOMINAL: "logistic_classifier",
-    UtilityTarget.Mode.ORDINAL: "logistic_classifier",
-    UtilityTarget.Mode.CARDINAL: "linear_regressor",
-}
-
-
 UTILITY_TARGETS: Dict[str, Dict[str, UtilityTarget]] = {
     "reddit": {
         "feature": UtilityTarget(name="feature", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=_reddit_feature),
@@ -134,31 +116,3 @@ UTILITY_TARGETS: Dict[str, Dict[str, UtilityTarget]] = {
         "stars": UtilityTarget(name="stars", source="trustpilot", mode=UtilityTarget.Mode.CARDINAL, getter=_trustpilot_stars),
     },
 }
-
-
-@dataclass(frozen=True)
-class UtilitySpec:
-    dataset: str
-    target_key: str
-    target: UtilityTarget
-    model_name: str
-
-    def identifier(self) -> str:
-        return f"{self.dataset}_{self.target_key}"
-
-    def build_model(self) -> DownstreamModel:
-        prototype = DOWNSTREAM_MODELS[self.model_name]
-        return prototype.clone()
-
-
-def _build_registry(targets: Dict[str, Dict[str, UtilityTarget]]) -> Dict[str, UtilitySpec]:
-    registry: Dict[str, UtilitySpec] = {}
-    for dataset, mapping in targets.items():
-        for key, target in mapping.items():
-            model_name = MODE_TO_MODEL[target.mode]
-            spec = UtilitySpec(dataset=dataset, target_key=key, target=target, model_name=model_name)
-            registry[spec.identifier()] = spec
-    return registry
-
-
-UTILITY_EXPERIMENTS_REGISTRY: Dict[str, UtilitySpec] = _build_registry(UTILITY_TARGETS)

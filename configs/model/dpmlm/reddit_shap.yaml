@@ -3,6 +3,7 @@ delete_probability: 0.0
 
 explainability: shap
 explainer_path: models/tri_pipelines/reddit/20251021_123112
+explainability_temperature: 0.1
 
 tri_chunking:
   enabled: true

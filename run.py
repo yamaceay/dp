@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import yaml
 
-from dp.experiments.constants import UTILITY_EXPERIMENTS_REGISTRY, UtilitySpec
+from experiments.utility.constants import UTILITY_EXPERIMENTS_REGISTRY, UtilitySpec
 from dp.experiments.divergence import (
     BERTScoreDivergence,
     CosineSimilarityDivergence,
@@ -16,7 +16,7 @@ from dp.experiments.divergence import (
 )
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
 from dp.experiments.utility.base import TextUtilityExperiment
-from dp.experiments.utility.vectorizer import TextVectorizer, TfidfTextVectorizer
+from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, TfidfTextVectorizer, BERTVectorizer
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources, uniquify_records
 from dp.loaders import DatasetRecord, get_adapter
 from dp.loaders.annotations import read_batch_annotations_from_path
@@ -123,7 +123,7 @@ def normalize_output_settings(params: Dict[str, Any]) -> None:
             params["output_file"] = output["file"]
 
 
-def build_vectorizer_from_config(payload: Any) -> Optional[TextVectorizer]:
+def build_vectorizer_from_config(payload: Any) -> Optional[SelfSupervisedFeatureExtractor]:
     if payload is None:
         return None
     if isinstance(payload, str):
@@ -136,6 +136,8 @@ def build_vectorizer_from_config(payload: Any) -> Optional[TextVectorizer]:
         raise ValueError("vectorizer config must be a string or mapping")
     if vectorizer_type == "tfidf":
         return TfidfTextVectorizer(**vectorizer_params)
+    if vectorizer_type == "bert":
+        return BERTVectorizer(**vectorizer_params)
     raise ValueError(f"unsupported vectorizer type '{vectorizer_type}'")
 
 

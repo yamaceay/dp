@@ -15,6 +15,7 @@ class ShapExplainer(TokenExplainer):
         self.shap_explainer = None
         self.splitter = TextSplitter()
         self.tri_detector = TRIDetector(model_name=model_name, device=device, use_chunking=use_chunking)
+        self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}
     
@@ -39,6 +40,18 @@ class ShapExplainer(TokenExplainer):
                 self.id_to_label = dict(config.id2label)
                 self.label_to_id = {label: idx for idx, label in self.id_to_label.items()}
 
+    def _ensure_tri_mapping(self) -> None:
+        if self._tri_mapping_attempted:
+            return
+        self._tri_mapping_attempted = True
+        try:
+            self.tri_detector.load(self.model_name)
+        except Exception:
+            return
+        self.label_to_id.update(self.tri_detector.name_to_label)
+        for name, idx in self.tri_detector.name_to_label.items():
+            self.id_to_label[idx] = name
+
     def explain(self, text: str, tokens: Optional[List[str]] = None, target_label: Optional[str] = None) -> np.ndarray:
         self._load_pipeline()
         
@@ -56,7 +69,8 @@ class ShapExplainer(TokenExplainer):
             raise ValueError("target label is not defined for the provided text")
         
         label_int: Optional[int] = None
-        if label_name in self.label_to_id:
+        self._ensure_tri_mapping()
+        if label_int is None and label_name in self.label_to_id:
             label_int = self.label_to_id[label_name]
         else:
             try:

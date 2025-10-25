@@ -6,14 +6,14 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from dp.experiments.divergence.base import DivergenceMetric, TextDivergenceExperiment
-from dp.experiments.utility.vectorizer import TextVectorizer, TfidfTextVectorizer
+from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, TfidfTextVectorizer
 
 
 class CosineSimilarityMetric(DivergenceMetric):
-    def __init__(self, vectorizer: TextVectorizer):
+    def __init__(self, vectorizer: SelfSupervisedFeatureExtractor):
         super().__init__("cosine")
         self._template = vectorizer.clone()
-        self._vectorizer: Optional[TextVectorizer] = None
+        self._vectorizer: Optional[SelfSupervisedFeatureExtractor] = None
 
     def clone(self) -> "CosineSimilarityMetric":
         return CosineSimilarityMetric(self._template.clone())
@@ -44,6 +44,6 @@ class CosineSimilarityMetric(DivergenceMetric):
 
 
 class CosineSimilarityDivergence(TextDivergenceExperiment):
-    def __init__(self, vectorizer: TextVectorizer):
+    def __init__(self, vectorizer: SelfSupervisedFeatureExtractor):
         metric = CosineSimilarityMetric(vectorizer)
         super().__init__(metric)

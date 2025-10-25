@@ -9,38 +9,8 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 from dp.experiments import Experiment, ExperimentResult
 from dp.loaders.base import DatasetRecord
-from dp.experiments.utility.vectorizer import TextVectorizer, TfidfTextVectorizer
-
-
-class DownstreamModel(ABC):
-    def __init__(self, name: str, primary_metric: str):
-        if not name:
-            raise ValueError("model name is required")
-        if not primary_metric:
-            raise ValueError("primary metric is required")
-        self.name = name
-        self.primary_metric = primary_metric
-
-    @abstractmethod
-    def clone(self) -> "DownstreamModel":
-        raise NotImplementedError
-
-    @abstractmethod
-    def fit(self, x: Any, y: Sequence[Any]) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def predict(self, x: Any) -> Sequence[Any]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def cleanup(self) -> None:
-        raise NotImplementedError
-
+from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, TfidfTextVectorizer
+from dp.experiments.utility.models import SupervisedDownstreamHead
 
 class UtilityTarget:
     class Mode(Enum):
@@ -99,7 +69,6 @@ def split_indices(
 class TextUtilityExperiment(Experiment):
     def __init__(
         self,
-        vectorizer: Optional[TextVectorizer] = None,
         test_size: float = 0.2,
         random_state: int = 42,
     ):
@@ -108,10 +77,8 @@ class TextUtilityExperiment(Experiment):
             raise ValueError("test_size must be between 0 and 1")
         self.test_size = test_size
         self.random_state = random_state
-        template = vectorizer.clone() if vectorizer else TfidfTextVectorizer()
-        self._vectorizer_template = template
-        self._vectorizer: Optional[TextVectorizer] = None
-        self._model: Optional[DownstreamModel] = None
+        self._vectorizer: Optional[SelfSupervisedFeatureExtractor] = None
+        self._model: Optional[SupervisedDownstreamHead] = None
         self._target: Optional[UtilityTarget] = None
         self._records: List[DatasetRecord] = []
         self._keys: List[str] = []
@@ -130,12 +97,14 @@ class TextUtilityExperiment(Experiment):
         self,
         target: UtilityTarget,
         records: Sequence[DatasetRecord],
-        model: DownstreamModel,
+        vectorizer: SelfSupervisedFeatureExtractor,
+        model: SupervisedDownstreamHead,
         **kwargs: Any,
     ) -> None:
         if not records:
             raise ValueError("records cannot be empty")
         self._target = target
+        self._vectorizer = vectorizer
         self._model = model
         filtered_records: List[DatasetRecord] = []
         keys: List[str] = []
@@ -171,14 +140,9 @@ class TextUtilityExperiment(Experiment):
         self._test_texts = [self._records[i].text for i in self._test_idx]
         self._train_labels = [self._labels[i] for i in self._train_idx]
         self._test_labels = [self._labels[i] for i in self._test_idx]
-        vectorizer = self._clone_vectorizer()
-        vectorizer.fit(self._train_texts)
-        x_train = vectorizer.transform(self._train_texts)
-        model_instance = self._model
-        if model_instance is None:
-            raise RuntimeError("model is not initialized")
-        model_instance.fit(x_train, self._train_labels)
-        x_test = vectorizer.transform(self._test_texts)
+        self._x_train = self._vectorizer.fit_transform(self._train_texts)
+        self._model.fit(self._x_train, self._train_labels)
+        x_test = self._vectorizer.transform(self._test_texts)
         baseline_metrics = model_instance.evaluate(x_test, self._test_labels)
         self._baseline_metrics = baseline_metrics
         self._vectorizer = vectorizer
@@ -252,7 +216,7 @@ class TextUtilityExperiment(Experiment):
         self._record_info = {}
         super().cleanup()
 
-    def _clone_vectorizer(self) -> TextVectorizer:
+    def _clone_vectorizer(self) -> SelfSupervisedFeatureExtractor:
         return self._vectorizer_template.clone()
 
     def _normalize_label(self, value: Any, mode: UtilityTarget.Mode) -> Optional[Any]:
