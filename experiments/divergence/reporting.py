@@ -14,7 +14,6 @@ class DivergenceEntry:
     key: str
     index: int
     name: Optional[str]
-    persona_uid: Optional[str]
     similarity: float
     divergence: float
 
@@ -124,7 +123,6 @@ class JsonDivergenceReportOutputter(DivergenceReportOutputter):
                             "key": entry.key,
                             "index": entry.index,
                             "name": entry.name,
-                            "persona_uid": entry.persona_uid,
                             "similarity": entry.similarity,
                             "divergence": entry.divergence,
                         }
@@ -167,7 +165,6 @@ class JsonLinesDivergenceReportOutputter(DivergenceReportOutputter):
                         "key": entry.key,
                         "index": entry.index,
                         "name": entry.name,
-                        "persona_uid": entry.persona_uid,
                         "similarity": entry.similarity,
                         "divergence": entry.divergence,
                     }
@@ -207,7 +204,6 @@ def build_divergence_report(
                     key=key,
                     index=int(info.get("index", 0)),
                     name=info.get("name"),
-                    persona_uid=info.get("persona_uid"),
                     similarity=float(similarities[key]),
                     divergence=float(divergences.get(key, 0.0)),
                 )

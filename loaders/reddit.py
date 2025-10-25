@@ -78,7 +78,6 @@ class RedditDatasetAdapter(DatasetAdapter):
         """Generate a deterministic hash from personality attributes."""
         if not persona:
             return hashlib.sha256(b"unknown_persona").hexdigest()[:16]
-        # Create a stable string representation
         pairs = [f"{key}={persona.get(key)}" for key in sorted(persona.keys())]
         persona_str = "|".join(pairs)
         return hashlib.sha256(persona_str.encode("utf-8")).hexdigest()[:16]

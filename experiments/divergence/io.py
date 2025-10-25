@@ -57,7 +57,6 @@ def build_record_info(records: List[DatasetRecord]) -> Dict[str, Dict[str, Any]]
         info[record.uid] = {
             "index": metadata.get("record_index", index),
             "name": record.name,
-            "persona_uid": metadata.get("persona_uid"),
         }
     return info
 

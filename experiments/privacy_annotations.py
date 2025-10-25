@@ -68,10 +68,8 @@ class TextPrivacyExperiment(Experiment):
             zip(self.record_keys, self.original_dataset),
             start=1,
         ):
-            persona_name = self._persona_name(record)
             self.record_info[key] = {
-                "persona_uid": record.metadata.get("persona_uid", record.uid),
-                "name": persona_name or record.name,
+                "name": record.name,
                 "index": record.metadata.get("record_index", idx),
             }
         super().setup(**kwargs)
@@ -153,8 +151,7 @@ class TextPrivacyExperiment(Experiment):
         if progress:
             iterator = tqdm(iterator, total=len(keys), desc="Computing ranks")
         for key, record in iterator:
-            # Use canonical persona identity string expected by the TRI pipeline
-            name = self._persona_name(record)
+            name = record.name
             if not name or not self.detector:
                 continue
             if name not in self.detector.name_to_label:
@@ -198,21 +195,3 @@ class TextPrivacyExperiment(Experiment):
             "degraded": degraded,
             "unchanged": unchanged,
         }
-
-    def _persona_name(self, record: DatasetRecord) -> Optional[str]:
-        """Build the canonical persona identity string used as TRI label names.
-
-        The TRI pipelines in this project are trained with label names formed by
-        joining persona key=value pairs with '|', sorted by key. Reddit adapter
-        stores persona attributes in record.metadata with keys prefixed by 'persona_'.
-        """
-        meta = record.metadata or {}
-        persona_items: Dict[str, Any] = {}
-        for k, v in meta.items():
-            if k.startswith("persona_"):
-                persona_key = k[len("persona_") :]
-                persona_items[persona_key] = v
-        if not persona_items:
-            return record.name or None
-        parts = [f"{k}={persona_items.get(k)}" for k in sorted(persona_items.keys())]
-        return "|".join(parts)

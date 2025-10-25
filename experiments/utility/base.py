@@ -161,7 +161,6 @@ class TextUtilityExperiment(Experiment):
             raise RuntimeError("setup must be completed before run")
         evaluations: Dict[str, Dict[str, Any]] = {}
         for name, mapping in evaluation_texts.items():
-            # Only evaluate on the test split to ensure apples-to-apples comparison with the baseline
             aligned_keys = [key for key in mapping.keys() if key in self._test_key_set]
             if not aligned_keys:
                 continue
@@ -170,7 +169,6 @@ class TextUtilityExperiment(Experiment):
             x_eval = self._vectorizer.transform(texts)
             metrics = self._model.evaluate(x_eval, labels)
             drops = self._score_difference(self._baseline_metrics, metrics)
-            # With evaluation restricted to test keys, these counts reflect coverage
             train_matched = 0
             test_matched = len(aligned_keys)
             evaluations[name] = {

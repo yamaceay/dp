@@ -14,7 +14,6 @@ class RankEntry:
     key: str
     rank: int
     name: Optional[str]
-    persona_uid: Optional[str]
     index: int
     delta: Optional[int] = None
 
@@ -120,8 +119,6 @@ class JsonPrivacyReportOutputter(PrivacyReportOutputter):
             "rank": entry.rank,
             "index": entry.index,
         }
-        if entry.persona_uid:
-            payload["persona_uid"] = entry.persona_uid
         if entry.name:
             payload["name"] = entry.name
         if entry.delta is not None:
@@ -163,8 +160,6 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
             "rank": entry.rank,
             "index": entry.index,
         }
-        if entry.persona_uid:
-            payload["persona_uid"] = entry.persona_uid
         if entry.name:
             payload["name"] = entry.name
         if entry.delta is not None:
@@ -194,7 +189,6 @@ def build_privacy_report(
                 key=key,
                 rank=rank,
                 name=info.get("name"),
-                persona_uid=info.get("persona_uid"),
                 index=int(info.get("index", 0)),
             )
         )
@@ -215,7 +209,6 @@ def build_privacy_report(
                     key=key,
                     rank=rank,
                     name=info.get("name"),
-                    persona_uid=info.get("persona_uid"),
                     index=int(info.get("index", 0)),
                     delta=deltas.get(key),
                 )
