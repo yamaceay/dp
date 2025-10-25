@@ -8,35 +8,29 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import yaml
 
-from experiments.utility.constants import UTILITY_EXPERIMENTS_REGISTRY, UtilitySpec
-from dp.experiments.divergence import (
-    BERTScoreDivergence,
-    CosineSimilarityDivergence,
-    TextDivergenceExperiment,
+from dp.experiments.divergence.io import (
+    build_divergence_evaluation_inputs,
+    build_original_texts,
+    build_record_info,
 )
+from dp.experiments.divergence.reporting import build_divergence_report, create_divergence_outputter
+from dp.experiments.privacy.io import build_privacy_evaluation_dataset
+from dp.experiments.privacy.reporting import build_privacy_report, create_privacy_outputter
+from dp.experiments.utility.io import build_utility_evaluation_texts
+from dp.experiments.utility.reporting import build_utility_report, create_utility_outputter
+from dp.experiments.utility.models import (
+    UTILITY_EXPERIMENTS_REGISTRY,
+    UtilitySpec,
+)
+from dp.experiments.divergence.bertscore import BERTScoreDivergence
+from dp.experiments.divergence.cosine import CosineSimilarityDivergence
+from dp.experiments.divergence.base import TextDivergenceExperiment
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
 from dp.experiments.utility.base import TextUtilityExperiment
-from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, TfidfTextVectorizer, BERTVectorizer
+from dp.experiments.utility.vectorizer import TfidfTextVectorizer, BERTVectorizer, SelfSupervisedFeatureExtractor
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
 from dp.loaders.annotations import read_batch_annotations_from_path
-from run_divergence_experiment import (
-    build_evaluation_inputs as build_divergence_evaluation_inputs,
-    build_experiment_report as build_divergence_report,
-    build_original_texts,
-    build_record_info,
-    create_outputter as create_divergence_outputter,
-)
-from run_privacy_experiment import (
-    build_evaluation_dataset as build_privacy_evaluation_dataset,
-    build_experiment_report as build_privacy_report,
-    create_outputter as create_privacy_outputter,
-)
-from run_utility_experiment import (
-    build_evaluation_texts as build_utility_evaluation_texts,
-    build_experiment_report as build_utility_report,
-    create_outputter as create_utility_outputter,
-)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -99,10 +93,10 @@ def load_config(value: Optional[str]) -> Dict[str, Any]:
 
 def merge_params(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
     merged = dict(config)
-    for key, value in vars(args).items():
-        if key in {"command", "config", "handler"}:
-            continue
-        merged[key] = value
+    arg_map = vars(args)
+    for key in ("mode", "identifier"):
+        if key in arg_map and arg_map[key] is not None:
+            merged[key] = arg_map[key]
     return merged
 
 
@@ -123,23 +117,19 @@ def normalize_output_settings(params: Dict[str, Any]) -> None:
             params["output_file"] = output["file"]
 
 
-def build_vectorizer_from_config(payload: Any) -> Optional[SelfSupervisedFeatureExtractor]:
+def parse_component_config(payload: Any) -> Tuple[str, Dict[str, Any]]:
     if payload is None:
-        return None
+        return "", {}
     if isinstance(payload, str):
-        vectorizer_type = payload
-        vectorizer_params: Dict[str, Any] = {}
-    elif isinstance(payload, dict):
-        vectorizer_type = payload.get("type", "tfidf")
-        vectorizer_params = dict(payload.get("params", {}))
-    else:
-        raise ValueError("vectorizer config must be a string or mapping")
-    if vectorizer_type == "tfidf":
-        return TfidfTextVectorizer(**vectorizer_params)
-    if vectorizer_type == "bert":
-        return BERTVectorizer(**vectorizer_params)
-    raise ValueError(f"unsupported vectorizer type '{vectorizer_type}'")
-
+        return payload, {}
+    if isinstance(payload, dict):
+        cfg = dict(payload)
+        name = str(cfg.pop("type", cfg.pop("name", "")))
+        params = cfg.get("params", {}) if "params" in cfg else cfg
+        if not isinstance(params, dict):
+            raise ValueError("component params must be a mapping")
+        return name, dict(params)
+    raise ValueError("invalid component config")
 
 def parse_metric_config(payload: Any) -> Tuple[str, Dict[str, Any]]:
     if payload is None:
@@ -151,6 +141,18 @@ def parse_metric_config(payload: Any) -> Tuple[str, Dict[str, Any]]:
         metric_type = str(config.pop("type", "bertscore"))
         return metric_type, config
     raise ValueError("metric config must be a string or mapping")
+
+
+def build_vectorizer_from_config(payload: Any) -> SelfSupervisedFeatureExtractor:
+    name, params = parse_component_config(payload)
+    if not name:
+        name = "tfidf"
+    name = name.lower()
+    if name == "tfidf":
+        return TfidfTextVectorizer(**params)
+    if name == "bert":
+        return BERTVectorizer(**params)
+    raise ValueError(f"unsupported vectorizer '{name}'")
 
 
 def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
@@ -175,10 +177,6 @@ def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     dry_run = params.get("dry_run", False)
     output_format = params.get("output_format", "text")
     output_file = params.get("output_file")
-    vectorizer_config = params.get("vectorizer")
-    if 'params' in vectorizer_config and 'ngram_range' in vectorizer_config['params']:
-        vectorizer_config['params']['ngram_range'] = tuple(vectorizer_config['params']['ngram_range'])
-    vectorizer = build_vectorizer_from_config(vectorizer_config)
     records = load_records(dataset, data_in, max_records)
     if not records:
         raise RuntimeError("no records loaded")
@@ -205,9 +203,23 @@ def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     evaluation_texts = {name: mapping for name, mapping in evaluation_texts.items() if mapping}
     if not evaluation_texts:
         raise RuntimeError("no anonymized texts aligned with dataset records")
-    experiment = TextUtilityExperiment(vectorizer=vectorizer, test_size=float(test_size), random_state=int(random_state))
-    model = spec.build_model()
-    experiment.setup(target=spec.target, records=records, model=model)
+    util_cfg = params.get("utility", {}) or {}
+    if not util_cfg:
+        legacy_vec = params.get("vectorizer")
+        legacy_head = params.get("head")
+        util_cfg = {"vectorizer": legacy_vec, "head": legacy_head}
+    vec_name, vec_kwargs = parse_component_config(util_cfg.get("vectorizer"))
+    head_name, head_kwargs = parse_component_config(util_cfg.get("head"))
+    identifier = params.get("identifier") or util_cfg.get("identifier")
+    vectorizer, model = spec.build_components(
+        vectorizer_name=vec_name or None,
+        vectorizer_kwargs=vec_kwargs,
+        head_name=head_name or None,
+        head_kwargs=head_kwargs,
+        identifier=identifier,
+    )
+    experiment = TextUtilityExperiment(test_size=float(test_size), random_state=int(random_state))
+    experiment.setup(target=spec.target, records=records, vectorizer=vectorizer, model=model)
     result = experiment.run(evaluation_texts=evaluation_texts)
     experiment.cleanup()
     report = build_utility_report(result, sources)
@@ -273,6 +285,14 @@ def handle_divergence(args: argparse.Namespace, config: Dict[str, Any]) -> None:
 def handle_privacy(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     params = merge_params(config, args)
     normalize_output_settings(params)
+    tri_cfg = params.get("tri")
+    if isinstance(tri_cfg, dict):
+        if "pipeline" in tri_cfg and "tri_pipeline" not in params:
+            params["tri_pipeline"] = tri_cfg["pipeline"]
+        if "max_length" in tri_cfg and "tri_max_length" not in params:
+            params["tri_max_length"] = tri_cfg["max_length"]
+        if "device" in tri_cfg and "tri_device" not in params:
+            params["tri_device"] = tri_cfg["device"]
     annotation_values = ensure_sequence(params.get("annotations")) + ensure_sequence(params.get("annotations_in"))
     annotations = list(dict.fromkeys(annotation_values))
     dataset = params.get("dataset")
@@ -337,12 +357,8 @@ def handle_privacy(args: argparse.Namespace, config: Dict[str, Any]) -> None:
 
 def build_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=str, help="Path to experiment config file")
-    parser.add_argument("--dataset", type=str, help="Path to dataset file")
-    parser.add_argument("--data-in", type=str, help="Path to dataset input")
-    parser.add_argument("--max-records", type=int, help="Maximum number of records to load")
-    parser.add_argument("--annotations_in", type=str, nargs="+", help="Paths to anonymized output files")
-    parser.add_argument("--output-format", type=str, choices=["text", "json", "jsonl"], help="Output format")
-    parser.add_argument("--output-file", type=str, help="Path to output file")
+    parser.add_argument("--mode", type=str, choices=["utility", "privacy", "divergence"], help="Experiment mode override (optional)")
+    parser.add_argument("--identifier", type=str, help="Optional model identifier override for utility experiments")
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -354,25 +370,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     utility = subparsers.add_parser("utility", help="Run utility experiment", argument_default=argparse.SUPPRESS)
     build_args(utility)
-    utility.add_argument("--target")
-    utility.add_argument("--test-size", type=float)
-    utility.add_argument("--random-state", type=int)
-    utility.add_argument("--dry-run", action="store_true")
-    utility.add_argument("--vectorizer")
     utility.set_defaults(handler=handle_utility)
 
     divergence = subparsers.add_parser("divergence", help="Run divergence experiment", argument_default=argparse.SUPPRESS)
     build_args(divergence)
-    divergence.add_argument("--metric")
     divergence.set_defaults(handler=handle_divergence)
 
     privacy = subparsers.add_parser("privacy", help="Run privacy experiment", argument_default=argparse.SUPPRESS)
     build_args(privacy)
-    privacy.add_argument("--tri-pipeline")
-    privacy.add_argument("--tri-max-length", type=int)
-    privacy.add_argument("--tri-device")
-    privacy.add_argument("--mask-token")
-    privacy.add_argument("--progress", action="store_true")
     privacy.set_defaults(handler=handle_privacy)
 
     return parser

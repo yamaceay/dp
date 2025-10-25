@@ -1,78 +1,73 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
-from dp.loaders.base import DatasetRecord
 from dp.experiments.utility.base import UtilityTarget
-from dp.experiments.utility.downstream import DOWNSTREAM_HEAD_REGISTRY
-from dp.experiments.utility.vectorizer import FEATURE_EXTRACTOR_REGISTRY
-from dp.experiments.utility.constants import UTILITY_TARGETS 
+from dp.experiments.utility.getters import UTILITY_TARGETS
+from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, FEATURE_EXTRACTOR_REGISTRY
+from dp.experiments.utility.downstream import SupervisedDownstreamHead, DOWNSTREAM_HEAD_REGISTRY
 
-class UtilityModel:
-    def __init__(self) -> None:
-        self._feature_extractor: Optional[SelfSupervisedFeatureExtractor] = None
-        self._downstream_model: Optional[SupervisedDownstreamHead] = None
 
-    def with_feature_extractor(self, extractor: SelfSupervisedFeatureExtractor) -> 'UtilityModel':
-        self._feature_extractor = extractor
-        return self
+MODE_TO_MODEL: Dict[UtilityTarget.Mode, Tuple[str, str]] = {
+    UtilityTarget.Mode.BINARY: ("bert", "feedforward_classifier"),
+    UtilityTarget.Mode.NOMINAL: ("bert", "feedforward_classifier"),
+    UtilityTarget.Mode.ORDINAL: ("bert", "feedforward_classifier"),
+    UtilityTarget.Mode.CARDINAL: ("bert", "feedforward_regressor"),
+}
 
-    def with_downstream_model(self, model: SupervisedDownstreamHead) -> 'UtilityModel':
-        self._downstream_model = model
-        return self
-    
-    def fit(self, texts: Sequence[str], labels: Sequence[Any]) -> None:
-        if self._feature_extractor is None:
-            raise ValueError("Feature extractor is not set")
-        if self._downstream_model is None:
-            raise ValueError("Downstream model is not set")
-        self._feature_extractor.fit(texts)
-        features = self._feature_extractor.transform(texts)
-        self._downstream_model.fit(features, labels)
-
-    def predict(self, texts: Sequence[str]) -> Any:
-        if self._feature_extractor is None:
-            raise ValueError("Feature extractor is not set")
-        if self._downstream_model is None:
-            raise ValueError("Downstream model is not set")
-        features = self._feature_extractor.transform(texts)
-        return self._downstream_model.predict(features)
-    
-    def evaluate(self, texts: Sequence[str], labels: Sequence[Any]) -> Dict[str, float]:
-        features = self.predict(texts)
-        return self._downstream_model.evaluate(features, labels)
-
-    def identifier(self) -> str:
-        feat_name = type(self._feature_extractor).__name__ if self._feature_extractor else "None"
-        model_name = type(self._downstream_model).__name__ if self._downstream_model else "None"
-        return f"{feat_name}_{model_name}"
 
 @dataclass(frozen=True)
 class UtilitySpec:
     dataset: str
     target_key: str
     target: UtilityTarget
-    model_name: str
+    default_vectorizer: str
+    default_head: str
 
     def identifier(self) -> str:
         return f"{self.dataset}_{self.target_key}"
+
+    def build_components(
+        self,
+        *,
+        vectorizer_name: Optional[str] = None,
+        vectorizer_kwargs: Optional[Dict[str, Any]] = None,
+        head_name: Optional[str] = None,
+        head_kwargs: Optional[Dict[str, Any]] = None,
+        identifier: Optional[str] = None,
+    ) -> Tuple[SelfSupervisedFeatureExtractor, SupervisedDownstreamHead]:
+        v_name = (vectorizer_name or self.default_vectorizer or "").lower()
+        h_name = (head_name or self.default_head or "").lower()
+        if identifier:
+            parts = identifier.lower().replace(" ", "").replace("/", "+").split("+")
+            if len(parts) == 2:
+                v_name, h_name = parts[0], parts[1]
+        v_kwargs = dict(vectorizer_kwargs or {})
+        h_kwargs = dict(head_kwargs or {})
+        if v_name not in FEATURE_EXTRACTOR_REGISTRY:
+            raise ValueError(f"unknown vectorizer '{v_name}'")
+        if h_name not in DOWNSTREAM_HEAD_REGISTRY:
+            raise ValueError(f"unknown head '{h_name}'")
+        vectorizer = FEATURE_EXTRACTOR_REGISTRY[v_name](**v_kwargs)
+        head = DOWNSTREAM_HEAD_REGISTRY[h_name](**h_kwargs)
+        return vectorizer, head
+
 
 def _build_registry(targets: Dict[str, Dict[str, UtilityTarget]]) -> Dict[str, UtilitySpec]:
     registry: Dict[str, UtilitySpec] = {}
     for dataset, mapping in targets.items():
         for key, target in mapping.items():
-            vectorizer_name, head_name = MODE_TO_MODEL[target.mode]
-            if vectorizer_name not in FEATURE_EXTRACTOR_REGISTRY:
-                raise ValueError(f"unknown feature extractor: {vectorizer_name}")
-            if head_name not in DOWNSTREAM_HEAD_REGISTRY:
-                raise ValueError(f"unknown downstream head: {head_name}")
-            spec = (
-                UtilitySpec(dataset=dataset, target_key=key, target=target)
-                .with_feature_extractor(FEATURE_EXTRACTOR_REGISTRY[vectorizer_name])
-                .with_downstream_model(DOWNSTREAM_HEAD_REGISTRY[head_name])
+            v_name, h_name = MODE_TO_MODEL[target.mode]
+            spec = UtilitySpec(
+                dataset=dataset,
+                target_key=key,
+                target=target,
+                default_vectorizer=v_name,
+                default_head=h_name,
             )
             registry[spec.identifier()] = spec
     return registry
+
 
 UTILITY_EXPERIMENTS_REGISTRY: Dict[str, UtilitySpec] = _build_registry(UTILITY_TARGETS)

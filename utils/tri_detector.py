@@ -326,65 +326,53 @@ class TRIDetector:
         torch.cuda.empty_cache()
     
     def predict(self, records: List[DatasetRecord]) -> Dict[str, Dict[str, float]]:
-        if self.model is None:
+        if not records:
+            return {}
+        if self.model is None or self.tokenizer is None:
             raise ValueError("Model not initialized. Train or load a model first.")
-        
-        pipe = pipeline("text-classification", model=self.model, tokenizer=self.tokenizer, device=self.device if self.device.type != "cpu" else -1, top_k=None, truncation=True, max_length=self.max_length)
-        
+        pipe = pipeline(
+            "text-classification",
+            model=self.model,
+            tokenizer=self.tokenizer,
+            device=self.device if self.device.type != "cpu" else -1,
+            top_k=None,
+            truncation=True,
+            max_length=self.max_length,
+        )
         results: Dict[str, Dict[str, float]] = {}
         if self.use_chunking and self.chunker is not None:
             aggregator = ProbabilityAggregator()
+
             def classify(text: str) -> Dict[str, float]:
-                preds = pipe(text)[0]
-                return {pred["label"]: pred["score"] for pred in preds}
+                entries = pipe(text)[0]
+                return self._map_prediction_entries(entries)
+
             for record in records:
-                pred_dict = process_with_chunking(record.text, self.chunker, classify, aggregator)
-                results[record.uid] = pred_dict
+                scores = process_with_chunking(record.text, self.chunker, classify, aggregator)
+                results[record.uid] = scores
         else:
             for record in records:
-                predictions = pipe(record.text)[0]
-                pred_dict = {pred["label"]: pred["score"] for pred in predictions}
-                results[record.uid] = pred_dict
-        
+                entries = pipe(record.text)[0]
+                results[record.uid] = self._map_prediction_entries(entries)
         return results
-    
+
     def evaluate(self, records: List[DatasetRecord]) -> Dict[str, Any]:
         if not records:
             raise ValueError("records cannot be empty")
-        if not self.model:
-            raise ValueError("Model not initialized")
-        if not self.tokenizer:
-            raise ValueError("Tokenizer not initialized")
-        
-        pipe = pipeline("text-classification", model=self.model, tokenizer=self.tokenizer, device=self.device if self.device.type != "cpu" else -1, truncation=True, max_length=self.max_length)
-        
+        predictions = self.predict(records)
         correct = 0
         total = 0
-        
-        if self.use_chunking and self.chunker is not None:
-            from dp.utils.chunking import ProbabilityAggregator, process_with_chunking
-            aggregator = ProbabilityAggregator()
-            def classify(text: str) -> Dict[str, float]:
-                preds = pipe(text)[0]
-                return {pred["label"]: pred["score"] for pred in preds}
-            for record in records:
-                pred_dict = process_with_chunking(record.text, self.chunker, classify, aggregator)
-                predicted_label = max(pred_dict.items(), key=lambda item: item[1])[0]
-                true_label = f"LABEL_{self.name_to_label[record.name]}"
-                if predicted_label == true_label:
-                    correct += 1
-                total += 1
-        else:
-            for record in records:
-                predictions = pipe(record.text)
-                predicted_label = predictions[0]["label"]
-                true_label = f"LABEL_{self.name_to_label[record.name]}"
-                if predicted_label == true_label:
-                    correct += 1
-                total += 1
-        
-        accuracy = correct / total if total > 0 else 0
-        
+        for record in records:
+            if not record.name or record.name not in self.name_to_label:
+                continue
+            scores = predictions.get(record.uid)
+            if not scores:
+                continue
+            predicted_name = max(scores.items(), key=lambda item: item[1])[0]
+            if predicted_name == record.name:
+                correct += 1
+            total += 1
+        accuracy = correct / total if total else 0.0
         return {
             "accuracy": accuracy,
             "correct": correct,
@@ -418,6 +406,32 @@ class TRIDetector:
             self.name_to_label = json.load(f)
         
         self.label_to_name = {v: k for k, v in self.name_to_label.items()}
+
+    def _parse_label_id(self, label: str) -> Optional[int]:
+        if not label:
+            return None
+        if "_" not in label:
+            return None
+        _, value = label.rsplit("_", 1)
+        if not value.isdigit():
+            return None
+        return int(value)
+
+    def _map_prediction_entries(self, entries: List[Dict[str, Any]]) -> Dict[str, float]:
+        mapped: Dict[str, float] = {}
+        for entry in entries:
+            label = entry.get("label")
+            score = entry.get("score")
+            if label is None or score is None:
+                continue
+            label_id = self._parse_label_id(str(label))
+            if label_id is None:
+                continue
+            name = self.label_to_name.get(label_id)
+            if not name:
+                continue
+            mapped[name] = float(score)
+        return mapped
 
 
 class TRIDataset(Dataset):

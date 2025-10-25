@@ -9,8 +9,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 from dp.loaders.base import DatasetRecord
 from dp.experiments import Experiment, ExperimentResult
-from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor
-from dp.experiments.utility.downstream import SupervisedDownstreamHead
+# Vectorizer and model types are runtime-provided; keep generic to avoid tight coupling
 
 class UtilityTarget:
     class Mode(Enum):
@@ -140,12 +139,12 @@ class TextUtilityExperiment(Experiment):
         self._test_texts = [self._records[i].text for i in self._test_idx]
         self._train_labels = [self._labels[i] for i in self._train_idx]
         self._test_labels = [self._labels[i] for i in self._test_idx]
-        self._x_train = self._vectorizer.fit_transform(self._train_texts)
+        self._vectorizer.fit(self._train_texts)
+        self._x_train = self._vectorizer.transform(self._train_texts)
         self._model.fit(self._x_train, self._train_labels)
         x_test = self._vectorizer.transform(self._test_texts)
-        baseline_metrics = model_instance.evaluate(x_test, self._test_labels)
+        baseline_metrics = self._model.evaluate(x_test, self._test_labels)
         self._baseline_metrics = baseline_metrics
-        self._vectorizer = vectorizer
         self._label_by_key = {key: self._labels[idx] for idx, key in enumerate(self._keys)}
         self._record_info = {
             key: {
@@ -162,7 +161,8 @@ class TextUtilityExperiment(Experiment):
             raise RuntimeError("setup must be completed before run")
         evaluations: Dict[str, Dict[str, Any]] = {}
         for name, mapping in evaluation_texts.items():
-            aligned_keys = [key for key in mapping.keys() if key in self._label_by_key]
+            # Only evaluate on the test split to ensure apples-to-apples comparison with the baseline
+            aligned_keys = [key for key in mapping.keys() if key in self._test_key_set]
             if not aligned_keys:
                 continue
             texts = [mapping[key] for key in aligned_keys]
@@ -170,8 +170,9 @@ class TextUtilityExperiment(Experiment):
             x_eval = self._vectorizer.transform(texts)
             metrics = self._model.evaluate(x_eval, labels)
             drops = self._score_difference(self._baseline_metrics, metrics)
-            train_matched = sum(1 for key in aligned_keys if key in self._train_key_set)
-            test_matched = sum(1 for key in aligned_keys if key in self._test_key_set)
+            # With evaluation restricted to test keys, these counts reflect coverage
+            train_matched = 0
+            test_matched = len(aligned_keys)
             evaluations[name] = {
                 "metrics": metrics,
                 "drops": drops,
@@ -180,7 +181,7 @@ class TextUtilityExperiment(Experiment):
                 "test_matched": test_matched,
                 "test_total": len(self._test_keys),
                 "available": len(aligned_keys),
-                "valid": bool(train_matched and test_matched),
+                "valid": bool(test_matched),
             }
         metrics_payload: Dict[str, Any] = {
             "model": self._model.name,
@@ -217,7 +218,9 @@ class TextUtilityExperiment(Experiment):
         super().cleanup()
 
     def _clone_vectorizer(self) -> SelfSupervisedFeatureExtractor:
-        return self._vectorizer_template.clone()
+        if not self._vectorizer:
+            raise RuntimeError("vectorizer is not initialized")
+        return self._vectorizer
 
     def _normalize_label(self, value: Any, mode: UtilityTarget.Mode) -> Optional[Any]:
         if value is None:

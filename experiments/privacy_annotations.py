@@ -63,21 +63,21 @@ class TextPrivacyExperiment(Experiment):
             keys=self.record_keys,
             **kwargs,
         )
-        self.record_info = {
-            key: {
+        self.record_info = {}
+        for idx, (key, record) in enumerate(
+            zip(self.record_keys, self.original_dataset),
+            start=1,
+        ):
+            persona_name = self._persona_name(record)
+            self.record_info[key] = {
                 "persona_uid": record.metadata.get("persona_uid", record.uid),
-                "name": record.name,
+                "name": persona_name or record.name,
                 "index": record.metadata.get("record_index", idx),
             }
-            for idx, (key, record) in enumerate(
-                zip(self.record_keys, self.original_dataset),
-                start=1,
-            )
-        }
         super().setup(**kwargs)
 
     def run(self, **kwargs) -> ExperimentResult:
-        if not self.detector or not self.original_ranks:
+        if not self.detector:
             raise RuntimeError("setup must be completed before run")
         evaluations: Dict[str, Dict[str, Any]] = {}
         for name, records in self.evaluation_datasets.items():
@@ -88,8 +88,18 @@ class TextPrivacyExperiment(Experiment):
                 "rank_deltas": deltas,
             }
             summary = self._summarize_rank_deltas(deltas)
-            if summary:
-                evaluations[name]["rank_delta_summary"] = summary
+            if not summary:
+                summary = {
+                    "count": 0,
+                    "mean": 0.0,
+                    "median": 0.0,
+                    "min": 0,
+                    "max": 0,
+                    "improved": 0,
+                    "degraded": 0,
+                    "unchanged": 0,
+                }
+            evaluations[name]["rank_delta_summary"] = summary
         metrics: Dict[str, Any] = {
             "original_ranks": self.original_ranks,
             "evaluations": evaluations,
@@ -114,14 +124,7 @@ class TextPrivacyExperiment(Experiment):
         super().cleanup()
 
     def _build_record_keys(self, records: List[DatasetRecord]) -> List[str]:
-        counts: Dict[str, int] = {}
-        keys: List[str] = []
-        for record in records:
-            index = counts.get(record.uid, 0)
-            key = record.uid if index == 0 else f"{record.uid}#{index}"
-            counts[record.uid] = index + 1
-            keys.append(key)
-        return keys
+        return [record.uid for record in records]
 
     def _compute_ranks(
         self,
@@ -149,38 +152,27 @@ class TextPrivacyExperiment(Experiment):
         iterator = zip(keys, records)
         if progress:
             iterator = tqdm(iterator, total=len(keys), desc="Computing ranks")
-        for prediction_key, record in iterator:
-            name = record.name
-            if not name:
+        for key, record in iterator:
+            # Use canonical persona identity string expected by the TRI pipeline
+            name = self._persona_name(record)
+            if not name or not self.detector:
                 continue
             if name not in self.detector.name_to_label:
                 continue
-            scores = predictions.get(prediction_key)
+            scores = predictions.get(record.uid)
             if not scores:
                 continue
-            label_id = self.detector.name_to_label[name]
             ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-            rank = self._find_rank(label_id, ordered)
+            rank = self._rank_for_name(name, ordered)
             if rank is not None:
-                ranks[prediction_key] = rank
+                ranks[key] = rank
         return ranks
 
-    def _find_rank(self, label_id: int, ordered: List[tuple[str, float]]) -> Optional[int]:
-        for position, (label, _) in enumerate(ordered, start=1):
-            parsed = self._parse_label(label)
-            if parsed == label_id:
+    def _rank_for_name(self, name: str, ordered: List[tuple[str, float]]) -> Optional[int]:
+        for position, (candidate, _) in enumerate(ordered, start=1):
+            if candidate == name:
                 return position
         return None
-
-    def _parse_label(self, label: str) -> Optional[int]:
-        if not label:
-            return None
-        if "_" not in label:
-            return None
-        _, value = label.rsplit("_", 1)
-        if not value.isdigit():
-            return None
-        return int(value)
 
     def _compute_rank_deltas(self, anonymized_ranks: Dict[str, int]) -> Dict[str, int]:
         deltas: Dict[str, int] = {}
@@ -206,3 +198,21 @@ class TextPrivacyExperiment(Experiment):
             "degraded": degraded,
             "unchanged": unchanged,
         }
+
+    def _persona_name(self, record: DatasetRecord) -> Optional[str]:
+        """Build the canonical persona identity string used as TRI label names.
+
+        The TRI pipelines in this project are trained with label names formed by
+        joining persona key=value pairs with '|', sorted by key. Reddit adapter
+        stores persona attributes in record.metadata with keys prefixed by 'persona_'.
+        """
+        meta = record.metadata or {}
+        persona_items: Dict[str, Any] = {}
+        for k, v in meta.items():
+            if k.startswith("persona_"):
+                persona_key = k[len("persona_") :]
+                persona_items[persona_key] = v
+        if not persona_items:
+            return record.name or None
+        parts = [f"{k}={persona_items.get(k)}" for k in sorted(persona_items.keys())]
+        return "|".join(parts)
