@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dp.experiments import ExperimentResult
-from dp.experiments.utils import collect_jsonl_sources, uniquify_reddit_records, OutputCallback, build_output_sink
+from dp.experiments.utils import collect_jsonl_sources, OutputCallback, build_output_sink
 from dp.experiments.utility.base import TextUtilityExperiment
-from dp.experiments.constants import UTILITY_EXPERIMENTS_REGISTRY, UtilitySpec
+from dp.experiments.utility.constants import UTILITY_EXPERIMENTS_REGISTRY, UtilitySpec
 from dp.loaders import get_adapter
 
 
@@ -256,10 +256,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     adapter = get_adapter(args.dataset, data=args.dataset, data_in=args.data_in, max_records=args.max_records)
-    raw_records = list(adapter)
-    if not raw_records:
+    records = list(adapter)
+    if not records:
         raise RuntimeError("No records loaded from dataset")
-    records = uniquify_reddit_records(raw_records)
     spec_key = f"{args.dataset}_{args.target}"
     spec: Optional[UtilitySpec] = UTILITY_EXPERIMENTS_REGISTRY.get(spec_key)
     if spec is None:

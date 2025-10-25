@@ -17,7 +17,7 @@ from dp.experiments.divergence import (
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
 from dp.experiments.utility.base import TextUtilityExperiment
 from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, TfidfTextVectorizer, BERTVectorizer
-from dp.experiments.utils import build_output_sink, collect_jsonl_sources, uniquify_records
+from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
 from dp.loaders.annotations import read_batch_annotations_from_path
 from run_divergence_experiment import (
@@ -179,10 +179,9 @@ def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     if 'params' in vectorizer_config and 'ngram_range' in vectorizer_config['params']:
         vectorizer_config['params']['ngram_range'] = tuple(vectorizer_config['params']['ngram_range'])
     vectorizer = build_vectorizer_from_config(vectorizer_config)
-    raw_records = load_records(dataset, data_in, max_records)
-    if not raw_records:
+    records = load_records(dataset, data_in, max_records)
+    if not records:
         raise RuntimeError("no records loaded")
-    records = uniquify_records(raw_records)
     spec_key = f"{dataset}_{target}"
     spec: Optional[UtilitySpec] = UTILITY_EXPERIMENTS_REGISTRY.get(spec_key)
     if spec is None:
@@ -245,10 +244,9 @@ def handle_divergence(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     output_format = params.get("output_format", "text")
     output_file = params.get("output_file")
     metric_type, metric_params = parse_metric_config(params.get("metric"))
-    raw_records = load_records(dataset, data_in, max_records)
-    if not raw_records:
+    records = load_records(dataset, data_in, max_records)
+    if not records:
         raise RuntimeError("no records loaded")
-    records = uniquify_records(raw_records)
     sources = collect_jsonl_sources(*annotations)
     if not sources:
         raise RuntimeError("no anonymized output files discovered")
@@ -300,10 +298,9 @@ def handle_privacy(args: argparse.Namespace, config: Dict[str, Any]) -> None:
         progress = True
     output_format = params.get("output_format", "text")
     output_file = params.get("output_file")
-    raw_records = load_records(dataset, data_in, max_records)
-    if not raw_records:
+    records = load_records(dataset, data_in, max_records)
+    if not records:
         raise RuntimeError("no records loaded")
-    records = uniquify_records(raw_records)
     sources = collect_jsonl_sources(*annotations)
     if not sources:
         raise RuntimeError("no annotation files discovered")
@@ -338,6 +335,15 @@ def handle_privacy(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     outputter.output(report)
 
 
+def build_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--config", type=str, help="Path to experiment config file")
+    parser.add_argument("--dataset", type=str, help="Path to dataset file")
+    parser.add_argument("--data-in", type=str, help="Path to dataset input")
+    parser.add_argument("--max-records", type=int, help="Maximum number of records to load")
+    parser.add_argument("--annotations_in", type=str, nargs="+", help="Paths to anonymized output files")
+    parser.add_argument("--output-format", type=str, choices=["text", "json", "jsonl"], help="Output format")
+    parser.add_argument("--output-file", type=str, help="Path to output file")
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run experiments",
@@ -347,48 +353,26 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.required = True
 
     utility = subparsers.add_parser("utility", help="Run utility experiment", argument_default=argparse.SUPPRESS)
-    utility.add_argument("--config")
-    utility.add_argument("--dataset")
-    utility.add_argument("--data-in")
-    utility.add_argument("--annotations", nargs="+")
-    utility.add_argument("--annotations-in", nargs="+")
+    build_args(utility)
     utility.add_argument("--target")
-    utility.add_argument("--max-records", type=int)
     utility.add_argument("--test-size", type=float)
     utility.add_argument("--random-state", type=int)
-    utility.add_argument("--output-format", choices=["text", "json", "jsonl"])
-    utility.add_argument("--output-file")
     utility.add_argument("--dry-run", action="store_true")
     utility.add_argument("--vectorizer")
     utility.set_defaults(handler=handle_utility)
 
     divergence = subparsers.add_parser("divergence", help="Run divergence experiment", argument_default=argparse.SUPPRESS)
-    divergence.add_argument("--config")
-    divergence.add_argument("--dataset")
-    divergence.add_argument("--data-in")
-    divergence.add_argument("--annotations", nargs="+")
-    divergence.add_argument("--annotations-in", nargs="+")
-    divergence.add_argument("--max-records", type=int)
+    build_args(divergence)
     divergence.add_argument("--metric")
-    divergence.add_argument("--output-format", choices=["text", "json", "jsonl"])
-    divergence.add_argument("--output-file")
     divergence.set_defaults(handler=handle_divergence)
 
     privacy = subparsers.add_parser("privacy", help="Run privacy experiment", argument_default=argparse.SUPPRESS)
-    privacy.add_argument("--config")
-    privacy.add_argument("--dataset")
-    privacy.add_argument("--data-in")
-    privacy.add_argument("--annotations", nargs="+")
-    privacy.add_argument("--annotations-in", nargs="+")
-    privacy.add_argument("--max-records", type=int)
+    build_args(privacy)
     privacy.add_argument("--tri-pipeline")
     privacy.add_argument("--tri-max-length", type=int)
     privacy.add_argument("--tri-device")
     privacy.add_argument("--mask-token")
-    privacy.add_argument("--output-format", choices=["text", "json", "jsonl"])
-    privacy.add_argument("--output-file")
     privacy.add_argument("--progress", action="store_true")
-    privacy.add_argument("--no-progress", action="store_true")
     privacy.set_defaults(handler=handle_privacy)
 
     return parser

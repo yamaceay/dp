@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from dp.experiments.utility.base import UtilityTarget
 from dp.loaders.base import DatasetRecord
+from dp.experiments.utility.base import UtilityTarget
 
 def _text_value(value: Any) -> Optional[str]:
     if value is None:

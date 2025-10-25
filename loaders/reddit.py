@@ -42,7 +42,6 @@ class RedditDatasetAdapter(DatasetAdapter):
             if not text:
                 continue
             persona_raw = row.get("personality") or {}
-            identity = self._identity_key(persona_raw)
             persona_hash = self._hash_persona(persona_raw)
 
             persona = {}
@@ -61,8 +60,8 @@ class RedditDatasetAdapter(DatasetAdapter):
             }
             yield DatasetRecord(
                 text=text,
-                uid=persona_hash,
-                name=identity,
+                uid=f"reddit_{idx + 1}",
+                name=persona_hash,
                 metadata=metadata,
             )
             count += 1

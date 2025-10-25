@@ -96,3 +96,8 @@ class BERTVectorizer(SelfSupervisedFeatureExtractor):
                 embeddings = outputs.last_hidden_state.mean(dim=1).cpu().numpy()
                 all_embeddings.append(embeddings)
         return np.vstack(all_embeddings)
+
+FEATURE_EXTRACTOR_REGISTRY: Dict[str, SelfSupervisedFeatureExtractor] = {
+    "tfidf": TfidfTextVectorizer(),
+    "bert": BERTVectorizer(),
+}

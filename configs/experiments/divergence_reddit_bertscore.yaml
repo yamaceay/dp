@@ -1,6 +1,6 @@
 dataset: reddit
 data_in: data/reddit/train.jsonl
-annotations:
+annotations_in:
   - logs/divergence/example.jsonl
 metric:
   type: bertscore

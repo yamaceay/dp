@@ -34,51 +34,6 @@ def _first_text(*values: Any) -> str:
                 return text
     return ""
 
-def uniquify_records(
-    records: Sequence[DatasetRecord],
-    *,
-    identity_fields: Sequence[str] = ("uid", "name"),
-    metadata_identity_keys: Sequence[str] = ("persona_uid", "uid", "name"),
-    fallback_prefix: str = "record",
-) -> List[DatasetRecord]:
-    counts: Dict[str, int] = {}
-    output: List[DatasetRecord] = []
-    for index, record in enumerate(records, start=1):
-        identity_sources: List[Any] = []
-        for field in identity_fields:
-            identity_sources.append(getattr(record, field, None))
-        metadata = dict(record.metadata or {})
-        for key in metadata_identity_keys:
-            identity_sources.append(metadata.get(key))
-        base = _first_text(*identity_sources)
-        if not base:
-            base = f"{fallback_prefix}_{index}"
-        occurrence = counts.get(base, 0)
-        counts[base] = occurrence + 1
-        uid = base if occurrence == 0 else f"{base}#{occurrence}"
-        persona_uid = _first_text(metadata.get("persona_uid"), base)
-        metadata["persona_uid"] = persona_uid
-        metadata["record_index"] = index
-        spans = list(record.spans) if record.spans else None
-        output.append(
-            DatasetRecord(
-                text=record.text,
-                uid=uid,
-                name=record.name,
-                spans=spans,
-                metadata=metadata,
-            )
-        )
-    return output
-
-def uniquify_reddit_records(records: Sequence[DatasetRecord]) -> List[DatasetRecord]:
-    return uniquify_records(
-        records,
-        identity_fields=("uid", "name"),
-        metadata_identity_keys=("persona_uid", "uid", "name"),
-        fallback_prefix="record",
-    )
-
 def collect_jsonl_sources(*paths: str) -> Dict[str, Path]:
     resolved_paths = [Path(p) for p in paths]
     entries: List[Tuple[str, Path]] = []

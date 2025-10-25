@@ -174,3 +174,18 @@ class FeedForwardRegressor(SupervisedDownstreamHead):
         if self._model is not None:
             self._model.delete()
             self._model = None
+
+DOWNSTREAM_CLASSIFIER_HEAD_REGISTRY: Dict[str, SupervisedDownstreamHead] = {
+    "logistic_classifier": LogisticClassifier(),
+    "feedforward_classifier": FeedForwardClassifier(),
+}
+
+DOWNSTREAM_REGRESSOR_HEAD_REGISTRY: Dict[str, SupervisedDownstreamHead] = {
+    "linear_regressor": LinearRegressor(), 
+    "feedforward_regressor": FeedForwardRegressor(),
+}
+
+DOWNSTREAM_HEAD_REGISTRY: Dict[str, SupervisedDownstreamHead] = {
+    **DOWNSTREAM_CLASSIFIER_HEAD_REGISTRY,
+    **DOWNSTREAM_REGRESSOR_HEAD_REGISTRY,
+}

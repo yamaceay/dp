@@ -7,10 +7,10 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from sklearn.model_selection import StratifiedShuffleSplit
 
-from dp.experiments import Experiment, ExperimentResult
 from dp.loaders.base import DatasetRecord
-from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, TfidfTextVectorizer
-from dp.experiments.utility.models import SupervisedDownstreamHead
+from dp.experiments import Experiment, ExperimentResult
+from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor
+from dp.experiments.utility.downstream import SupervisedDownstreamHead
 
 class UtilityTarget:
     class Mode(Enum):

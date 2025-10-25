@@ -20,21 +20,23 @@ def add_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark Anonymization Tools")
     add_data_args(parser)
+    parser.add_argument('--full_record', action='store_true', help='Print full record details')
 
     args = parser.parse_args()
 
     dataset = load_data(args.data, args.data_in, args.max_records)
 
     unique_uids = set()
-    texts = []
-
+    unique_names = set()
     utility_keys = set()
 
     for record in dataset.iter_records():
+        if args.full_record:
+            print(record)
+        unique_names.add(record.name)
         unique_uids.add(record.uid)
-        texts.append(record.text[:100])
         utility_keys.update(record.metadata.keys())
 
-    print(f"Total individuals loaded: {len(unique_uids)}")
-    print(f"Total records loaded: {len(texts)}")
+    print(f"Total individuals loaded: {len(unique_names)}")
+    print(f"Total records loaded: {len(unique_uids)}")
     print(f"Utility keys found: {', '.join(utility_keys)}")

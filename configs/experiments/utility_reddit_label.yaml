@@ -1,6 +1,6 @@
 dataset: reddit
 data_in: data/reddit/train.jsonl
-annotations:
+annotations_in:
   - outputs/reddit
 target: label
 test_size: 0.2
