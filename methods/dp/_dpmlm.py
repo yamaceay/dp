@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import torch
 import numpy as np
 import string
@@ -235,7 +235,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         probs = positive_scores / positive_scores.sum()
         return probs
 
-    def _grid_anonymize(self, text: str, epsilon: List[float], *args, **kwargs) -> Dict[float, List[AnonymizationResult]]:
+    def _grid_anonymize(self, text: str, epsilon: List[float], *args, tokenwise_epsilon_temperature: Optional[float] = None, **kwargs) -> Dict[float, List[AnonymizationResult]]:
         if not epsilon:
             raise ValueError("epsilon must contain at least one value")
         ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
@@ -261,46 +261,47 @@ class DPMlmAnonymizer(DPAnonymizer):
             if token in string.punctuation:
                 continue
             
-            is_pii = False
-            if pii_spans:
-                is_pii = any(
-                    not (token_end <= span.start or token_start >= span.end)
-                    for span in pii_spans
-                )
-            
-            if pii_spans and not is_pii:
+            if pii_spans and not any(
+                not (token_end <= span.start or token_start >= span.end)
+                for span in pii_spans
+            ):
                 continue
-            
+
             critical_indices.append(i)
             critical_tokens.append(token)
 
+        if not critical_indices or not critical_tokens:
+            return {
+                eps: [
+                    AnonymizationResult(
+                        text=text,
+                        metadata={"epsilon": eps, "method": "dpmlm", "perturbed": 0, "total": 0},
+                    )
+                ]
+                for eps in ordered_eps
+            }
+
         perturbation_ratio = 1.0
-        if self.compensate_epsilon and critical_indices:
+        if self.compensate_epsilon:
             non_punctuation_total = sum(1 for t in tokens if t not in string.punctuation)
             if non_punctuation_total > 0:
                 perturbation_ratio = len(critical_indices) / non_punctuation_total
                 perturbation_ratio = max(perturbation_ratio, 1e-6)
 
-        scores = None
-        probs = None
-        explainability_temperature = kwargs.get("explainability_temperature", 0.1)
-        if self.explainer is not None and critical_tokens:
-            try:
-                scores = self.explainer.explain(text, critical_tokens)
-                if scores is not None and len(scores) == len(critical_tokens):
-                    probs = self._weights_to_probs(np.array(scores), temperature=explainability_temperature)
-            except Exception as e:
-                print(f"Warning: Explainer failed ({e}), using uniform epsilon")
+        probs = np.ones(len(critical_tokens)) / len(critical_tokens)
+        if tokenwise_epsilon_temperature is None:
+            tokenwise_epsilon_temperature = 1.0
+
+        if self.explainer is not None:
+            scores = self.explainer.explain(text, critical_tokens)
+            if scores is not None and len(scores) == len(critical_tokens):
+                probs = self._weights_to_probs(np.array(scores), temperature=tokenwise_epsilon_temperature)
         
         results: Dict[float, List[AnonymizationResult]] = {eps: [] for eps in ordered_eps}
         for eps in ordered_eps:
             compensated_epsilon = eps * perturbation_ratio
-            epsilon_values = [compensated_epsilon] * len(critical_indices)
-            
-            if probs is not None:
-                epsilon_values = [compensated_epsilon / (w * len(probs)) for w in probs]
-                epsilon_values = np.clip(epsilon_values, 1e-6, compensated_epsilon * len(probs))
-            
+            epsilon_values = [compensated_epsilon / (w * len(probs)) for w in probs]
+
             critical_map = {idx: eps_val for idx, eps_val in zip(critical_indices, epsilon_values)}
             
             perturbed = 0
@@ -336,8 +337,6 @@ class DPMlmAnonymizer(DPAnonymizer):
 
                 token_epsilon = critical_map.get(i, compensated_epsilon)
                 private_token = self._privatize_token(text, token, token_offset, token_epsilon)
-
-                print(f"Token '{token}' privatized to '{private_token}' with ε={token_epsilon:.4f}")
 
                 original_text = text[token_start:token_end]
                 if len(private_token) == len(original_text):

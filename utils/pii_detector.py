@@ -250,8 +250,8 @@ class PIIDetector:
         trainer.save_model(output_dir)
         self.tokenizer.save_pretrained(output_dir)
         print(f"Training complete! Model saved to {output_dir}")
-    
-    def predict(self, records: List[DatasetRecord]) -> List[DatasetRecord]:
+
+    def predict(self, records: List[DatasetRecord], verbose: bool = False) -> List[DatasetRecord]:
         if not records:
             return []
         
@@ -317,8 +317,9 @@ class PIIDetector:
                 metadata={**record.metadata, "predicted": True},
             )
             results.append(new_record)
-        
-        print(f"✓ Predicted spans for {len(records)} records")
+
+        if verbose:
+            print(f"✓ Predicted spans for {len(records)} records")
         return results
     
     def evaluate(self, records: List[DatasetRecord], use_nervaluate: bool = True, modes: Optional[List[str]] = None) -> Dict[str, Any]:
