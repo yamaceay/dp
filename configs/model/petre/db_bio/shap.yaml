@@ -1,0 +1,7 @@
+explainability: shap
+explainer_path: models/tri_pipelines/db_bio/20251021_114347
+
+mask_text: "[MASK]"
+
+tri_chunking:
+  enabled: false

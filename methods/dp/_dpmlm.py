@@ -337,7 +337,7 @@ class DPMlmAnonymizer(DPAnonymizer):
                 token_epsilon = critical_map.get(i, compensated_epsilon)
                 private_token = self._privatize_token(text, token, token_offset, token_epsilon)
 
-                # print(f"Token '{token}' privatized to '{private_token}' with ε={token_epsilon:.4f}")
+                print(f"Token '{token}' privatized to '{private_token}' with ε={token_epsilon:.4f}")
 
                 original_text = text[token_start:token_end]
                 if len(private_token) == len(original_text):

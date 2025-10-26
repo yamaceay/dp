@@ -1,16 +1,9 @@
-compensate_epsilon: false
 add_probability: 0.0
 delete_probability: 0.0
 
-pii_annotator: models/pii_detectors/tab/20251021_093003
-pii_threshold: 0.7
-
-explainability: greedy
+explainability: shap
 explainer_path: models/tri_pipelines/tab/20251020_223625
 explainability_temperature: 0.1
-
-pii_chunking:
-  enabled: true
 
 tri_chunking:
   enabled: true
