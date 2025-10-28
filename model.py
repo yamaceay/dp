@@ -4,7 +4,7 @@ import yaml
 import time
 from datetime import datetime
 
-from dp.methods.anonymizer import Anonymizer
+from dp.methods.anonymizer import Anonymizer, AnonymizationBuilder
 from dp.methods.registry import MODEL_REGISTRY
 from dp.methods.constants import get_capabilities
 from dp.loaders import (
@@ -44,7 +44,9 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--annotations', type=str, choices=['spacy', 'presidio', 'manual'], default=None, help='Type of starting annotations relevant for data preprocessing')
     parser.add_argument('--annotations_in', type=str, default=None, metavar='SOURCES', help='Load annotations from previous run (format: path/to/file.jsonl, comma-separated for multiple sources)')
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
-    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations']
+    parser.add_argument('--stream', action='store_true', help='Stream outputs (recommended for jsonl) instead of buffering all results')
+    parser.add_argument('--start_idx', type=int, default=0, help='Starting index for streaming output (default: 0)')
+    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream', 'start_idx']
 
 def load_config(sth_in: Optional[str]) -> dict:
     config = {}
@@ -155,6 +157,94 @@ def output_results(
             print(f"Result {i+1}/{total_results}")
             print('='*80)
         output_handler.output(result, idx=idx, **output_kwargs)
+
+
+def stream_anonymization(
+    *,
+    anonymizer: Anonymizer,
+    builder: AnonymizationBuilder,
+    capabilities,
+    runtime_config: Dict[str, Any],
+    dataset_name: str,
+    model_name: str,
+    output_handler,
+    indices: Optional[List[int]],
+    texts: Optional[List[str]],
+    text_indices: Optional[List[Optional[int]]],
+    start_idx: int,
+    ) -> Tuple[int, float]:
+    start_idx = max(start_idx or 0, 0)
+    processed = 0
+    run_start = time.time()
+
+    if capabilities.requires_k:
+        if indices is None:
+            raise ValueError("Streaming requires dataset indices for k-anonymization methods.")
+        stream = builder.anonymize_stream(**runtime_config)
+        for position, per_idx in enumerate(stream):
+            idx_value = indices[position]
+            if idx_value < start_idx:
+                continue
+            for results in per_idx.values():
+                for result in results:
+                    output_handler.output(result, idx=idx_value, dataset=dataset_name, model=model_name)
+            processed += 1
+
+    elif capabilities.must_use_dataset:
+        if indices is None:
+            raise ValueError("Streaming requires dataset indices for dataset-based methods.")
+        filtered_kwargs = dict(runtime_config)
+        for idx in indices:
+            if idx < start_idx:
+                continue
+            result = anonymizer.anonymize_from_dataset(idx=idx, **filtered_kwargs)
+            output_handler.output(result, idx=idx, dataset=dataset_name, model=model_name)
+            processed += 1
+
+    elif capabilities.requires_epsilon:
+        if texts is None or not texts:
+            raise ValueError("Streaming requires texts for DP methods.")
+        if text_indices is None or len(text_indices) != len(texts):
+            text_indices = [None] * len(texts)
+        stream = builder.anonymize_stream(**runtime_config)
+        for position, per_text in enumerate(stream):
+            idx_value = text_indices[position]
+            effective_idx = idx_value if idx_value is not None else position
+            if effective_idx < start_idx:
+                continue
+            target_idx = idx_value if idx_value is not None else effective_idx
+            for results in per_text.values():
+                for result in results:
+                    output_handler.output(
+                        result,
+                        idx=target_idx,
+                        dataset=dataset_name,
+                        model=model_name,
+                    )
+            processed += 1
+
+    else:
+        if texts is None or not texts:
+            raise ValueError("Streaming requires texts for this method.")
+        filtered_kwargs = dict(runtime_config)
+        if text_indices is None or len(text_indices) != len(texts):
+            text_indices = [None] * len(texts)
+        for pos, text in enumerate(texts):
+            idx_value = text_indices[pos]
+            effective_idx = idx_value if idx_value is not None else pos
+            if effective_idx < start_idx:
+                continue
+            result = anonymizer.anonymize(text=text, **filtered_kwargs)
+            output_handler.output(
+                result,
+                idx=idx_value if idx_value is not None else effective_idx,
+                dataset=dataset_name,
+                model=model_name,
+            )
+            processed += 1
+
+    elapsed = time.time() - run_start
+    return processed, elapsed
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Batch Anonymization - Process Multiple Records")
@@ -166,6 +256,14 @@ if __name__ == "__main__":
     data_kwargs = {k: getattr(args, k) for k in data_keys}
     model_kwargs = {k: getattr(args, k) for k in model_keys}
     runtime_kwargs = {k: getattr(args, k) for k in runtime_keys}
+    stream_enabled = runtime_kwargs.pop("stream", False)
+    start_idx = runtime_kwargs.pop("start_idx", 0)
+    if start_idx is None:
+        start_idx = 0
+    if start_idx < 0:
+        raise ValueError("--start_idx must be non-negative")
+    if start_idx > 0 and not stream_enabled:
+        raise ValueError("--start_idx can only be used together with --stream")
 
     if args.list_annotations:
         print(f"Available annotations for {args.data}/{args.model}:")
@@ -282,6 +380,10 @@ if __name__ == "__main__":
             for idx in indices:
                 if idx < 0 or idx >= len(dataset):
                     raise ValueError(f"Index {idx} is out of bounds for dataset of length {len(dataset)}.")
+        if stream_enabled and start_idx > 0:
+            indices = [idx for idx in indices if idx >= start_idx]
+            if not indices:
+                raise ValueError("No indices remain after applying --start_idx for streaming run.")
         
         builder.with_indices(indices)
         text_indices = indices  # For dataset methods, use indices as text_indices
@@ -299,6 +401,18 @@ if __name__ == "__main__":
                 text_indices = list(range(len(texts)))
         else:
             text_indices = [None] * len(texts)
+        if stream_enabled and start_idx > 0:
+            filtered_texts: List[str] = []
+            filtered_indices: List[Optional[int]] = []
+            for pos, (text, idx_val) in enumerate(zip(texts, text_indices)):
+                effective_idx = idx_val if idx_val is not None else pos
+                if effective_idx >= start_idx:
+                    filtered_texts.append(text)
+                    filtered_indices.append(idx_val)
+            if not filtered_texts:
+                raise ValueError("No texts remain after applying --start_idx for streaming run.")
+            texts = filtered_texts
+            text_indices = filtered_indices
         
         builder.with_texts(texts)
 
@@ -310,6 +424,7 @@ if __name__ == "__main__":
             k = k[0]
         
         builder.with_ks(k)
+        runtime_config["k"] = k
 
     if capabilities.requires_epsilon:
         epsilon = runtime_config.get("epsilon", 100.0)
@@ -319,47 +434,67 @@ if __name__ == "__main__":
             epsilon = epsilon[0]
         
         builder.with_epsilons(epsilon)
+        runtime_config["epsilon"] = epsilon
 
-    start_time = time.time()
-    results = builder.anonymize(**runtime_config)
-    end_time = time.time()
-    
-    total_time = end_time - start_time
-    num_texts = len(texts) if not capabilities.must_use_dataset else len(indices)
-    avg_time = total_time / num_texts if num_texts > 0 else 0
-    
-    print(f"\n{'='*80}")
-    print(f"Anonymization Performance:")
-    print(f"  Total time: {total_time:.2f}s")
-    print(f"  Texts processed: {num_texts}")
-    print(f"  Average time per text: {avg_time:.2f}s")
-    print(f"  Throughput: {num_texts/total_time:.2f} texts/s" if total_time > 0 else "  Throughput: N/A")
-    print('='*80)
+    if stream_enabled:
+        if args.output != "jsonl":
+            raise ValueError("--stream is currently supported only with --output jsonl")
+        if not capabilities.supports_streaming:
+            raise ValueError(f"{args.model} does not support --stream mode")
+        processed, total_time = stream_anonymization(
+            anonymizer=model,
+            builder=builder,
+            capabilities=capabilities,
+            runtime_config=runtime_config,
+            dataset_name=args.data,
+            model_name=args.model,
+            output_handler=output_handler,
+            indices=indices,
+            texts=texts,
+            text_indices=text_indices,
+            start_idx=start_idx,
+        )
+    else:
+        start_time = time.time()
+        results = builder.anonymize(**runtime_config)
+        end_time = time.time()
+        total_time = end_time - start_time
+        num_texts = len(texts) if not capabilities.must_use_dataset else len(indices)
+        flattened = flatten_results(results, text_indices)
 
-    flattened = flatten_results(results, text_indices)
-
-    if isinstance(flattened, dict):
-        for grid_value, (flat_res, flat_indices) in flattened.items():
-            header = f"Grid value: {grid_value}"
+        if isinstance(flattened, dict):
+            for grid_value, (flat_res, flat_indices) in flattened.items():
+                header = f"Grid value: {grid_value}"
+                output_results(
+                    flat_res,
+                    flat_indices,
+                    output_handler,
+                    verbose=args.output not in ["jsonl"],
+                    header=header,
+                    dataset=args.data,
+                    model=args.model,
+                )
+        else:
+            flat_res, flat_indices = flattened
             output_results(
                 flat_res,
                 flat_indices,
                 output_handler,
                 verbose=args.output not in ["jsonl"],
-                header=header,
                 dataset=args.data,
                 model=args.model,
             )
-    else:
-        flat_res, flat_indices = flattened
-        output_results(
-            flat_res,
-            flat_indices,
-            output_handler,
-            verbose=args.output not in ["jsonl"],
-            dataset=args.data,
-            model=args.model,
-        )
+
+        processed = num_texts
+    
+    avg_time = total_time / processed if processed > 0 else 0
+    print(f"\n{'='*80}")
+    print(f"Anonymization Performance:")
+    print(f"  Total time: {total_time:.2f}s")
+    print(f"  Texts processed: {processed}")
+    print(f"  Average time per text: {avg_time:.2f}s")
+    print(f"  Throughput: {processed/total_time:.2f} texts/s" if total_time > 0 and processed > 0 else "  Throughput: N/A")
+    print('='*80)
  
     if hasattr(output_handler, 'close'):
         output_handler.close()

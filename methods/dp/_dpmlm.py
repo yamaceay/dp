@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Optional
+from typing import Iterator, List, Tuple, Optional
 import torch
 import numpy as np
 import string
@@ -235,20 +235,21 @@ class DPMlmAnonymizer(DPAnonymizer):
         probs = positive_scores / positive_scores.sum()
         return probs
 
-    def _grid_anonymize(self, text: str, epsilon: List[float], *args, tokenwise_epsilon_temperature: Optional[float] = None, **kwargs) -> Dict[float, List[AnonymizationResult]]:
+    def _grid_anonymize_stream(
+        self,
+        text: str,
+        epsilon: List[float],
+        *args,
+        tokenwise_epsilon_temperature: Optional[float] = None,
+        **kwargs,
+    ) -> Iterator[Tuple[float, List[AnonymizationResult]]]:
         if not epsilon:
-            raise ValueError("epsilon must contain at least one value")
-        ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
+            return
         if not text or not text.strip():
-            return {
-                eps: [
-                    AnonymizationResult(
-                        text="",
-                        metadata={"epsilon": eps, "method": "dpmlm"},
-                    )
-                ]
-                for eps in ordered_eps
-            }
+            for eps in epsilon:
+                yield eps, [AnonymizationResult(text="", metadata={"epsilon": eps, "method": "dpmlm"})]
+            return
+
         tokens, offsets = self._tokenize(text)
 
         pii_spans = []
@@ -260,26 +261,18 @@ class DPMlmAnonymizer(DPAnonymizer):
         for i, (token, (token_start, token_end)) in enumerate(zip(tokens, offsets)):
             if token in string.punctuation:
                 continue
-            
             if pii_spans and not any(
                 not (token_end <= span.start or token_start >= span.end)
                 for span in pii_spans
             ):
                 continue
-
             critical_indices.append(i)
             critical_tokens.append(token)
 
         if not critical_indices or not critical_tokens:
-            return {
-                eps: [
-                    AnonymizationResult(
-                        text=text,
-                        metadata={"epsilon": eps, "method": "dpmlm", "perturbed": 0, "total": 0},
-                    )
-                ]
-                for eps in ordered_eps
-            }
+            for eps in epsilon:
+                yield eps, [AnonymizationResult(text=text, metadata={"epsilon": eps, "method": "dpmlm", "perturbed": 0, "total": 0})]
+            return
 
         perturbation_ratio = 1.0
         if self.compensate_epsilon:
@@ -288,49 +281,48 @@ class DPMlmAnonymizer(DPAnonymizer):
                 perturbation_ratio = len(critical_indices) / non_punctuation_total
                 perturbation_ratio = max(perturbation_ratio, 1e-6)
 
-        probs = np.ones(len(critical_tokens)) / len(critical_tokens)
         if tokenwise_epsilon_temperature is None:
             tokenwise_epsilon_temperature = 1.0
 
+        probs = np.ones(len(critical_tokens)) / len(critical_tokens)
         if self.explainer is not None:
             scores = self.explainer.explain(text, critical_tokens)
             if scores is not None and len(scores) == len(critical_tokens):
                 probs = self._weights_to_probs(np.array(scores), temperature=tokenwise_epsilon_temperature)
-        
-        results: Dict[float, List[AnonymizationResult]] = {eps: [] for eps in ordered_eps}
-        for eps in ordered_eps:
+
+        for eps in epsilon:
             compensated_epsilon = eps * perturbation_ratio
             epsilon_values = [compensated_epsilon / (w * len(probs)) for w in probs]
-
             critical_map = {idx: eps_val for idx, eps_val in zip(critical_indices, epsilon_values)}
-            
+
             perturbed = 0
             total = 0
             added = 0
             deleted = 0
-            replaced_tokens = []            
+            replaced_tokens = []
+
             for i, (token, token_offset) in enumerate(zip(tokens, offsets)):
                 if token in string.punctuation:
                     replaced_tokens.append(token)
                     total += 1
                     continue
 
-                token_start, token_end = token_offset  
+                token_start, token_end = token_offset
                 is_pii = False
                 if pii_spans:
                     is_pii = any(
                         not (token_end <= span.start or token_start >= span.end)
                         for span in pii_spans
                     )
-                
+
                 if pii_spans and not is_pii:
                     replaced_tokens.append(token)
                     total += 1
                     continue
 
-                is_last_token = (i == len(tokens) - 1)
+                is_last_token = i == len(tokens) - 1
                 delete_prob = np.random.rand()
-                
+
                 if delete_prob < self.delete_probability and not is_last_token:
                     deleted += 1
                     continue
@@ -340,7 +332,7 @@ class DPMlmAnonymizer(DPAnonymizer):
 
                 original_text = text[token_start:token_end]
                 if len(private_token) == len(original_text):
-                    private_token = ''.join(
+                    private_token = "".join(
                         p.upper() if o.isupper() else p.lower()
                         for p, o in zip(private_token, original_text)
                     )
@@ -352,12 +344,12 @@ class DPMlmAnonymizer(DPAnonymizer):
                 if private_token != token:
                     perturbed += 1
                 total += 1
-                
+
                 add_prob = np.random.rand()
                 if add_prob < self.add_probability:
                     additional_token = self._generate_additional_token(
                         self.detokenizer.detokenize(replaced_tokens),
-                        token_epsilon
+                        token_epsilon,
                     )
                     if additional_token:
                         replaced_tokens.append(additional_token)
@@ -383,6 +375,4 @@ class DPMlmAnonymizer(DPAnonymizer):
                 metadata["explainer"] = self.explainer.__class__.__name__
                 metadata["critical_tokens"] = len(critical_tokens)
 
-            results[eps].append(AnonymizationResult(text=private_text, metadata=metadata))
-
-        return results
+            yield eps, [AnonymizationResult(text=private_text, metadata=metadata)]

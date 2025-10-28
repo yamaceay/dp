@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, Iterator, List, Optional, Sequence, Tuple, Union
 import torch
 from abc import abstractmethod
 
@@ -14,7 +14,6 @@ class DPAnonymizer(Anonymizer):
     def add_dataset_records(self, dataset_records):
         raise NotImplementedError("DPAnonymizer does not support dataset records.")
 
-    @abstractmethod
     def _grid_anonymize(
         self,
         text: str,
@@ -22,16 +21,39 @@ class DPAnonymizer(Anonymizer):
         *args,
         **kwargs,
     ) -> Dict[float, List[AnonymizationResult]]:
+        ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
+        if not ordered_eps:
+            raise ValueError("epsilon must contain at least one value")
+        aggregated: Dict[float, List[AnonymizationResult]] = {value: [] for value in ordered_eps}
+        for eps_value, results in self._grid_anonymize_stream(
+            text,
+            ordered_eps,
+            *args,
+            **kwargs,
+        ):
+            if eps_value not in aggregated:
+                aggregated[eps_value] = []
+            aggregated[eps_value].extend(results)
+        return aggregated
+
+    @abstractmethod
+    def _grid_anonymize_stream(
+        self,
+        text: str,
+        epsilon: List[float],
+        *args,
+        **kwargs,
+    ) -> Iterator[Tuple[float, List[AnonymizationResult]]]:
         raise NotImplementedError()
 
-    def batch_grid_anonymize(
+    def stream_batch_anonymize(
         self,
         texts: Sequence[str],
-        epsilon: List[float],
+        epsilon: Sequence[float],
         *,
         progress: bool = False,
         **kwargs,
-    ) -> Dict[float, List[List[AnonymizationResult]]]:
+    ) -> Iterator[Dict[float, List[AnonymizationResult]]]:
         if isinstance(texts, str):
             texts = [texts]
         else:
@@ -42,13 +64,52 @@ class DPAnonymizer(Anonymizer):
             ordered_eps = [float(epsilon)]
         else:
             ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
+        if not ordered_eps:
+            raise ValueError("epsilon must contain at least one value")
+        for batch in self._chunk_texts(texts, kwargs.pop("stream_batch_size", None)):
+            for per_text in self._grid_anonymize_batch(
+                batch,
+                ordered_eps,
+                progress=progress,
+                **kwargs,
+            ):
+                yield per_text
+
+    def anonymize_stream(
+        self,
+        texts: Sequence[str],
+        epsilon: Sequence[float],
+        *,
+        progress: bool = False,
+        **kwargs,
+    ) -> Iterator[Dict[float, List[AnonymizationResult]]]:
+        return self.stream_batch_anonymize(
+            texts=texts,
+            epsilon=epsilon,
+            progress=progress,
+            **kwargs,
+        )
+
+    def batch_grid_anonymize(
+        self,
+        texts: Sequence[str],
+        epsilon: List[float],
+        *,
+        progress: bool = False,
+        **kwargs,
+    ) -> Dict[float, List[List[AnonymizationResult]]]:
+        stream = self.stream_batch_anonymize(
+            texts=texts,
+            epsilon=epsilon,
+            progress=progress,
+            **kwargs,
+        )
+        if isinstance(epsilon, (int, float)):
+            ordered_eps = [float(epsilon)]
+        else:
+            ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
         aggregated: Dict[float, List[List[AnonymizationResult]]] = {value: [] for value in ordered_eps}
-        texts_iter = texts
-        if progress:
-            from tqdm import tqdm
-            texts_iter = tqdm(texts_iter, desc="DP batch anonymization")
-        for text in texts_iter:
-            per_text = self._grid_anonymize(text, ordered_eps, **kwargs)
+        for per_text in stream:
             for eps_value, per_results in per_text.items():
                 aggregated.setdefault(eps_value, []).append(per_results)
         return aggregated
@@ -61,31 +122,25 @@ class DPAnonymizer(Anonymizer):
         progress: bool = False,
         **kwargs,
     ) -> List[List[AnonymizationResult]] | Dict[float, List[List[AnonymizationResult]]]:
-        if isinstance(texts, str):
-            texts = [texts]
-        else:
-            texts = list(texts)
+        stream = self.stream_batch_anonymize(
+            texts=texts,
+            epsilon=epsilon,
+            progress=progress,
+            **kwargs,
+        )
         if isinstance(epsilon, (int, float)):
             ordered_eps = [float(epsilon)]
         else:
             ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
-        if not ordered_eps:
-            raise ValueError("epsilon must contain at least one value")
         if len(ordered_eps) > 1:
-            return self.batch_grid_anonymize(
-                texts,
-                ordered_eps,
-                progress=progress,
-                **kwargs,
-            )
+            aggregated_dict: Dict[float, List[List[AnonymizationResult]]] = {value: [] for value in ordered_eps}
+            for per_text in stream:
+                for eps_value, per_results in per_text.items():
+                    aggregated_dict.setdefault(eps_value, []).append(per_results)
+            return aggregated_dict
         single_eps = ordered_eps[0]
         aggregated: List[List[AnonymizationResult]] = []
-        texts_iter = texts
-        if progress:
-            from tqdm import tqdm
-            texts_iter = tqdm(texts_iter, desc="DP batch anonymization")
-        for text in texts_iter:
-            per_text = self._grid_anonymize(text, [single_eps], **kwargs)
+        for per_text in stream:
             aggregated.append(per_text[single_eps])
         return aggregated
 
@@ -121,3 +176,35 @@ class DPAnonymizer(Anonymizer):
                 return torch.device(f"cuda:{device}")
             return torch.device("cpu")
         return torch.device("cpu")
+
+    def _grid_anonymize_batch(
+        self,
+        texts: Sequence[str],
+        ordered_eps: List[float],
+        *,
+        progress: bool,
+        **kwargs,
+    ) -> Iterator[Dict[float, List[AnonymizationResult]]]:
+        iterator = texts
+        if progress:
+            from tqdm import tqdm
+            iterator = tqdm(iterator, desc="DP batch anonymization")
+        for text in iterator:
+            per_text: Dict[float, List[AnonymizationResult]] = {value: [] for value in ordered_eps}
+            for eps_value, results in self._grid_anonymize_stream(
+                text,
+                ordered_eps,
+                **kwargs,
+            ):
+                if eps_value not in per_text:
+                    per_text[eps_value] = []
+                per_text[eps_value].extend(results)
+            yield per_text
+
+    def _chunk_texts(self, texts: List[str], batch_size: Optional[int]) -> Iterator[List[str]]:
+        if batch_size is None or batch_size <= 0:
+            yield list(texts)
+            return
+        total = len(texts)
+        for start in range(0, total, batch_size):
+            yield texts[start:start + batch_size]

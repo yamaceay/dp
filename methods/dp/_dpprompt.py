@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Iterator, List, Optional, Tuple
 import torch
 
 from dp.methods.anonymizer import AnonymizationResult
@@ -56,36 +56,33 @@ class DPPromptAnonymizer(DPAnonymizer):
             return input_ids[0]
         return input_ids or []
 
-    def _grid_anonymize(self, text: str, epsilon: List[float], *args, **kwargs) -> Dict[float, List[AnonymizationResult]]:
+    def _grid_anonymize_stream(
+        self,
+        text: str,
+        epsilon: List[float],
+        *args,
+        **kwargs,
+    ) -> Iterator[Tuple[float, List[AnonymizationResult]]]:
         if not epsilon:
-            raise ValueError("epsilon must contain at least one value")
-        ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
+            return
         if not text or not text.strip():
-            return {
-                eps: [
-                    AnonymizationResult(
-                        text="",
-                        metadata={"epsilon": eps, "method": "dpprompt"},
-                    )
-                ]
-                for eps in ordered_eps
-            }
-        
+            for eps in epsilon:
+                yield eps, [AnonymizationResult(text="", metadata={"epsilon": eps, "method": "dpprompt"})]
+            return
+
         prompt = self._create_prompt(text)
         prompt_ids = self._encode_without_special(prompt)
         max_new_tokens = len(prompt_ids)
-        
+
         model_inputs = self.tokenizer(
             prompt,
             return_tensors="pt",
             truncation=True,
         ).to(self.device)
-        
-        results: Dict[float, List[AnonymizationResult]] = {eps: [] for eps in ordered_eps}
+
         with torch.no_grad():
-            for eps in ordered_eps:
+            for eps in epsilon:
                 temperature = 2 * self.sensitivity / eps
-                
                 output = self.model.generate(
                     **model_inputs,
                     do_sample=True,
@@ -95,16 +92,11 @@ class DPPromptAnonymizer(DPAnonymizer):
                     max_new_tokens=max_new_tokens,
                     logits_processor=self.logits_processor,
                 )
-                
                 private_text = self.tokenizer.decode(output[0], skip_special_tokens=True).strip()
-                
                 metadata = {
                     "epsilon": eps,
                     "method": "dpprompt",
                     "model": self.model_checkpoint,
                     "temperature": temperature,
                 }
-                
-                results[eps].append(AnonymizationResult(text=private_text, metadata=metadata))
-
-        return results
+                yield eps, [AnonymizationResult(text=private_text, metadata=metadata)]

@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Iterator, List, Tuple
 import torch
 import numpy as np
 from transformers.modeling_outputs import BaseModelOutput
@@ -51,65 +51,49 @@ class DPBartAnonymizer(DPAnonymizer):
         noise = torch.from_numpy(np.random.normal(0, scale, size=vector.shape)).float()
         return vector + noise.to(vector.device)
 
-    def _grid_anonymize(self, text: str, epsilon: List[float], *args, **kwargs) -> Dict[float, List[AnonymizationResult]]:
+    def _grid_anonymize_stream(
+        self,
+        text: str,
+        epsilon: List[float],
+        *args,
+        **kwargs,
+    ) -> Iterator[Tuple[float, List[AnonymizationResult]]]:
         if not epsilon:
-            raise ValueError("epsilon must contain at least one value")
-        ordered_eps = [float(e) for e in dict.fromkeys(epsilon)]
+            return
         if not text or not text.strip():
-            return {
-                eps: [
-                    AnonymizationResult(
-                        text="",
-                        metadata={"epsilon": eps, "delta": self.delta, "method": "dpbart"},
-                    )
-                ]
-                for eps in ordered_eps
-            }
-        
+            for eps in epsilon:
+                yield eps, [AnonymizationResult(text="", metadata={"epsilon": eps, "delta": self.delta, "method": "dpbart"})]
+            return
+
         inputs = self.tokenizer(
             text,
             max_length=self.max_length,
             truncation=True,
             return_tensors="pt",
         ).to(self.device)
-        
+
         if inputs["input_ids"].shape[-1] == 0:
-            return {
-                eps: [
-                    AnonymizationResult(
-                        text="",
-                        metadata={"epsilon": eps, "delta": self.delta, "method": "dpbart"},
-                    )
-                ]
-                for eps in ordered_eps
-            }
-        
+            for eps in epsilon:
+                yield eps, [AnonymizationResult(text="", metadata={"epsilon": eps, "delta": self.delta, "method": "dpbart"})]
+            return
+
         num_tokens = len(inputs["input_ids"][0])
-        
+
         with torch.no_grad():
             enc_output = self.model.encoder(**inputs)
             clipped = self._clip(enc_output["last_hidden_state"].cpu())
-            
-            results: Dict[float, List[AnonymizationResult]] = {eps: [] for eps in ordered_eps}
-            for eps in ordered_eps:
+            for eps in epsilon:
                 noisy = self._add_noise(clipped.clone(), eps).to(self.device)
-                
                 encoder_outputs_obj = BaseModelOutput(last_hidden_state=noisy)
-                
                 dec_out = self.decoder.generate(
                     encoder_outputs=encoder_outputs_obj,
-                    max_new_tokens=num_tokens
+                    max_new_tokens=num_tokens,
                 )
-                
                 private_text = self.tokenizer.decode(dec_out[0], skip_special_tokens=True).strip()
-                
                 metadata = {
                     "epsilon": eps,
                     "delta": self.delta,
                     "method": "dpbart",
                     "model": self.model_name,
                 }
-                
-                results[eps].append(AnonymizationResult(text=private_text, metadata=metadata))
-        
-        return results
+                yield eps, [AnonymizationResult(text=private_text, metadata=metadata)]

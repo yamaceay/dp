@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 from collections import defaultdict
 import re
 import numpy as np
@@ -594,28 +594,27 @@ class PetreAnonymizer(KAnonymizer):
         })
         self._k_processed[target_k].update(pending)
 
-    def _grid_anonymize_from_dataset(
+    def _grid_anonymize_stream_from_dataset(
         self,
         idx: int,
         k_values: List[int],
         **kwargs,
-    ) -> Dict[int, List[AnonymizationResult]]:
+    ) -> Iterator[Tuple[int, List[AnonymizationResult]]]:
         if idx < 0 or idx >= len(self._records_by_idx):
             raise IndexError(f"Index {idx} is out of bounds")
-        ordered_k = list(dict.fromkeys(k_values))
+        ordered_k = [int(value) for value in dict.fromkeys(k_values)]
         for k_value in ordered_k:
             self._ensure_annotations_for_k(k_value, [idx])
         state = self._records_by_idx[idx]
         record = self.dataset_records[idx]
         text = record.text or state.text
-        results: Dict[int, List[AnonymizationResult]] = {k_value: [] for k_value in ordered_k}
         for k_value in ordered_k:
             raw_annotations = self._annotation_history.get(k_value, {}).get(state.uid, [])
             aligned_annotations = self._align_annotations(state, raw_annotations)
             spans = [(ann.start, ann.end) for ann in aligned_annotations]
             masked_text = self._apply_spans_to_text(text, spans)
             cloned_annotations = self._clone_annotation_dict({state.uid: aligned_annotations}).get(state.uid, [])
-            results[k_value].append(
+            yield k_value, [
                 AnonymizationResult(
                     text=masked_text,
                     spans=cloned_annotations,
@@ -626,8 +625,7 @@ class PetreAnonymizer(KAnonymizer):
                         "uid": state.uid,
                     },
                 )
-            )
-        return results
+            ]
 
     def batch_grid_anonymize_from_dataset(
         self,
@@ -648,7 +646,7 @@ class PetreAnonymizer(KAnonymizer):
         else:
             ordered_k = list(dict.fromkeys(k_values))
         for k_value in ordered_k:
-            self._ensure_annotations_for_k(k_value, ordered_indices)
+            self._ensure_annotations_for_k(k_value, indices)
         results: Dict[int, List[List[AnonymizationResult]]] = {k_value: [] for k_value in ordered_k}
         iterator = indices
         if progress:

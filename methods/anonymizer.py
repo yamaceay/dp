@@ -1,4 +1,4 @@
-from typing import Optional, List, Union
+from typing import Dict, Iterator, List, Optional, Union
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from tqdm import tqdm
@@ -24,29 +24,14 @@ class Anonymizer(ABC):
 
     @abstractmethod
     def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
-        """Anonymize the provided text and return an AnonymizationResult.
-
-        Implementations should override this method and may accept extra
-        parameters (k, epsilon, etc.) specific to the algorithm.
-        """
         raise NotImplementedError()
     
     @abstractmethod
     def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
-        """Anonymize the text at the specified index in the dataset and return an AnonymizationResult.
-
-        Implementations should override this method and may accept extra
-        parameters (k, epsilon, etc.) specific to the algorithm.
-        """
         raise NotImplementedError()
 
     @abstractmethod
     def add_dataset_records(self, dataset_records):
-        """Add dataset records to the anonymizer for use in anonymization.
-
-        Implementations should override this method to handle dataset records
-        appropriately.
-        """
         raise NotImplementedError()
 
 @dataclass
@@ -111,6 +96,30 @@ class AnonymizationBuilder:
         self.request.ks = ks
         return self
     
+    def anonymize_stream(self, progress: bool = False, **kwargs) -> Iterator[Dict[float, List[AnonymizationResult]] | Dict[int, List[AnonymizationResult]]]:
+        if self.model_name is None:
+            raise ValueError("Model name not set in anonymizer")
+        capabilities = get_capabilities(self.model_name)
+        if not capabilities.supports_streaming:
+            raise ValueError(f"{self.model_name} does not support streaming")
+        if capabilities.requires_k:
+            indices, ordered_k, filtered_kwargs = self._prepare_k_inputs(kwargs)
+            return self.anonymizer.anonymize_stream(
+                indices=indices,
+                k=ordered_k,
+                progress=progress,
+                **filtered_kwargs,
+            )
+        if capabilities.requires_epsilon:
+            texts, ordered_eps, filtered_kwargs = self._prepare_dp_inputs(kwargs)
+            return self.anonymizer.anonymize_stream(
+                texts=texts,
+                epsilon=ordered_eps,
+                progress=progress,
+                **filtered_kwargs,
+            )
+        raise ValueError("Streaming not supported for this model")
+
     def anonymize(self, **kwargs):
         if self.model_name is None:
             raise ValueError("Model name not set in anonymizer")
@@ -168,35 +177,43 @@ class AnonymizationBuilder:
         return results
     
     def _anonymize_dp(self, progress: bool = False, **kwargs):
-        filtered_kwargs = {key: value for key, value in kwargs.items() if key != "epsilon"}
-        texts = list(self.request.texts or [])
-        epsilons = list(self.request.epsilons or [])
-        if not texts:
-            raise ValueError("No texts provided for DP anonymization")
-        if not epsilons:
-            raise ValueError("No epsilon values provided for DP anonymization")
-        results = self.anonymizer.batch_anonymize(
+        texts, ordered_eps, filtered_kwargs = self._prepare_dp_inputs(kwargs)
+        stream = self.anonymizer.stream_batch_anonymize(
             texts=texts,
-            epsilon=epsilons,
+            epsilon=ordered_eps,
             progress=progress,
             **filtered_kwargs,
         )
+        if len(ordered_eps) > 1:
+            aggregated: Dict[float, List[List[AnonymizationResult]]] = {value: [] for value in ordered_eps}
+            for per_text in stream:
+                for eps_value, per_results in per_text.items():
+                    aggregated.setdefault(eps_value, []).append(per_results)
+            return aggregated
+        single_eps = ordered_eps[0]
+        results: List[List[AnonymizationResult]] = []
+        for per_text in stream:
+            results.append(per_text[single_eps])
         return results
     
     def _anonymize_k_anon(self, progress: bool = False, **kwargs):
-        filtered_kwargs = {key: value for key, value in kwargs.items() if key != "k"}
-        indices = list(self.request.indices or [])
-        ks = list(self.request.ks or [])
-        if not indices:
-            raise ValueError("No indices provided for k-anonymization")
-        if not ks:
-            raise ValueError("No k values provided for k-anonymization")
-        results = self.anonymizer.batch_anonymize_from_dataset(
+        indices, ordered_k, filtered_kwargs = self._prepare_k_inputs(kwargs)
+        stream = self.anonymizer.stream_batch_anonymize_from_dataset(
             indices=indices,
-            k=ks,
+            k=ordered_k,
             progress=progress,
             **filtered_kwargs,
         )
+        if len(ordered_k) > 1:
+            aggregated: Dict[int, List[List[AnonymizationResult]]] = {value: [] for value in ordered_k}
+            for per_idx in stream:
+                for k_value, per_results in per_idx.items():
+                    aggregated.setdefault(k_value, []).append(per_results)
+            return aggregated
+        single_k = ordered_k[0]
+        results: List[List[AnonymizationResult]] = []
+        for per_idx in stream:
+            results.append(per_idx[single_k])
         return results
 
     def _anonymize_dataset(self, progress: bool = False, **kwargs):
@@ -208,3 +225,25 @@ class AnonymizationBuilder:
             result = self.anonymizer.anonymize_from_dataset(idx=idx, **kwargs)
             results.append(result)
         return results
+
+    def _prepare_dp_inputs(self, kwargs):
+        texts = list(self.request.texts or [])
+        epsilons = list(self.request.epsilons or [])
+        if not texts:
+            raise ValueError("No texts provided for DP anonymization")
+        if not epsilons:
+            raise ValueError("No epsilon values provided for DP anonymization")
+        ordered_eps = [float(e) for e in dict.fromkeys(epsilons)]
+        filtered_kwargs = {key: value for key, value in kwargs.items() if key != "epsilon"}
+        return texts, ordered_eps, filtered_kwargs
+
+    def _prepare_k_inputs(self, kwargs):
+        indices = list(self.request.indices or [])
+        ks = list(self.request.ks or [])
+        if not indices:
+            raise ValueError("No indices provided for k-anonymization")
+        if not ks:
+            raise ValueError("No k values provided for k-anonymization")
+        ordered_k = [int(k_value) for k_value in dict.fromkeys(ks)]
+        filtered_kwargs = {key: value for key, value in kwargs.items() if key != "k"}
+        return indices, ordered_k, filtered_kwargs

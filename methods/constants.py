@@ -29,6 +29,7 @@ class ModelCapabilities:
     can_use_scoring: bool = False
     can_use_filtering: bool = False
     supports_batch_predict: bool = False
+    supports_streaming: bool = False
 
 
 MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
@@ -42,14 +43,16 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
         must_use_non_uniform_explainer=True,
         can_use_annotations=True,
         can_use_scoring=True,
+        supports_streaming=True,
     ),
-    "dpbart": ModelCapabilities(requires_epsilon=True),
-    "dpparaphrase": ModelCapabilities(requires_epsilon=True),
-    "dpprompt": ModelCapabilities(requires_epsilon=True),
+    "dpbart": ModelCapabilities(requires_epsilon=True, supports_streaming=True),
+    "dpparaphrase": ModelCapabilities(requires_epsilon=True, supports_streaming=True),
+    "dpprompt": ModelCapabilities(requires_epsilon=True, supports_streaming=True),
     "dpmlm": ModelCapabilities(
         requires_epsilon=True,
         can_use_filtering=True,
         can_use_scoring=True,
+        supports_streaming=True,
     ),
 }
 
