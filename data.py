@@ -29,14 +29,18 @@ if __name__ == "__main__":
     unique_uids = set()
     unique_names = set()
     utility_keys = set()
+    sum_text_length = 0
 
     for record in dataset.iter_records():
         if args.full_record:
             print(record)
         unique_names.add(record.name)
+        sum_text_length += len(record.text)
+
         unique_uids.add(record.uid)
         utility_keys.update(record.metadata.keys())
 
     print(f"Total individuals loaded: {len(unique_names)}")
     print(f"Total records loaded: {len(unique_uids)}")
     print(f"Utility keys found: {', '.join(utility_keys)}")
+    print(f"Average text length: {sum_text_length / len(dataset)}" if dataset else "No records found.")
