@@ -4,11 +4,13 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 from collections import defaultdict
 import re
+import nltk
 import numpy as np
 import torch
 
 from transformers import pipeline
 
+from dp.utils.explainer.base import TokenExplainer
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.k_anon import KAnonymizer
 from dp.loaders.base import DatasetRecord, TextAnnotation
@@ -79,8 +81,10 @@ class PetreAnonymizer(KAnonymizer):
         self._terms_to_ignore = self._build_terms_to_ignore(self.annotations, self._annotation_name)
 
     def _build_terms_to_ignore(self, annotations: Dict[str, List[TextAnnotation]], name: Optional[str]) -> Set[str]:
+        stopwords = set(nltk.corpus.stopwords.words("english"))
         marks = {
             self.mask_text,
+            *stopwords,
             "[CLS]",
             "[SEP]",
             "[PAD]",
@@ -299,7 +303,7 @@ class PetreAnonymizer(KAnonymizer):
             return int(label.split("_")[-1])
         return int(label)
 
-    def set_scoring_strategy(self, explainer) -> None:
+    def set_scoring_strategy(self, explainer: TokenExplainer) -> None:
         if explainer is None:
             raise ValueError("explainer cannot be None")
         if not hasattr(explainer, "tri_detector"):
