@@ -35,7 +35,10 @@ class ManualAnonymizer(SimpleAnonymizer):
         metadata = {"method": "manual"}
         return AnonymizationResult(text=text, spans=spans, metadata=metadata)
 
-    def _deduplicate_annotations(self, annotations: List[TextAnnotation]) -> List[TextAnnotation]:
+    def _deduplicate_annotations(self, annotations: Optional[List[TextAnnotation]]) -> List[TextAnnotation]:
+        if not annotations:
+            return []
+
         last_end = -1
         deduped = []
         
