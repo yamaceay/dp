@@ -7,7 +7,7 @@ cmd_tpl="python3 model.py \
   --data %s --data_in %s \
   --model %s --model_in %s \
   --runtime_in %s \
-  --output jsonl %s --start_idx 0 2>&1"
+  --output jsonl %s --start_idx 0 2>&1 >> logs/%s_%s.log"
 
 function all_methods() {
   find "$models_dir" -mindepth 1 -maxdepth 1 -print0 | while IFS= read -r -d '' path
@@ -79,7 +79,7 @@ function all_methods_runtimes() {
           fi
         fi
 
-        flags=""
+        flags=" "
         if [[ "$runtime_type" != "simple" ]]; then
           flags="--stream"
         fi
@@ -90,7 +90,8 @@ function all_methods_runtimes() {
               "$dataset_name" "$dataset_path" \
               "$method_base" "$method_path" \
               "$runtime_path_ext" \
-              $flags
+              $flags \
+              "$dataset_name" "$method_base"
           fi
         done
       fi
@@ -99,164 +100,3 @@ function all_methods_runtimes() {
 }
 
 all_methods_runtimes
-
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model manual --model_in configs/model/manual.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model petre --model_in configs/model/petre/trustpilot/greedy.yaml   --runtime_in configs/runtime/k_5.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model petre --model_in configs/model/petre/trustpilot/greedy.yaml   --runtime_in configs/runtime/k_3.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model petre --model_in configs/model/petre/trustpilot/greedy.yaml   --runtime_in configs/runtime/k_2.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model petre --model_in configs/model/petre/trustpilot/shap.yaml   --runtime_in configs/runtime/k_5.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model petre --model_in configs/model/petre/trustpilot/shap.yaml   --runtime_in configs/runtime/k_3.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model petre --model_in configs/model/petre/trustpilot/shap.yaml   --runtime_in configs/runtime/k_2.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model presidio --model_in configs/model/presidio.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model spacy --model_in configs/model/spacy.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model baroud --model_in configs/model/baroud.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/trustpilot/greedy.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/trustpilot/greedy.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/trustpilot/greedy.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/trustpilot/greedy.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/trustpilot/shap.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/trustpilot/shap.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/trustpilot/shap.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/trustpilot/shap.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data trustpilot --data_in data/trustpilot/sample_300.jsonl   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model manual --model_in configs/model/manual.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model petre --model_in configs/model/petre/tab/greedy.yaml   --runtime_in configs/runtime/k_5.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model petre --model_in configs/model/petre/tab/greedy.yaml   --runtime_in configs/runtime/k_3.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model petre --model_in configs/model/petre/tab/greedy.yaml   --runtime_in configs/runtime/k_2.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model petre --model_in configs/model/petre/tab/shap.yaml   --runtime_in configs/runtime/k_5.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model petre --model_in configs/model/petre/tab/shap.yaml   --runtime_in configs/runtime/k_3.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model petre --model_in configs/model/petre/tab/shap.yaml   --runtime_in configs/runtime/k_2.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model presidio --model_in configs/model/presidio.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model spacy --model_in configs/model/spacy.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model baroud --model_in configs/model/baroud.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy_pii.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy_pii.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy_pii.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy_pii.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy_plus.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy_plus.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy_plus.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/greedy_plus.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/shap.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/shap.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/shap.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/tab/shap.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data tab --data_in data/tab/splitted/test.json   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model manual --model_in configs/model/manual.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model petre --model_in configs/model/petre/reddit/greedy.yaml   --runtime_in configs/runtime/k_5.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model petre --model_in configs/model/petre/reddit/greedy.yaml   --runtime_in configs/runtime/k_3.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model petre --model_in configs/model/petre/reddit/greedy.yaml   --runtime_in configs/runtime/k_2.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model petre --model_in configs/model/petre/reddit/shap.yaml   --runtime_in configs/runtime/k_5.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model petre --model_in configs/model/petre/reddit/shap.yaml   --runtime_in configs/runtime/k_3.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model petre --model_in configs/model/petre/reddit/shap.yaml   --runtime_in configs/runtime/k_2.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model presidio --model_in configs/model/presidio.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model spacy --model_in configs/model/spacy.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model baroud --model_in configs/model/baroud.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/reddit/greedy.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/reddit/greedy.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/reddit/greedy.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/reddit/greedy.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/reddit/shap.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/reddit/shap.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/reddit/shap.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/reddit/shap.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data reddit --data_in data/reddit/train.jsonl   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model manual --model_in configs/model/manual.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model petre --model_in configs/model/petre/db_bio/greedy.yaml   --runtime_in configs/runtime/k_5.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model petre --model_in configs/model/petre/db_bio/greedy.yaml   --runtime_in configs/runtime/k_3.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model petre --model_in configs/model/petre/db_bio/greedy.yaml   --runtime_in configs/runtime/k_2.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model petre --model_in configs/model/petre/db_bio/shap.yaml   --runtime_in configs/runtime/k_5.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model petre --model_in configs/model/petre/db_bio/shap.yaml   --runtime_in configs/runtime/k_3.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model petre --model_in configs/model/petre/db_bio/shap.yaml   --runtime_in configs/runtime/k_2.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpprompt --model_in configs/model/dpprompt.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model presidio --model_in configs/model/presidio.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpbart --model_in configs/model/dpbart.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model spacy --model_in configs/model/spacy.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model baroud --model_in configs/model/baroud.yaml   --runtime_in configs/runtime/simple.yaml   --output jsonl  --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/db_bio/greedy.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/db_bio/greedy.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/db_bio/greedy.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/db_bio/greedy.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/db_bio/shap.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/db_bio/shap.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/db_bio/shap.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/db_bio/shap.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/uniform.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpmlm --model_in configs/model/dpmlm/uniform_plus.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_250.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_25.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_100.yaml   --output jsonl --stream --start_idx 0 2>&1
-# python3 model.py   --data db_bio --data_in data/db_bio/train/data-00000-of-00001.arrow   --model dpparaphrase --model_in configs/model/dpparaphrase.yaml   --runtime_in configs/runtime/eps_10.yaml   --output jsonl --stream --start_idx 0 2>&1

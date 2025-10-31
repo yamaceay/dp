@@ -6,10 +6,11 @@ target: label
 test_size: 0.2
 random_state: 42
 vectorizer:
-  type: tfidf
-  params:
-    ngram_range: [1, 2]
-    max_features: 20000
+  type: bert
+  # type: tfidf
+  # params:
+  #   ngram_range: [1, 2]
+  #   max_features: 20000
 output:
   format: jsonl
   file: logs/util_exp.jsonl
