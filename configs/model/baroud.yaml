@@ -1,2 +1,2 @@
-pii_annotator: models/pii_detectors/tab/20251019_140402
+pii_annotator: models/pii_detectors/tab/20251021_093003
 pii_threshold: 0.7

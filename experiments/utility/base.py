@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -9,7 +8,8 @@ from sklearn.model_selection import StratifiedShuffleSplit
 
 from dp.loaders.base import DatasetRecord
 from dp.experiments import Experiment, ExperimentResult
-# Vectorizer and model types are runtime-provided; keep generic to avoid tight coupling
+from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor
+from dp.experiments.utility.downstream import SupervisedDownstreamHead
 
 class UtilityTarget:
     class Mode(Enum):
