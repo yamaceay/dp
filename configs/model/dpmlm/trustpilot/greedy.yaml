@@ -2,7 +2,7 @@ add_probability: 0.0
 delete_probability: 0.0
 
 explainability: greedy
-explainer_path: models/tri_pipelines/trustpilot/20251021_092159
+explainer_path: models/tri_pipelines/trustpilot/20251101_163918
 
 tri_chunking:
   enabled: false

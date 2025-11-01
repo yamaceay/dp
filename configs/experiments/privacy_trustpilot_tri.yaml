@@ -1,0 +1,10 @@
+dataset: trustpilot
+data_in: data/trustpilot/sample_300.jsonl
+annotations_in:
+  - outputs/trustpilot
+tri:
+  pipeline: models/tri_pipelines/trustpilot/20251101_163918
+mask_token: "[MASK]"
+output:
+  format: jsonl
+  file: logs/priv_exp.jsonl
