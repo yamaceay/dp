@@ -11,25 +11,28 @@ from dp.utils.summarizer import BartSummarizer
 class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
         self,
-        *args,
         data: Optional[str] = None,
         data_in: Optional[str] = None,
         max_records: Optional[int] = None,
         summarizer_model_name: str = "facebook/bart-large-cnn",
         summarizer_device: int = -1,
+        summarizer_max_length: int = 256, # originally 150
+        summarizer_min_length: int = 80,  # originally 40
         max_background_tokens: int = 512,
-        **kwargs
     ):
-        self.adapter = TabDatasetAdapter(data=data, data_in=data_in, max_records=max_records)
-        self.max_background_tokens = max_background_tokens
-        self._background_chunker: Optional[TokenAwareChunker] = None
+        adapter = TabDatasetAdapter(data=data, data_in=data_in, max_records=max_records)
         super().__init__(
-            adapter=self.adapter,
-            max_background_tokens=self.max_background_tokens,
-            *args,
-            **kwargs,
+            adapter=adapter,
+            max_background_tokens=max_background_tokens,
+            summarizer_max_length=summarizer_max_length,
+            summarizer_min_length=summarizer_min_length,
         )
-        summarizer = BartSummarizer(model_name=summarizer_model_name, device=summarizer_device)
+        self._background_chunker: Optional[TokenAwareChunker] = None
+        summarizer = BartSummarizer(
+            model_name=summarizer_model_name,
+            device=summarizer_device,
+            max_input_tokens=max_background_tokens,
+        )
         self.set_summarizer(summarizer)
 
     def _get_background_chunker(self) -> TokenAwareChunker:

@@ -32,18 +32,8 @@ class AttackerDatasetAdapter:
         self.summarizer: Optional[SummarizerProtocol] = None
         self._cache_map: Optional[Dict[str, Dict[str, Any]]] = None
 
-    def set_summarizer(
-        self,
-        summarizer: SummarizerProtocol,
-        *,
-        max_length: Optional[int] = None,
-        min_length: Optional[int] = None,
-    ) -> None:
+    def set_summarizer(self, summarizer: SummarizerProtocol) -> None:
         self.summarizer = summarizer
-        if max_length is not None:
-            self.summarizer_max_length = max_length
-        if min_length is not None:
-            self.summarizer_min_length = min_length
 
     def set_cache(
         self,
