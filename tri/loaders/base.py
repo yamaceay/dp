@@ -82,9 +82,10 @@ class AttackerDatasetAdapter:
         )
 
     def iter_records(self, progress: bool = False) -> Iterable[AttackerDatasetRecord]:
-        iterator = self.adapter.iter_records()
+        records_list = list(self.adapter.iter_records())
+        iterator = iter(records_list)
         if progress:
-            iterator = tqdm(iterator, desc="Processing attacker records")
+            iterator = tqdm(records_list, desc="Processing attacker records", total=len(records_list))
         for record in iterator:
             if self._cache_map is not None and record.uid in self._cache_map:
                 ext = self._cache_map.get(record.uid, {})
