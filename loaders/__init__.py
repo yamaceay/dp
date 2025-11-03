@@ -6,9 +6,8 @@ identifier, raw text, optional annotations, and optional utility metadata.
 """
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
-from dp.tri.attacker_adapter import AttackerDatasetAdapter
 from dp.loaders.trustpilot import TrustpilotDatasetAdapter
-from dp.loaders.tab import TabDatasetAdapter, TabAttackerDatasetAdapter
+from dp.loaders.tab import TabDatasetAdapter
 from dp.loaders.db_bio import DBBioDatasetAdapter
 from dp.loaders.reddit import RedditDatasetAdapter
 from dp.loaders.annotations import (
@@ -30,10 +29,6 @@ ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "reddit": RedditDatasetAdapter,
 }
 
-ATTACKER_ADAPTER_REGISTRY: dict[str, type[AttackerDatasetAdapter]] = {
-    "tab": TabAttackerDatasetAdapter,
-}
-
 
 def get_adapter(name: str, **kwargs) -> DatasetAdapter:
     """Instantiate a dataset adapter by name."""
@@ -46,18 +41,6 @@ def get_adapter(name: str, **kwargs) -> DatasetAdapter:
     adapter_cls = ADAPTER_REGISTRY[key]
     return adapter_cls(**kwargs)
 
-def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:
-    """Instantiate an attacker dataset adapter by name."""
-    key = (name or "").lower()
-    if key not in ATTACKER_ADAPTER_REGISTRY:
-        raise ValueError(
-            f"Unknown dataset adapter '{name}'. "
-            f"Available adapters: {sorted(ATTACKER_ADAPTER_REGISTRY.keys())}"
-        )
-    adapter_cls = ATTACKER_ADAPTER_REGISTRY[key]
-    return adapter_cls(**kwargs)
-
-
 __all__ = [
     "DatasetAdapter",
     "DatasetRecord",
@@ -66,7 +49,6 @@ __all__ = [
     "DBBioDatasetAdapter",
     "TextAnnotation",
     "get_adapter",
-    "get_attacker_adapter",
     "read_annotations",
     "write_annotations",
     "apply_annotations",
@@ -76,5 +58,4 @@ __all__ = [
     "read_batch_annotations_from_path",
     "list_batch_timestamps",
     "ADAPTER_REGISTRY",
-    "ATTACKER_ADAPTER_REGISTRY",
 ]

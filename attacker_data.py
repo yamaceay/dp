@@ -1,10 +1,8 @@
 import argparse
 import os
 import json
-from typing import List
 
-from dp.loaders import ATTACKER_ADAPTER_REGISTRY, get_attacker_adapter
-from dp.loaders.base import AttackerDatasetRecord
+from dp.tri.loaders import ATTACKER_ADAPTER_REGISTRY, get_attacker_adapter
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 
@@ -31,7 +29,6 @@ def main() -> None:
         adapter.load_cache_from_jsonl(args.load_from_jsonl)
         print("✓ Loaded precomputed extensions")
 
-    # Truncate output file if requested
     if args.save_to_jsonl:
         os.makedirs(os.path.dirname(args.save_to_jsonl), exist_ok=True)
         with open(args.save_to_jsonl, 'w', encoding='utf-8') as f:

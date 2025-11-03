@@ -2,8 +2,8 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
-from dp.loaders import get_attacker_adapter, ATTACKER_ADAPTER_REGISTRY
 from dp.tri import get_tri_detector
+from dp.tri.loaders import get_attacker_adapter, ATTACKER_ADAPTER_REGISTRY
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 

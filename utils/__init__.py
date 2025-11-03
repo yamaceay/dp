@@ -2,10 +2,11 @@
 
 This module exposes utility classes for selectors and explainers
 used in anonymization strategies.
+
+Note: TRIDetectorWithDeid is now available from dp.tri, not dp.utils.
 """
 
 from dp.utils.pii_detector import PIIDetector, PIIDataset
-from dp.tri.with_deid import TRIDetectorWithDeid
 from dp.utils.selector import TokenSelector, AllSelector, PIIOnlySelector
 from dp.utils.explainer import TokenExplainer, UniformExplainer, GreedyExplainer, ShapExplainer
 from dp.utils.chunking import (
@@ -24,7 +25,6 @@ from dp.utils.chunking import (
 __all__ = [
     "PIIDetector",
     "PIIDataset",
-    "TRIDetectorWithDeid",
     "TokenSelector",
     "AllSelector",
     "PIIOnlySelector",

@@ -135,7 +135,7 @@ dp/
 │   ├── base.py             # Core TRI training/evaluation
 │   ├── with_deid.py        # De-identified evaluation flow
 │   ├── with_bk.py          # Background-knowledge flow
-│   └── attacker_adapter.py # Attacker dataset adapter
+│   ├── loaders/            # TRI dataset adapters
 ├── experiments/             # Evaluation pipelines (placeholder)
 ├── model.py                 # Main anonymization script
 ├── pii.py                   # PII detector training

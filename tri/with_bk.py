@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any, Tuple, Union
-from dp.loaders.base import DatasetRecord, AttackerDatasetRecord
+from dp.loaders.base import DatasetRecord
 from dp.tri.base import TRIDetector, TRIDataset
+from dp.tri.loaders.base import AttackerDatasetRecord
 
 
 class TRIDetectorWithBK(TRIDetector):

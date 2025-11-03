@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
-from pathlib import Path
-import json
-from tqdm import tqdm
+from typing import Any, Dict, Iterable, Iterator, Optional
 
 @dataclass
 class TextAnnotation:
@@ -49,10 +46,3 @@ class DatasetAdapter:
     def __len__(self) -> int:
         """Return the size of the dataset if known."""
         raise NotImplementedError
-
-@dataclass
-class AttackerDatasetRecord(DatasetRecord):
-    background_knowledge: List[Tuple[str, str]] = field(default_factory=list)
-    summarized_text: Optional[str] = None
-
-# Attacker adapter lives under dp.tri.attacker_adapter to keep loaders lean and avoid circular deps.

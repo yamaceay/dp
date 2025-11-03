@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Protocol, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Protocol, Tuple
 import json
 from tqdm import tqdm
 
-from dp.loaders.base import DatasetAdapter, DatasetRecord, AttackerDatasetRecord
-
+from dp.loaders.base import DatasetAdapter, DatasetRecord
 
 class SummarizerProtocol(Protocol):
     summarization_pipeline: Any
     def summarize(self, text: str, **kwargs) -> str: ...
 
+@dataclass
+class AttackerDatasetRecord(DatasetRecord):
+    background_knowledge: List[Tuple[str, str]] = field(default_factory=list)
+    summarized_text: Optional[str] = None
 
 class AttackerDatasetAdapter:
     def __init__(
@@ -131,11 +134,3 @@ def load_attacker_extensions_jsonl(path: str) -> Dict[str, Dict[str, Any]]:
                 "summarized_text": obj.get("summarized_text"),
             }
     return mapping
-
-
-__all__ = [
-    "SummarizerProtocol",
-    "AttackerDatasetAdapter",
-    "save_attacker_extensions_jsonl",
-    "load_attacker_extensions_jsonl",
-]
