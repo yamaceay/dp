@@ -532,6 +532,7 @@ MODEL_REGISTRY: Dict[str, Type[Anonymizer]] = {
     "presidio": PresidioAnonymizer,
     "manual": ManualAnonymizer,
     "baroud": BaroudAnonymizer,
+    "risk": RiskAnonymizer,
     "petre": PetreAnonymizer,
     "dpbart": DPBartAnonymizer,
     "dpparaphrase": DPParaphraseAnonymizer,
@@ -578,6 +579,9 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
     "presidio": ModelCapabilities(),
     "manual": ModelCapabilities(must_use_dataset=True),
     "baroud": ModelCapabilities(supports_batch_predict=True),
+    "risk": ModelCapabilities(
+        can_use_scoring=True,
+    ),
     "petre": ModelCapabilities(
         must_use_dataset=True,
         requires_k=True,

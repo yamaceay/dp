@@ -6,6 +6,7 @@ SIMPLE_MODEL_LIST = [
     "presidio",
     "manual",
     "baroud",
+    "risk",
 ]
 
 K_ANON_MODEL_LIST = [
@@ -36,7 +37,16 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
     "spacy": ModelCapabilities(),
     "presidio": ModelCapabilities(),
     "manual": ModelCapabilities(must_use_dataset=True),
-    "baroud": ModelCapabilities(supports_batch_predict=True),
+    "baroud": ModelCapabilities(
+        supports_batch_predict=True, 
+        supports_streaming=True,
+    ),
+    "risk": ModelCapabilities(
+        must_use_non_uniform_explainer=True,
+        can_use_annotations=True,
+        can_use_scoring=True, 
+        supports_streaming=True,
+    ),
     "petre": ModelCapabilities(
         must_use_dataset=True,
         requires_k=True,

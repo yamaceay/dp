@@ -62,6 +62,7 @@ function all_methods_runtimes() {
     ["dpbart"]="dp"
     ["dpmlm"]="dp"
     ["baroud"]="simple"
+    ["risk"]="simple"
     ["spacy"]="simple"
     ["presidio"]="simple"
     ["manual"]="simple"

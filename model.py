@@ -229,12 +229,12 @@ def stream_anonymization(
         filtered_kwargs = dict(runtime_config)
         if text_indices is None or len(text_indices) != len(texts):
             text_indices = [None] * len(texts)
-        for pos, text in enumerate(texts):
-            idx_value = text_indices[pos]
+        stream = anonymizer.anonymize_stream(texts=texts, **filtered_kwargs)
+        for pos, result in enumerate(stream):
+            idx_value = text_indices[pos] if pos < len(text_indices) else None
             effective_idx = idx_value if idx_value is not None else pos
             if effective_idx < start_idx:
                 continue
-            result = anonymizer.anonymize(text=text, **filtered_kwargs)
             output_handler.output(
                 result,
                 idx=idx_value if idx_value is not None else effective_idx,
@@ -456,34 +456,23 @@ if __name__ == "__main__":
         )
     else:
         start_time = time.time()
-        results = builder.anonymize(**runtime_config)
+        results = []
+        for result in builder.anonymize(**runtime_config):
+            results.append(result)
         end_time = time.time()
         total_time = end_time - start_time
         num_texts = len(texts) if not capabilities.must_use_dataset else len(indices)
         flattened = flatten_results(results, text_indices)
 
-        if isinstance(flattened, dict):
-            for grid_value, (flat_res, flat_indices) in flattened.items():
-                header = f"Grid value: {grid_value}"
-                output_results(
-                    flat_res,
-                    flat_indices,
-                    output_handler,
-                    verbose=args.output not in ["jsonl"],
-                    header=header,
-                    dataset=args.data,
-                    model=args.model,
-                )
-        else:
-            flat_res, flat_indices = flattened
-            output_results(
-                flat_res,
-                flat_indices,
-                output_handler,
-                verbose=args.output not in ["jsonl"],
-                dataset=args.data,
-                model=args.model,
-            )
+        flat_res, flat_indices = flattened
+        output_results(
+            flat_res,
+            flat_indices,
+            output_handler,
+            verbose=args.output not in ["jsonl"],
+            dataset=args.data,
+            model=args.model,
+        )
 
         processed = num_texts
     

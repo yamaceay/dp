@@ -12,6 +12,7 @@ from dp.methods.simple._spacy import SpacyAnonymizer
 from dp.methods.simple._manual import ManualAnonymizer
 from dp.methods.simple._presidio import PresidioAnonymizer
 from dp.methods.simple._baroud import BaroudAnonymizer
+from dp.methods.simple._risk import RiskAnonymizer
 
 from dp.methods.k_anon import KAnonymizer
 from dp.methods.k_anon._petre import PetreAnonymizer
@@ -30,6 +31,7 @@ __all__ = [
     "SpacyAnonymizer",
     "PresidioAnonymizer",
     "BaroudAnonymizer",
+    "RiskAnonymizer",
     "KAnonymizer",
     "PetreAnonymizer",
     "DPAnonymizer",

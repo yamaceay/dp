@@ -70,6 +70,7 @@ class AnonymizationBuilder:
     def __init__(self, anonymizer: 'Anonymizer', model_name: Optional[str] = None):
         self.anonymizer = anonymizer
         self.model_name = model_name
+        self.capabilities = get_capabilities(model_name) if model_name else None
         self.request = AnonymizationRequest()
     
     def with_texts(self, texts: Union[str, List[str]]) -> 'AnonymizationBuilder':
@@ -99,10 +100,11 @@ class AnonymizationBuilder:
     def anonymize_stream(self, progress: bool = False, **kwargs) -> Iterator[Dict[float, List[AnonymizationResult]] | Dict[int, List[AnonymizationResult]]]:
         if self.model_name is None:
             raise ValueError("Model name not set in anonymizer")
-        capabilities = get_capabilities(self.model_name)
-        if not capabilities.supports_streaming:
+        if self.capabilities is None:
+            self.capabilities = get_capabilities(self.model_name)
+        if not self.capabilities.supports_streaming:
             raise ValueError(f"{self.model_name} does not support streaming")
-        if capabilities.requires_k:
+        if self.capabilities.requires_k:
             indices, ordered_k, filtered_kwargs = self._prepare_k_inputs(kwargs)
             return self.anonymizer.anonymize_stream(
                 indices=indices,
@@ -110,7 +112,7 @@ class AnonymizationBuilder:
                 progress=progress,
                 **filtered_kwargs,
             )
-        if capabilities.requires_epsilon:
+        if self.capabilities.requires_epsilon:
             texts, ordered_eps, filtered_kwargs = self._prepare_dp_inputs(kwargs)
             return self.anonymizer.anonymize_stream(
                 texts=texts,
@@ -118,19 +120,24 @@ class AnonymizationBuilder:
                 progress=progress,
                 **filtered_kwargs,
             )
-        raise ValueError("Streaming not supported for this model")
+        print("Here I AM")
+        return self.anonymizer.anonymize_stream(
+            texts=self.request.texts or [],
+            progress=progress,            
+            **kwargs,
+        )
 
     def anonymize(self, **kwargs):
         if self.model_name is None:
             raise ValueError("Model name not set in anonymizer")
-        
-        capabilities = get_capabilities(self.model_name)
+        if self.capabilities is None:
+            self.capabilities = get_capabilities(self.model_name)
         name = self.anonymizer.__class__.__name__
         
         if self.request.has_texts() and self.request.has_indices():
             raise ValueError("Cannot specify both texts and indices")
         
-        if capabilities.requires_k:
+        if self.capabilities.requires_k:
             if self.request.has_texts():
                 raise ValueError(f"{name} requires dataset indices, not texts")
             if not self.request.has_indices():
@@ -140,7 +147,7 @@ class AnonymizationBuilder:
             
             return self._anonymize_k_anon(**kwargs)
         
-        elif capabilities.requires_epsilon:
+        elif self.capabilities.requires_epsilon:
             if self.request.has_indices():
                 raise ValueError(f"{name} requires texts, not dataset indices")
             if not self.request.has_texts():
@@ -150,7 +157,7 @@ class AnonymizationBuilder:
             
             return self._anonymize_dp(**kwargs)
         
-        elif capabilities.must_use_dataset:
+        elif self.capabilities.must_use_dataset:
             if self.request.has_texts():
                 raise ValueError(f"{name} requires dataset indices, not texts")
             if not self.request.has_indices():
@@ -163,7 +170,7 @@ class AnonymizationBuilder:
                 raise ValueError(f"{name} requires texts, not dataset indices")
             if not self.request.has_texts():
                 raise ValueError("Must specify texts for simple methods")
-            
+
             return self._anonymize_simple(**kwargs)
 
     def _anonymize_simple(self, progress: bool = False, **kwargs):

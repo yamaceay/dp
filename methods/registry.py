@@ -6,6 +6,7 @@ from dp.methods.simple._spacy import SpacyAnonymizer
 from dp.methods.simple._manual import ManualAnonymizer
 from dp.methods.simple._presidio import PresidioAnonymizer
 from dp.methods.simple._baroud import BaroudAnonymizer
+from dp.methods.simple._risk import RiskAnonymizer
 
 from dp.methods.k_anon import KAnonymizer
 from dp.methods.k_anon._petre import PetreAnonymizer
@@ -21,6 +22,7 @@ SIMPLE_MODEL_REGISTRY: Dict[str, Type[SimpleAnonymizer]] = {
     "presidio": PresidioAnonymizer,
     "manual": ManualAnonymizer,
     "baroud": BaroudAnonymizer,
+    "risk": RiskAnonymizer,
 }
 
 K_ANON_MODEL_REGISTRY: Dict[str, Type[KAnonymizer]] = {
