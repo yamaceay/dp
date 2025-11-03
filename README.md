@@ -93,7 +93,7 @@ python3 pii.py \
     --use-nervaluate
 
 # Train TRI model (for privacy evaluation)
-python3 tri.py \
+python3 tri_by_deid.py \
     --dataset tab \
     --data-path data/TAB/splitted \
     --mode train \
@@ -129,12 +129,18 @@ dp/
 ├── loaders/                 # Dataset adapters
 ├── utils/                   # Shared utilities
 │   ├── pii_detector.py     # Token classification for PII
-│   ├── tri_detector.py     # Re-identification attacks
 │   └── explainer/          # Importance scoring strategies
+├── tri/                     # TRI (Text Re-Identification) package
+│   ├── __init__.py         # Registry and public API
+│   ├── base.py             # Core TRI training/evaluation
+│   ├── with_deid.py        # De-identified evaluation flow
+│   ├── with_bk.py          # Background-knowledge flow
+│   └── attacker_adapter.py # Attacker dataset adapter
 ├── experiments/             # Evaluation pipelines (placeholder)
 ├── model.py                 # Main anonymization script
 ├── pii.py                   # PII detector training
-├── tri.py                   # TRI model training
+├── tri_by_deid.py           # TRI model training (de-identified eval)
+├── tri_by_bk.py             # TRI model training (background knowledge)
 └── data.py                  # Dataset preprocessing
 ```
 

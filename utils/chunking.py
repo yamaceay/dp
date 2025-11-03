@@ -58,25 +58,32 @@ class TokenAwareChunker:
         self.max_tokens = max_tokens
     
     def chunk(self, text: str) -> List[Chunk]:
-        tokens = self.tokenizer.encode(text, add_special_tokens=False)
+        encoding = self.tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
+        tokens = encoding['input_ids']
+        offsets = encoding.get('offset_mapping', [])
         
         if len(tokens) <= self.max_tokens:
             return [Chunk(text=text, start=0, end=len(text))]
         
         chunks = []
-        token_chunks = [tokens[i:i + self.max_tokens] for i in range(0, len(tokens), self.max_tokens)]
-        
-        pos = 0
-        for token_chunk in token_chunks:
-            chunk_text = self.tokenizer.decode(
-                token_chunk,
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False,
-            )
-            start = pos
-            end = start + len(chunk_text)
-            chunks.append(Chunk(text=chunk_text, start=start, end=end))
-            pos = end
+        i = 0
+        while i < len(tokens):
+            end_idx = min(i + self.max_tokens, len(tokens))
+            
+            if offsets:
+                start_char = offsets[i][0]
+                end_char = offsets[end_idx - 1][1]
+            else:
+                chunk_tokens = tokens[i:end_idx]
+                decoded = self.tokenizer.decode(chunk_tokens, skip_special_tokens=True)
+                start_char = text.find(decoded, 0 if not chunks else chunks[-1].end)
+                if start_char == -1:
+                    start_char = 0 if not chunks else chunks[-1].end
+                end_char = start_char + len(decoded)
+            
+            chunk_text = text[start_char:end_char]
+            chunks.append(Chunk(text=chunk_text, start=start_char, end=end_char))
+            i = end_idx
         
         return chunks
 

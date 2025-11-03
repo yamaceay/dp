@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, List
 
 from dp.loaders import get_adapter, DatasetRecord, read_batch_annotations_from_path, ADAPTER_REGISTRY
-from dp.utils import TRIDetector
+from dp.tri import get_tri_detector
 
 available_datasets = list(ADAPTER_REGISTRY.keys())
 
@@ -160,7 +160,7 @@ def main():
     parser.add_argument("--data-path", type=str, default="data/TAB/tab.json",
                         help="Path to dataset file")
     parser.add_argument("--annotation-folder", type=str, 
-                        default="/Users/yay/work/DPMLM/outputs/tab/samples/train_100/annotations/simple",
+                        default="outputs/tab_simple",
                         help="Path to folder with annotation JSON files for evaluation")
     parser.add_argument("--best-metric-dataset", type=str, default=None,
                         help="Which evaluation dataset to use for best model selection (e.g., 'spacy', 'manual', 'presidio')")
@@ -198,23 +198,16 @@ def main():
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     model_path = args.model_path or f"models/tri_pipelines/{args.dataset}/{timestamp}"
-    
+
+    tri = get_tri_detector("deid", dataset_name=args.dataset, model_name=args.model_name, max_length=512, device=args.device)
     if args.mode == "train":
-        print(f"\nInitializing TRI detector for {args.dataset}...")
-        tri = TRIDetector(
-            dataset_name=args.dataset,
-            model_name=args.model_name,
-            max_length=512,
-            device=args.device
-        )
+        print(f"\nInitializing TRI detector for {args.dataset} (deid)...")
         if args.model_path:
             model_path = Path(args.model_path)
             if not model_path.exists():
                 raise ValueError(f"Model path not found: {model_path}")
             print(f"\nLoading weights from {model_path}...")
             tri.load(str(model_path))
-        
-        tri.set_train_dataset(records)
         
         eval_datasets = {}
         if args.annotation_folder:
@@ -232,9 +225,9 @@ def main():
         else:
             print("\nNo annotation folder provided, using original texts for evaluation")
             eval_datasets = {"original": records}
-        
-        tri.set_eval_datasets(eval_datasets)
-        
+
+        tri.setup(train_records=records, eval_records_dict=eval_datasets)
+
         print(f"\nFinetuning for {args.finetuning_epochs} epochs...")
         tri.train(
             epochs=args.finetuning_epochs,
@@ -250,12 +243,6 @@ def main():
         
     elif args.mode == "evaluate":
         print(f"\nLoading model from {model_path}...")
-        tri = TRIDetector(
-            dataset_name=args.dataset,
-            model_name=args.model_name,
-            max_length=512,
-            device=args.device
-        )
         tri.load(model_path)
         
         if args.annotation_folder:
@@ -282,12 +269,6 @@ def main():
         
     elif args.mode == "predict":
         print(f"\nLoading model from {model_path}...")
-        tri = TRIDetector(
-            dataset_name=args.dataset,
-            model_name=args.model_name,
-            max_length=512,
-            device=args.device
-        )
         tri.load(model_path)
         
         print("\nPredicting on sample records...")

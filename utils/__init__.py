@@ -5,7 +5,7 @@ used in anonymization strategies.
 """
 
 from dp.utils.pii_detector import PIIDetector, PIIDataset
-from dp.utils.tri_detector import TRIDetector
+from dp.tri.with_deid import TRIDetectorWithDeid
 from dp.utils.selector import TokenSelector, AllSelector, PIIOnlySelector
 from dp.utils.explainer import TokenExplainer, UniformExplainer, GreedyExplainer, ShapExplainer
 from dp.utils.chunking import (
@@ -24,7 +24,7 @@ from dp.utils.chunking import (
 __all__ = [
     "PIIDetector",
     "PIIDataset",
-    "TRIDetector",
+    "TRIDetectorWithDeid",
     "TokenSelector",
     "AllSelector",
     "PIIOnlySelector",

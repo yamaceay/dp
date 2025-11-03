@@ -673,13 +673,13 @@ python3 pii.py \
 - `--use-nervaluate`: Enable nervaluate metrics
 - `--evaluation-mode`: Nervaluate mode (strict, partial, exact)
 
-### tri.py
+### tri_by_deid.py
 
 TRI model training and evaluation.
 
 ```bash
 # Train
-python3 tri.py \
+python3 tri_by_deid.py \
     --dataset tab \
     --data-path data/TAB/splitted \
     --mode train \
@@ -690,7 +690,7 @@ python3 tri.py \
     --best-metric-dataset presidio
 
 # Evaluate
-python3 tri.py \
+python3 tri_by_deid.py \
     --dataset tab \
     --data-path data/TAB/splitted \
     --mode evaluate \

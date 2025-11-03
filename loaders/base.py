@@ -1,9 +1,12 @@
-"""Base classes for dataset adapters used in benchmarking."""
+"""Base classes and attacker adapter for dataset processing."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, Iterator, Optional
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from pathlib import Path
+import json
+from tqdm import tqdm
 
 @dataclass
 class TextAnnotation:
@@ -36,14 +39,20 @@ class DatasetAdapter:
     data_in: Optional[str] = None
     max_records: Optional[int] = None
 
-
     def __iter__(self) -> Iterator[DatasetRecord]:
         return iter(self.iter_records())
 
-    def iter_records(self) -> Iterable[DatasetRecord]:
+    def iter_records(self, *args, **kwargs) -> Iterable[DatasetRecord]:
         """Yield normalized dataset records."""
         raise NotImplementedError
 
     def __len__(self) -> int:
         """Return the size of the dataset if known."""
         raise NotImplementedError
+
+@dataclass
+class AttackerDatasetRecord(DatasetRecord):
+    background_knowledge: List[Tuple[str, str]] = field(default_factory=list)
+    summarized_text: Optional[str] = None
+
+# Attacker adapter lives under dp.tri.attacker_adapter to keep loaders lean and avoid circular deps.

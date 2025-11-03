@@ -52,7 +52,7 @@ The benchmark evaluates methods across three dimensions:
 **Privacy Score** (aggregate):
 $$\text{Privacy} = \alpha \cdot \text{NormalizedRankDrop} + (1-\alpha) \cdot \text{ConfidenceDrop}$$
 
-**Implementation**: `tri.py --mode evaluate`
+**Implementation**: `tri_by_deid.py --mode evaluate`
 
 **Training Requirements**:
 - Minimum 10 texts per author for reliable classifier

@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
-from dp.utils.tri_detector import TRIDetector
+from dp.tri.with_deid import TRIDetectorWithDeid
 from dp.utils.splitter import TextSplitter
 
 class ShapExplainer(TokenExplainer):
@@ -14,7 +14,7 @@ class ShapExplainer(TokenExplainer):
         self.pipeline = None
         self.shap_explainer = None
         self.splitter = TextSplitter()
-        self.tri_detector = TRIDetector(model_name=model_name, device=device, use_chunking=use_chunking)
+        self.tri_detector = TRIDetectorWithDeid(model_name=model_name, device=device, use_chunking=use_chunking)
         self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}

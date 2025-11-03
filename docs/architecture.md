@@ -323,7 +323,7 @@ Save model checkpoint
 
 **TRI Detector**:
 ```
-tri.py --mode train --dataset tab --use-pretraining --annotation-folder outputs/
+tri_by_deid.py --mode train --dataset tab --use-pretraining --annotation-folder outputs/
     ↓
 Load dataset with UIDs and names
     ↓

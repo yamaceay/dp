@@ -94,7 +94,7 @@ Output shows strict, partial, and exact F1 scores.
 Train re-identification model with pretraining:
 
 ```bash
-python3 tri.py \
+python3 tri_by_deid.py \
     --dataset tab \
     --data-path data/TAB/splitted \
     --mode train \
@@ -116,7 +116,7 @@ python3 tri.py \
 Measure re-identification risk:
 
 ```bash
-python3 tri.py \
+python3 tri_by_deid.py \
     --dataset tab \
     --data-path data/TAB/splitted \
     --mode evaluate \
@@ -301,46 +301,30 @@ for record in predicted:
     print(f"Spans: {record.spans}")
 ```
 
-### Training TRI Model
+### Training TRI (De-identified Eval)
 
 ```python
-from dp.utils.tri_detector import TRIDetector
+from dp.tri import get_tri_detector
 from dp.loaders import get_adapter
 
-# Load data (separate files)
-train_adapter = get_adapter("tab", data_in="data/TAB/splitted/train.json")
-val_adapter = get_adapter("tab", data_in="data/TAB/splitted/dev.json")
-train_records = list(train_adapter.iter_records())
-val_records = list(val_adapter.iter_records())
+adapter = get_adapter("tab", data_in="data/TAB/splitted/train.json")
+records = list(adapter.iter_records())[:100]
 
-# Initialize detector
-tri = TRIDetector(
+tri = get_tri_detector(
+    "deid",
     dataset_name="tab",
     model_name="distilbert-base-uncased",
-    device="cuda"
+    device="cpu",
 )
 
-# Train with pretraining
-tri.train(
-    train_records=train_records,
-    val_records=val_records,
-    use_pretraining=True,
-    pretraining_epochs=3,
-    finetuning_epochs=10,
-    batch_size=8
-)
+eval_datasets = {"original": records}
+tri.setup(train_records=records, eval_records_dict=eval_datasets)
+tri.train(epochs=1, batch_size=8, best_metric_dataset="original")
 
-# Predict
-test_record = val_records[0]
-probabilities = tri.predict(test_record)
-
-# Show top-5 predictions
-sorted_preds = sorted(probabilities.items(), key=lambda x: x[1], reverse=True)
-print(f"True author: {test_record.name}")
-print("Top-5 predictions:")
-for rank, (author, prob) in enumerate(sorted_preds[:5], 1):
-    marker = "✓" if author == test_record.name else " "
-    print(f"  {rank}. {author}: {prob:.3f} {marker}")
+preds = tri.predict(records[:3])
+for uid, scores in preds.items():
+    top = max(scores.items(), key=lambda x: x[1])
+    print(uid, top)
 ```
 
 ### Custom Anonymizer
@@ -400,10 +384,10 @@ python3 model.py \
     --runtime_in configs/runtime/dp.yaml
 
 # 3. Train TRI on original texts
-python3 tri.py --dataset tab --data-path data/TAB/splitted --mode train --finetuning-epochs 10
+python3 tri_by_deid.py --dataset tab --data-path data/TAB/splitted --mode train --finetuning-epochs 10
 
 # 4. Evaluate TRI on anonymized texts
-python3 tri.py --dataset tab --data-path data/TAB/splitted --mode evaluate \
+python3 tri_by_deid.py --dataset tab --data-path data/TAB/splitted --mode evaluate \
     --model-path models/tri_pipelines/tab/<timestamp> \
     --annotation-folder outputs/tab/dpmlm
 
@@ -423,7 +407,7 @@ for method in presidio spacy dpmlm dpprompt petre; do
 done
 
 # Compare TRI metrics
-python3 tri.py --dataset tab --data-path data/TAB/splitted --mode evaluate \
+python3 tri_by_deid.py --dataset tab --data-path data/TAB/splitted --mode evaluate \
     --model-path models/tri_pipelines/tab/<timestamp> \
     --annotation-folder outputs/tab
 

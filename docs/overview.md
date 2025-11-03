@@ -151,15 +151,20 @@ dp/
 ├── data.py              # Dataset preprocessing
 ├── model.py             # Anonymization execution
 ├── pii.py               # PII detector training
-├── tri.py               # TRI model training
+├── tri_by_deid.py       # TRI model training (de-identified eval)
+├── tri_by_bk.py         # TRI model training (background knowledge)
 ├── methods/             # Anonymization implementations
 │   ├── simple/          # Baseline methods
 │   ├── dp/              # DP methods
 │   └── k_anon/          # K-anonymity methods
 ├── loaders/             # Dataset adapters
 ├── utils/               # Shared utilities
-│   ├── pii_detector.py  # Token classification
-│   └── tri_detector.py  # Re-identification
+│   └── pii_detector.py  # Token classification
+├── tri/                 # TRI (Text Re-Identification)
+│   ├── __init__.py      # Registry and API
+│   ├── base.py          # Core TRI logic
+│   ├── with_deid.py     # De-identified evaluation flow
+│   └── with_bk.py       # Background-knowledge flow
 └── experiments/         # Evaluation pipelines
     ├── reidentification.py
     └── utility/         # Downstream task experiments

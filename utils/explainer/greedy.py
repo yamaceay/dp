@@ -1,7 +1,7 @@
 from typing import Optional, List
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
-from dp.utils.tri_detector import TRIDetector
+from dp.tri.with_deid import TRIDetectorWithDeid
 
 class GreedyExplainer(TokenExplainer):
     def __init__(self, model_name: str = None, mask_token: str = "[MASK]", batch_size: int = 128, device: str = "auto", use_chunking: bool = False, **kwargs):
@@ -13,7 +13,7 @@ class GreedyExplainer(TokenExplainer):
         self.batch_size = batch_size
         self.device = self._resolve_device(device)
         self.pipeline = None
-        self.tri_detector = TRIDetector(model_name=model_name, device=device, use_chunking=use_chunking)
+        self.tri_detector = TRIDetectorWithDeid(model_name=model_name, device=device, use_chunking=use_chunking)
     
     def _resolve_device(self, device: str) -> str:
         if device == "auto":
