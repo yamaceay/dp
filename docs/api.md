@@ -530,7 +530,7 @@ from dp.methods.registry import MODEL_REGISTRY, SIMPLE_MODEL_REGISTRY, DP_MODEL_
 MODEL_REGISTRY: Dict[str, Type[Anonymizer]] = {
     "spacy": SpacyAnonymizer,
     "presidio": PresidioAnonymizer,
-    "manual": ManualAnonymizer,
+    # "manual": ManualAnonymizer,
     "baroud": BaroudAnonymizer,
     "risk": RiskAnonymizer,
     "petre": PetreAnonymizer,
@@ -577,7 +577,7 @@ class ModelCapabilities:
 MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
     "spacy": ModelCapabilities(),
     "presidio": ModelCapabilities(),
-    "manual": ModelCapabilities(must_use_dataset=True),
+    # "manual": ModelCapabilities(must_use_dataset=True),
     "baroud": ModelCapabilities(supports_batch_predict=True),
     "risk": ModelCapabilities(
         can_use_scoring=True,

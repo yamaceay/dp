@@ -1,6 +1,5 @@
 runtime: dp
 
 epsilon: 250.0
-tokenwise_epsilon_temperature: 0.1
 
 progress: true # slow runtime

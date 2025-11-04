@@ -25,7 +25,8 @@ class NumpyEncoder(json.JSONEncoder):
 
 OUTPUT_STRUCTURE = {
     model: "outputs/{dataset}" + f"/{model}" for model in [
-        "spacy", "presidio", "manual", "baroud", "risk",
+        "spacy", "presidio", "baroud", "risk", 
+        # "manual", # Uncomment if ManualAnonymizer is used
         "dpmlm", "dpbart", "dpprompt", "dpparaphrase",
         "petre",
     ]

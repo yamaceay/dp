@@ -1,2 +1,4 @@
 explainability: shap
 explainer_path: models/tri_pipelines/tab/20251104_085941
+risk_threshold: 0.1
+tokenwise_epsilon_temperature: 0.1
