@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 from collections import defaultdict
 import re
 import nltk
@@ -67,6 +67,8 @@ class PetreAnonymizer(KAnonymizer):
         self.tri_chunker: Optional[TokenAwareChunker] = None
         self._score_cache: Dict[str, np.ndarray] = {}
         self._score_order_cache: Dict[str, List[int]] = {}
+        self._raw_risk_scores: Dict[str, Tuple[List[Tuple[int, int]], List[float]]] = {}
+        self._prepared_risk_scores: Dict[str, np.ndarray] = {}
 
     def add_dataset_records(self, dataset_records: List[DatasetRecord]):
         if not dataset_records:
@@ -82,10 +84,73 @@ class PetreAnonymizer(KAnonymizer):
         self.tri_chunker = None
         self._terms_to_ignore = self._build_terms_to_ignore(self.annotations, self._annotation_name)
         self._clear_score_cache()
+        self._prepare_risk_scores_for_records()
 
     def _clear_score_cache(self) -> None:
         self._score_cache.clear()
         self._score_order_cache.clear()
+        self._refresh_prepared_risk_cache()
+
+    def _refresh_prepared_risk_cache(self) -> None:
+        if not self._prepared_risk_scores:
+            return
+        for uid, scores in self._prepared_risk_scores.items():
+            self._score_cache[uid] = scores
+            self._score_order_cache[uid] = list(np.argsort(-scores, kind="mergesort"))
+
+    def set_risk_scores(
+        self,
+        risk_scores: Dict[str, Dict[str, object]],
+        records: Optional[Sequence[DatasetRecord]] = None,
+    ) -> None:
+        self._raw_risk_scores = {}
+        self._prepared_risk_scores = {}
+        if not risk_scores:
+            self._clear_score_cache()
+            return
+        for uid, payload in risk_scores.items():
+            if not isinstance(payload, dict):
+                continue
+            offsets = payload.get("offsets")
+            scores = payload.get("scores")
+            if offsets is None or scores is None:
+                continue
+            normalized_offsets: List[Tuple[int, int]] = []
+            for span in offsets:
+                if isinstance(span, (list, tuple)) and len(span) >= 2:
+                    normalized_offsets.append((int(span[0]), int(span[1])))
+            score_list: List[float] = []
+            for value in scores:
+                try:
+                    score_list.append(float(value))
+                except (TypeError, ValueError):
+                    score_list.append(float("nan"))
+            if not normalized_offsets or not score_list:
+                continue
+            self._raw_risk_scores[uid] = (normalized_offsets, score_list)
+        self._clear_score_cache()
+        self._prepare_risk_scores_for_records()
+
+    def _prepare_risk_scores_for_records(self) -> None:
+        if not self._raw_risk_scores or not self._records_by_uid:
+            return
+        self._prepared_risk_scores = {}
+        for uid, state in self._records_by_uid.items():
+            raw = self._raw_risk_scores.get(uid)
+            if raw is None:
+                continue
+            offsets, scores = raw
+            span_map: Dict[Tuple[int, int], float] = {}
+            for span, value in zip(offsets, scores):
+                span_map[span] = float(value)
+            token_scores = np.full(len(state.term_spans), float("-inf"), dtype=float)
+            for idx, span in enumerate(state.term_spans):
+                key = (span[0], span[1])
+                if key not in span_map:
+                    continue
+                token_scores[idx] = float(span_map[key])
+            self._prepared_risk_scores[uid] = token_scores
+        self._refresh_prepared_risk_cache()
 
     def _build_terms_to_ignore(self, annotations: Dict[str, List[TextAnnotation]], name: Optional[str]) -> Set[str]:
         stopwords = set(nltk.corpus.stopwords.words("english"))
@@ -316,6 +381,11 @@ class PetreAnonymizer(KAnonymizer):
         cached = self._score_cache.get(state.uid)
         if cached is not None:
             return cached
+        precomputed = self._prepared_risk_scores.get(state.uid)
+        if precomputed is not None:
+            self._score_cache[state.uid] = precomputed
+            self._score_order_cache[state.uid] = list(np.argsort(-precomputed, kind="mergesort"))
+            return precomputed
         tokens = list(state.term_texts)
         if not tokens:
             empty = np.zeros(0, dtype=float)

@@ -189,12 +189,20 @@ class DPAnonymizer(Anonymizer):
         if progress:
             from tqdm import tqdm
             iterator = tqdm(iterator, desc="DP batch anonymization")
+        record_names_iter = kwargs.pop("record_names_iter", None)
+        base_kwargs = dict(kwargs)
         for text in iterator:
+            record_name = None
+            if record_names_iter is not None:
+                record_name = next(record_names_iter, None)
+            per_kwargs = dict(base_kwargs)
+            if record_name is not None:
+                per_kwargs["record_name"] = record_name
             per_text: Dict[float, List[AnonymizationResult]] = {value: [] for value in ordered_eps}
             for eps_value, results in self._grid_anonymize_stream(
                 text,
                 ordered_eps,
-                **kwargs,
+                **per_kwargs,
             ):
                 if eps_value not in per_text:
                     per_text[eps_value] = []

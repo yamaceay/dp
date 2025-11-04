@@ -1,4 +1,4 @@
-from typing import Iterator, List, Tuple, Optional
+from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 import torch
 import numpy as np
 import string
@@ -7,6 +7,7 @@ from collections import Counter
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.dp import DPAnonymizer
 from dp.utils.splitter import TextSplitter
+from dp.loaders import DatasetRecord
 
 
 class DPMlmAnonymizer(DPAnonymizer):
@@ -89,6 +90,9 @@ class DPMlmAnonymizer(DPAnonymizer):
         self.pii_detector = None
         self.explainer = None
         self.splitter = TextSplitter()
+        self._risk_scores_by_uid: Dict[str, Dict[Tuple[int, int], float]] = {}
+        self._risk_text_to_uid: Dict[str, List[str]] = {}
+        self._risk_text_positions: Dict[str, int] = {}
 
         try:
             from transformers import AutoTokenizer, AutoModelForMaskedLM
@@ -141,6 +145,47 @@ class DPMlmAnonymizer(DPAnonymizer):
             anonymizer.set_scoring_strategy(greedy)
         """
         self.explainer = explainer
+
+    def set_risk_scores(
+        self,
+        risk_scores: Dict[str, Dict[str, object]],
+        records: Optional[Sequence[DatasetRecord]] = None,
+    ) -> None:
+        self._risk_scores_by_uid = {}
+        if not risk_scores:
+            self._risk_text_to_uid = {}
+            self._risk_text_positions = {}
+            return
+        for uid, payload in risk_scores.items():
+            if not isinstance(payload, dict):
+                continue
+            offsets = payload.get("offsets")
+            scores = payload.get("scores")
+            if offsets is None or scores is None:
+                continue
+            span_map: Dict[Tuple[int, int], float] = {}
+            for span, value in zip(offsets, scores):
+                if not isinstance(span, (list, tuple)) or len(span) < 2:
+                    continue
+                try:
+                    span_key = (int(span[0]), int(span[1]))
+                    span_map[span_key] = float(value)
+                except (TypeError, ValueError):
+                    continue
+            if span_map:
+                self._risk_scores_by_uid[uid] = span_map
+        self._risk_text_to_uid = {}
+        self._risk_text_positions = {}
+        if records is None:
+            return
+        for record in records:
+            uid = record.uid
+            if uid not in self._risk_scores_by_uid:
+                continue
+            text_key = record.text or ""
+            entries = self._risk_text_to_uid.setdefault(text_key, [])
+            entries.append(uid)
+            self._risk_text_positions.setdefault(text_key, 0)
 
     def _tokenize(self, text: str) -> Tuple[List[str], List[Tuple[int, int]]]:
         tokens = []
@@ -235,12 +280,55 @@ class DPMlmAnonymizer(DPAnonymizer):
         probs = positive_scores / positive_scores.sum()
         return probs
 
+    def _lookup_precomputed_scores(
+        self,
+        text: str,
+        offsets: Sequence[Tuple[int, int]],
+        indices: Sequence[int],
+        record_name: Optional[str],
+    ) -> Optional[np.ndarray]:
+        uid = self._resolve_risk_uid(text, record_name)
+        if uid is None:
+            return None
+        mapping = self._risk_scores_by_uid.get(uid)
+        if mapping is None:
+            return None
+        values: List[float] = []
+        for idx in indices:
+            if idx < 0 or idx >= len(offsets):
+                return None
+            span = offsets[idx]
+            key = (int(span[0]), int(span[1]))
+            if key not in mapping:
+                return None
+            values.append(float(mapping[key]))
+        if not values:
+            return None
+        return np.asarray(values, dtype=float)
+
+    def _resolve_risk_uid(self, text: str, record_name: Optional[str]) -> Optional[str]:
+        if record_name and record_name in self._risk_scores_by_uid:
+            return record_name
+        text_key = text or ""
+        entries = self._risk_text_to_uid.get(text_key)
+        if not entries:
+            return None
+        position = self._risk_text_positions.get(text_key, 0)
+        if position >= len(entries):
+            position = len(entries) - 1
+        if position < len(entries) - 1:
+            self._risk_text_positions[text_key] = position + 1
+        else:
+            self._risk_text_positions[text_key] = position
+        return entries[position]
+
     def _grid_anonymize_stream(
         self,
         text: str,
         epsilon: List[float],
         *args,
         tokenwise_epsilon_temperature: Optional[float] = None,
+        record_name: Optional[str] = None,
         **kwargs,
     ) -> Iterator[Tuple[float, List[AnonymizationResult]]]:
         if not epsilon:
@@ -285,7 +373,12 @@ class DPMlmAnonymizer(DPAnonymizer):
             tokenwise_epsilon_temperature = 1.0
 
         probs = np.ones(len(critical_tokens)) / len(critical_tokens)
-        if self.explainer is not None:
+        used_precomputed = False
+        precomputed_scores = self._lookup_precomputed_scores(text, offsets, critical_indices, record_name)
+        if precomputed_scores is not None:
+            used_precomputed = True
+            probs = self._weights_to_probs(precomputed_scores, temperature=tokenwise_epsilon_temperature)
+        elif self.explainer is not None:
             scores = self.explainer.explain(text, critical_tokens)
             if scores is not None and len(scores) == len(critical_tokens):
                 probs = self._weights_to_probs(np.array(scores), temperature=tokenwise_epsilon_temperature)
@@ -371,7 +464,10 @@ class DPMlmAnonymizer(DPAnonymizer):
             if self.pii_detector is not None:
                 metadata["pii_detection"] = "enabled"
                 metadata["pii_spans_count"] = len(pii_spans)
-            if self.explainer is not None:
+            if used_precomputed:
+                metadata["explainer"] = "PrecomputedRisk"
+                metadata["critical_tokens"] = len(critical_tokens)
+            elif self.explainer is not None:
                 metadata["explainer"] = self.explainer.__class__.__name__
                 metadata["critical_tokens"] = len(critical_tokens)
 

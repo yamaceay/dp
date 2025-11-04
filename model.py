@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional, List, Tuple, Union
 import argparse
+import json
 import yaml
 import time
 from datetime import datetime
@@ -46,7 +47,8 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
     parser.add_argument('--stream', action='store_true', help='Stream outputs (recommended for jsonl) instead of buffering all results')
     parser.add_argument('--start_idx', type=int, default=0, help='Starting index for streaming output (default: 0)')
-    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream', 'start_idx']
+    parser.add_argument('--risk_in', type=str, default=None, help='Path to precomputed risk scores file')
+    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream', 'start_idx', 'risk_in']
 
 def load_config(sth_in: Optional[str]) -> dict:
     config = {}
@@ -64,7 +66,29 @@ def load_data(data_kwargs: Optional[dict]) -> List[DatasetRecord]:
     dataset = adapter(**data_kwargs)
     return dataset
 
-def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_kwargs: Optional[dict], dataset: Optional[List[DatasetRecord]] = None) -> Anonymizer:
+
+def load_precomputed_risk(path: str) -> Dict[str, Dict[str, object]]:
+    risk_map: Dict[str, Dict[str, object]] = {}
+    with open(path, "r", encoding="utf-8") as reader:
+        for line in reader:
+            entry = line.strip()
+            if not entry:
+                continue
+            payload = json.loads(entry)
+            uid = payload.get("uid")
+            if not uid:
+                continue
+            offsets = payload.get("offsets")
+            scores = payload.get("scores")
+            if offsets is None or scores is None:
+                continue
+            risk_map[str(uid)] = {
+                "offsets": offsets,
+                "scores": scores,
+            }
+    return risk_map
+
+def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_kwargs: Optional[dict], dataset: Optional[Any] = None) -> Anonymizer:
     model = model_kwargs.get("model")
     model_cls = MODEL_REGISTRY.get(model)
     if model_cls is None:
@@ -75,8 +99,14 @@ def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_
     if capabilities.must_use_dataset:
         if dataset is None:
             raise ValueError(f"{model} requires dataset to be loaded")
+        if isinstance(dataset, list):
+            dataset_records = dataset
+        elif hasattr(dataset, "iter_records"):
+            dataset_records = list(dataset.iter_records())
+        else:
+            dataset_records = list(dataset)
         model_instance = model_cls(**model_config, **model_kwargs, **data_kwargs)
-        model_instance.add_dataset_records(list(dataset.iter_records()))
+        model_instance.add_dataset_records(dataset_records)
     else:
         model_instance = model_cls(**model_config, **model_kwargs, **data_kwargs)
     
@@ -256,6 +286,7 @@ if __name__ == "__main__":
     data_kwargs = {k: getattr(args, k) for k in data_keys}
     model_kwargs = {k: getattr(args, k) for k in model_keys}
     runtime_kwargs = {k: getattr(args, k) for k in runtime_keys}
+    risk_path = runtime_kwargs.pop("risk_in", None)
     stream_enabled = runtime_kwargs.pop("stream", False)
     start_idx = runtime_kwargs.pop("start_idx", 0)
     if start_idx is None:
@@ -277,6 +308,7 @@ if __name__ == "__main__":
         exit(0)
 
     dataset = load_data(data_kwargs)
+    records = list(dataset.iter_records())
 
     model_config = load_config(args.model_in)
     if model_config is None:
@@ -289,7 +321,6 @@ if __name__ == "__main__":
 
     loaded_annotations = None
     if capabilities.can_use_annotations and args.annotations_in:
-        records = list(dataset.iter_records())
         loaded_annotations = {}
         
         for source in args.annotations_in.split(','):
@@ -306,7 +337,7 @@ if __name__ == "__main__":
         
         print(f"✓ Loaded annotations for {len(loaded_annotations)} records from {len(args.annotations_in.split(','))} source(s)")
     
-    model = load_model(model_config, model_kwargs, data_kwargs, dataset)
+    model = load_model(model_config, model_kwargs, data_kwargs, records)
     
     if loaded_annotations is not None and hasattr(model, 'set_annotations'):
         model.set_annotations(loaded_annotations, name=args.annotations)
@@ -349,7 +380,15 @@ if __name__ == "__main__":
             model.set_scoring_strategy(explainer)
 
     runtime_config = load_config(args.runtime_in)
+    config_risk_path = runtime_config.pop("risk_in", None)
+    if risk_path is None and config_risk_path is not None:
+        risk_path = config_risk_path
     
+    if risk_path:
+        risk_scores = load_precomputed_risk(risk_path)
+        if hasattr(model, "set_risk_scores"):
+            model.set_risk_scores(risk_scores, records=records)
+
     batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])
@@ -374,12 +413,12 @@ if __name__ == "__main__":
         if indices is None:
             max_records = data_kwargs.get("max_records", None)
             if max_records is None:
-                max_records = len(dataset)
-            indices = list(range(min(max_records, len(dataset))))
+                max_records = len(records)
+            indices = list(range(min(max_records, len(records))))
         else:
             for idx in indices:
-                if idx < 0 or idx >= len(dataset):
-                    raise ValueError(f"Index {idx} is out of bounds for dataset of length {len(dataset)}.")
+                if idx < 0 or idx >= len(records):
+                    raise ValueError(f"Index {idx} is out of bounds for dataset of length {len(records)}.")
         if stream_enabled and start_idx > 0:
             indices = [idx for idx in indices if idx >= start_idx]
             if not indices:
@@ -389,32 +428,51 @@ if __name__ == "__main__":
         text_indices = indices  # For dataset methods, use indices as text_indices
     
     else:
+        record_names: Optional[List[str]] = None
         if texts is None:
             if indices is not None:
-                records = list(dataset.iter_records())
                 texts = [records[idx].text for idx in indices]
                 text_indices = indices
+                names: List[str] = []
+                for idx_val in indices:
+                    record = records[idx_val]
+                    identifier = getattr(record, "uid", None) or getattr(record, "name", None) or str(idx_val)
+                    names.append(str(identifier))
+                record_names = names
             else:
-                max_records = data_kwargs.get("max_records", len(dataset))
-                records = list(dataset.iter_records())[:max_records]
-                texts = [record.text for record in records]
+                max_records = data_kwargs.get("max_records", len(records))
+                selected_records = records[:max_records]
+                texts = [record.text for record in selected_records]
                 text_indices = list(range(len(texts)))
+                record_names = [
+                    str(getattr(record, "uid", None) or getattr(record, "name", None) or idx)
+                    for idx, record in enumerate(selected_records)
+                ]
         else:
             text_indices = [None] * len(texts)
         if stream_enabled and start_idx > 0:
             filtered_texts: List[str] = []
             filtered_indices: List[Optional[int]] = []
+            filtered_names: Optional[List[str]] = [] if record_names is not None else None
             for pos, (text, idx_val) in enumerate(zip(texts, text_indices)):
                 effective_idx = idx_val if idx_val is not None else pos
                 if effective_idx >= start_idx:
                     filtered_texts.append(text)
                     filtered_indices.append(idx_val)
+                    if filtered_names is not None and record_names is not None and pos < len(record_names):
+                        filtered_names.append(record_names[pos])
             if not filtered_texts:
                 raise ValueError("No texts remain after applying --start_idx for streaming run.")
             texts = filtered_texts
             text_indices = filtered_indices
-        
+            if filtered_names is not None:
+                record_names = filtered_names
+            if record_names is not None:
+                record_names = [name for name in record_names if name is not None]
+
         builder.with_texts(texts)
+        if record_names is not None:
+            runtime_config["record_names"] = record_names
 
     if capabilities.requires_k:
         k = runtime_config.get("k", 5)

@@ -178,8 +178,13 @@ class AnonymizationBuilder:
         texts_iter = self.request.texts
         if progress:
             texts_iter = tqdm(texts_iter, desc="Anonymizing texts")
-        for text in texts_iter:
-            result = self.anonymizer.anonymize(text=text, **kwargs)
+        record_names = kwargs.pop("record_names", None)
+        base_kwargs = dict(kwargs)
+        for idx, text in enumerate(texts_iter):
+            per_kwargs = dict(base_kwargs)
+            if record_names is not None and idx < len(record_names):
+                per_kwargs["record_name"] = record_names[idx]
+            result = self.anonymizer.anonymize(text=text, **per_kwargs)
             results.append(result)
         return results
     
@@ -241,7 +246,14 @@ class AnonymizationBuilder:
         if not epsilons:
             raise ValueError("No epsilon values provided for DP anonymization")
         ordered_eps = [float(e) for e in dict.fromkeys(epsilons)]
-        filtered_kwargs = {key: value for key, value in kwargs.items() if key != "epsilon"}
+        record_names = kwargs.get("record_names")
+        filtered_kwargs = {
+            key: value
+            for key, value in kwargs.items()
+            if key not in {"epsilon", "record_names"}
+        }
+        if record_names is not None:
+            filtered_kwargs["record_names_iter"] = iter(record_names)
         return texts, ordered_eps, filtered_kwargs
 
     def _prepare_k_inputs(self, kwargs):
