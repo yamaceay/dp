@@ -79,7 +79,7 @@ replacement: type_placeholder
 
 **Use Case**: General-purpose baseline when training data unavailable
 
-<!-- ### Manual
+### Manual
 
 **Type**: Ground-truth annotation based
 
@@ -107,7 +107,7 @@ replacement: type_placeholder
 - Not applicable to new texts
 - Still loses utility from redaction
 
-**Use Case**: Upper bound analysis, debugging other methods -->
+**Use Case**: Upper bound analysis, debugging other methods
 
 ### Baroud
 

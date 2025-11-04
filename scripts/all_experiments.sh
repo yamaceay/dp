@@ -32,7 +32,7 @@ function all_methods() {
 
 function all_datasets() {
   printf 'trustpilot,data/trustpilot/sample_300.jsonl\n'
-  printf 'tab,data/tab/test_processed.json\n'
+  printf 'tab,data/tab/splitted/test.json\n'
   printf 'reddit,data/reddit/train.jsonl\n'
   printf 'db_bio,data/db_bio/train/data-00000-of-00001.arrow\n'
 }
@@ -65,7 +65,7 @@ function all_methods_runtimes() {
     ["risk"]="simple"
     ["spacy"]="simple"
     ["presidio"]="simple"
-    # ["manual"]="simple"
+    ["manual"]="simple"
   )
 
   while IFS=, read -r dataset_name dataset_path; do

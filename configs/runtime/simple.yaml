@@ -1,3 +1,4 @@
 runtime: simple
 
-progress: false # too fast anyway
+progress: true
+# progress: false # too fast anyway

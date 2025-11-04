@@ -2,7 +2,6 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime
 import json
-from dataclasses import asdict
 import numpy as np
 
 from dp.methods.anonymizer import AnonymizationResult
@@ -25,8 +24,7 @@ class NumpyEncoder(json.JSONEncoder):
 
 OUTPUT_STRUCTURE = {
     model: "outputs/{dataset}" + f"/{model}" for model in [
-        "spacy", "presidio", "baroud", "risk", 
-        # "manual", # Uncomment if ManualAnonymizer is used
+        "spacy", "presidio", "baroud", "risk",  "manual",
         "dpmlm", "dpbart", "dpprompt", "dpparaphrase",
         "petre",
     ]
@@ -101,7 +99,6 @@ class JsonlOutputHandler(OutputHandler):
         if ann.replacement:
             data["replacement"] = ann.replacement
         if ann.confidence is not None:
-            # Convert NumPy float types to native Python float
             data["confidence"] = float(ann.confidence) if isinstance(ann.confidence, (np.floating, np.float32, np.float64)) else ann.confidence
         if ann.annotator:
             data["annotator"] = ann.annotator
