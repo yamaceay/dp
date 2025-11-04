@@ -43,8 +43,7 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
     ),
     "risk": ModelCapabilities(
         must_use_non_uniform_explainer=True,
-        can_use_annotations=True,
-        can_use_scoring=True, 
+        can_use_scoring=True,
         supports_streaming=True,
     ),
     "petre": ModelCapabilities(

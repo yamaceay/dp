@@ -55,30 +55,22 @@ class RiskAnonymizer(SimpleAnonymizer):
             raise ValueError("Explainer must define explain")
         self._explainer = explainer
 
-    def anonymize(self, text: str, *args, target_label: Optional[str] = None, record_name: Optional[str] = None, **kwargs) -> AnonymizationResult:
+    def anonymize(self, text: str, *args, record_name: Optional[str] = None, **kwargs) -> AnonymizationResult:
         tokens, spans = self._split_tokens(text)
         if not tokens:
             raise ValueError("tokenization produced no tokens")
-        risk_scores, risk_probabilities, risk_source = self._score_tokens(text, tokens, target_label)
+        risk_scores, risk_probabilities, risk_source = self._score_tokens(text, tokens)
         risks = self._build_risks(tokens, spans, risk_scores, risk_probabilities)
         masked_text, mask_spans = self._apply_mask(text, risks)
         annotations = self._build_annotations(risks)
         metadata = self._build_metadata(
             record_name=record_name,
-            target_label=target_label,
             risk_source=risk_source,
         )
         return AnonymizationResult(text=masked_text, spans=annotations, metadata=metadata)
 
-    def anonymize_from_dataset(self, idx: int, *args, target_label: Optional[str] = None, **kwargs) -> AnonymizationResult:
-        if idx < 0 or idx >= len(self._dataset_records):
-            raise IndexError("dataset index out of range")
-        record = self._dataset_records[idx]
-        return self.anonymize(
-            record.text,
-            target_label=target_label,
-            record_name=record.name or record.uid or None,
-        )
+    def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
+        raise NotImplementedError("Use anonymize with text for RiskAnonymizer.")
 
     def _split_tokens(self, text: str) -> Tuple[List[str], List[Tuple[int, int]]]:
         spans = self._splitter.tokenize_with_spans(text)
@@ -90,11 +82,10 @@ class RiskAnonymizer(SimpleAnonymizer):
         self,
         text: str,
         tokens: Sequence[str],
-        target_label: Optional[str],
     ) -> Tuple[np.ndarray, Optional[np.ndarray], str]:
         if self._explainer is None:
             raise RuntimeError("RiskAnonymizer requires set_scoring_strategy before use")
-        raw_scores = self._explainer.explain(text, list(tokens), target_label=target_label)
+        raw_scores = self._explainer.explain(text, list(tokens))
         scores = np.asarray(raw_scores, dtype=float).ravel()
         probabilities = self._to_distribution(scores)
         source = type(self._explainer).__name__
@@ -206,13 +197,11 @@ class RiskAnonymizer(SimpleAnonymizer):
     def _build_metadata(
         self,
         record_name: Optional[str],
-        target_label: Optional[str],
         risk_source: str,
     ) -> Dict[str, object]:
         return {
             "method": "risk",
             "record": record_name,
-            "target_label": target_label,
             "threshold": self._threshold,
             "mask_text": self._mask_text,
             "risk_source": risk_source,

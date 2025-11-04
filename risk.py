@@ -14,6 +14,7 @@ if __name__ == "__main__":
     parser.add_argument('--explainer_in', type=str, required=True, help='Path to model config file')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load')
     parser.add_argument('--save_to_jsonl', type=str, default=None, help='Path to save output JSONL file')
+    parser.add_argument('--starting_index', type=int, default=0, help='Starting index for processing records')
     parser.add_argument('--sort_by', type=str, choices=['scores', 'offsets'], default='offsets', help='Whether to sort tokens by score or offset in output')
     args = parser.parse_args()
 
@@ -27,6 +28,7 @@ if __name__ == "__main__":
         explainer = ShapExplainer(model_name=args.explainer_in)
     splitter = TextSplitter()
     records = list(adapter.iter_records())
+    records = records[args.starting_index:]
     for record in tqdm(records, desc="Explaining records"):
         tokens = []
         offsets = []

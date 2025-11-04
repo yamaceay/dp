@@ -65,6 +65,8 @@ class PetreAnonymizer(KAnonymizer):
         self.annotations: Dict[str, List[TextAnnotation]] = {}
         self._annotation_name: Optional[str] = None
         self.tri_chunker: Optional[TokenAwareChunker] = None
+        self._score_cache: Dict[str, np.ndarray] = {}
+        self._score_order_cache: Dict[str, List[int]] = {}
 
     def add_dataset_records(self, dataset_records: List[DatasetRecord]):
         if not dataset_records:
@@ -79,6 +81,11 @@ class PetreAnonymizer(KAnonymizer):
         self._annotation_name = None
         self.tri_chunker = None
         self._terms_to_ignore = self._build_terms_to_ignore(self.annotations, self._annotation_name)
+        self._clear_score_cache()
+
+    def _clear_score_cache(self) -> None:
+        self._score_cache.clear()
+        self._score_order_cache.clear()
 
     def _build_terms_to_ignore(self, annotations: Dict[str, List[TextAnnotation]], name: Optional[str]) -> Set[str]:
         stopwords = set(nltk.corpus.stopwords.words("english"))
@@ -303,6 +310,46 @@ class PetreAnonymizer(KAnonymizer):
             return int(label.split("_")[-1])
         return int(label)
 
+    def _token_scores_for_state(self, state: RecordState) -> np.ndarray:
+        if self.explainer is None:
+            raise RuntimeError("Scoring strategy must be set before running PETRE")
+        cached = self._score_cache.get(state.uid)
+        if cached is not None:
+            return cached
+        tokens = list(state.term_texts)
+        if not tokens:
+            empty = np.zeros(0, dtype=float)
+            self._score_cache[state.uid] = empty
+            return empty
+        raw_scores = self.explainer.explain(state.text, tokens)
+        array = np.asarray(raw_scores, dtype=float).ravel()
+        length = len(tokens)
+        if array.size < length:
+            padded = np.full(length, float("-inf"), dtype=float)
+            if array.size > 0:
+                padded[: array.size] = array
+            array = padded
+        elif array.size > length:
+            array = array[:length]
+        invalid_mask = ~np.isfinite(array)
+        if invalid_mask.any():
+            array = array.copy()
+            array[invalid_mask] = float("-inf")
+        self._score_cache[state.uid] = array
+        return array
+
+    def _ordered_token_indices_for_state(self, state: RecordState) -> List[int]:
+        cached = self._score_order_cache.get(state.uid)
+        if cached is not None:
+            return cached
+        scores = self._token_scores_for_state(state)
+        if scores.size == 0:
+            ordered: List[int] = []
+        else:
+            ordered = list(np.argsort(-scores, kind="mergesort"))
+        self._score_order_cache[state.uid] = ordered
+        return ordered
+
     def set_scoring_strategy(self, explainer: TokenExplainer) -> None:
         if explainer is None:
             raise ValueError("explainer cannot be None")
@@ -314,6 +361,7 @@ class PetreAnonymizer(KAnonymizer):
         self.explainer = explainer
         self.tri_pipeline_path = tri_model_name
         self.batch_size = int(getattr(explainer, "batch_size", self.batch_size))
+        self._clear_score_cache()
         self._load_tri_pipeline()
 
     def _load_tri_pipeline(self) -> None:
@@ -476,50 +524,6 @@ class PetreAnonymizer(KAnonymizer):
             expanded.append(base_span)
         return expanded
 
-    def _collect_candidates(
-        self,
-        state: RecordState,
-        span_set: Set[Tuple[int, int]],
-    ) -> List[Tuple[int, Tuple[int, int], str]]:
-        candidates: List[Tuple[int, Tuple[int, int], str]] = []
-        for idx, span in enumerate(state.term_spans):
-            span_tuple = (span[0], span[1])
-            if span_tuple in span_set:
-                continue
-            if self._span_overlaps_existing(span_tuple, span_set):
-                continue
-            term_text = state.term_texts[idx]
-            if self._should_ignore(term_text):
-                continue
-            candidates.append((idx, span_tuple, term_text))
-        return candidates
-
-    def _select_candidate(
-        self,
-        state: RecordState,
-        current_spans: List[Tuple[int, int]],
-        span_set: Set[Tuple[int, int]],
-        current_probs: np.ndarray,
-        candidates: List[Tuple[int, Tuple[int, int], str]],
-    ) -> Optional[Tuple[List[Tuple[int, int]], np.ndarray]]:
-        label_idx = state.label
-        baseline_prob = current_probs[label_idx]
-        best_spans: Optional[List[Tuple[int, int]]] = None
-        best_probs: Optional[np.ndarray] = None
-        best_drop = float("-inf")
-        for _, base_span, term_text in candidates:
-            candidate_spans = self._expand_candidate_spans(state, base_span, term_text, span_set)
-            test_spans = current_spans + candidate_spans
-            probs = self._evaluate_state(state, test_spans)
-            drop = baseline_prob - probs[label_idx]
-            if drop > best_drop + 1e-12 or (abs(drop - best_drop) <= 1e-12 and best_spans is None):
-                best_drop = drop
-                best_spans = candidate_spans
-                best_probs = probs
-        if best_spans is None or best_probs is None:
-            return None
-        return best_spans, best_probs
-
     def _base_annotations_for(self, target_k: int) -> Dict[str, List[TextAnnotation]]:
         if not self._annotation_history:
             return self._starting_annotations
@@ -557,25 +561,58 @@ class PetreAnonymizer(KAnonymizer):
             annotations = self.annotations[state.uid]
             spans: List[Tuple[int, int]] = [(ann.start, ann.end) for ann in annotations]
             span_set: Set[Tuple[int, int]] = set(spans)
+            span_to_indices: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+            for token_idx, span in enumerate(state.term_spans):
+                span_tuple = (span[0], span[1])
+                span_to_indices[span_tuple].append(token_idx)
+            used_indices: Set[int] = set()
+            for existing_span in span_set:
+                for mapped_idx in span_to_indices.get(existing_span, []):
+                    used_indices.add(mapped_idx)
+            scores = self._token_scores_for_state(state)
+            ordered_indices = self._ordered_token_indices_for_state(state)
             current_probs = self._evaluate_state(state, spans)
             while True:
                 rank = self._rank_from_probs(current_probs, state.label)
                 if rank >= target_k:
                     break
-                candidates = self._collect_candidates(state, span_set)
-                if not candidates:
-                    break
-                selected = self._select_candidate(state, spans, span_set, current_probs, candidates)
-                if selected is None:
-                    break
-                candidate_spans, candidate_probs = selected
-                new_spans = []
-                for candidate_span in candidate_spans:
-                    if candidate_span in span_set:
+                next_token_idx: Optional[int] = None
+                candidate_spans: List[Tuple[int, int]] = []
+                candidate_text: Optional[str] = None
+                for token_idx in ordered_indices:
+                    if token_idx in used_indices:
                         continue
-                    new_spans.append(candidate_span)
-                if not new_spans:
+                    score = scores[token_idx] if token_idx < scores.size else float("-inf")
+                    if not np.isfinite(score):
+                        used_indices.add(token_idx)
+                        continue
+                    token_text = state.term_texts[token_idx]
+                    if self._should_ignore(token_text):
+                        used_indices.add(token_idx)
+                        if self.mask_all_instances:
+                            for related_idx in state.term_indices_by_text.get(token_text, []):
+                                used_indices.add(related_idx)
+                        continue
+                    base_span = state.term_spans[token_idx]
+                    expanded = self._expand_candidate_spans(state, base_span, token_text, span_set)
+                    if not expanded:
+                        used_indices.add(token_idx)
+                        continue
+                    next_token_idx = token_idx
+                    candidate_spans = expanded
+                    candidate_text = token_text
                     break
+                if next_token_idx is None or not candidate_spans:
+                    break
+                new_spans: List[Tuple[int, int]] = []
+                for start, end in candidate_spans:
+                    span_tuple = (start, end)
+                    if span_tuple in span_set:
+                        continue
+                    new_spans.append(span_tuple)
+                if not new_spans:
+                    used_indices.add(next_token_idx)
+                    continue
                 for start, end in new_spans:
                     annotations.append(
                         TextAnnotation(
@@ -585,9 +622,16 @@ class PetreAnonymizer(KAnonymizer):
                             replacement=self.mask_text,
                         )
                     )
-                    span_set.add((start, end))
+                    span_tuple = (start, end)
+                    span_set.add(span_tuple)
+                    for mapped_idx in span_to_indices.get(span_tuple, []):
+                        used_indices.add(mapped_idx)
+                if candidate_text is not None:
+                    for related_idx in state.term_indices_by_text.get(candidate_text, []):
+                        used_indices.add(related_idx)
+                used_indices.add(next_token_idx)
                 spans.extend(new_spans)
-                current_probs = candidate_probs
+                current_probs = self._evaluate_state(state, spans)
         aligned_history: Dict[str, List[TextAnnotation]] = {}
         for idx in pending:
             state = self._records_by_idx[idx]
