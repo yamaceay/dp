@@ -81,7 +81,7 @@ function all_methods_runtimes() {
         fi
 
         flags=" "
-        if [[ "$runtime_type" != "simple" ]]; then
+        if [[ "$runtime_type" != "simple" || "$method_base" == "risk" ]]; then
           flags="--stream"
         fi
         all_runtimes | while IFS=, read -r runtime_method runtime_path; do
