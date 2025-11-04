@@ -1,8 +1,16 @@
+from typing import List
 from dp.loaders import ADAPTER_REGISTRY
 import argparse
-import os
 
 available_datasets = list(ADAPTER_REGISTRY.keys())
+
+
+def format_table(unique_keys: List[str], unique_counts: List[int], unique_values: List[str]) -> str:
+    """Format data as a simple table string."""
+    count_keys = [f"Unique {key}s[{count}]" for key, count in zip(unique_keys, unique_counts)]
+    col_width = max(len(str(item)) for item in count_keys)
+    padded_strs = [f"{count_key:<{col_width}} : {values}" for count_key, values in zip(count_keys, unique_values)]
+    return "\n".join(padded_strs)
 
 def load_data(data: str, data_in: str, max_records: int = None):
     adapter = ADAPTER_REGISTRY.get(data)
@@ -26,24 +34,48 @@ if __name__ == "__main__":
 
     dataset = load_data(args.data, args.data_in, args.max_records)
 
-    unique_uids = set()
-    unique_names = set()
-    utility_keys = set()
+    value_getters = {
+        'uid': lambda r: r.uid,
+        'name': lambda r: r.name,
+        'key': lambda r: list(r.metadata.keys()),
+    }
+
+    if args.data.lower() == 'db_bio':
+        value_getters.update({
+            'label': lambda r: r.metadata.get('label', None),
+        })
+
+    unique_values = {}
     sum_text_length = 0
     max_text_length = 0
 
     for record in dataset.iter_records():
         if args.full_record:
             print(record)
-        unique_names.add(record.name)
         sum_text_length += len(record.text)
         max_text_length = max(max_text_length, len(record.text))
 
-        unique_uids.add(record.uid)
-        utility_keys.update(record.metadata.keys())
+        for key, getter in value_getters.items():
+            value = getter(record)
+            if value is None:
+                continue
+            unique_value = unique_values.get(key, dict())
+            not_a_list = not isinstance(value, (list, set))
+            if not_a_list :
+                value = [value]
+            for v in value:
+                unique_value[v] = unique_value.get(v, 0) + 1
+            unique_values[key] = unique_value
 
-    print(f"Total individuals loaded: {len(unique_names)}")
-    print(f"Total records loaded: {len(unique_uids)}")
-    print(f"Utility keys found: {', '.join(utility_keys)}")
+    unique_key_list, unique_value_list, unique_count_list = [], [], []
+    for key, values in unique_values.items():
+        unique_key_list.append(key)
+        if any(count > 1 for _, count in values.items()):
+            values_sorted = sorted(values.items(), key=lambda item: item[1], reverse=True)
+            values = [f"{v}[{c}]" for v, c in values_sorted]
+        unique_value_list.append(values)
+        unique_count_list.append(len(values))
+    table_str = format_table(unique_key_list, unique_count_list, unique_value_list)
+    print(table_str)
     print(f"Average text length: {sum_text_length / len(dataset)}" if dataset else "No records found.")
     print(f"Maximum text length: {max_text_length}" if dataset else "No records found.")
