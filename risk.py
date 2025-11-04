@@ -1,5 +1,6 @@
 import json
 from tqdm import tqdm
+import torch
 
 from dp.utils.explainer import GreedyExplainer, ShapExplainer
 from dp.loaders import get_adapter
@@ -36,6 +37,10 @@ if __name__ == "__main__":
             tokens.append(token)
             offsets.append((start, end))
         scores = explainer.explain(record.text, tokens)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        elif torch.backends.mps.is_available():
+            torch.mps.empty_cache()
         if args.sort_by == 'scores':
             sorted_indices = sorted(range(len(tokens)), key=lambda i: scores[i], reverse=True)
             offsets = [offsets[i] for i in sorted_indices]

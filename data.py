@@ -48,10 +48,12 @@ if __name__ == "__main__":
     unique_values = {}
     sum_text_length = 0
     max_text_length = 0
+    all_text_lengths = []
 
     for record in dataset.iter_records():
         if args.full_record:
             print(record)
+        all_text_lengths.append(len(record.text))
         sum_text_length += len(record.text)
         max_text_length = max(max_text_length, len(record.text))
 
@@ -79,3 +81,4 @@ if __name__ == "__main__":
     print(table_str)
     print(f"Average text length: {sum_text_length / len(dataset)}" if dataset else "No records found.")
     print(f"Maximum text length: {max_text_length}" if dataset else "No records found.")
+    print(f"All text lengths: {all_text_lengths}" if dataset else "No records found.")
