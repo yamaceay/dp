@@ -1,8 +1,7 @@
-from typing import Optional, List, Dict
+from typing import Optional, Sequence, Tuple, Dict, List
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
 from dp.tri.with_deid import TRIDetectorWithDeid
-from dp.utils.splitter import TextSplitter
 
 class ShapExplainer(TokenExplainer):
     def __init__(self, model_name: str = None, device: str = "auto", use_chunking: bool = False, **kwargs):
@@ -13,7 +12,6 @@ class ShapExplainer(TokenExplainer):
         self.device = self._resolve_device(device)
         self.pipeline = None
         self.shap_explainer = None
-        self.splitter = TextSplitter()
         self.tri_detector = TRIDetectorWithDeid(model_name=model_name, device=device, use_chunking=use_chunking)
         self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
@@ -52,7 +50,10 @@ class ShapExplainer(TokenExplainer):
         for name, idx in self.tri_detector.name_to_label.items():
             self.id_to_label[idx] = name
 
-    def explain(self, text: str, tokens: Optional[List[str]] = None, target_label: Optional[str] = None) -> np.ndarray:
+    def explain(self, text: str, offsets: Sequence[Tuple[int, int]], target_label: Optional[str] = None) -> np.ndarray:
+        normalized_offsets = self._normalize_offsets(text, offsets)
+        if not normalized_offsets:
+            return np.zeros(0, dtype=float)
         self._load_pipeline()
         
         label_name = None
@@ -61,10 +62,11 @@ class ShapExplainer(TokenExplainer):
         else:
             predictions = self.pipeline(text)
             if isinstance(predictions, list) and predictions:
-                if isinstance(predictions[0], dict):
-                    label_name = predictions[0].get("label")
-                elif isinstance(predictions[0], list) and predictions[0]:
-                    label_name = predictions[0][0].get("label")
+                prediction = predictions[0]
+                if isinstance(prediction, dict):
+                    label_name = prediction.get("label")
+                elif isinstance(prediction, list) and prediction:
+                    label_name = prediction[0].get("label")
         if not label_name:
             raise ValueError("target label is not defined for the provided text")
         
@@ -79,22 +81,14 @@ class ShapExplainer(TokenExplainer):
                 pass
         if label_int is None:
             raise ValueError(f"target label '{label_name}' cannot be mapped to an output index")
-        
-        if tokens is None:
-            raise ValueError("tokens required")
-        
-        term_spans = self.splitter.tokenize_with_spans(text)
+        term_spans = normalized_offsets
         shap_values = self.shap_explainer([text], batch_size=1)
         subword_weights = shap_values.values[0, :, label_int]
         shap_tokens = shap_values.data[0]
         
-        term_weights = np.zeros(len(tokens))
+        term_weights = np.zeros(len(term_spans), dtype=float)
         
-        for term_idx, token in enumerate(tokens):
-            if term_idx >= len(term_spans):
-                break
-            
-            term_start, term_end, _ = term_spans[term_idx]
+        for term_idx, (term_start, term_end) in enumerate(term_spans):
             overlapping_weights = []
             
             current_pos = 0
@@ -106,9 +100,21 @@ class ShapExplainer(TokenExplainer):
                 
                 if not (subword_end <= term_start or subword_start >= term_end):
                     overlapping_weights.append(subword_weights[subword_idx])
-                
                 current_pos = subword_end
             
             term_weights[term_idx] = sum(overlapping_weights) if overlapping_weights else 0.0
         
         return term_weights
+
+    def _normalize_offsets(self, text: str, offsets: Sequence[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        if offsets is None:
+            raise ValueError("ShapExplainer requires offsets")
+        length = len(text)
+        normalized: List[Tuple[int, int]] = []
+        for start, end in offsets:
+            start_int = int(start)
+            end_int = int(end)
+            if start_int < 0 or end_int < start_int or end_int > length:
+                raise ValueError(f"Invalid offset span ({start}, {end}) for text of length {length}")
+            normalized.append((start_int, end_int))
+        return normalized

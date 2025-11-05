@@ -361,6 +361,7 @@ class DPMlmAnonymizer(DPAnonymizer):
             for eps in epsilon:
                 yield eps, [AnonymizationResult(text=text, metadata={"epsilon": eps, "method": "dpmlm", "perturbed": 0, "total": 0})]
             return
+        critical_offsets = [offsets[i] for i in critical_indices]
 
         perturbation_ratio = 1.0
         if self.compensate_epsilon:
@@ -379,7 +380,7 @@ class DPMlmAnonymizer(DPAnonymizer):
             used_precomputed = True
             probs = self._weights_to_probs(precomputed_scores, temperature=tokenwise_epsilon_temperature)
         elif self.explainer is not None:
-            scores = self.explainer.explain(text, critical_tokens)
+            scores = self.explainer.explain(text, critical_offsets)
             if scores is not None and len(scores) == len(critical_tokens):
                 probs = self._weights_to_probs(np.array(scores), temperature=tokenwise_epsilon_temperature)
 

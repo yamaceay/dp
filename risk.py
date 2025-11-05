@@ -1,10 +1,10 @@
 import json
 from tqdm import tqdm
-import torch
 
 from dp.utils.explainer import GreedyExplainer, ShapExplainer
 from dp.loaders import get_adapter
 from dp.utils.splitter import TextSplitter
+from dp.utils.memory import clear_memory
 
 if __name__ == "__main__":
     import argparse
@@ -36,13 +36,10 @@ if __name__ == "__main__":
         for start, end, token in splitter.tokenize_with_spans(record.text):
             tokens.append(token)
             offsets.append((start, end))
-        scores = explainer.explain(record.text, tokens)
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        elif torch.backends.mps.is_available():
-            torch.mps.empty_cache()
+        scores = explainer.explain(record.text, offsets)
+        clear_memory()
         if args.sort_by == 'scores':
-            sorted_indices = sorted(range(len(tokens)), key=lambda i: scores[i], reverse=True)
+            sorted_indices = sorted(range(len(offsets)), key=lambda i: scores[i], reverse=True)
             offsets = [offsets[i] for i in sorted_indices]
             scores = [scores[i] for i in sorted_indices]
         if args.save_to_jsonl:

@@ -140,7 +140,7 @@ class RiskAnonymizer(SimpleAnonymizer):
             return precomputed, probabilities, "PrecomputedRisk"
         if self._explainer is None:
             raise RuntimeError("RiskAnonymizer requires set_scoring_strategy before use")
-        raw_scores = self._explainer.explain(text, list(tokens))
+        raw_scores = self._explainer.explain(text, spans)
         scores = np.asarray(raw_scores, dtype=float).ravel()
         probabilities = self._to_distribution(scores)
         source = type(self._explainer).__name__

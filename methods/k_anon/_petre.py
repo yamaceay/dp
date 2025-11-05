@@ -391,7 +391,7 @@ class PetreAnonymizer(KAnonymizer):
             empty = np.zeros(0, dtype=float)
             self._score_cache[state.uid] = empty
             return empty
-        raw_scores = self.explainer.explain(state.text, tokens)
+        raw_scores = self.explainer.explain(state.text, state.term_spans)
         array = np.asarray(raw_scores, dtype=float).ravel()
         length = len(tokens)
         if array.size < length:
