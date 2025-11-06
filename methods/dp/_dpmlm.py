@@ -9,6 +9,7 @@ from dp.methods.dp import DPAnonymizer
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.loaders import DatasetRecord
+from dp.utils.token_ledger import TokenLedger
 
 
 class DPMlmAnonymizer(DPAnonymizer):
@@ -74,6 +75,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         compensate_epsilon: bool = False,
         add_probability: float = 0.0,
         delete_probability: float = 0.0,
+        sort_tokens_by_risk: bool = True,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -87,6 +89,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         self.compensate_epsilon = compensate_epsilon
         self.add_probability = add_probability
         self.delete_probability = delete_probability
+        self.sort_tokens_by_risk = sort_tokens_by_risk
 
         self.pii_detector = None
         self.explainer = None
@@ -332,6 +335,10 @@ class DPMlmAnonymizer(DPAnonymizer):
         record_name: Optional[str] = None,
         **kwargs,
     ) -> Iterator[Tuple[float, List[AnonymizationResult]]]:
+        sort_tokens_by_risk = kwargs.pop("sort_tokens_by_risk", None)
+        if sort_tokens_by_risk is None:
+            sort_tokens_by_risk = self.sort_tokens_by_risk
+
         try:
             if not epsilon:
                 return
@@ -377,6 +384,7 @@ class DPMlmAnonymizer(DPAnonymizer):
 
             probs = np.ones(len(critical_tokens)) / len(critical_tokens)
             used_precomputed = False
+            scores = None
             precomputed_scores = self._lookup_precomputed_scores(text, offsets, critical_indices, record_name)
             if precomputed_scores is not None:
                 used_precomputed = True
@@ -386,20 +394,48 @@ class DPMlmAnonymizer(DPAnonymizer):
                 if scores is not None and len(scores) == len(critical_tokens):
                     probs = self._weights_to_probs(np.array(scores), temperature=tokenwise_epsilon_temperature)
 
+            risk_scores = None
+            if sort_tokens_by_risk:
+                if precomputed_scores is not None:
+                    risk_scores = np.array(precomputed_scores, dtype=float)
+                elif scores is not None:
+                    risk_scores = np.array(scores, dtype=float)
+
+            risk_map: Dict[int, float] = {}
+            if risk_scores is not None:
+                for idx_pos, idx in enumerate(critical_indices):
+                    risk_map[idx] = float(risk_scores[idx_pos])
+
+            processing_order = list(range(len(tokens)))
+            if sort_tokens_by_risk and risk_map:
+                sorted_risk_indices = [idx for idx, _ in sorted(risk_map.items(), key=lambda item: item[1], reverse=True)]
+                remaining_indices = [idx for idx in processing_order if idx not in risk_map]
+                processing_order = sorted_risk_indices + remaining_indices
+
             for eps in epsilon:
                 compensated_epsilon = eps * perturbation_ratio
                 epsilon_values = [compensated_epsilon / (w * len(probs)) for w in probs]
                 critical_map = {idx: eps_val for idx, eps_val in zip(critical_indices, epsilon_values)}
 
+                ledger = TokenLedger(text, offsets)
                 perturbed = 0
                 total = 0
                 added = 0
                 deleted = 0
-                replaced_tokens = []
+                processed_indices = set()
 
-                for i, (token, token_offset) in enumerate(zip(tokens, offsets)):
+                for i in processing_order:
+                    if i in processed_indices:
+                        continue
+                    processed_indices.add(i)
+                    if i >= len(ledger):
+                        continue
+
+                    entry = ledger.entry(i)
+                    token = entry.original_text
+                    token_offset = (entry.start, entry.end)
                     if token in string.punctuation:
-                        replaced_tokens.append(token)
+                        ledger.replace(i, token)
                         total += 1
                         continue
 
@@ -412,16 +448,23 @@ class DPMlmAnonymizer(DPAnonymizer):
                         )
 
                     if pii_spans and not is_pii:
-                        replaced_tokens.append(token)
                         total += 1
                         continue
 
                     is_last_token = i == len(tokens) - 1
-                    delete_prob = np.random.rand()
-
-                    if delete_prob < self.delete_probability and not is_last_token:
-                        deleted += 1
-                        continue
+                    if self.delete_probability > 0 and not is_last_token:
+                        deletions_applied = 0
+                        cursor = i
+                        while cursor < len(tokens) - 1 and np.random.rand() < self.delete_probability:
+                            if cursor == len(tokens) - 1:
+                                break
+                            ledger.delete(cursor)
+                            processed_indices.add(cursor)
+                            deleted += 1
+                            deletions_applied += 1
+                            cursor += 1
+                        if deletions_applied:
+                            continue
 
                     token_epsilon = critical_map.get(i, compensated_epsilon)
                     private_token = self._privatize_token(text, token, token_offset, token_epsilon)
@@ -435,23 +478,21 @@ class DPMlmAnonymizer(DPAnonymizer):
                     elif original_text and original_text[0].isupper():
                         private_token = private_token.capitalize()
 
-                    replaced_tokens.append(private_token)
-
+                    ledger.replace(i, private_token)
                     if private_token != token:
                         perturbed += 1
                     total += 1
 
-                    add_prob = np.random.rand()
-                    if add_prob < self.add_probability:
-                        additional_token = self._generate_additional_token(
-                            self.detokenizer.detokenize(replaced_tokens),
-                            token_epsilon,
-                        )
-                        if additional_token:
-                            replaced_tokens.append(additional_token)
+                    if self.add_probability > 0:
+                        while np.random.rand() < self.add_probability:
+                            context_text = ledger.render(self.detokenizer.detokenize)
+                            additional_token = self._generate_additional_token(context_text, token_epsilon)
+                            if not additional_token:
+                                break
+                            ledger.add_after(i, additional_token)
                             added += 1
 
-                private_text = self.detokenizer.detokenize(replaced_tokens)
+                private_text = ledger.render(self.detokenizer.detokenize)
 
                 metadata = {
                     "epsilon": eps,
@@ -461,6 +502,7 @@ class DPMlmAnonymizer(DPAnonymizer):
                     "total": total,
                     "added": added,
                     "deleted": deleted,
+                    "token_edits": ledger.edits_metadata(),
                 }
                 if self.compensate_epsilon:
                     metadata["effective_epsilon"] = compensated_epsilon
