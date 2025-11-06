@@ -11,7 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description="Train and evaluate TRI model for re-identification")
     parser.add_argument("--dataset", type=str, default="tab", choices=available_datasets, 
                         help="Dataset name")
-    parser.add_argument("--data-path", type=str, default="data/TAB/tab.json",
+    parser.add_argument("--data-path", type=str, required=True,
                         help="Path to dataset file")
     parser.add_argument("--model-name", type=str, default="distilbert-base-uncased",
                         help="Base model name")

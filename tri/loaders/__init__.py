@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dp.tri.loaders.tab import TabAttackerDatasetAdapter
+from dp.tri.loaders.reddit import RedditAttackerDatasetAdapter
 from dp.tri.loaders.base import (
     AttackerDatasetAdapter, 
     SummarizerProtocol, 
@@ -10,6 +11,7 @@ from dp.tri.loaders.base import (
 
 ATTACKER_ADAPTER_REGISTRY: dict[str, type[AttackerDatasetAdapter]] = {
     "tab": TabAttackerDatasetAdapter,
+    "reddit": RedditAttackerDatasetAdapter,
 }
 
 def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:

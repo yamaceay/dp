@@ -7,6 +7,7 @@ from collections import Counter
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.dp import DPAnonymizer
 from dp.utils.splitter import TextSplitter
+from dp.utils.memory import clear_memory
 from dp.loaders import DatasetRecord
 
 
@@ -331,145 +332,148 @@ class DPMlmAnonymizer(DPAnonymizer):
         record_name: Optional[str] = None,
         **kwargs,
     ) -> Iterator[Tuple[float, List[AnonymizationResult]]]:
-        if not epsilon:
-            return
-        if not text or not text.strip():
-            for eps in epsilon:
-                yield eps, [AnonymizationResult(text="", metadata={"epsilon": eps, "method": "dpmlm"})]
-            return
+        try:
+            if not epsilon:
+                return
+            if not text or not text.strip():
+                for eps in epsilon:
+                    yield eps, [AnonymizationResult(text="", metadata={"epsilon": eps, "method": "dpmlm"})]
+                return
 
-        tokens, offsets = self._tokenize(text)
+            tokens, offsets = self._tokenize(text)
 
-        pii_spans = []
-        if self.pii_detector is not None:
-            pii_spans = self.pii_detector.select(text)
-
-        critical_indices = []
-        critical_tokens = []
-        for i, (token, (token_start, token_end)) in enumerate(zip(tokens, offsets)):
-            if token in string.punctuation:
-                continue
-            if pii_spans and not any(
-                not (token_end <= span.start or token_start >= span.end)
-                for span in pii_spans
-            ):
-                continue
-            critical_indices.append(i)
-            critical_tokens.append(token)
-
-        if not critical_indices or not critical_tokens:
-            for eps in epsilon:
-                yield eps, [AnonymizationResult(text=text, metadata={"epsilon": eps, "method": "dpmlm", "perturbed": 0, "total": 0})]
-            return
-        critical_offsets = [offsets[i] for i in critical_indices]
-
-        perturbation_ratio = 1.0
-        if self.compensate_epsilon:
-            non_punctuation_total = sum(1 for t in tokens if t not in string.punctuation)
-            if non_punctuation_total > 0:
-                perturbation_ratio = len(critical_indices) / non_punctuation_total
-                perturbation_ratio = max(perturbation_ratio, 1e-6)
-
-        if tokenwise_epsilon_temperature is None:
-            tokenwise_epsilon_temperature = 1.0
-
-        probs = np.ones(len(critical_tokens)) / len(critical_tokens)
-        used_precomputed = False
-        precomputed_scores = self._lookup_precomputed_scores(text, offsets, critical_indices, record_name)
-        if precomputed_scores is not None:
-            used_precomputed = True
-            probs = self._weights_to_probs(precomputed_scores, temperature=tokenwise_epsilon_temperature)
-        elif self.explainer is not None:
-            scores = self.explainer.explain(text, critical_offsets)
-            if scores is not None and len(scores) == len(critical_tokens):
-                probs = self._weights_to_probs(np.array(scores), temperature=tokenwise_epsilon_temperature)
-
-        for eps in epsilon:
-            compensated_epsilon = eps * perturbation_ratio
-            epsilon_values = [compensated_epsilon / (w * len(probs)) for w in probs]
-            critical_map = {idx: eps_val for idx, eps_val in zip(critical_indices, epsilon_values)}
-
-            perturbed = 0
-            total = 0
-            added = 0
-            deleted = 0
-            replaced_tokens = []
-
-            for i, (token, token_offset) in enumerate(zip(tokens, offsets)):
-                if token in string.punctuation:
-                    replaced_tokens.append(token)
-                    total += 1
-                    continue
-
-                token_start, token_end = token_offset
-                is_pii = False
-                if pii_spans:
-                    is_pii = any(
-                        not (token_end <= span.start or token_start >= span.end)
-                        for span in pii_spans
-                    )
-
-                if pii_spans and not is_pii:
-                    replaced_tokens.append(token)
-                    total += 1
-                    continue
-
-                is_last_token = i == len(tokens) - 1
-                delete_prob = np.random.rand()
-
-                if delete_prob < self.delete_probability and not is_last_token:
-                    deleted += 1
-                    continue
-
-                token_epsilon = critical_map.get(i, compensated_epsilon)
-                private_token = self._privatize_token(text, token, token_offset, token_epsilon)
-
-                original_text = text[token_start:token_end]
-                if len(private_token) == len(original_text):
-                    private_token = "".join(
-                        p.upper() if o.isupper() else p.lower()
-                        for p, o in zip(private_token, original_text)
-                    )
-                elif original_text and original_text[0].isupper():
-                    private_token = private_token.capitalize()
-
-                replaced_tokens.append(private_token)
-
-                if private_token != token:
-                    perturbed += 1
-                total += 1
-
-                add_prob = np.random.rand()
-                if add_prob < self.add_probability:
-                    additional_token = self._generate_additional_token(
-                        self.detokenizer.detokenize(replaced_tokens),
-                        token_epsilon,
-                    )
-                    if additional_token:
-                        replaced_tokens.append(additional_token)
-                        added += 1
-
-            private_text = self.detokenizer.detokenize(replaced_tokens)
-
-            metadata = {
-                "epsilon": eps,
-                "method": "dpmlm",
-                "model": self.model_checkpoint,
-                "perturbed": perturbed,
-                "total": total,
-                "added": added,
-                "deleted": deleted,
-            }
-            if self.compensate_epsilon:
-                metadata["effective_epsilon"] = compensated_epsilon
+            pii_spans = []
             if self.pii_detector is not None:
-                metadata["pii_detection"] = "enabled"
-                metadata["pii_spans_count"] = len(pii_spans)
-            if used_precomputed:
-                metadata["explainer"] = "PrecomputedRisk"
-                metadata["critical_tokens"] = len(critical_tokens)
-            elif self.explainer is not None:
-                metadata["explainer"] = self.explainer.__class__.__name__
-                metadata["critical_tokens"] = len(critical_tokens)
+                pii_spans = self.pii_detector.select(text)
 
-            yield eps, [AnonymizationResult(text=private_text, metadata=metadata)]
+            critical_indices = []
+            critical_tokens = []
+            for i, (token, (token_start, token_end)) in enumerate(zip(tokens, offsets)):
+                if token in string.punctuation:
+                    continue
+                if pii_spans and not any(
+                    not (token_end <= span.start or token_start >= span.end)
+                    for span in pii_spans
+                ):
+                    continue
+                critical_indices.append(i)
+                critical_tokens.append(token)
+
+            if not critical_indices or not critical_tokens:
+                for eps in epsilon:
+                    yield eps, [AnonymizationResult(text=text, metadata={"epsilon": eps, "method": "dpmlm", "perturbed": 0, "total": 0})]
+                return
+            critical_offsets = [offsets[i] for i in critical_indices]
+
+            perturbation_ratio = 1.0
+            if self.compensate_epsilon:
+                non_punctuation_total = sum(1 for t in tokens if t not in string.punctuation)
+                if non_punctuation_total > 0:
+                    perturbation_ratio = len(critical_indices) / non_punctuation_total
+                    perturbation_ratio = max(perturbation_ratio, 1e-6)
+
+            if tokenwise_epsilon_temperature is None:
+                tokenwise_epsilon_temperature = 1.0
+
+            probs = np.ones(len(critical_tokens)) / len(critical_tokens)
+            used_precomputed = False
+            precomputed_scores = self._lookup_precomputed_scores(text, offsets, critical_indices, record_name)
+            if precomputed_scores is not None:
+                used_precomputed = True
+                probs = self._weights_to_probs(precomputed_scores, temperature=tokenwise_epsilon_temperature)
+            elif self.explainer is not None:
+                scores = self.explainer.explain(text, critical_offsets)
+                if scores is not None and len(scores) == len(critical_tokens):
+                    probs = self._weights_to_probs(np.array(scores), temperature=tokenwise_epsilon_temperature)
+
+            for eps in epsilon:
+                compensated_epsilon = eps * perturbation_ratio
+                epsilon_values = [compensated_epsilon / (w * len(probs)) for w in probs]
+                critical_map = {idx: eps_val for idx, eps_val in zip(critical_indices, epsilon_values)}
+
+                perturbed = 0
+                total = 0
+                added = 0
+                deleted = 0
+                replaced_tokens = []
+
+                for i, (token, token_offset) in enumerate(zip(tokens, offsets)):
+                    if token in string.punctuation:
+                        replaced_tokens.append(token)
+                        total += 1
+                        continue
+
+                    token_start, token_end = token_offset
+                    is_pii = False
+                    if pii_spans:
+                        is_pii = any(
+                            not (token_end <= span.start or token_start >= span.end)
+                            for span in pii_spans
+                        )
+
+                    if pii_spans and not is_pii:
+                        replaced_tokens.append(token)
+                        total += 1
+                        continue
+
+                    is_last_token = i == len(tokens) - 1
+                    delete_prob = np.random.rand()
+
+                    if delete_prob < self.delete_probability and not is_last_token:
+                        deleted += 1
+                        continue
+
+                    token_epsilon = critical_map.get(i, compensated_epsilon)
+                    private_token = self._privatize_token(text, token, token_offset, token_epsilon)
+
+                    original_text = text[token_start:token_end]
+                    if len(private_token) == len(original_text):
+                        private_token = "".join(
+                            p.upper() if o.isupper() else p.lower()
+                            for p, o in zip(private_token, original_text)
+                        )
+                    elif original_text and original_text[0].isupper():
+                        private_token = private_token.capitalize()
+
+                    replaced_tokens.append(private_token)
+
+                    if private_token != token:
+                        perturbed += 1
+                    total += 1
+
+                    add_prob = np.random.rand()
+                    if add_prob < self.add_probability:
+                        additional_token = self._generate_additional_token(
+                            self.detokenizer.detokenize(replaced_tokens),
+                            token_epsilon,
+                        )
+                        if additional_token:
+                            replaced_tokens.append(additional_token)
+                            added += 1
+
+                private_text = self.detokenizer.detokenize(replaced_tokens)
+
+                metadata = {
+                    "epsilon": eps,
+                    "method": "dpmlm",
+                    "model": self.model_checkpoint,
+                    "perturbed": perturbed,
+                    "total": total,
+                    "added": added,
+                    "deleted": deleted,
+                }
+                if self.compensate_epsilon:
+                    metadata["effective_epsilon"] = compensated_epsilon
+                if self.pii_detector is not None:
+                    metadata["pii_detection"] = "enabled"
+                    metadata["pii_spans_count"] = len(pii_spans)
+                if used_precomputed:
+                    metadata["explainer"] = "PrecomputedRisk"
+                    metadata["critical_tokens"] = len(critical_tokens)
+                elif self.explainer is not None:
+                    metadata["explainer"] = self.explainer.__class__.__name__
+                    metadata["critical_tokens"] = len(critical_tokens)
+
+                yield eps, [AnonymizationResult(text=private_text, metadata=metadata)]
+        finally:
+            clear_memory()
