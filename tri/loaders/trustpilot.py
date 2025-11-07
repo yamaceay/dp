@@ -23,7 +23,5 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
         self.rewriter: Optional[RewriterProtocol] = None
         self._cache_map: Optional[Dict[str, Dict[str, Any]]] = None
 
-    def set_rewriter(self, rewriter: RewriterProtocol)
-
     def extract_background_knowledge(self, record: DatasetRecord) -> List[Tuple[str, str]]:
         raise NotImplementedError
