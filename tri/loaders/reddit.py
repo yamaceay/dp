@@ -197,21 +197,15 @@ def format_inference(metadata: Dict[str, str], persona: Dict[str, str], pronouns
 class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
         self,
+        *args,
         data: str | None = None,
         data_in: str | None = None,
         max_records: int | None = None,
-        max_background_tokens: int = 512,
-        rewriter_max_length: int = 150,
-        rewriter_min_length: int = 40,
         seed: int = 42,
+        **kwargs,
     ) -> None:
         adapter = RedditDatasetAdapter(data=data, data_in=data_in, max_records=max_records)
-        super().__init__(
-            adapter=adapter,
-            max_background_tokens=max_background_tokens,
-            rewriter_max_length=rewriter_max_length,
-            rewriter_min_length=rewriter_min_length,
-        )
+        super().__init__(adapter=adapter, *args, **kwargs)
         self._seed = seed
         self._persona_records: List[AttackerDatasetRecord] = self._build_persona_records()
 
