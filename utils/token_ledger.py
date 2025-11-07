@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
+from dp.utils.token_edits import apply_token_edits
 
 @dataclass
 class TokenAddition:
@@ -78,6 +79,9 @@ class TokenLedger:
 
     def render(self, detokenize: Callable[[List[str]], str]) -> str:
         return detokenize(self.build_context())
+
+    def render_offsets(self, original_text: str) -> str:
+        return apply_token_edits(original_text, self.edits_metadata())
 
     def edits_metadata(self) -> List[Dict[str, object]]:
         metadata: List[Dict[str, object]] = []

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple, Optional
 
 from dp.loaders.base import TextAnnotation
 
@@ -54,6 +54,7 @@ def apply_token_edits(original_text: str, edits: Sequence[Dict[str, object]]) ->
             cursor = end
         elif kind == "added":
             output.append(payload)
+            cursor = start
         else:
             raise ValueError(f"unsupported edit kind '{kind}'")
     output.append(original_text[cursor:])
@@ -108,3 +109,26 @@ def edits_to_annotations(
             raise ValueError(f"unknown edit kind '{kind}'")
     annotations.sort(key=lambda ann: (ann.start, ann.end))
     return annotations
+
+
+def validate_offsets(
+    original_text: str,
+    target_text: str,
+    edits: Sequence[Dict[str, object]],
+) -> Dict[str, object]:
+    applied = apply_token_edits(original_text, edits)
+    if applied == target_text:
+        return {"ok": True, "mismatch_at": None}
+    i = 0
+    a_len = min(len(applied), len(target_text))
+    while i < a_len and applied[i] == target_text[i]:
+        i += 1
+    ctx_start = max(0, i - 20)
+    return {
+        "ok": False,
+        "mismatch_at": i,
+        "applied_slice": applied[ctx_start:i + 20],
+        "target_slice": target_text[ctx_start:i + 20],
+        "applied_len": len(applied),
+        "target_len": len(target_text),
+    }

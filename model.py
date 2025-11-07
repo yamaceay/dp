@@ -42,6 +42,7 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--texts', type=str, nargs='+', help='Texts to anonymize (space-separated)')
     parser.add_argument('--indices', type=int, nargs='+', help='Indices of records to anonymize from dataset (space-separated)')
     parser.add_argument('--output', type=str, default='print', choices=list(OUTPUT_HANDLER_REGISTRY.keys()), help='Output handler type')
+    parser.add_argument('--timestamp', type=str, default=None, help='Batch timestamp to use for output files (default: now)')
     parser.add_argument('--annotations', type=str, choices=['spacy', 'presidio', 'manual'], default=None, help='Type of starting annotations relevant for data preprocessing')
     parser.add_argument('--annotations_in', type=str, default=None, metavar='SOURCES', help='Load annotations from previous run (format: path/to/file.jsonl, comma-separated for multiple sources)')
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
@@ -389,7 +390,7 @@ if __name__ == "__main__":
         if hasattr(model, "set_risk_scores"):
             model.set_risk_scores(risk_scores, records=records)
 
-    batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    batch_timestamp = args.timestamp if args.timestamp else datetime.now().strftime("%Y%m%d_%H%M%S")
 
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])
     
