@@ -20,7 +20,7 @@ class TRIDetectorWithBK(TRIDetector):
         for record in records:
             eval_record = DatasetRecord(
                 uid=record.uid,
-                text=record.summarized_text,
+                text=record.rewrited_text,
                 name=record.name,
                 spans=record.spans,
                 metadata=record.metadata,

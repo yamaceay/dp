@@ -72,11 +72,14 @@ if __name__ == "__main__":
     unique_key_list, unique_value_list, unique_count_list = [], [], []
     for key, values in unique_values.items():
         unique_key_list.append(key)
+        unique_values = None
         if any(count > 1 for _, count in values.items()):
             values_sorted = sorted(values.items(), key=lambda item: item[1], reverse=True)
-            values = [f"{v}[{c}]" for v, c in values_sorted]
-        unique_value_list.append(values)
-        unique_count_list.append(len(values))
+            unique_values = [f"{v}[{c}]" for v, c in values_sorted]
+        else:
+            unique_values = list(values.keys())
+        unique_value_list.append(unique_values)
+        unique_count_list.append(len(unique_values))
     table_str = format_table(unique_key_list, unique_count_list, unique_value_list)
     print(table_str)
     print(f"Average text length: {sum_text_length / len(dataset)}" if dataset else "No records found.")

@@ -45,7 +45,7 @@ def main() -> None:
                 json_record = {
                     'uid': record.uid,
                     'background_knowledge': record.background_knowledge,
-                    'summarized_text': record.summarized_text,
+                    'rewrited_text': record.rewrited_text,
                 }
                 f.write(json.dumps(json_record) + '\n')
         unique_names.add(record.name)

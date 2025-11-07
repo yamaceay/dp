@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import random
 import re
+from tqdm import tqdm
 from typing import Dict, List, Tuple, cast
 
 from dp.loaders.base import DatasetRecord
@@ -200,16 +201,16 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
         data_in: str | None = None,
         max_records: int | None = None,
         max_background_tokens: int = 512,
-        summarizer_max_length: int = 150,
-        summarizer_min_length: int = 40,
+        rewriter_max_length: int = 150,
+        rewriter_min_length: int = 40,
         seed: int = 42,
     ) -> None:
         adapter = RedditDatasetAdapter(data=data, data_in=data_in, max_records=max_records)
         super().__init__(
             adapter=adapter,
             max_background_tokens=max_background_tokens,
-            summarizer_max_length=summarizer_max_length,
-            summarizer_min_length=summarizer_min_length,
+            rewriter_max_length=rewriter_max_length,
+            rewriter_min_length=rewriter_min_length,
         )
         self._seed = seed
         self._persona_records: List[AttackerDatasetRecord] = self._build_persona_records()
@@ -284,7 +285,7 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
                     name=persona_hash,
                     metadata={"persona": payload["metadata"]},
                     background_knowledge=background_items,
-                    summarized_text=persona_text,
+                    rewrited_text=persona_text,
                 )
             )
         return persona_records
@@ -292,15 +293,13 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
     def extract_background_knowledge(self, record: DatasetRecord) -> List[Tuple[str, str]]:
         raise NotImplementedError("RedditAttackerDatasetAdapter aggregates records by persona; use iter_records()")
 
-    def summarize_original_text(self, record: DatasetRecord) -> str:
+    def rewrite_original_text(self, record: DatasetRecord) -> str:
         raise NotImplementedError("RedditAttackerDatasetAdapter provides persona summaries directly; use iter_records()")
 
     def iter_records(self, progress: bool = False):
         records = self._persona_records
         iterator = records
         if progress:
-            from tqdm import tqdm  # local import to avoid optional dependency at import time
-
             iterator = tqdm(records, desc="Processing attacker records", total=len(records))
         for record in iterator:
             yield record

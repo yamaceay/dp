@@ -4,7 +4,7 @@ from dp.tri.loaders.tab import TabAttackerDatasetAdapter
 from dp.tri.loaders.reddit import RedditAttackerDatasetAdapter
 from dp.tri.loaders.base import (
     AttackerDatasetAdapter, 
-    SummarizerProtocol, 
+    RewriterProtocol, 
     save_attacker_extensions_jsonl, 
     load_attacker_extensions_jsonl,
 )
@@ -26,7 +26,7 @@ def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:
     return adapter_cls(**kwargs)
 
 __all__ = [
-    "SummarizerProtocol",
+    "RewriterProtocol",
     "AttackerDatasetAdapter",
     "save_attacker_extensions_jsonl",
     "load_attacker_extensions_jsonl",

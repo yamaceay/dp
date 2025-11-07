@@ -8,32 +8,32 @@ from tqdm import tqdm
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord
 
-class SummarizerProtocol(Protocol):
-    summarization_pipeline: Any
-    def summarize(self, text: str, **kwargs) -> str: ...
+class RewriterProtocol(Protocol):
+    rewriting_pipeline: Any
+    def rewrite(self, text: str, **kwargs) -> str: ...
 
 @dataclass
 class AttackerDatasetRecord(DatasetRecord):
     background_knowledge: List[Tuple[str, str]] = field(default_factory=list)
-    summarized_text: Optional[str] = None
+    rewrited_text: Optional[str] = None
 
 class AttackerDatasetAdapter:
     def __init__(
         self,
         adapter: DatasetAdapter,
         max_background_tokens: int = 512,
-        summarizer_max_length: int = 150,
-        summarizer_min_length: int = 40,
+        rewriter_max_length: int = 150,
+        rewriter_min_length: int = 40,
     ) -> None:
         self.adapter = adapter
         self.max_background_tokens = max_background_tokens
-        self.summarizer_max_length = summarizer_max_length
-        self.summarizer_min_length = summarizer_min_length
-        self.summarizer: Optional[SummarizerProtocol] = None
+        self.rewriter_max_length = rewriter_max_length
+        self.rewriter_min_length = rewriter_min_length
+        self.rewriter: Optional[RewriterProtocol] = None
         self._cache_map: Optional[Dict[str, Dict[str, Any]]] = None
 
-    def set_summarizer(self, summarizer: SummarizerProtocol) -> None:
-        self.summarizer = summarizer
+    def set_rewriter(self, rewriter: RewriterProtocol) -> None:
+        self.rewriter = rewriter
 
     def set_cache(
         self,
@@ -47,7 +47,7 @@ class AttackerDatasetAdapter:
             self._cache_map = {
                 r.uid: {
                     "background_knowledge": r.background_knowledge,
-                    "summarized_text": r.summarized_text,
+                    "rewrited_text": r.rewrited_text,
                 }
                 for r in cache
             }
@@ -61,13 +61,13 @@ class AttackerDatasetAdapter:
     def extract_background_knowledge(self, record: DatasetRecord) -> List[Tuple[str, str]]:
         raise NotImplementedError
 
-    def summarize_original_text(self, record: DatasetRecord) -> str:
-        if not self.summarizer:
-            raise RuntimeError("summarizer is not set; call set_summarizer() first or load cache with summaries")
-        return self.summarizer.summarize(
+    def rewrite_original_text(self, record: DatasetRecord) -> str:
+        if not self.rewriter:
+            raise RuntimeError("rewriter is not set; call set_rewriter() first or load cache with summaries")
+        return self.rewriter.rewrite(
             text=record.text,
-            max_length=self.summarizer_max_length,
-            min_length=self.summarizer_min_length,
+            max_length=self.rewriter_max_length,
+            min_length=self.rewriter_min_length,
             do_sample=False,
         )
 
@@ -77,13 +77,15 @@ class AttackerDatasetAdapter:
         if progress:
             iterator = tqdm(records_list, desc="Processing attacker records", total=len(records_list))
         for record in iterator:
+            rewr = record.text
             if self._cache_map is not None and record.uid in self._cache_map:
                 ext = self._cache_map.get(record.uid, {})
                 bk = ext.get("background_knowledge", [])
-                summ = ext.get("summarized_text")
+                rewr = ext.get("rewrited_text")
             else:
                 bk = self.extract_background_knowledge(record)
-                summ = self.summarize_original_text(record)
+                if self.rewriter:
+                    rewr = self.rewrite_original_text(record)
             yield AttackerDatasetRecord(
                 text=record.text,
                 uid=record.uid,
@@ -91,7 +93,7 @@ class AttackerDatasetAdapter:
                 spans=record.spans,
                 metadata=record.metadata,
                 background_knowledge=bk,
-                summarized_text=summ,
+                rewrited_text=rewr,
             )
 
 
@@ -103,7 +105,7 @@ def save_attacker_extensions_jsonl(path: str, records: Iterable[AttackerDatasetR
             obj = {
                 "uid": r.uid,
                 "background_knowledge": r.background_knowledge,
-                "summarized_text": r.summarized_text,
+                "rewrited_text": r.rewrited_text,
             }
             f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
@@ -122,6 +124,6 @@ def load_attacker_extensions_jsonl(path: str) -> Dict[str, Dict[str, Any]]:
             uid = str(obj.get("uid"))
             mapping[uid] = {
                 "background_knowledge": obj.get("background_knowledge", []),
-                "summarized_text": obj.get("summarized_text"),
+                "rewrited_text": obj.get("rewrited_text"),
             }
     return mapping

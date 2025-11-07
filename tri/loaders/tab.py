@@ -6,7 +6,7 @@ from dp.loaders.base import DatasetRecord
 from dp.loaders.tab import TabDatasetAdapter
 from dp.tri.loaders.base import AttackerDatasetAdapter
 from dp.utils.chunking import TokenAwareChunker
-from dp.utils.summarizer import BartSummarizer
+from dp.utils.rewriter import BartRewriter
 
 class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
@@ -14,31 +14,31 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         data: Optional[str] = None,
         data_in: Optional[str] = None,
         max_records: Optional[int] = None,
-        summarizer_model_name: str = "facebook/bart-large-cnn",
-        summarizer_device: int = -1,
-        summarizer_max_length: int = 256, # originally 150
-        summarizer_min_length: int = 80,  # originally 40
+        rewriter_model_name: str = "facebook/bart-large-cnn",
+        rewriter_device: int = -1,
+        rewriter_max_length: int = 256, # originally 150
+        rewriter_min_length: int = 80,  # originally 40
         max_background_tokens: int = 512,
     ):
         adapter = TabDatasetAdapter(data=data, data_in=data_in, max_records=max_records)
         super().__init__(
             adapter=adapter,
             max_background_tokens=max_background_tokens,
-            summarizer_max_length=summarizer_max_length,
-            summarizer_min_length=summarizer_min_length,
+            rewriter_max_length=rewriter_max_length,
+            rewriter_min_length=rewriter_min_length,
         )
         self._background_chunker: Optional[TokenAwareChunker] = None
-        summarizer = BartSummarizer(
-            model_name=summarizer_model_name,
-            device=summarizer_device,
+        rewriter = BartRewriter(
+            model_name=rewriter_model_name,
+            device=rewriter_device,
             max_input_tokens=max_background_tokens,
         )
-        self.set_summarizer(summarizer)
+        self.set_rewriter(rewriter)
 
     def _get_background_chunker(self) -> TokenAwareChunker:
         if self._background_chunker is None:
             self._background_chunker = TokenAwareChunker(
-                tokenizer=self.summarizer.summarization_pipeline.tokenizer,
+                tokenizer=self.rewriter.rewriting_pipeline.tokenizer,
                 max_tokens=self.max_background_tokens,
             )
         return self._background_chunker
