@@ -46,6 +46,7 @@ class TrustpilotDatasetAdapter(DatasetAdapter):
             metadata = {
                 "category": row.get("category"),
                 "mean_stars": row.get("mean_stars"),
+                "records": row.get("records", []),
             }
 
             yield DatasetRecord(

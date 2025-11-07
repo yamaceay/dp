@@ -61,6 +61,9 @@ class AttackerDatasetAdapter:
     def extract_background_knowledge(self, record: DatasetRecord) -> List[Tuple[str, str]]:
         raise NotImplementedError
 
+    def clean_metadata(self, record: DatasetRecord) -> Dict[str, Any]:
+        return record.metadata
+
     def rewrite_original_text(self, record: DatasetRecord) -> str:
         if not self.rewriter:
             raise RuntimeError("rewriter is not set; call set_rewriter() first or load cache with summaries")
@@ -86,12 +89,13 @@ class AttackerDatasetAdapter:
                 bk = self.extract_background_knowledge(record)
                 if self.rewriter:
                     rewr = self.rewrite_original_text(record)
+            metadata = self.clean_metadata(record)
             yield AttackerDatasetRecord(
                 text=record.text,
                 uid=record.uid,
                 name=record.name,
                 spans=record.spans,
-                metadata=record.metadata,
+                metadata=metadata,
                 background_knowledge=bk,
                 rewrited_text=rewr,
             )
