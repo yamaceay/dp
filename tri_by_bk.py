@@ -11,31 +11,33 @@ def main():
     parser = argparse.ArgumentParser(description="Train and evaluate TRI model for re-identification")
     parser.add_argument("--dataset", type=str, default="tab", choices=available_datasets, 
                         help="Dataset name")
-    parser.add_argument("--data-path", type=str, required=True,
+    parser.add_argument("--data_path", type=str, required=True,
                         help="Path to dataset file")
-    parser.add_argument("--model-name", type=str, default="distilbert-base-uncased",
+    parser.add_argument("--model_name", type=str, default="distilbert-base-uncased",
                         help="Base model name")
-    parser.add_argument("--max-records", type=int, default=None,
+    parser.add_argument("--max_records", type=int, default=None,
                         help="Maximum number of records to use")
-    parser.add_argument("--finetuning-epochs", type=int, default=15,
+    parser.add_argument("--finetuning_epochs", type=int, default=15,
                         help="Number of finetuning epochs")
-    parser.add_argument("--pretraining-epochs", type=int, default=3,
+    parser.add_argument("--pretraining_epochs", type=int, default=3,
                         help="Number of pretraining epochs")
-    parser.add_argument("--batch-size", type=int, default=16,
+    parser.add_argument("--batch_size", type=int, default=16,
                         help="Batch size for training")
-    parser.add_argument("--pretraining-batch-size", type=int, default=8,
+    parser.add_argument("--pretraining_batch_size", type=int, default=8,
                         help="Batch size for pretraining")
-    parser.add_argument("--use-pretraining", action="store_true",
+    parser.add_argument("--use_pretraining", action="store_true",
                         help="Use MLM pretraining before finetuning")
+    parser.add_argument("--per_step", type=int, default=None,
+                        help="Evaluation frequency in steps (default: per epoch)")
     parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate", "predict"],
                         help="Mode: train, evaluate, or predict")
-    parser.add_argument("--model-path", type=str, default=None,
+    parser.add_argument("--model_path", type=str, default=None,
                         help="Path to an existing TRI model checkpoint (optional for train/evaluate/predict)")
     parser.add_argument("--device", type=str, default="cpu",
                         help="Device to use (auto, cuda, mps, cpu)")
-    parser.add_argument("--attacker-extensions", type=str, default=None,
+    parser.add_argument("--attacker_extensions", type=str, default=None,
                         help="Optional JSONL file with precomputed attacker extensions (BK + summary)")
-    parser.add_argument("--early-stop-threshold", type=float, default=None,
+    parser.add_argument("--early_stop_threshold", type=float, default=None,
                         help="Minimum accuracy threshold across all eval datasets to stop training early (0-100)")
     
     args = parser.parse_args()
@@ -73,6 +75,7 @@ def main():
             use_pretraining=args.use_pretraining,
             pretraining_epochs=args.pretraining_epochs,
             early_stop_threshold=args.early_stop_threshold,
+            per_step=args.per_step,
         )
         
         print(f"\n✓ Model saved to {model_path}")

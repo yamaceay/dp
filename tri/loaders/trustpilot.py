@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from dp.loaders import TrustpilotDatasetAdapter
 from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord
+# from dp.methods.simple._spacy import SpacyAnonymizer
 
 class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
@@ -20,6 +21,7 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
     ) -> None:
         adapter = TrustpilotDatasetAdapter(data=data, data_in=data_in, max_records=max_records)
         super().__init__(adapter=adapter, *args, **kwargs)
+        # self.masker = SpacyAnonymizer('spacy')
 
     def extract_background_knowledge(self, record: DatasetRecord) -> List[Tuple[str, str]]:
         background_knowledge = []
@@ -28,6 +30,8 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
         reviews = record.metadata['records']
         if not isinstance(reviews, list) or len(reviews) == 0:
             raise ValueError("'records' in metadata must be a non-empty list.")
+        # raw_description = record.text
+        # description = self.masker.anonymize(raw_description, labels=["ORG", "PERSON"]).text
 
         for review_record in reviews:
             if 'stars' not in review_record:
@@ -36,10 +40,9 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
             if 'text' not in review_record:
                 raise ValueError("Each review record must contain 'text' field.")
             text = review_record['text']
-            # if 'title' not in review_record:
-            #     raise ValueError("Each review record must contain 'title' field.")
-            # title = review_record['title']
-            review_str = f"A user gave a {stars}-star review: '{text}'"
+
+            # review_str = f"This company has the following description: '{description}'. A customer rated it {stars} stars and wrote: '{text}'"
+            review_str = f"A customer rated this company {stars} stars and wrote: '{text}'"
             background_knowledge.append(('review', review_str))
 
         return background_knowledge

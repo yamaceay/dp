@@ -40,14 +40,22 @@ class TRIDetectorWithBK(TRIDetector):
                 )
                 self.train_records.append(train_record)
 
-    def get_eval_dataset(self, best_metric_dataset: Optional[str] = None) -> Tuple[Union[TRIDataset, Dict[str, TRIDataset]], Dict[str, Any]]:
+    def get_eval_dataset(self, best_metric_dataset: Optional[str] = None, per_step: Optional[int] = None) -> Tuple[Union[TRIDataset, Dict[str, TRIDataset]], Dict[str, Any]]:
         eval_dataset = TRIDataset(self.eval_records, self.tokenizer, self.name_to_label, self.max_length)
             
         eval_kwargs = {
-            "eval_strategy": "epoch",
             "load_best_model_at_end": True,
             "metric_for_best_model": "eval_Accuracy",
             "greater_is_better": True,
         }
+        if per_step:
+            eval_kwargs.update({
+                "eval_strategy": "steps",
+                "eval_steps": per_step,
+            })
+        else:
+            eval_kwargs.update({
+                "eval_strategy": "epoch",
+            })
 
         return eval_dataset, eval_kwargs

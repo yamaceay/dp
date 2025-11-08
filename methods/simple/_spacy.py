@@ -1,3 +1,5 @@
+from typing import List
+
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.simple import SimpleAnonymizer
 from dp.loaders.base import TextAnnotation
@@ -11,7 +13,7 @@ class SpacyAnonymizer(SimpleAnonymizer):
         try:
             import spacy
         except Exception:
-            return AnonymizationResult(text="[SPACY ANONYMIZED TEXT]")
+            raise ImportError("spaCy is not installed. Please install it with 'pip install spacy'.")
 
         if not hasattr(self, '_nlp'):
             model_loaded = False
@@ -27,7 +29,7 @@ class SpacyAnonymizer(SimpleAnonymizer):
                 raise ImportError("Could not load any spaCy model. Please install one of: " + ", ".join(spacy_models))
                 
 
-    def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
+    def anonymize(self, text: str, labels: List[str] = None, *args, **kwargs) -> AnonymizationResult:
 
         nlp = self._nlp
 
@@ -36,6 +38,8 @@ class SpacyAnonymizer(SimpleAnonymizer):
         out_parts = []
         last = 0
         for ent in doc.ents:
+            if labels and ent.label_ not in labels:
+                continue
             spans.append(TextAnnotation(
                 start=ent.start_char,
                 end=ent.end_char,

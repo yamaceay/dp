@@ -88,7 +88,7 @@ class TRIDetectorWithDeid(TRIDetector):
         del mlm_model
         torch.cuda.empty_cache()
 
-    def get_eval_dataset(self, best_metric_dataset: Optional[str] = None) -> Tuple[Union[TRIDataset, Dict[str, TRIDataset]], dict[str, Any]]:
+    def get_eval_dataset(self, best_metric_dataset: Optional[str] = None, per_step: Optional[int] = None) -> Tuple[Union[TRIDataset, Dict[str, TRIDataset]], dict[str, Any]]:
         eval_datasets_dict = None
         eval_kwargs = {}
         if not self.eval_records_dict:
@@ -109,10 +109,18 @@ class TRIDetectorWithDeid(TRIDetector):
             metric_for_best = f"eval_{first_eval_name}_Accuracy"
         
         eval_kwargs = {
-            "eval_strategy": "epoch",
             "load_best_model_at_end": True,
             "metric_for_best_model": metric_for_best,
             "greater_is_better": True,
         }
-        
+        if per_step:
+            eval_kwargs.update({
+                "eval_strategy": "steps",
+                "eval_steps": per_step,
+            })
+        else:
+            eval_kwargs.update({
+                "eval_strategy": "epoch",
+            })
+
         return eval_datasets_dict, eval_kwargs

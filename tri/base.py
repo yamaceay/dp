@@ -143,7 +143,7 @@ class TRIDetector(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def get_eval_dataset(self, best_metric_dataset: Optional[str] = None, *args, **kwargs) -> Tuple[Union[TRIDataset, Dict[str, TRIDataset]], Dict[str, Any]]:
+    def get_eval_dataset(self, best_metric_dataset: Optional[str] = None, per_step: Optional[int] = None) -> Tuple[Union[TRIDataset, Dict[str, TRIDataset]], Dict[str, Any]]:
         raise NotImplementedError
  
     def resolve_device(self, device: str) -> torch.device:
@@ -178,7 +178,7 @@ class TRIDetector(ABC):
             per_device_train_batch_size=batch_size,
             learning_rate=learning_rate,
             logging_strategy="epoch",
-            save_strategy="no",
+            save_strategy="epoch",
             report_to="none",
         )
         trainer = Trainer(
@@ -285,6 +285,7 @@ class TRIDetector(ABC):
         pretraining_epochs: int = 3,
         best_metric_dataset: Optional[str] = None,
         early_stop_threshold: Optional[float] = None,
+        per_step: Optional[int] = None,
     ) -> None:
         if not self.train_records:
             raise ValueError("No training data set. Call set_train_dataset() first")
@@ -307,18 +308,29 @@ class TRIDetector(ABC):
         if use_pretraining:
             self.pretrain(pretraining_epochs, batch_size, learning_rate, output_dir)
         train_dataset = TRIDataset(self.train_records, self.tokenizer, self.name_to_label, self.max_length)
-        eval_dataset, eval_kwargs = self.get_eval_dataset(best_metric_dataset=best_metric_dataset)
+        eval_dataset, eval_kwargs = self.get_eval_dataset(best_metric_dataset=best_metric_dataset, per_step=per_step)
+        save_kwargs = {}
+        if per_step:
+            save_kwargs.update({
+                "logging_strategy": "steps",
+                "save_strategy": "steps",
+                "save_steps": per_step,
+            })
+        else:
+            save_kwargs.update({
+                "logging_strategy": "epoch",
+                "save_strategy": "epoch",
+            })
         training_args = TrainingArguments(
             output_dir=f"{output_dir}/finetuning",
             num_train_epochs=epochs,
             per_device_train_batch_size=batch_size,
             per_device_eval_batch_size=batch_size,
             learning_rate=learning_rate,
-            logging_strategy="epoch",
-            save_strategy="epoch",
             save_total_limit=1,
             report_to="none",
             no_cuda=True,
+            **save_kwargs,
             **eval_kwargs,
         )
         optimizer = AdamW(self.model.parameters(), lr=learning_rate)
