@@ -1,5 +1,7 @@
-explainability: shap
-explainer_path: models/tri_pipelines/tab/20251104_085941
+explainer:
+  name: shap
+  tri_pipeline: models/tri_pipelines/tab/20251104_085941
+  risk_scores: data/TAB/test_risk_shap.jsonl
 
 mask_text: "[MASK]"
 

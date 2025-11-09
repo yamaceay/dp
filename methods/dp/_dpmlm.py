@@ -76,6 +76,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         add_probability: float = 0.0,
         delete_probability: float = 0.0,
         sort_tokens_by_risk: bool = True,
+        risk_temperature: Optional[float] = None,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -90,6 +91,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         self.add_probability = add_probability
         self.delete_probability = delete_probability
         self.sort_tokens_by_risk = sort_tokens_by_risk
+        self.risk_temperature = risk_temperature
 
         self.pii_detector = None
         self.explainer = None
@@ -331,7 +333,6 @@ class DPMlmAnonymizer(DPAnonymizer):
         text: str,
         epsilon: List[float],
         *args,
-        tokenwise_epsilon_temperature: Optional[float] = None,
         record_name: Optional[str] = None,
         **kwargs,
     ) -> Iterator[Tuple[float, List[AnonymizationResult]]]:
@@ -379,20 +380,17 @@ class DPMlmAnonymizer(DPAnonymizer):
                     perturbation_ratio = len(critical_indices) / non_punctuation_total
                     perturbation_ratio = max(perturbation_ratio, 1e-6)
 
-            if tokenwise_epsilon_temperature is None:
-                tokenwise_epsilon_temperature = 1.0
-
             probs = np.ones(len(critical_tokens)) / len(critical_tokens)
             used_precomputed = False
             scores = None
             precomputed_scores = self._lookup_precomputed_scores(text, offsets, critical_indices, record_name)
             if precomputed_scores is not None:
                 used_precomputed = True
-                probs = self._weights_to_probs(precomputed_scores, temperature=tokenwise_epsilon_temperature)
+                probs = self._weights_to_probs(precomputed_scores, temperature=self.risk_temperature)
             elif self.explainer is not None:
                 scores = self.explainer.explain(text, critical_offsets)
                 if scores is not None and len(scores) == len(critical_tokens):
-                    probs = self._weights_to_probs(np.array(scores), temperature=tokenwise_epsilon_temperature)
+                    probs = self._weights_to_probs(np.array(scores), temperature=self.risk_temperature)
 
             risk_scores = None
             if sort_tokens_by_risk:

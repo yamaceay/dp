@@ -29,12 +29,12 @@ class RiskAnonymizer(SimpleAnonymizer):
         mask_text: str = "[MASK]",
         risk_threshold: float = 0.5,
         temperature: Optional[float] = None,
-        tokenwise_epsilon_temperature: Optional[float] = None,
+        risk_temperature: Optional[float] = None,
         **kwargs,
     ):
         if risk_threshold < 0:
             raise ValueError("risk_threshold must be non-negative")
-        temp_value: Optional[float] = tokenwise_epsilon_temperature if tokenwise_epsilon_temperature is not None else temperature
+        temp_value: Optional[float] = risk_temperature if risk_temperature is not None else temperature
         if temp_value is None:
             temp_value = 1.0
         if temp_value <= 0:

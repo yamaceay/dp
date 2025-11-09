@@ -48,8 +48,7 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
     parser.add_argument('--stream', action='store_true', help='Stream outputs (recommended for jsonl) instead of buffering all results')
     parser.add_argument('--start_idx', type=int, default=0, help='Starting index for streaming output (default: 0)')
-    parser.add_argument('--risk_in', type=str, default=None, help='Path to precomputed risk scores file')
-    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream', 'start_idx', 'risk_in']
+    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream', 'start_idx']
 
 def load_config(sth_in: Optional[str]) -> dict:
     config = {}
@@ -287,7 +286,6 @@ if __name__ == "__main__":
     data_kwargs = {k: getattr(args, k) for k in data_keys}
     model_kwargs = {k: getattr(args, k) for k in model_keys}
     runtime_kwargs = {k: getattr(args, k) for k in runtime_keys}
-    risk_path = runtime_kwargs.pop("risk_in", None)
     stream_enabled = runtime_kwargs.pop("stream", False)
     start_idx = runtime_kwargs.pop("start_idx", 0)
     if start_idx is None:
@@ -314,6 +312,22 @@ if __name__ == "__main__":
     model_config = load_config(args.model_in)
     if model_config is None:
         model_config = {}
+
+    explainer_block = model_config.pop("explainer", None)
+
+    explainer_name = None
+    explainer_path = None
+    risk_path = None
+    risk_temperature = None
+    if isinstance(explainer_block, dict):
+        explainer_name = explainer_block.get("name")
+        explainer_path = explainer_block.get("tri_pipeline")
+        risk_temperature = explainer_block.get("risk_temperature")
+        nested_risk_path = explainer_block.get("risk_scores")
+        if nested_risk_path is not None:
+            risk_path = nested_risk_path
+
+    model_config["risk_temperature"] = risk_temperature
     
     capabilities = get_capabilities(args.model)
     
@@ -354,19 +368,17 @@ if __name__ == "__main__":
             model.set_filtering_strategy(selector)
 
     if capabilities.can_use_scoring:
-        explainer_path = model_config.get("explainer_path", None)
-        
-        explainability = model_config.get("explainability", None)
+        explainability = explainer_name
         tri_use_chunking = tri_chunking.get("enabled", False)
-        
-        if capabilities.must_use_non_uniform_explainer:
-            if explainability is None or explainability == "uniform":
-                raise ValueError(f"{args.model} requires explainability to be 'greedy' or 'shap', not 'uniform'")
-            if explainer_path is None:
-                raise ValueError(f"{args.model} requires explainer_path to be set")
         
         if explainability is None:
             explainability = "uniform"
+        
+        if capabilities.must_use_non_uniform_explainer:
+            if explainability == "uniform":
+                raise ValueError(f"{args.model} requires explainability to be 'greedy' or 'shap', not 'uniform'")
+            if explainer_path is None:
+                raise ValueError(f"{args.model} requires an explainer tri_pipeline to be set")
         
         if explainability == "uniform":
             explainer = UniformExplainer()
@@ -381,9 +393,12 @@ if __name__ == "__main__":
             model.set_scoring_strategy(explainer)
 
     runtime_config = load_config(args.runtime_in)
-    config_risk_path = runtime_config.pop("risk_in", None)
-    if risk_path is None and config_risk_path is not None:
-        risk_path = config_risk_path
+    runtime_explainer = runtime_config.pop("explainer", None)
+    runtime_risk_path = None
+    if isinstance(runtime_explainer, dict):
+        runtime_risk_path = runtime_explainer.get("risk_scores")
+    if risk_path is None and runtime_risk_path is not None:
+        risk_path = runtime_risk_path
     
     if risk_path:
         risk_scores = load_precomputed_risk(risk_path)
