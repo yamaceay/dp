@@ -31,10 +31,10 @@ function all_methods() {
 }
 
 function all_datasets() {
-  printf 'trustpilot,data/trustpilot/sample_300.jsonl\n'
-  printf 'tab,data/tab/splitted/test.json\n'
-  printf 'reddit,data/reddit/train.jsonl\n'
-  printf 'db_bio,data/db_bio/train/data-00000-of-00001.arrow\n'
+  printf 'tab,data/TAB/splitted/test.json\n'
+  printf 'reddit,data/reddit/reddit.jsonl\n'
+  # printf 'trustpilot,data/trustpilot/sample_300.jsonl\n'
+  # printf 'db_bio,data/db_bio/train/data-00000-of-00001.arrow\n'
 }
 
 function all_runtimes() {
@@ -56,23 +56,46 @@ function all_runtimes() {
 function all_methods_runtimes() {
   declare -A method_runtime_map
   method_runtime_map=(
-    ["petre"]="k_anon"
-    ["dpprompt"]="dp"
-    ["dpparaphrase"]="dp"
-    ["dpbart"]="dp"
-    ["dpmlm"]="dp"
     ["baroud"]="simple"
     ["risk"]="simple"
     ["spacy"]="simple"
     ["presidio"]="simple"
     ["manual"]="simple"
+    ["petre"]="k_anon"
+    ["dpprompt"]="dp"
+    ["dpparaphrase"]="dp"
+    ["dpbart"]="dp"
+    ["dpmlm"]="dp"
   )
 
-  while IFS=, read -r dataset_name dataset_path; do
-    while IFS=, read -r method_path method_base; do
-      runtime_type="${method_runtime_map[$method_base]}"
-      
-      if [[ -n "$runtime_type" ]]; then
+  dataset_entries=()
+  while IFS= read -r line; do
+    dataset_entries+=("$line")
+  done < <(all_datasets)
+
+  method_entries=()
+  while IFS= read -r line; do
+    method_entries+=("$line")
+  done < <(all_methods)
+
+  runtime_entries=()
+  while IFS= read -r line; do
+    runtime_entries+=("$line")
+  done < <(all_runtimes)
+
+  ordered_methods=("baroud" "risk" "spacy" "presidio" "manual" "petre" "dpprompt" "dpparaphrase" "dpbart" "dpmlm")
+
+  for dataset_entry in "${dataset_entries[@]}"; do
+    IFS=, read -r dataset_name dataset_path <<< "$dataset_entry"
+
+    for method_key in "${ordered_methods[@]}"; do
+      runtime_type="${method_runtime_map[$method_key]}"
+      [[ -z "$runtime_type" ]] && continue
+
+      for method_entry in "${method_entries[@]}"; do
+        IFS=, read -r method_path method_base <<< "$method_entry"
+        [[ "$method_base" != "$method_key" ]] && continue
+
         if [[ "$method_path" =~ configs/model/[^/]+/([^/]+)/[^/]+\.yaml$ ]]; then
           ref_dataset_name="${match[1]}"
           if [[ "$ref_dataset_name" != "$dataset_name" ]]; then
@@ -84,7 +107,9 @@ function all_methods_runtimes() {
         if [[ "$runtime_type" != "simple" || "$method_base" == "risk" ]]; then
           flags="--stream"
         fi
-        all_runtimes | while IFS=, read -r runtime_method runtime_path; do
+
+        for runtime_entry in "${runtime_entries[@]}"; do
+          IFS=, read -r runtime_method runtime_path <<< "$runtime_entry"
           runtime_path_ext="${runtime_dir}/${runtime_path##*/}"
           if [[ "$runtime_method" == "$runtime_type"* ]]; then
             printf "$cmd_tpl\n" \
@@ -95,9 +120,9 @@ function all_methods_runtimes() {
               "$dataset_name" "$method_base"
           fi
         done
-      fi
-    done < <(all_methods)
-  done < <(all_datasets)
+      done
+    done
+  done
 }
 
 all_methods_runtimes
