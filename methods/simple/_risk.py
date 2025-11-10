@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -27,13 +27,11 @@ class RiskAnonymizer(SimpleAnonymizer):
         *args,
         model: str,
         mask_text: str = "[MASK]",
-        risk_threshold: float = 0.5,
+        risk_tolerance: float = 0.5,
         temperature: Optional[float] = None,
         risk_temperature: Optional[float] = None,
         **kwargs,
     ):
-        if risk_threshold < 0:
-            raise ValueError("risk_threshold must be non-negative")
         temp_value: Optional[float] = risk_temperature if risk_temperature is not None else temperature
         if temp_value is None:
             temp_value = 1.0
@@ -42,7 +40,7 @@ class RiskAnonymizer(SimpleAnonymizer):
         super().__init__(*args, model=model, **kwargs)
         self._mask_text = mask_text
         self._temperature = float(temp_value)
-        self._threshold = float(risk_threshold)
+        self._tolerance = self._normalize_tolerance(risk_tolerance)
         self._splitter = TextSplitter()
         self._dataset_records: List[DatasetRecord] = []
         self._explainer: Optional[object] = None
@@ -50,17 +48,18 @@ class RiskAnonymizer(SimpleAnonymizer):
         self._risk_text_to_uid: Dict[str, List[str]] = {}
         self._risk_text_positions: Dict[str, int] = {}
 
+    def _normalize_tolerance(self, value: float) -> float:
+        numeric = float(value)
+        if numeric < 0 or numeric > 1:
+            raise ValueError("risk_tolerance must be within [0, 1]")
+        return numeric
+
     def add_dataset_records(self, dataset_records: Iterable[DatasetRecord]) -> None:
         self._dataset_records.extend(dataset_records)
 
-    def set_risk_tolerance(self, threshold: float) -> None:
-        value = float(threshold)
-        if value < 0:
-            raise ValueError("risk_tolerance must be non-negative")
-        self._threshold = value
-
-    def set_risk_threshold(self, threshold: float) -> None:
-        self.set_risk_tolerance(threshold)
+    def set_risk_tolerance(self, tolerance: float) -> None:
+        value = self._normalize_tolerance(tolerance)
+        self._tolerance = value
 
     def set_scoring_strategy(self, explainer) -> None:
         if not hasattr(explainer, "explain"):
@@ -109,26 +108,40 @@ class RiskAnonymizer(SimpleAnonymizer):
             self._risk_text_positions.setdefault(text_key, 0)
 
     def anonymize(self, text: str, *args, record_name: Optional[str] = None, **kwargs) -> AnonymizationResult:
-        tokens, spans = self._split_tokens(text)
-        if not tokens:
-            raise ValueError("tokenization produced no tokens")
-        risk_scores, risk_probabilities, risk_source = self._score_tokens(
-            text,
-            tokens,
-            spans,
-            record_name,
-        )
-        risks = self._build_risks(tokens, spans, risk_scores, risk_probabilities)
-        masked_text, mask_spans = self._apply_mask(text, risks)
-        annotations = self._build_annotations(risks)
-        metadata = self._build_metadata(
-            record_name=record_name,
-            risk_source=risk_source,
-        )
-        return AnonymizationResult(text=masked_text, spans=annotations, metadata=metadata)
+        context = self._prepare_context(text, record_name)
+        return self._build_result_from_context(context, self._tolerance)
 
     def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize with text for RiskAnonymizer.")
+
+    def grid_param_anonymize(
+        self,
+        *,
+        param_name: str,
+        values: List[float],
+        texts: List[str],
+        base_kwargs: Dict[str, Any],
+        record_names: Optional[List[Optional[str]]],
+        progress: bool,
+    ) -> Optional[List[List[AnonymizationResult]]]:
+        if param_name != "risk_tolerance":
+            return None
+        names = record_names or [None] * len(texts)
+        contexts = [self._prepare_context(text, names[idx] if idx < len(names) else None) for idx, text in enumerate(texts)]
+        aggregated: List[List[AnonymizationResult]] = [[] for _ in texts]
+        for tolerance in values:
+            tol_value = self._normalize_tolerance(float(tolerance if tolerance is not None else self._tolerance))
+            per_results = []
+            for context in contexts:
+                result = self._build_result_from_context(context, tol_value)
+                metadata = dict(result.metadata or {})
+                metadata["_grid_param"] = "risk_tolerance"
+                metadata["_grid_value"] = tol_value
+                result.metadata = metadata
+                per_results.append(result)
+            for idx, result in enumerate(per_results):
+                aggregated[idx].append(result)
+        return aggregated
 
     def _split_tokens(self, text: str) -> Tuple[List[str], List[Tuple[int, int]]]:
         spans = self._splitter.tokenize_with_spans(text)
@@ -154,6 +167,48 @@ class RiskAnonymizer(SimpleAnonymizer):
         probabilities = self._to_distribution(scores)
         source = type(self._explainer).__name__
         return scores, probabilities, source
+
+    def _prepare_context(self, text: str, record_name: Optional[str]) -> Dict[str, object]:
+        tokens, spans = self._split_tokens(text)
+        if not tokens:
+            raise ValueError("tokenization produced no tokens")
+        risk_scores, risk_probabilities, risk_source = self._score_tokens(
+            text,
+            tokens,
+            spans,
+            record_name,
+        )
+        return {
+            "text": text,
+            "tokens": tokens,
+            "spans": spans,
+            "scores": risk_scores,
+            "probabilities": risk_probabilities,
+            "record_name": record_name,
+            "risk_source": risk_source,
+        }
+
+    def _build_result_from_context(
+        self,
+        context: Dict[str, object],
+        tolerance: float,
+    ) -> AnonymizationResult:
+        risks, removed_fraction = self._build_risks(
+            context["tokens"],
+            context["spans"],
+            context["scores"],
+            context["probabilities"],
+            tolerance,
+        )
+        masked_text, _ = self._apply_mask(context["text"], risks)
+        annotations = self._build_annotations(risks)
+        metadata = self._build_metadata(
+            record_name=context["record_name"],
+            risk_source=context["risk_source"],
+            risk_tolerance=tolerance,
+            removed_fraction=removed_fraction,
+        )
+        return AnonymizationResult(text=masked_text, spans=annotations, metadata=metadata)
 
     def _lookup_precomputed_scores(
         self,
@@ -219,28 +274,30 @@ class RiskAnonymizer(SimpleAnonymizer):
         spans: Sequence[Tuple[int, int]],
         risk_scores: np.ndarray,
         risk_probabilities: Optional[np.ndarray],
-    ) -> List[TokenRisk]:
+        tolerance: float,
+    ) -> Tuple[List[TokenRisk], float]:
         risks: List[TokenRisk] = []
         token_count = len(tokens)
         ordered_indices = sorted(range(token_count), key=lambda idx: risk_scores[idx], reverse=True)
         masked_flags = [False] * token_count
 
-        cumulative_risk = 0.0
-        for position, idx in enumerate(ordered_indices):
-            if token_count == 0:
-                break
-            contribution: float
-            if risk_probabilities is not None and idx < len(risk_probabilities):
-                contribution = float(risk_probabilities[idx])
-            else:
-                contribution = float(risk_scores[idx]) if idx < len(risk_scores) else 0.0
-            if not np.isfinite(contribution):
-                contribution = 0.0
-            contribution = max(contribution, 0.0)
-            masked_flags[idx] = True
-            cumulative_risk += contribution
-            if cumulative_risk >= self._threshold:
-                break
+        removal_limit = max(0.0, min(1.0, 1.0 - tolerance))
+        removed = 0.0
+        if removal_limit > 0 and token_count > 0:
+            for idx in ordered_indices:
+                if removed >= removal_limit:
+                    break
+                if risk_probabilities is not None and idx < len(risk_probabilities):
+                    contribution = float(risk_probabilities[idx])
+                else:
+                    contribution = float(risk_scores[idx]) if idx < len(risk_scores) else 0.0
+                if not np.isfinite(contribution):
+                    continue
+                contribution = max(contribution, 0.0)
+                if contribution <= 0:
+                    continue
+                masked_flags[idx] = True
+                removed += contribution
 
         for idx, token in enumerate(tokens):
             start, end = spans[idx] if idx < len(spans) else (0, 0)
@@ -258,7 +315,7 @@ class RiskAnonymizer(SimpleAnonymizer):
                     masked=masked_flags[idx] and start < end,
                 )
             )
-        return risks
+        return risks, min(1.0, removed)
 
     def _apply_mask(self, text: str, risks: Sequence[TokenRisk]) -> Tuple[str, List[Tuple[int, int]]]:
         spans = [(risk.start, risk.end) for risk in risks if risk.masked]
@@ -299,11 +356,14 @@ class RiskAnonymizer(SimpleAnonymizer):
         self,
         record_name: Optional[str],
         risk_source: str,
+        risk_tolerance: float,
+        removed_fraction: float,
     ) -> Dict[str, object]:
         return {
             "method": "risk",
             "record": record_name,
-            "threshold": self._threshold,
+            "risk_tolerance": risk_tolerance,
+            "removed_fraction": removed_fraction,
             "mask_text": self._mask_text,
             "risk_source": risk_source,
             "temperature": self._temperature,

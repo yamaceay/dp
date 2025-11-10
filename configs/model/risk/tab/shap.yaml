@@ -3,5 +3,3 @@ explainer:
   tri_pipeline: models/tri_pipelines/tab/20251104_085941
   risk_scores: data/TAB/test_risk_shap.jsonl
   risk_temperature: 0.1
-
-risk_threshold: 0.1

@@ -3,5 +3,3 @@ explainer:
   tri_pipeline: models/tri_pipelines/reddit/20251105_211404
   risk_scores: data/reddit/reddit_risk_shap.jsonl
   risk_temperature: 0.1
-
-risk_threshold: 0.1

@@ -12,6 +12,6 @@ tri_chunking:
 
 token_selection:
   name: by_risk
-  risk_threshold: 0.3
+  risk_tolerance: 0.7
 
 compensate_epsilon: false

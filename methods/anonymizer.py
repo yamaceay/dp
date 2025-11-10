@@ -34,6 +34,18 @@ class Anonymizer(ABC):
     def add_dataset_records(self, dataset_records):
         raise NotImplementedError()
 
+    def grid_param_anonymize(
+        self,
+        *,
+        param_name: str,
+        values: List[float],
+        texts: List[str],
+        base_kwargs: Dict[str, Any],
+        record_names: Optional[List[Optional[str]]],
+        progress: bool,
+    ) -> Optional[List[List[AnonymizationResult]]]:
+        return None
+
 @dataclass
 class AnonymizationRequest:
     texts: Optional[List[str]] = None
@@ -378,16 +390,36 @@ class AnonymizationBuilder:
         setter = getattr(self.anonymizer, setter_name, None)
         if setter is None and any(value is not None for value in ordered_values):
             raise ValueError(f"{self.anonymizer.__class__.__name__} does not support '{param_name}' overrides")
-        def run_for(value: Optional[float]):
+        def run_for(value: Optional[float]) -> List[AnonymizationResult]:
             if value is not None and setter is not None:
                 setter(value)
-            metadata = {param_name: value} if value is not None else None
+            metadata: Optional[Dict[str, Any]] = None
+            if value is not None:
+                metadata = {
+                    param_name: value,
+                    "_grid_param": param_name,
+                    "_grid_value": value,
+                }
             return self._run_plain_text(texts, record_names, base_kwargs, progress, metadata)
         if len(ordered_values) == 1:
             return run_for(ordered_values[0])
-        aggregated: Dict[Optional[float], List[AnonymizationResult]] = {}
+        grid_results = self.anonymizer.grid_param_anonymize(
+            param_name=param_name,
+            values=ordered_values,
+            texts=texts,
+            base_kwargs=base_kwargs,
+            record_names=record_names,
+            progress=progress,
+        )
+        if grid_results is not None:
+            return grid_results
+        aggregated: List[List[AnonymizationResult]] = [[] for _ in texts]
         for value in ordered_values:
-            aggregated[value] = run_for(value)
+            per_value_results = run_for(value)
+            if len(per_value_results) != len(texts):
+                raise ValueError("Mismatch between text count and results")
+            for idx, result in enumerate(per_value_results):
+                aggregated[idx].append(result)
         return aggregated
 
     def _normalize_parameter_values(self, values: Optional[List[Optional[float]]]) -> List[Optional[float]]:

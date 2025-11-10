@@ -47,19 +47,14 @@ class JsonlOutputHandler(OutputHandler):
     def __init__(self, base_path: str = "outputs", timestamp: Optional[str] = None):
         self.base_path = base_path
         self.timestamp = timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.jsonl_file = None
-        self.jsonl_path = None
-    
+        self._streams: Dict[str, Any] = {}
+        self._paths: Dict[str, Path] = {}
+
     def output(self, result: AnonymizationResult, dataset: str, model: str, **kwargs):
-        output_dir = self._get_output_dir(dataset, model)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        if self.jsonl_file is None:
-            self.jsonl_path = output_dir / f"{self.timestamp}.jsonl"
-            self.jsonl_file = open(self.jsonl_path, 'w', encoding='utf-8')
-        
         idx = kwargs.get("idx", None)
-        
+        variant_key = self._derive_variant_key(result)
+        stream = self._ensure_stream(dataset, model, variant_key)
+
         record = {
             "idx": idx,
             "text": result.text,
@@ -71,19 +66,55 @@ class JsonlOutputHandler(OutputHandler):
         if result.metadata:
             record["metadata"] = result.metadata
         
-        self.jsonl_file.write(json.dumps(record, ensure_ascii=False, cls=NumpyEncoder) + '\n')
-        self.jsonl_file.flush()
+        stream.write(json.dumps(record, ensure_ascii=False, cls=NumpyEncoder) + '\n')
+        stream.flush()
     
     def close(self):
-        if self.jsonl_file is not None:
-            self.jsonl_file.close()
-            print(f"Output written to: {self.jsonl_path}")
-            self.jsonl_file = None
-    
+        for key, stream in self._streams.items():
+            stream.close()
+            path = self._paths.get(key)
+            if path is not None:
+                print(f"Output written to: {path}")
+        self._streams.clear()
+        self._paths.clear()
+
     def _get_output_dir(self, dataset: str, model: str) -> Path:
         pattern = OUTPUT_STRUCTURE.get(model, f"outputs/{{dataset}}/{model}")
         path_str = pattern.format(dataset=dataset)
         return Path(path_str)
+
+    def _ensure_stream(self, dataset: str, model: str, variant_key: str):
+        if variant_key in self._streams:
+            return self._streams[variant_key]
+        output_dir = self._get_output_dir(dataset, model)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        suffix = f"_{variant_key}" if variant_key else ""
+        sanitized_suffix = suffix.replace(" ", "_")
+        path = output_dir / f"{self.timestamp}{sanitized_suffix}.jsonl"
+        handle = open(path, 'w', encoding='utf-8')
+        self._streams[variant_key] = handle
+        self._paths[variant_key] = path
+        return handle
+
+    def _derive_variant_key(self, result: AnonymizationResult) -> str:
+        metadata = result.metadata or {}
+        param = metadata.get("_grid_param")
+        value = metadata.get("_grid_value") if param else None
+        if param is None:
+            for key in ("pii_confidence", "risk_tolerance", "epsilon", "k"):
+                if key in metadata and metadata[key] is not None:
+                    param = key
+                    value = metadata[key]
+                    break
+        if param is None or value is None:
+            return ""
+        formatted_value = self._format_variant_value(value)
+        return f"{param}-{formatted_value}"
+
+    def _format_variant_value(self, value: Any) -> str:
+        if isinstance(value, float):
+            return f"{value:.4f}".rstrip("0").rstrip(".")
+        return str(value)
     
     def _serialize_annotation_minimal(self, ann: TextAnnotation) -> Dict[str, Any]:
         """Serialize annotation with omitempty pattern, converting NumPy types to native Python"""

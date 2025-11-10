@@ -3,7 +3,6 @@ from typing import Dict, List
 
 PII_CLASSIFIER_MODEL_LIST: List[str] = [
     "spacy",
-    "presidio",
     "baroud",
 ]
 
@@ -39,7 +38,7 @@ class ModelCapabilities:
 
 MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
     "spacy": ModelCapabilities(is_pii_classifier=True),
-    "presidio": ModelCapabilities(is_pii_classifier=True),
+    "presidio": ModelCapabilities(),
     "manual": ModelCapabilities(must_use_dataset=True),
     "baroud": ModelCapabilities(
         is_pii_classifier=True,

@@ -421,10 +421,10 @@ if __name__ == "__main__":
             selector = PIIOnlySelector(pii_detector=pii_annotator, threshold=pii_threshold)
         
         elif type_of_selector is not None and type_of_selector == "by_risk":
-            risk_threshold = token_selection_config.get("risk_threshold", None)
-            if risk_threshold is None:
-                raise ValueError("ByRiskSelector requires 'risk_threshold' in model configuration.")
-            selector = ByRiskSelector(threshold=risk_threshold)
+            risk_tolerance = token_selection_config.get("risk_tolerance")
+            if risk_tolerance is None:
+                raise ValueError("ByRiskSelector requires 'risk_tolerance'.")
+            selector = ByRiskSelector(risk_tolerance=risk_tolerance)
 
         model.set_filtering_strategy(selector)
 
