@@ -1,6 +1,8 @@
-from typing import List, Union
+import string
+from typing import List, Optional, Tuple
 from dp.loaders.base import TextAnnotation, DatasetRecord
 from dp.utils.selector.base import TokenSelector
+from dp.utils.pii_detector import PIIDetector
 
 
 class PIIOnlySelector(TokenSelector):
@@ -35,7 +37,7 @@ class PIIOnlySelector(TokenSelector):
     
     def __init__(
         self,
-        pii_detector=None,
+        pii_detector: Optional[PIIDetector] =None,
         threshold: float = 0.5,
         **kwargs
     ):
@@ -57,21 +59,37 @@ class PIIOnlySelector(TokenSelector):
         
         self.pii_detector = pii_detector
         self.threshold = threshold
-    
-    def select(self, text: str) -> List[TextAnnotation]:
+
+    def select(self, text: str, offsets: Optional[List[Tuple[int, int]]] = None, labels: Optional[List[str]] = None) -> List[TextAnnotation]:
         if not text or not text.strip():
             return []
         
         temp_record = DatasetRecord(text=text)
         
-        predictions = self.pii_detector.predict([temp_record])
+        predictions = self.pii_detector.predict([temp_record])[0]
         
-        if not predictions or not predictions[0].spans:
+        if not predictions or not predictions.spans:
             return []
         
         filtered_spans = []
-        for span in predictions[0].spans:
-            if span.confidence is None or span.confidence >= self.threshold:
-                filtered_spans.append(span)
+        for span in predictions.spans:
+            if span.confidence is not None:
+                if span.confidence < self.threshold:
+                    continue
+                if labels and span.label not in labels:
+                    continue
+            if span.text in string.punctuation:
+                continue
+            filtered_spans.append(span)
         
-        return filtered_spans
+        if offsets is None:
+            return filtered_spans
+
+        shifted_spans = []
+        for span in filtered_spans:
+            if any(
+                not (span.end <= offset[0] or span.start >= offset[1])
+                for offset in offsets
+            ):
+                shifted_spans.append(span)
+        return shifted_spans

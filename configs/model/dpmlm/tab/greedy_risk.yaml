@@ -11,11 +11,7 @@ tri_chunking:
   enabled: true
 
 token_selection:
-  name: pii_only
-  pii_annotator: models/pii_detectors/tab/20251021_093003
-  pii_threshold: 0.7
+  name: by_risk
+  risk_threshold: 0.3
 
 compensate_epsilon: false
-
-pii_chunking:
-  enabled: true

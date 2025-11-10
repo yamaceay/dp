@@ -18,7 +18,7 @@ from dp.loaders import (
 )
 
 from dp.utils.pii_detector import PIIDetector
-from dp.utils.selector.pii_only_selector import PIIOnlySelector
+from dp.utils.selector import PIIOnlySelector, AllSelector, ByRiskSelector
 from dp.utils.explainer import UniformExplainer, GreedyExplainer, ShapExplainer
 from dp.utils.chunking import TruncateChunker, SlidingWindowChunker, TokenAwareChunker
 from dp.utils.output import OUTPUT_HANDLER_REGISTRY
@@ -358,14 +358,27 @@ if __name__ == "__main__":
         model.set_annotations(loaded_annotations, name=args.annotations)
 
     if capabilities.can_use_filtering:
-        pii_annotator_path = model_config.get("pii_annotator", None)
-        threshold = model_config.get("pii_threshold", None)
-        pii_use_chunking = pii_chunking.get("enabled", False)
+        selector = AllSelector()
+        token_selection_config = model_config.get("token_selection", {})
+        type_of_selector = token_selection_config.get("name", None)
 
-        if pii_annotator_path is not None:
+        if type_of_selector is not None and type_of_selector == "pii_only":
+            pii_annotator_path = token_selection_config.get("pii_annotator", None)
+            if pii_annotator_path is None:
+                raise ValueError("PIIOnlySelector requires 'pii_annotator' path in model configuration.")
+            pii_threshold = token_selection_config.get("pii_threshold", None)
+            
+            pii_use_chunking = pii_chunking.get("enabled", False)
             pii_annotator = PIIDetector(model_name=pii_annotator_path, use_chunking=pii_use_chunking)
-            selector = PIIOnlySelector(pii_detector=pii_annotator, threshold=threshold)
-            model.set_filtering_strategy(selector)
+            selector = PIIOnlySelector(pii_detector=pii_annotator, threshold=pii_threshold)
+        
+        elif type_of_selector is not None and type_of_selector == "by_risk":
+            risk_threshold = token_selection_config.get("risk_threshold", None)
+            if risk_threshold is None:
+                raise ValueError("ByRiskSelector requires 'risk_threshold' in model configuration.")
+            selector = ByRiskSelector(threshold=risk_threshold)
+
+        model.set_filtering_strategy(selector)
 
     if capabilities.can_use_scoring:
         explainability = explainer_name

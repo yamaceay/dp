@@ -352,7 +352,7 @@ class DPMlmAnonymizer(DPAnonymizer):
 
             pii_spans = []
             if self.pii_detector is not None:
-                pii_spans = self.pii_detector.select(text)
+                pii_spans = self.pii_detector.select(text, offsets=offsets)
 
             critical_indices = []
             critical_tokens = []

@@ -11,9 +11,11 @@ protected (skipped) during anonymization:
 from dp.utils.selector.base import TokenSelector
 from dp.utils.selector.all_selector import AllSelector
 from dp.utils.selector.pii_only_selector import PIIOnlySelector
+from dp.utils.selector.by_risk_selector import ByRiskSelector
 
 __all__ = [
     "TokenSelector",
     "AllSelector",
     "PIIOnlySelector",
+    "ByRiskSelector",
 ]
