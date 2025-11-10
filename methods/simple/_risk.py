@@ -53,6 +53,15 @@ class RiskAnonymizer(SimpleAnonymizer):
     def add_dataset_records(self, dataset_records: Iterable[DatasetRecord]) -> None:
         self._dataset_records.extend(dataset_records)
 
+    def set_risk_tolerance(self, threshold: float) -> None:
+        value = float(threshold)
+        if value < 0:
+            raise ValueError("risk_tolerance must be non-negative")
+        self._threshold = value
+
+    def set_risk_threshold(self, threshold: float) -> None:
+        self.set_risk_tolerance(threshold)
+
     def set_scoring_strategy(self, explainer) -> None:
         if not hasattr(explainer, "explain"):
             raise ValueError("Explainer must define explain")
@@ -271,7 +280,8 @@ class RiskAnonymizer(SimpleAnonymizer):
                 TextAnnotation(
                     start=risk.start,
                     end=risk.end,
-                    label=risk.token,
+                    label="risk",
+                    text=risk.token,
                     replacement=self._mask_text if risk.masked else risk.token,
                     metadata=self._risk_metadata(risk),
                 )

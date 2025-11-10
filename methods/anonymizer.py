@@ -1,4 +1,4 @@
-from typing import Dict, Iterator, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional, Union
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from tqdm import tqdm
@@ -40,6 +40,8 @@ class AnonymizationRequest:
     indices: Optional[List[int]] = None
     epsilons: Optional[List[float]] = None
     ks: Optional[List[int]] = None
+    pii_confidences: Optional[List[Optional[float]]] = None
+    risk_tolerances: Optional[List[Optional[float]]] = None
     
     def has_texts(self) -> bool:
         return self.texts is not None
@@ -53,6 +55,12 @@ class AnonymizationRequest:
     def has_ks(self) -> bool:
         return self.ks is not None
     
+    def has_pii_confidences(self) -> bool:
+        return self.pii_confidences is not None
+    
+    def has_risk_tolerances(self) -> bool:
+        return self.risk_tolerances is not None
+    
     def is_batch_text(self) -> bool:
         return self.has_texts() and len(self.texts) > 1
     
@@ -64,6 +72,12 @@ class AnonymizationRequest:
     
     def is_grid_k(self) -> bool:
         return self.has_ks() and len(self.ks) > 1
+    
+    def is_grid_pii_confidence(self) -> bool:
+        return self.has_pii_confidences() and len(self.pii_confidences) > 1
+    
+    def is_grid_risk_tolerance(self) -> bool:
+        return self.has_risk_tolerances() and len(self.risk_tolerances) > 1
 
 
 class AnonymizationBuilder:
@@ -97,6 +111,36 @@ class AnonymizationBuilder:
         self.request.ks = ks
         return self
     
+    def with_pii_confidences(self, values: Union[None, float, List[Optional[float]]]) -> 'AnonymizationBuilder':
+        if values is None:
+            self.request.pii_confidences = None
+            return self
+        if isinstance(values, (int, float)):
+            values = [float(values)]
+        normalized: List[Optional[float]] = []
+        for value in values:
+            if value is None:
+                normalized.append(None)
+            else:
+                normalized.append(float(value))
+        self.request.pii_confidences = normalized
+        return self
+    
+    def with_risk_tolerances(self, values: Union[None, float, List[Optional[float]]]) -> 'AnonymizationBuilder':
+        if values is None:
+            self.request.risk_tolerances = None
+            return self
+        if isinstance(values, (int, float)):
+            values = [float(values)]
+        normalized: List[Optional[float]] = []
+        for value in values:
+            if value is None:
+                normalized.append(None)
+            else:
+                normalized.append(float(value))
+        self.request.risk_tolerances = normalized
+        return self
+    
     def anonymize_stream(self, progress: bool = False, **kwargs) -> Iterator[Dict[float, List[AnonymizationResult]] | Dict[int, List[AnonymizationResult]]]:
         if self.model_name is None:
             raise ValueError("Model name not set in anonymizer")
@@ -120,7 +164,6 @@ class AnonymizationBuilder:
                 progress=progress,
                 **filtered_kwargs,
             )
-        print("Here I AM")
         return self.anonymizer.anonymize_stream(
             texts=self.request.texts or [],
             progress=progress,            
@@ -157,6 +200,20 @@ class AnonymizationBuilder:
             
             return self._anonymize_dp(**kwargs)
         
+        elif self.capabilities.is_pii_classifier:
+            if self.request.has_indices():
+                raise ValueError(f"{name} requires texts, not dataset indices")
+            if not self.request.has_texts():
+                raise ValueError("Must specify texts for PII classifiers")
+            return self._anonymize_pii_classifier(**kwargs)
+        
+        elif self.capabilities.is_risk_masker:
+            if self.request.has_indices():
+                raise ValueError(f"{name} requires texts, not dataset indices")
+            if not self.request.has_texts():
+                raise ValueError("Must specify texts for risk maskers")
+            return self._anonymize_risk_masker(**kwargs)
+        
         elif self.capabilities.must_use_dataset:
             if self.request.has_texts():
                 raise ValueError(f"{name} requires dataset indices, not texts")
@@ -169,24 +226,31 @@ class AnonymizationBuilder:
             if self.request.has_indices():
                 raise ValueError(f"{name} requires texts, not dataset indices")
             if not self.request.has_texts():
-                raise ValueError("Must specify texts for simple methods")
+                raise ValueError("Must specify texts for text anonymization")
 
-            return self._anonymize_simple(**kwargs)
+            return self._anonymize_texts(**kwargs)
 
-    def _anonymize_simple(self, progress: bool = False, **kwargs):
-        results = []
-        texts_iter = self.request.texts
-        if progress:
-            texts_iter = tqdm(texts_iter, desc="Anonymizing texts")
-        record_names = kwargs.pop("record_names", None)
-        base_kwargs = dict(kwargs)
-        for idx, text in enumerate(texts_iter):
-            per_kwargs = dict(base_kwargs)
-            if record_names is not None and idx < len(record_names):
-                per_kwargs["record_name"] = record_names[idx]
-            result = self.anonymizer.anonymize(text=text, **per_kwargs)
-            results.append(result)
-        return results
+    def _anonymize_texts(self, progress: bool = False, **kwargs):
+        texts, record_names, base_kwargs = self._prepare_text_inputs(kwargs)
+        return self._run_plain_text(texts, record_names, base_kwargs, progress)
+
+    def _anonymize_pii_classifier(self, progress: bool = False, **kwargs):
+        return self._anonymize_with_param(
+            param_name="pii_confidence",
+            values=self.request.pii_confidences,
+            setter_name="set_pii_confidence",
+            progress=progress,
+            **kwargs,
+        )
+
+    def _anonymize_risk_masker(self, progress: bool = False, **kwargs):
+        return self._anonymize_with_param(
+            param_name="risk_tolerance",
+            values=self.request.risk_tolerances,
+            setter_name="set_risk_tolerance",
+            progress=progress,
+            **kwargs,
+        )
     
     def _anonymize_dp(self, progress: bool = False, **kwargs):
         texts, ordered_eps, filtered_kwargs = self._prepare_dp_inputs(kwargs)
@@ -266,3 +330,75 @@ class AnonymizationBuilder:
         ordered_k = [int(k_value) for k_value in dict.fromkeys(ks)]
         filtered_kwargs = {key: value for key, value in kwargs.items() if key != "k"}
         return indices, ordered_k, filtered_kwargs
+
+    def _prepare_text_inputs(self, kwargs):
+        texts = list(self.request.texts or [])
+        if not texts:
+            raise ValueError("No texts provided for text anonymization")
+        record_names = kwargs.pop("record_names", None)
+        base_kwargs = dict(kwargs)
+        return texts, record_names, base_kwargs
+
+    def _run_plain_text(
+        self,
+        texts: List[str],
+        record_names: Optional[List[str]],
+        base_kwargs: Dict[str, Any],
+        progress: bool,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[AnonymizationResult]:
+        iterator = texts
+        if progress:
+            iterator = tqdm(texts, desc="Anonymizing texts")
+        names_list = list(record_names) if record_names is not None else None
+        results: List[AnonymizationResult] = []
+        for idx, text in enumerate(iterator):
+            per_kwargs = dict(base_kwargs)
+            if names_list is not None and idx < len(names_list):
+                per_kwargs["record_name"] = names_list[idx]
+            result = self.anonymizer.anonymize(text=text, **per_kwargs)
+            if metadata:
+                payload = dict(result.metadata or {})
+                payload.update(metadata)
+                result.metadata = payload
+            results.append(result)
+        return results
+
+    def _anonymize_with_param(
+        self,
+        param_name: str,
+        values: Optional[List[Optional[float]]],
+        setter_name: str,
+        *,
+        progress: bool = False,
+        **kwargs,
+    ):
+        texts, record_names, base_kwargs = self._prepare_text_inputs(kwargs)
+        ordered_values = self._normalize_parameter_values(values)
+        setter = getattr(self.anonymizer, setter_name, None)
+        if setter is None and any(value is not None for value in ordered_values):
+            raise ValueError(f"{self.anonymizer.__class__.__name__} does not support '{param_name}' overrides")
+        def run_for(value: Optional[float]):
+            if value is not None and setter is not None:
+                setter(value)
+            metadata = {param_name: value} if value is not None else None
+            return self._run_plain_text(texts, record_names, base_kwargs, progress, metadata)
+        if len(ordered_values) == 1:
+            return run_for(ordered_values[0])
+        aggregated: Dict[Optional[float], List[AnonymizationResult]] = {}
+        for value in ordered_values:
+            aggregated[value] = run_for(value)
+        return aggregated
+
+    def _normalize_parameter_values(self, values: Optional[List[Optional[float]]]) -> List[Optional[float]]:
+        if not values:
+            return [None]
+        ordered: List[Optional[float]] = []
+        seen: set = set()
+        for value in values:
+            key = value
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered.append(value)
+        return ordered

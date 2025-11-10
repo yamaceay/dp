@@ -9,12 +9,22 @@ class BaroudAnonymizer(SimpleAnonymizer):
         super().__init__(*args, **kwargs)
         
         self.pii_annotator = pii_annotator
-        self.pii_threshold = pii_threshold
+        self.pii_threshold = 0.5
         self.pii_detector = None
+        self.set_pii_confidence(pii_threshold)
         
         if self.pii_annotator:
             from dp.utils.pii_detector import PIIDetector
             self.pii_detector = PIIDetector(model_name=self.pii_annotator, use_chunking=False)
+    
+    def set_pii_confidence(self, threshold: float) -> None:
+        value = float(threshold)
+        if value < 0 or value > 1:
+            raise ValueError("pii_confidence must be between 0 and 1")
+        self.pii_threshold = value
+    
+    def set_classification_threshold(self, threshold: float) -> None:
+        self.set_pii_confidence(threshold)
     
     def _get_category_mask(self, label: str) -> str:
         if not label:

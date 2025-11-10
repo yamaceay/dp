@@ -1,12 +1,14 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, List
 
-SIMPLE_MODEL_LIST = [
+PII_CLASSIFIER_MODEL_LIST: List[str] = [
     "spacy",
     "presidio",
     "baroud",
+]
+
+RISK_MASKER_MODEL_LIST: List[str] = [
     "risk",
-    "manual",
 ]
 
 K_ANON_MODEL_LIST = [
@@ -25,6 +27,8 @@ class ModelCapabilities:
     must_use_dataset: bool = False
     requires_epsilon: bool = False
     requires_k: bool = False
+    is_pii_classifier: bool = False
+    is_risk_masker: bool = False
     must_use_non_uniform_explainer: bool = False
     can_use_annotations: bool = False
     can_use_scoring: bool = False
@@ -34,14 +38,16 @@ class ModelCapabilities:
 
 
 MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
-    "spacy": ModelCapabilities(),
-    "presidio": ModelCapabilities(),
+    "spacy": ModelCapabilities(is_pii_classifier=True),
+    "presidio": ModelCapabilities(is_pii_classifier=True),
     "manual": ModelCapabilities(must_use_dataset=True),
     "baroud": ModelCapabilities(
-        supports_batch_predict=True, 
+        is_pii_classifier=True,
+        supports_batch_predict=True,
         supports_streaming=True,
     ),
     "risk": ModelCapabilities(
+        is_risk_masker=True,
         must_use_non_uniform_explainer=True,
         can_use_scoring=True,
         supports_streaming=True,

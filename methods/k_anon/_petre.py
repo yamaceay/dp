@@ -16,7 +16,7 @@ from dp.methods.k_anon import KAnonymizer
 from dp.loaders.base import DatasetRecord, TextAnnotation
 from dp.utils.splitter import TextSplitter
 from dp.utils.chunking import TokenAwareChunker
-from dp.methods.constants import SIMPLE_MODEL_LIST
+from dp.methods.constants import PII_CLASSIFIER_MODEL_LIST, RISK_MASKER_MODEL_LIST
 
 @dataclass
 class RecordState:
@@ -165,7 +165,7 @@ class PetreAnonymizer(KAnonymizer):
             "\t",
             "\n",
         }
-        if name is not None and name in SIMPLE_MODEL_LIST:
+        if name in PII_CLASSIFIER_MODEL_LIST or name in RISK_MASKER_MODEL_LIST or name == "manual":
             for uid, anns in annotations.items():
                 for ann in anns:
                     if ann.label:

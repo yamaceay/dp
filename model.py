@@ -7,7 +7,11 @@ from datetime import datetime
 
 from dp.methods.anonymizer import Anonymizer, AnonymizationBuilder
 from dp.methods.registry import MODEL_REGISTRY
-from dp.methods.constants import get_capabilities
+from dp.methods.constants import (
+    get_capabilities,
+    PII_CLASSIFIER_MODEL_LIST,
+    RISK_MASKER_MODEL_LIST,
+)
 from dp.loaders import (
     ADAPTER_REGISTRY,
     DatasetRecord,
@@ -22,9 +26,12 @@ from dp.utils.selector import PIIOnlySelector, AllSelector, ByRiskSelector
 from dp.utils.explainer import UniformExplainer, GreedyExplainer, ShapExplainer
 from dp.utils.chunking import TruncateChunker, SlidingWindowChunker, TokenAwareChunker
 from dp.utils.output import OUTPUT_HANDLER_REGISTRY
+from runtime import load_runtime_bundle
 
 available_models = list(MODEL_REGISTRY.keys())
 available_datasets = list(ADAPTER_REGISTRY.keys())
+pii_confidence_models = set(PII_CLASSIFIER_MODEL_LIST)
+risk_tolerance_models = set(RISK_MASKER_MODEL_LIST)
 
 def add_data_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
@@ -38,7 +45,7 @@ def add_model_args(parser: argparse.ArgumentParser) -> List[str]:
     return ['model', 'model_in']
 
 def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
-    parser.add_argument('--runtime_in', type=str, default=None, help='Path to the runtime configuration')
+    parser.add_argument('--runtime_in', type=str, nargs='+', default=None, help='Path(s) to the runtime configuration(s)')
     parser.add_argument('--texts', type=str, nargs='+', help='Texts to anonymize (space-separated)')
     parser.add_argument('--indices', type=int, nargs='+', help='Indices of records to anonymize from dataset (space-separated)')
     parser.add_argument('--output', type=str, default='print', choices=list(OUTPUT_HANDLER_REGISTRY.keys()), help='Output handler type')
@@ -259,19 +266,57 @@ def stream_anonymization(
         filtered_kwargs = dict(runtime_config)
         if text_indices is None or len(text_indices) != len(texts):
             text_indices = [None] * len(texts)
-        stream = anonymizer.anonymize_stream(texts=texts, **filtered_kwargs)
-        for pos, result in enumerate(stream):
-            idx_value = text_indices[pos] if pos < len(text_indices) else None
-            effective_idx = idx_value if idx_value is not None else pos
-            if effective_idx < start_idx:
-                continue
-            output_handler.output(
-                result,
-                idx=idx_value if idx_value is not None else effective_idx,
-                dataset=dataset_name,
-                model=model_name,
-            )
-            processed += 1
+        param_name: Optional[str] = None
+        values: List[Optional[float]] = [None]
+        if capabilities.is_pii_classifier:
+            param_name = "pii_confidence"
+            values = builder.request.pii_confidences or [None]
+        elif capabilities.is_risk_masker:
+            param_name = "risk_tolerance"
+            values = builder.request.risk_tolerances or [None]
+
+        def normalize_parameter_list(entries: Optional[List[Optional[float]]]) -> List[Optional[float]]:
+            if not entries:
+                return [None]
+            ordered: List[Optional[float]] = []
+            seen: set = set()
+            for entry in entries:
+                key = entry
+                if key in seen:
+                    continue
+                seen.add(key)
+                ordered.append(entry)
+            return ordered
+
+        def attach_metadata(result, key: Optional[str], value: Optional[float]) -> None:
+            if key is None or value is None:
+                return
+            payload = dict(result.metadata or {})
+            payload[key] = value
+            result.metadata = payload
+
+        ordered_values = normalize_parameter_list(values)
+        setter = getattr(anonymizer, f"set_{param_name}", None) if param_name else None
+        if setter is None and param_name is not None and any(value is not None for value in ordered_values):
+            raise ValueError(f"{model_name} does not support '{param_name}' overrides")
+
+        for value in ordered_values:
+            if setter is not None and value is not None:
+                setter(value)
+            stream = anonymizer.anonymize_stream(texts=texts, **filtered_kwargs)
+            for pos, result in enumerate(stream):
+                idx_value = text_indices[pos] if pos < len(text_indices) else None
+                effective_idx = idx_value if idx_value is not None else pos
+                if effective_idx < start_idx:
+                    continue
+                attach_metadata(result, param_name, value)
+                output_handler.output(
+                    result,
+                    idx=idx_value if idx_value is not None else effective_idx,
+                    dataset=dataset_name,
+                    model=model_name,
+                )
+                processed += 1
 
     elapsed = time.time() - run_start
     return processed, elapsed
@@ -286,6 +331,9 @@ if __name__ == "__main__":
     data_kwargs = {k: getattr(args, k) for k in data_keys}
     model_kwargs = {k: getattr(args, k) for k in model_keys}
     runtime_kwargs = {k: getattr(args, k) for k in runtime_keys}
+    runtime_inputs = runtime_kwargs.pop("runtime_in", None)
+    runtime_bundle = load_runtime_bundle(runtime_inputs)
+    runtime_config = dict(runtime_bundle.base_config)
     stream_enabled = runtime_kwargs.pop("stream", False)
     start_idx = runtime_kwargs.pop("start_idx", 0)
     if start_idx is None:
@@ -405,7 +453,6 @@ if __name__ == "__main__":
                 raise ValueError(f"Unknown explainability method: {explainability}")
             model.set_scoring_strategy(explainer)
 
-    runtime_config = load_config(args.runtime_in)
     runtime_explainer = runtime_config.pop("explainer", None)
     runtime_risk_path = None
     if isinstance(runtime_explainer, dict):
@@ -503,25 +550,23 @@ if __name__ == "__main__":
         if record_names is not None:
             runtime_config["record_names"] = record_names
 
+    if args.model in pii_confidence_models and runtime_bundle.pii_confidence_values:
+        builder.with_pii_confidences(runtime_bundle.pii_confidence_values)
+
+    if args.model in risk_tolerance_models and runtime_bundle.risk_tolerance_values:
+        builder.with_risk_tolerances(runtime_bundle.risk_tolerance_values)
+
     if capabilities.requires_k:
-        k = runtime_config.get("k", 5)
-        if isinstance(k, list):
-            if len(k) > 1:
-                raise ValueError("Grid search over k values is not supported. Provide single k value.")
-            k = k[0]
-        
-        builder.with_ks(k)
-        runtime_config["k"] = k
+        ks = runtime_bundle.k_values
+        if not ks:
+            ks = [5]
+        builder.with_ks(ks)
 
     if capabilities.requires_epsilon:
-        epsilon = runtime_config.get("epsilon", 100.0)
-        if isinstance(epsilon, list):
-            if len(epsilon) > 1:
-                raise ValueError("Grid search over epsilon values is not supported. Provide single epsilon value.")
-            epsilon = epsilon[0]
-        
-        builder.with_epsilons(epsilon)
-        runtime_config["epsilon"] = epsilon
+        epsilons = runtime_bundle.epsilon_values
+        if not epsilons:
+            epsilons = [100.0]
+        builder.with_epsilons(epsilons)
 
     if stream_enabled:
         if args.output != "jsonl":
