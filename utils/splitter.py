@@ -1,3 +1,4 @@
+import string
 from typing import List, Tuple
 import re
 from nltk.tokenize import TreebankWordTokenizer
@@ -29,6 +30,8 @@ class TextSplitter:
         terms = []
         for start, end in self.tokenizer.span_tokenize(text):
             term_text = text[start:end]
+            if not term_text.strip() or term_text.strip() in string.punctuation:
+                continue
             terms.append((start, end, term_text))
         return terms
     

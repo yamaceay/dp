@@ -293,8 +293,8 @@ class DPMlmAnonymizer(DPAnonymizer):
         self,
         text: str,
         offsets: Sequence[Tuple[int, int]],
-        indices: Sequence[int],
         record_name: Optional[str],
+        indices: Optional[Sequence[int]] = None,
     ) -> Optional[np.ndarray]:
         uid = self._resolve_risk_uid(text, record_name)
         if uid is None:
@@ -303,9 +303,11 @@ class DPMlmAnonymizer(DPAnonymizer):
         if mapping is None:
             return None
         values: List[float] = []
-        for idx in indices:
+        for idx in range(len(offsets)):
             if idx < 0 or idx >= len(offsets):
                 return None
+            if indices is not None and idx not in indices:
+                continue
             span = offsets[idx]
             key = (int(span[0]), int(span[1]))
             if key not in mapping:
@@ -349,30 +351,24 @@ class DPMlmAnonymizer(DPAnonymizer):
         self,
         text: str,
         offsets: Sequence[Tuple[int, int]],
-        indices: Sequence[int],
         record_name: Optional[str],
-    ) -> Tuple[Dict[int, float], bool]:
-        score_map: Dict[int, float] = {}
-        if not indices:
-            return score_map, False
+        critical_indices: Optional[Sequence[int]] = None,
+    ) -> Tuple[np.ndarray, bool]:
+        scores = np.array([], dtype=float)
 
-        precomputed_scores = self._lookup_precomputed_scores(text, offsets, indices, record_name)
-        if precomputed_scores is not None:
-            for idx, value in zip(indices, precomputed_scores):
-                score_map[idx] = float(value)
-            return score_map, True
-
-        if self.explainer is None:
-            return score_map, False
-
-        subset_offsets = [offsets[i] for i in indices]
-        scores = self.explainer.explain(text, subset_offsets)
-        if scores is None or len(scores) != len(indices):
-            return score_map, False
-
-        for idx, value in zip(indices, scores):
-            score_map[idx] = float(value)
-        return score_map, False
+        precomputed_scores = self._lookup_precomputed_scores(text, offsets, record_name, indices=critical_indices)
+        if precomputed_scores is None:
+            if self.explainer is None:
+                return scores, False
+            
+            critical_offsets = offsets
+            if critical_indices is not None:
+                critical_offsets = [offsets[i] for i in critical_indices]
+            scores = self.explainer.explain(text, critical_offsets)
+            if scores is None or len(scores) != len(critical_offsets):
+                return scores, False
+        else:
+            return precomputed_scores, True
 
     def _grid_anonymize_stream(
         self,
@@ -382,9 +378,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         record_name: Optional[str] = None,
         **kwargs,
     ) -> Iterator[Tuple[float, List[AnonymizationResult]]]:
-        sort_tokens_by_risk = kwargs.pop("sort_tokens_by_risk", None)
-        if sort_tokens_by_risk is None:
-            sort_tokens_by_risk = self.sort_tokens_by_risk
+        sort_tokens_by_risk = self.sort_tokens_by_risk
 
         try:
             if not epsilon:
@@ -393,66 +387,61 @@ class DPMlmAnonymizer(DPAnonymizer):
                 raise StopIteration
 
             tokens, offsets = self._tokenize(text)
+            used_precomputed = False
+
+            selector_requires_risks = self._selector_supports_risks()
+            if selector_requires_risks:
+                risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name)
 
             pii_spans = []
             if self.pii_detector is not None:
-                pii_spans = self.pii_detector.select(text, offsets=offsets)
+                detector_kwargs = {"offsets": offsets}
+                if selector_requires_risks:
+                    detector_kwargs["risks"] = self._weights_to_probs(
+                        risk_scores,
+                        temperature=self.risk_temperature or 1.0,
+                    )
+                pii_spans = self.pii_detector.select(text, **detector_kwargs)
 
-            critical_indices = []
-            critical_tokens = []
-            for i, (token, (token_start, token_end)) in enumerate(zip(tokens, offsets)):
-                if token in string.punctuation:
-                    continue
-                if pii_spans and not any(
-                    not (token_end <= span.start or token_start >= span.end)
-                    for span in pii_spans
-                ):
-                    continue
-                critical_indices.append(i)
-                critical_tokens.append(token)
+            if pii_spans:
+                critical_indices = []
+                for i, (token, (token_start, token_end)) in enumerate(zip(tokens, offsets)):
+                    if pii_spans and not any(
+                        not (token_end <= span.start or token_start >= span.end)
+                        for span in pii_spans
+                    ):
+                        continue
+                    critical_indices.append(i)
 
-            if not critical_indices or not critical_tokens:
-                for eps in epsilon:
-                    yield eps, [AnonymizationResult(text=text, metadata={"epsilon": eps, "method": "dpmlm", "perturbed": 0, "total": 0})]
-                return
-            critical_offsets = [offsets[i] for i in critical_indices]
+                if not critical_indices:
+                    for eps in epsilon:
+                        yield eps, [AnonymizationResult(text=text, metadata={"epsilon": eps, "method": "dpmlm", "perturbed": 0, "total": 0})]
+                    return
+            else:
+                critical_indices = list(range(len(tokens)))
+
+            critical_tokens = [tokens[i] for i in critical_indices]
 
             perturbation_ratio = 1.0
             if self.compensate_epsilon:
-                non_punctuation_total = sum(1 for t in tokens if t not in string.punctuation)
-                if non_punctuation_total > 0:
-                    perturbation_ratio = len(critical_indices) / non_punctuation_total
-                    perturbation_ratio = max(perturbation_ratio, 1e-6)
+                perturbation_ratio = len(critical_tokens) / len(tokens)
+                perturbation_ratio = max(perturbation_ratio, 1e-6)
 
             probs = np.ones(len(critical_tokens)) / len(critical_tokens)
-            used_precomputed = False
-            scores = None
-            precomputed_scores = self._lookup_precomputed_scores(text, offsets, critical_indices, record_name)
-            if precomputed_scores is not None:
-                used_precomputed = True
-                probs = self._weights_to_probs(precomputed_scores, temperature=self.risk_temperature)
-            elif self.explainer is not None:
-                scores = self.explainer.explain(text, critical_offsets)
-                if scores is not None and len(scores) == len(critical_tokens):
-                    probs = self._weights_to_probs(np.array(scores), temperature=self.risk_temperature)
-
-            risk_scores = None
-            if sort_tokens_by_risk:
-                if precomputed_scores is not None:
-                    risk_scores = np.array(precomputed_scores, dtype=float)
-                elif scores is not None:
-                    risk_scores = np.array(scores, dtype=float)
-
-            risk_map: Dict[int, float] = {}
-            if risk_scores is not None:
-                for idx_pos, idx in enumerate(critical_indices):
-                    risk_map[idx] = float(risk_scores[idx_pos])
-
             processing_order = list(range(len(tokens)))
-            if sort_tokens_by_risk and risk_map:
-                sorted_risk_indices = [idx for idx, _ in sorted(risk_map.items(), key=lambda item: item[1], reverse=True)]
-                remaining_indices = [idx for idx in processing_order if idx not in risk_map]
-                processing_order = sorted_risk_indices + remaining_indices
+            if self.explainer is not None or used_precomputed:
+                risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name, critical_indices=critical_indices)
+                if len(risk_scores) == len(critical_tokens):
+                    probs = self._weights_to_probs(risk_scores, temperature=self.risk_temperature)
+
+                if sort_tokens_by_risk:
+                    risk_prob_map: Dict[int, float] = {}
+                    for idx_pos, idx in enumerate(critical_indices):
+                        risk_prob_map[idx] = float(probs[idx_pos])
+
+                    sorted_risk_indices = [idx for idx, _ in sorted(risk_prob_map.items(), key=lambda item: item[1], reverse=True)]
+                    remaining_indices = [idx for idx in processing_order if idx not in risk_prob_map]
+                    processing_order = sorted_risk_indices + remaining_indices
 
             for eps in epsilon:
                 compensated_epsilon = eps * perturbation_ratio
@@ -475,13 +464,12 @@ class DPMlmAnonymizer(DPAnonymizer):
 
                     entry = ledger.entry(i)
                     token = entry.original_text
-                    token_offset = (entry.start, entry.end)
                     if token in string.punctuation:
                         ledger.replace(i, token)
                         total += 1
                         continue
 
-                    token_start, token_end = token_offset
+                    token_start, token_end = entry.start, entry.end
                     is_pii = False
                     if pii_spans:
                         is_pii = any(
@@ -509,7 +497,7 @@ class DPMlmAnonymizer(DPAnonymizer):
                             continue
 
                     token_epsilon = critical_map.get(i, compensated_epsilon)
-                    private_token = self._privatize_token(text, token, token_offset, token_epsilon)
+                    private_token = self._privatize_token(text, token, (token_start, token_end), token_epsilon)
 
                     original_text = text[token_start:token_end]
                     if len(private_token) == len(original_text):

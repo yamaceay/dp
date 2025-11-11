@@ -21,8 +21,8 @@ class ByRiskSelector(TokenSelector):
     def select(self, text: str, offsets: List[Tuple[int, int]], risks: List[float]) -> List[TextAnnotation]:
         if not text or not text.strip():
             return []
-        
-        if not risks or len(risks) != len(offsets):
+
+        if len(risks) != len(offsets):
             return []
 
         removal_limit = max(0.0, min(1.0, 1.0 - self._tolerance))
