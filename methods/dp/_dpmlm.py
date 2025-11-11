@@ -1,15 +1,18 @@
 from typing import Dict, Iterator, List, Optional, Sequence, Tuple
+import inspect
 import torch
 import numpy as np
 import string
 from collections import Counter
 
+from dp.loaders import DatasetRecord
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.dp import DPAnonymizer
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
-from dp.loaders import DatasetRecord
 from dp.utils.token_ledger import TokenLedger
+from dp.utils.explainer.base import TokenExplainer
+from dp.utils.selector.base import TokenSelector
 
 
 class DPMlmAnonymizer(DPAnonymizer):
@@ -112,7 +115,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         except ImportError as exc:
             raise ImportError("Required packages not found. Install with: pip install transformers nltk") from exc
 
-    def set_filtering_strategy(self, detector):
+    def set_filtering_strategy(self, detector: TokenSelector):
         """
         Set filtering strategy for DPMLM anonymizer.
         
@@ -132,7 +135,7 @@ class DPMlmAnonymizer(DPAnonymizer):
         """
         self.pii_detector = detector
 
-    def set_scoring_strategy(self, explainer):
+    def set_scoring_strategy(self, explainer: TokenExplainer):
         """
         Set scoring strategy for DPMLM anonymizer.
         
@@ -328,6 +331,49 @@ class DPMlmAnonymizer(DPAnonymizer):
             self._risk_text_positions[text_key] = position
         return entries[position]
 
+    def _selector_supports_risks(self) -> bool:
+        if self.pii_detector is None:
+            return False
+        try:
+            signature = inspect.signature(self.pii_detector.select)
+        except (TypeError, ValueError):
+            return False
+        if "risks" in signature.parameters:
+            return True
+        return any(
+            param.kind == inspect.Parameter.VAR_KEYWORD
+            for param in signature.parameters.values()
+        )
+
+    def _collect_risk_scores(
+        self,
+        text: str,
+        offsets: Sequence[Tuple[int, int]],
+        indices: Sequence[int],
+        record_name: Optional[str],
+    ) -> Tuple[Dict[int, float], bool]:
+        score_map: Dict[int, float] = {}
+        if not indices:
+            return score_map, False
+
+        precomputed_scores = self._lookup_precomputed_scores(text, offsets, indices, record_name)
+        if precomputed_scores is not None:
+            for idx, value in zip(indices, precomputed_scores):
+                score_map[idx] = float(value)
+            return score_map, True
+
+        if self.explainer is None:
+            return score_map, False
+
+        subset_offsets = [offsets[i] for i in indices]
+        scores = self.explainer.explain(text, subset_offsets)
+        if scores is None or len(scores) != len(indices):
+            return score_map, False
+
+        for idx, value in zip(indices, scores):
+            score_map[idx] = float(value)
+        return score_map, False
+
     def _grid_anonymize_stream(
         self,
         text: str,
@@ -344,9 +390,7 @@ class DPMlmAnonymizer(DPAnonymizer):
             if not epsilon:
                 return
             if not text or not text.strip():
-                for eps in epsilon:
-                    yield eps, [AnonymizationResult(text="", metadata={"epsilon": eps, "method": "dpmlm"})]
-                return
+                raise StopIteration
 
             tokens, offsets = self._tokenize(text)
 
