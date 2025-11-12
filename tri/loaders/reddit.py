@@ -4,7 +4,7 @@ import hashlib
 import random
 import re
 from tqdm import tqdm
-from typing import Dict, List, Tuple, cast
+from typing import Dict, List, Tuple, cast, Optional, Any
 
 from dp.loaders.base import DatasetRecord
 from dp.loaders.reddit import RedditDatasetAdapter
