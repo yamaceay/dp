@@ -6,7 +6,7 @@ identifier, raw text, optional annotations, and optional utility metadata.
 """
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
-from loaders.trustpilot_company import TrustpilotDatasetAdapter
+from dp.loaders.trustpilot_company import TrustpilotDatasetAdapter
 from dp.loaders.tab import TabDatasetAdapter
 from dp.loaders.db_bio import DBBioDatasetAdapter
 from dp.loaders.reddit import RedditDatasetAdapter

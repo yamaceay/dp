@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from experiments import ExperimentResult
-from experiments.utils import OutputCallback
+from .. import ExperimentResult
+from ..utils import OutputCallback
 
 
 @dataclass(frozen=True)
