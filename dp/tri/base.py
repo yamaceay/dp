@@ -179,6 +179,8 @@ class TRIDetector(ABC):
             learning_rate=learning_rate,
             logging_strategy="epoch",
             save_strategy="epoch",
+            save_steps=epochs,
+            save_total_limit=1,
             report_to="none",
         )
         trainer = Trainer(
