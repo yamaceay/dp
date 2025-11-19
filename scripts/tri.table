@@ -1,0 +1,2 @@
+tri_reddit|python tri_by_bk.py --dataset reddit --data_path data/reddit/reddit.jsonl --attacker_extensions data/reddit/reddit_bk_sum.jsonl --use_pretraining --pretraining_epochs 3 --finetuning_epochs 7 --mode train --device cpu
+tri_tab|python tri_by_bk.py --dataset tab --data_path data/TAB/splitted/test.json --attacker_extensions data/TAB/test_bk_sum.jsonl --use_pretraining --pretraining_epochs 3 --finetuning_epochs 10 --mode train --device cpu
