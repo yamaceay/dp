@@ -3,7 +3,7 @@ data_in: data/reddit/reddit.jsonl
 annotations_in:
   - outputs/reddit
 tri:
-  pipeline: models/tri_pipelines/reddit/20251105_211404
+  pipeline: models/tri_pipelines/reddit/20251119_152245
   max_length: 512
   device: auto
 mask_token: "[MASK]"

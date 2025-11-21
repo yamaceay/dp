@@ -24,8 +24,8 @@ job_names=(
 job_cmds=(
   "python risk.py --data reddit --data_in data/reddit/reddit.jsonl --explainer greedy --explainer_in models/tri_pipelines/reddit/20251119_152245 --save_to_jsonl data/reddit/reddit_risk_greedy.jsonl --sort_by scores"
   "python risk.py --data reddit --data_in data/reddit/reddit.jsonl --explainer shap --explainer_in models/tri_pipelines/reddit/20251119_152245 --save_to_jsonl data/reddit/reddit_risk_shap.jsonl --sort_by scores"
-  "python risk.py --data tab --data_in data/TAB/test.json --explainer greedy --explainer_in models/tri_pipelines/tab/20251119_162236 --save_to_jsonl data/TAB/test_risk_greedy.jsonl --sort_by scores"
-  "python risk.py --data tab --data_in data/TAB/test.json --explainer shap --explainer_in models/tri_pipelines/tab/20251119_162236 --save_to_jsonl data/TAB/test_risk_shap.jsonl --sort_by scores"
+  "python risk.py --data tab --data_in data/TAB/splitted/test.json --explainer greedy --explainer_in models/tri_pipelines/tab/20251119_162236 --save_to_jsonl data/TAB/test_risk_greedy.jsonl --sort_by scores"
+  "python risk.py --data tab --data_in data/TAB/splitted/test.json --explainer shap --explainer_in models/tri_pipelines/tab/20251119_162236 --save_to_jsonl data/TAB/test_risk_shap.jsonl --sort_by scores"
 )
 
 JOB_NAME="${job_names[$SLURM_ARRAY_TASK_ID]}"

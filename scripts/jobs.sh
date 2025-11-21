@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Usage: ./jobs.sh [output_file]
-# Default output: jobs.table
+# Usage: scripts/jobs.sh [output_file]
+# Default output: scripts/jobs.table
 
-OUTPUT_FILE="${1:-jobs.table}"
+OUTPUT_FILE="${1:-scripts/jobs.table}"
 
 models_dir="configs/model"
 runtime_dir="configs/runtime"

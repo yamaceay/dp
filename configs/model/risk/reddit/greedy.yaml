@@ -1,5 +1,5 @@
 explainer:
   name: greedy
-  tri_pipeline: models/tri_pipelines/reddit/20251105_211404
+  tri_pipeline: models/tri_pipelines/reddit/20251119_152245
   risk_scores: data/reddit/reddit_risk_greedy.jsonl
   risk_temperature: 0.1
