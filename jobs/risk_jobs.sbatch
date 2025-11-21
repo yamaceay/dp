@@ -6,13 +6,11 @@
 #SBATCH --error=logs/%x_%a_%j.err
 #SBATCH --partition=batch
 #SBATCH --nodes=1
-#SBATCH --ntasks=4
+#SBATCH --mem-per-cpu=6G
+#SBATCH --ntasks=2
 #SBATCH --cpus-per-task=10
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=none
-#SBATCH --mem-per-cpu=6G
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=yaay01@dfki.de
 
 job_names=(
   "greedy_reddit_0"

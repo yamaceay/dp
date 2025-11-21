@@ -4,11 +4,13 @@ MAILTO=""
 FILE_NAME=""
 TABLE_FILE=""
 MAX_CONCURRENT=3
+MAX_TASKS=4
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --mail-to=*) MAILTO="${1#*=}"; shift ;;
         --max-concurrent=*) MAX_CONCURRENT="${1#*=}"; shift ;;
+        --max-tasks=*) MAX_TASKS="${1#*=}"; shift ;;
         -h)
             echo "Usage: $0 [--mail-to=email] [--max-concurrent=3] job_file_name table_file"
             exit 0
@@ -72,10 +74,28 @@ fi
 MAX_IDX=$((NUM_JOBS - 1))
 echo "Found $NUM_JOBS jobs, creating array job 0-${MAX_IDX}%${MAX_CONCURRENT}" >&2
 
+TASK_LINES=""
+if [[ $MAX_TASKS -gt 1 ]]; then
+    TASK_LINES="#SBATCH --ntasks=${MAX_TASKS}
+#SBATCH --cpus-per-task=10
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=none"
+fi
+
 MAIL_LINES=""
 if [[ -n "$MAILTO" ]]; then
     MAIL_LINES="#SBATCH --mail-type=ALL
 #SBATCH --mail-user=${MAILTO}"
+fi
+
+EXTRA_LINES=""
+declare -a _extra
+[[ -n "$MAIL_LINES" ]] && _extra+=("$MAIL_LINES")
+[[ -n "$TASK_LINES" ]] && _extra+=("$TASK_LINES")
+
+if [[ ${#_extra[@]} -gt 0 ]]; then
+    EXTRA_LINES="$(printf '%s\n' "${_extra[@]}")"
+    EXTRA_LINES="${EXTRA_LINES%$'\n'}"
 fi
 
 cat > "jobs/${FILE_NAME}.sbatch" <<EOF
@@ -87,12 +107,8 @@ cat > "jobs/${FILE_NAME}.sbatch" <<EOF
 #SBATCH --error=logs/%x_%a_%j.err
 #SBATCH --partition=batch
 #SBATCH --nodes=1
-#SBATCH --ntasks=4
-#SBATCH --cpus-per-task=10
-#SBATCH --gpus-per-task=1
-#SBATCH --gpu-bind=none
 #SBATCH --mem-per-cpu=6G
-${MAIL_LINES}
+${EXTRA_LINES}
 
 job_names=(
 EOF
