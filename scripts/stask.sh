@@ -34,7 +34,7 @@ fi
 
 [[ -z "$TABLE_FILE" ]] && TABLE_FILE="jobs.table"
 
-mkdir -p jobs logs
+mkdir -p jobs logs slurm/states
 
 if [[ ! -f "$TABLE_FILE" ]]; then
     echo "Table file not found: $TABLE_FILE" >&2
@@ -84,9 +84,22 @@ if [[ -n "$MAILTO" ]]; then
 #SBATCH --mail-user=${MAILTO}"
 fi
 
+TASK_LINES=""
+if [[ -n "$MAX_TASKS" ]]; then
+    TASK_LINES="#SBATCH --ntasks=${MAX_TASKS}
+#SBATCH --cpus-per-task=10
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=none
+"
+fi
+
 EXTRA_LINES=""
-if [[ -n "$MAIL_LINES" ]]; then
-    EXTRA_LINES="$MAIL_LINES"
+if [[ -n "$TASK_LINES" && -n "$MAIL_LINES" ]]; then
+    EXTRA_LINES="${TASK_LINES}${MAIL_LINES}"
+elif [[ -n "$TASK_LINES" ]]; then
+    EXTRA_LINES="${TASK_LINES}"
+elif [[ -n "$MAIL_LINES" ]]; then
+    EXTRA_LINES="${MAIL_LINES}"
 fi
 
 cat > "jobs/${FILE_NAME}.sbatch" <<EOF
@@ -123,6 +136,8 @@ echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
 echo "Job: $JOB_NAME (index $JOB_IDX)"
 echo "Task within job: $TASK_WITHIN_JOB"
 echo "State file: $STATE_FILE"
+
+export TASK_WITHIN_JOB JOB_NAME STATE_FILE SLURM_ARRAY_TASK_ID
 
 # Execute the task using task.sh --incr (it will run the command directly)
 srun -K \
