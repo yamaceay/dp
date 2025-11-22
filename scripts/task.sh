@@ -82,8 +82,10 @@ if [[ "$MODE" == "incr" ]]; then
     NEXT_ID="$CURRENT"
     NEW_CURRENT=$((CURRENT + 1))
     printf '%s\n%s\n%s\n' "$NTASKS" "$NEW_CURRENT" "$BASE_CMD" > "$STATE_FILE"
-    extend_cmd "$BASE_CMD" "$NTASKS" "$NEXT_ID"
-    exit 0
+    FULL_CMD=$(extend_cmd "$BASE_CMD" "$NTASKS" "$NEXT_ID")
+    echo "Executing: $FULL_CMD" >&2
+    eval "$FULL_CMD"
+    exit $?
 fi
 
 usage

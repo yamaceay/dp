@@ -1,14 +1,42 @@
 #!/bin/bash
 
-# Usage: scripts/jobs.sh [output_file]
+# Usage: scripts/jobs.sh [--datasets d1,d2,...] [--methods m1,m2,...] [output_file]
 # Default output: scripts/jobs.table
 
-OUTPUT_FILE="${1:-scripts/jobs.table}"
+OUTPUT_FILE=""
+FILTER_DATASETS=""
+FILTER_METHODS=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --datasets=*)
+      FILTER_DATASETS="${1#*=}"
+      shift
+      ;;
+    --methods=*)
+      FILTER_METHODS="${1#*=}"
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: $0 [--datasets d1,d2,...] [--methods m1,m2,...] [output_file]"
+      echo "  --datasets: Filter by dataset names (comma-separated, e.g., reddit,tab)"
+      echo "  --methods: Filter by method names (comma-separated, e.g., dpmlm,risk)"
+      echo "  output_file: Output file path (default: scripts/jobs.table)"
+      exit 0
+      ;;
+    *)
+      OUTPUT_FILE="$1"
+      shift
+      ;;
+  esac
+done
+
+OUTPUT_FILE="${OUTPUT_FILE:-scripts/jobs.table}"
 
 models_dir="configs/model"
 runtime_dir="configs/runtime"
 
-cmd_tpl="python3 model.py \
+cmd_tpl="python model.py \
   --data %s --data_in %s \
   --model %s --model_in %s \
   %s \
@@ -84,10 +112,31 @@ function all_methods_runtimes() {
 
   ordered_methods=("baroud" "risk" "spacy" "presidio" "manual" "petre" "dpprompt" "dpparaphrase" "dpbart" "dpmlm")
 
+  # Parse filter arrays
+  IFS=',' read -ra filter_datasets_arr <<< "$FILTER_DATASETS"
+  IFS=',' read -ra filter_methods_arr <<< "$FILTER_METHODS"
+
   for dataset_entry in "${dataset_entries[@]}"; do
     IFS=, read -r dataset_name dataset_path <<< "$dataset_entry"
 
+    # Filter datasets if specified
+    if [[ -n "$FILTER_DATASETS" ]]; then
+      match=0
+      for fd in "${filter_datasets_arr[@]}"; do
+        [[ "$dataset_name" == "$fd" ]] && match=1 && break
+      done
+      [[ $match -eq 0 ]] && continue
+    fi
+
     for method_key in "${ordered_methods[@]}"; do
+      # Filter methods if specified
+      if [[ -n "$FILTER_METHODS" ]]; then
+        match=0
+        for fm in "${filter_methods_arr[@]}"; do
+          [[ "$method_key" == "$fm" ]] && match=1 && break
+        done
+        [[ $match -eq 0 ]] && continue
+      fi
       for method_entry in "${method_entries[@]}"; do
         IFS=, read -r method_path method_base <<< "$method_entry"
         [[ "$method_base" != "$method_key" ]] && continue

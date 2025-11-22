@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --array=0-63%3
-#SBATCH --job-name=anon_reddit_jobs
+#SBATCH --job-name=reddit_anon_jobs
 #SBATCH --output=logs/%x_%a_%j.out
 #SBATCH --error=logs/%x_%a_%j.err
 #SBATCH --partition=batch
@@ -35,7 +35,7 @@ job_names=(
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"
-STATE_FILE="slurm/states/${JOB_NAME}.state"
+STATE_FILE="scripts/${JOB_NAME}.state"
 
 echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
 echo "Job: $JOB_NAME (index $JOB_IDX)"
@@ -47,4 +47,4 @@ srun -K \
   --container-image=/enroot/python+3.10.4-buster.sqsh \
   --container-mounts=`pwd`:`pwd` \
   --container-workdir=`pwd` \
-  scripts/install.sh scripts/task.sh --incr --state "$STATE_FILE"
+  scripts/install.sh scripts/task.sh --incr --state "$STATE_FILE" 
