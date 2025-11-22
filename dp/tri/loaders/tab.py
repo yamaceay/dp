@@ -13,6 +13,9 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         self,
         data: Optional[str] = None,
         data_in: Optional[str] = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
+        step: Optional[int] = None,
         max_records: Optional[int] = None,
         rewriter_model_name: str = "facebook/bart-large-cnn",
         rewriter_device: int = -1,
@@ -20,7 +23,14 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         rewriter_min_length: int = 80,  # originally 40
         max_background_tokens: int = 512,
     ):
-        adapter = TabDatasetAdapter(data=data, data_in=data_in, max_records=max_records)
+        adapter = TabDatasetAdapter(
+            data=data,
+            data_in=data_in,
+            start=start,
+            end=end,
+            step=step,
+            max_records=max_records,
+        )
         super().__init__(
             adapter=adapter,
             max_background_tokens=max_background_tokens,

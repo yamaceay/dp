@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List
 from dp.loaders import ADAPTER_REGISTRY
 import argparse
 
@@ -12,27 +12,32 @@ def format_table(unique_keys: List[str], unique_counts: List[int], unique_values
     padded_strs = [f"{count_key:<{col_width}} : {values}" for count_key, values in zip(count_keys, unique_values)]
     return "\n".join(padded_strs)
 
-def load_data(data: str, data_in: str, max_records: int = None):
-    adapter = ADAPTER_REGISTRY.get(data)
+def load_data(data_kwargs: Dict[str, object]):
+    data = data_kwargs.get("data")
+    adapter = ADAPTER_REGISTRY.get(str(data) if data is not None else None)
     if not adapter:
         raise ValueError(f"Adapter '{data}' not found.")
-    dataset = adapter(data, data_in=data_in, max_records=max_records)
+    dataset = adapter(**data_kwargs)
     return dataset
 
 def add_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
     parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
-    parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load')
-    return ['data', 'data_in', 'max_records']
+    parser.add_argument('--start', type=int, default=None, help='Start index for slicing (inclusive, python slicing semantics)')
+    parser.add_argument('--end', type=int, default=None, help='End index for slicing (exclusive, python slicing semantics)')
+    parser.add_argument('--step', type=int, default=None, help='Step for slicing (python slicing semantics)')
+    parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load after slicing')
+    return ['data', 'data_in', 'start', 'end', 'step', 'max_records']
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark Anonymization Tools")
-    add_data_args(parser)
+    data_keys = add_data_args(parser)
     parser.add_argument('--full_record', action='store_true', help='Print full record details')
 
     args = parser.parse_args()
+    data_kwargs = {k: getattr(args, k) for k in data_keys}
 
-    dataset = load_data(args.data, args.data_in, args.max_records)
+    dataset = load_data(data_kwargs)
 
     value_getters = {
         'uid': lambda r: r.uid,

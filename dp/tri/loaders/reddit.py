@@ -200,11 +200,21 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
         *args,
         data: str | None = None,
         data_in: str | None = None,
+        start: int | None = None,
+        end: int | None = None,
+        step: int | None = None,
         max_records: int | None = None,
         seed: int = 42,
         **kwargs,
     ) -> None:
-        adapter = RedditDatasetAdapter(data=data, data_in=data_in, max_records=max_records)
+        adapter = RedditDatasetAdapter(
+            data=data,
+            data_in=data_in,
+            start=start,
+            end=end,
+            step=step,
+            max_records=max_records,
+        )
         super().__init__(adapter=adapter, *args, **kwargs)
         self._seed = seed
         self._persona_records: List[AttackerDatasetRecord] = self._build_persona_records()

@@ -49,8 +49,6 @@ def add_model_args(parser: argparse.ArgumentParser) -> List[str]:
 
 def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--runtime_in', type=str, nargs='+', default=None, help='Path(s) to the runtime configuration(s)')
-    parser.add_argument('--texts', type=str, nargs='+', help='Texts to anonymize (space-separated)')
-    parser.add_argument('--indices', type=int, nargs='+', help='Indices of records to anonymize from dataset (space-separated)')
     parser.add_argument('--output', type=str, default='print', choices=list(OUTPUT_HANDLER_REGISTRY.keys()), help='Output handler type')
     parser.add_argument('--timestamp', type=str, default=None, help='Batch timestamp to use for output files (default: now)')
     parser.add_argument('--annotations', type=str, choices=['spacy', 'presidio', 'manual'], default=None, help='Type of starting annotations relevant for data preprocessing')
@@ -58,7 +56,7 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
     parser.add_argument('--stream', action='store_true', help='Stream outputs (recommended for jsonl) instead of buffering all results')
     parser.add_argument('--start_idx', type=int, default=0, help='Starting index for streaming output (default: 0)')
-    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream', 'start_idx']
+    return ['runtime_in', 'output', 'annotations_in', 'list_annotations', 'stream', 'start_idx']
 
 def load_config(sth_in: Optional[str]) -> dict:
     config = {}
@@ -121,24 +119,6 @@ def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_
         model_instance = model_cls(**model_config, **model_kwargs, **data_kwargs)
     
     return model_instance
-
-def use_indices(model_name: str, runtime_kwargs: dict, data_kwargs: dict, length: int) -> bool:
-    capabilities = get_capabilities(model_name)
-    if not capabilities.must_use_dataset:
-        return False
-    
-    indices = runtime_kwargs.get("indices")
-    if indices is not None:
-        for idx in indices:
-            if idx < 0 or idx >= length:
-                raise ValueError(f"Index {idx} is out of bounds for dataset of length {length}.")
-        return True
-    
-    max_records = data_kwargs.get("max_records")
-    if max_records is None:
-        max_records = length
-    runtime_kwargs["indices"] = list(range(min(max_records, length)))
-    return True
 
 def flatten_results(
     nested_results: Any,
@@ -469,7 +449,7 @@ if __name__ == "__main__":
             model.set_risk_scores(risk_scores, records=records)
 
     batch_timestamp = args.timestamp if args.timestamp else datetime.now().strftime("%Y%m%d_%H%M%S")
-
+    
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])
     
     if args.output in ["jsonl"]:
@@ -477,58 +457,28 @@ if __name__ == "__main__":
     else:
         output_handler = output_handler_cls()
     
-    texts = runtime_kwargs.get("texts")
-    indices = runtime_kwargs.get("indices")
-    
-    if texts is not None and indices is not None:
-        raise ValueError("Cannot specify both --texts and --indices")
-    
     builder = model.builder()
 
+    texts: Optional[List[str]] = None
+    indices: Optional[List[int]] = None
     if capabilities.must_use_dataset:
-        if texts is not None:
-            raise ValueError(f"{args.model} requires dataset records, cannot use --texts. Use --indices instead or omit both to process all records.")
-        
-        if indices is None:
-            max_records = data_kwargs.get("max_records", None)
-            if max_records is None:
-                max_records = len(records)
-            indices = list(range(min(max_records, len(records))))
-        else:
-            for idx in indices:
-                if idx < 0 or idx >= len(records):
-                    raise ValueError(f"Index {idx} is out of bounds for dataset of length {len(records)}.")
+        indices = list(range(len(records)))
         if stream_enabled and start_idx > 0:
             indices = [idx for idx in indices if idx >= start_idx]
             if not indices:
                 raise ValueError("No indices remain after applying --start_idx for streaming run.")
-        
         builder.with_indices(indices)
         text_indices = indices  # For dataset methods, use indices as text_indices
     
     else:
         record_names: Optional[List[str]] = None
-        if texts is None:
-            if indices is not None:
-                texts = [records[idx].text for idx in indices]
-                text_indices = indices
-                names: List[str] = []
-                for idx_val in indices:
-                    record = records[idx_val]
-                    identifier = getattr(record, "uid", None) or getattr(record, "name", None) or str(idx_val)
-                    names.append(str(identifier))
-                record_names = names
-            else:
-                max_records = data_kwargs.get("max_records", len(records))
-                selected_records = records[:max_records]
-                texts = [record.text for record in selected_records]
-                text_indices = list(range(len(texts)))
-                record_names = [
-                    str(getattr(record, "uid", None) or getattr(record, "name", None) or idx)
-                    for idx, record in enumerate(selected_records)
-                ]
-        else:
-            text_indices = [None] * len(texts)
+        selected_records = records
+        texts = [record.text for record in selected_records]
+        text_indices = list(range(len(texts)))
+        record_names = [
+            str(getattr(record, "uid", None) or getattr(record, "name", None) or idx)
+            for idx, record in enumerate(selected_records)
+        ]
         if stream_enabled and start_idx > 0:
             filtered_texts: List[str] = []
             filtered_indices: List[Optional[int]] = []

@@ -12,8 +12,11 @@ available_datasets = list(ADAPTER_REGISTRY.keys())
 def add_data_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--data', type=str, required=True, choices=available_datasets)
     parser.add_argument('--data_in', type=str, required=True)
-    parser.add_argument('--max_records', type=int, default=None)
-    return ['data', 'data_in', 'max_records']
+    parser.add_argument('--start', type=int, default=None, help='Start index for slicing (inclusive, python slicing semantics)')
+    parser.add_argument('--end', type=int, default=None, help='End index for slicing (exclusive, python slicing semantics)')
+    parser.add_argument('--step', type=int, default=None, help='Step for slicing (python slicing semantics)')
+    parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load after slicing')
+    return ['data', 'data_in', 'start', 'end', 'step', 'max_records']
 
 
 def add_validation_args(parser: argparse.ArgumentParser) -> List[str]:

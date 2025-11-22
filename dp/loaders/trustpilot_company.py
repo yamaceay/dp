@@ -16,9 +16,20 @@ from dp.loaders.utils import recode_text
 class TrustpilotDatasetAdapter(DatasetAdapter):
     """Adapter for Trustpilot review data."""
 
-    def __init__(self, data: Optional[str], data_in: Optional[str] = None, max_records: Optional[int] = None):
+    def __init__(
+        self,
+        data: Optional[str],
+        data_in: Optional[str] = None,
+        max_records: Optional[int] = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
+        step: Optional[int] = None,
+    ):
         self.data_in = Path(data_in)
         self.max_records = max_records
+        self.start = start
+        self.end = end
+        self.step = step
 
         if data_in.endswith(".json") or data_in.endswith(".jsonl"):
             self._dataset = load_dataset("json", data_files={"data": str(self.data_in)})["data"]
@@ -30,10 +41,8 @@ class TrustpilotDatasetAdapter(DatasetAdapter):
         return len(self._dataset)
 
     def iter_records(self) -> Iterable[DatasetRecord]:
-        for idx, row in enumerate(self._dataset):
-            if self.max_records is not None and idx >= self.max_records:
-                break
-
+        base_iter = ((idx, row) for idx, row in enumerate(self._dataset))
+        for idx, row in self._slice_records(base_iter):
             if "name" not in row:
                 raise ValueError("Expected 'name' field in Trustpilot dataset records.")
             name = row["name"]

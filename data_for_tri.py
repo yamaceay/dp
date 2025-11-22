@@ -10,19 +10,23 @@ available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 def add_data_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
     parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
-    parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load')
+    parser.add_argument('--start', type=int, default=None, help='Start index for slicing (inclusive, python slicing semantics)')
+    parser.add_argument('--end', type=int, default=None, help='End index for slicing (exclusive, python slicing semantics)')
+    parser.add_argument('--step', type=int, default=None, help='Step for slicing (python slicing semantics)')
+    parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load after slicing')
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate/load attacker record extensions (BK + summary)")
-    add_data_args(parser)
+    data_keys = add_data_args(parser)
     parser.add_argument('--full_record', action='store_true', help='Print full record details')
     parser.add_argument('--save_to_jsonl', type=str, help='Path to save processed extensions (JSONL)')
     parser.add_argument('--load_from_jsonl', type=str, help='Path to load processed extensions (JSONL)')
 
     args = parser.parse_args()
 
-    adapter = get_attacker_adapter(args.data, data=args.data, data_in=args.data_in, max_records=args.max_records)
+    data_kwargs = {k: getattr(args, k) for k in data_keys}
+    adapter = get_attacker_adapter(data_kwargs.pop("data"), **data_kwargs)
 
     if args.load_from_jsonl and os.path.exists(args.load_from_jsonl):
         print(f"Loading record extensions from {args.load_from_jsonl}...")

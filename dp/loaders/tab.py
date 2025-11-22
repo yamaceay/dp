@@ -8,9 +8,20 @@ from typing import Iterable, List, Optional
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
 
 class TabDatasetAdapter(DatasetAdapter):
-    def __init__(self, data: Optional[str] = None, data_in: Optional[str] = None, max_records: Optional[int] = None):
+    def __init__(
+        self,
+        data: Optional[str] = None,
+        data_in: Optional[str] = None,
+        max_records: Optional[int] = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
+        step: Optional[int] = None,
+    ):
         self.data_in = Path(data_in)
         self.max_records = max_records
+        self.start = start
+        self.end = end
+        self.step = step
         try:
             with self.data_in.open("r", encoding="utf-8") as handle:
                 self._records: List[dict] = json.load(handle)
@@ -21,10 +32,8 @@ class TabDatasetAdapter(DatasetAdapter):
         return len(self._records)
 
     def iter_records(self) -> Iterable[DatasetRecord]:
-        for idx, row in enumerate(self._records):
-            if self.max_records is not None and idx >= self.max_records:
-                break
-
+        base_iter = ((idx, row) for idx, row in enumerate(self._records))
+        for idx, row in self._slice_records(base_iter):
             uid = str(row.get("doc_id", idx))
             text = row.get("text", "")
             annotations_raw = row.get("annotations")

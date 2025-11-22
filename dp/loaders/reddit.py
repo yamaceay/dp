@@ -9,7 +9,15 @@ from dp.loaders.base import DatasetAdapter, DatasetRecord
 
 
 class RedditDatasetAdapter(DatasetAdapter):
-    def __init__(self, data: Optional[str] = None, data_in: Optional[str] = None, max_records: Optional[int] = None):
+    def __init__(
+        self,
+        data: Optional[str] = None,
+        data_in: Optional[str] = None,
+        max_records: Optional[int] = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
+        step: Optional[int] = None,
+    ):
         if data_in is None:
             raise ValueError("data_in must point to a JSONL file")
         path = Path(data_in)
@@ -17,6 +25,9 @@ class RedditDatasetAdapter(DatasetAdapter):
             raise ValueError(f"Reddit dataset file not found: {path}")
         self.data_in = path
         self.max_records = max_records
+        self.start = start
+        self.end = end
+        self.step = step
         self._records = list(self._read_records())
 
     def _read_records(self) -> Iterable[Dict]:
@@ -34,10 +45,8 @@ class RedditDatasetAdapter(DatasetAdapter):
         return len(self._records)
 
     def iter_records(self) -> Iterable[DatasetRecord]:
-        count = 0
-        for idx, row in enumerate(self._records):
-            if self.max_records is not None and count >= self.max_records:
-                break
+        base_iter = ((idx, row) for idx, row in enumerate(self._records))
+        for idx, row in self._slice_records(base_iter):
             text = (row.get("response") or "").strip()
             if not text:
                 continue
@@ -64,7 +73,6 @@ class RedditDatasetAdapter(DatasetAdapter):
                 name=persona_hash,
                 metadata=metadata,
             )
-            count += 1
 
     @staticmethod
     def _identity_key(persona: Dict) -> str:

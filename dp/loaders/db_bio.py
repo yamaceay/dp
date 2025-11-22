@@ -17,9 +17,15 @@ class DBBioDatasetAdapter(DatasetAdapter):
         data: Optional[str] = None,
         data_in: Optional[str] = None,
         max_records: Optional[int] = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
+        step: Optional[int] = None,
     ):
         self.data_in = Path(data_in)
         self.max_records = max_records
+        self.start = start
+        self.end = end
+        self.step = step
 
         try:
             if self.data_in.is_dir():
@@ -38,21 +44,19 @@ class DBBioDatasetAdapter(DatasetAdapter):
         return len(self._dataset)
 
     def iter_records(self) -> Iterable[DatasetRecord]:
-        yielded = 0
+        all_records = self._iter_all_records()
+        for record in self._slice_records(all_records):
+            yield record
+
+    def _iter_all_records(self) -> Iterable[DatasetRecord]:
         if isinstance(self._dataset, DatasetDict):
             for split_name in self._ordered_split_names(self._dataset):
                 split_dataset = self._dataset[split_name]
                 for record in self._iter_split(split_dataset, split_name):
                     yield record
-                    yielded += 1
-                    if self.max_records is not None and yielded >= self.max_records:
-                        return
         else:
             for record in self._iter_split(self._dataset, None):
                 yield record
-                yielded += 1
-                if self.max_records is not None and yielded >= self.max_records:
-                    return
 
     def _iter_split(self, dataset: Dataset, split_name: Optional[str]) -> Iterable[DatasetRecord]:
         for idx, row in enumerate(dataset):
