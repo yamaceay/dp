@@ -3,6 +3,7 @@ import argparse
 import json
 import yaml
 import time
+import itertools
 from datetime import datetime
 
 from dp.methods.anonymizer import Anonymizer, AnonymizationBuilder
@@ -49,14 +50,15 @@ def add_model_args(parser: argparse.ArgumentParser) -> List[str]:
 
 def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--runtime_in', type=str, nargs='+', default=None, help='Path(s) to the runtime configuration(s)')
+    parser.add_argument('--texts', type=str, nargs='+', help='Texts to anonymize (space-separated)')
+    parser.add_argument('--indices', type=int, nargs='+', help='Indices of records to anonymize from dataset (space-separated)')
     parser.add_argument('--output', type=str, default='print', choices=list(OUTPUT_HANDLER_REGISTRY.keys()), help='Output handler type')
     parser.add_argument('--timestamp', type=str, default=None, help='Batch timestamp to use for output files (default: now)')
     parser.add_argument('--annotations', type=str, choices=['spacy', 'presidio', 'manual'], default=None, help='Type of starting annotations relevant for data preprocessing')
     parser.add_argument('--annotations_in', type=str, default=None, metavar='SOURCES', help='Load annotations from previous run (format: path/to/file.jsonl, comma-separated for multiple sources)')
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
     parser.add_argument('--stream', action='store_true', help='Stream outputs (recommended for jsonl) instead of buffering all results')
-    parser.add_argument('--start_idx', type=int, default=0, help='Starting index for streaming output (default: 0)')
-    return ['runtime_in', 'output', 'annotations_in', 'list_annotations', 'stream', 'start_idx']
+    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream']
 
 def load_config(sth_in: Optional[str]) -> dict:
     config = {}
@@ -117,8 +119,71 @@ def load_model(model_config: Optional[dict], model_kwargs: Optional[dict], data_
         model_instance.add_dataset_records(dataset_records)
     else:
         model_instance = model_cls(**model_config, **model_kwargs, **data_kwargs)
-    
+
     return model_instance
+
+def compute_dataset_indices(dataset, data_kwargs: Dict[str, Any], record_count: int) -> List[int]:
+    total = len(dataset)
+    start = data_kwargs.get("start")
+    start_value = 0 if start is None else start
+    end = data_kwargs.get("end")
+    stop_value = total if end is None else min(end, total)
+    step = data_kwargs.get("step")
+    step_value = 1 if step is None else step
+    iterator = itertools.islice(range(total), start_value, stop_value, step_value)
+    max_records = data_kwargs.get("max_records")
+    if max_records is not None:
+        iterator = itertools.islice(iterator, max_records)
+    indices = list(iterator)
+    if len(indices) != record_count:
+        raise ValueError(f"Loaded {record_count} records but computed {len(indices)} dataset indices. Verify adapter slicing options.")
+    return indices
+
+def resolve_requested_indices(available: List[int], requested: Optional[List[int]]) -> List[int]:
+    if requested is None:
+        return list(available)
+    available_set = set(available)
+    missing = [idx for idx in requested if idx not in available_set]
+    if missing:
+        raise ValueError(f"Requested indices {missing} are not available in the loaded dataset slice.")
+    return list(requested)
+
+def build_dataset_selection(
+    *,
+    available_indices: List[int],
+    index_lookup: Dict[int, int],
+    requested_indices: Optional[List[int]],
+) -> Tuple[List[int], List[int]]:
+    selected = resolve_requested_indices(available_indices, requested_indices)
+    dataset_indices = [index_lookup[idx] for idx in selected]
+    return dataset_indices, selected
+
+def build_text_selection(
+    *,
+    records: List[DatasetRecord],
+    available_indices: List[int],
+    index_lookup: Dict[int, int],
+    requested_indices: Optional[List[int]],
+    provided_texts: Optional[List[str]],
+) -> Tuple[List[str], List[int], Optional[List[str]]]:
+    if provided_texts is not None:
+        texts = list(provided_texts)
+        record_indices = list(range(len(texts)))
+        record_names: Optional[List[str]] = None
+    else:
+        selected = resolve_requested_indices(available_indices, requested_indices)
+        selected_records = [records[index_lookup[idx]] for idx in selected]
+        texts = [record.text for record in selected_records]
+        record_indices = selected
+        record_names = [
+            str(
+                getattr(record, "uid", None)
+                or getattr(record, "name", None)
+                or idx
+            )
+            for record, idx in zip(selected_records, selected)
+        ]
+    return texts, record_indices, record_names
 
 def flatten_results(
     nested_results: Any,
@@ -188,56 +253,50 @@ def stream_anonymization(
     dataset_name: str,
     model_name: str,
     output_handler,
-    indices: Optional[List[int]],
+    dataset_indices: Optional[List[int]],
     texts: Optional[List[str]],
-    text_indices: Optional[List[Optional[int]]],
-    start_idx: int,
-    ) -> Tuple[int, float]:
-    start_idx = max(start_idx or 0, 0)
+    record_indices: Optional[List[int]],
+) -> Tuple[int, float]:
     processed = 0
     run_start = time.time()
 
     if capabilities.requires_k:
-        if indices is None:
+        if dataset_indices is None or record_indices is None:
             raise ValueError("Streaming requires dataset indices for k-anonymization methods.")
         stream = builder.anonymize_stream(**runtime_config)
         for position, per_idx in enumerate(stream):
-            idx_value = indices[position]
-            if idx_value < start_idx:
-                continue
+            if position >= len(record_indices):
+                raise ValueError("Stream produced more results than record indices provided.")
+            idx_value = record_indices[position]
             for results in per_idx.values():
                 for result in results:
                     output_handler.output(result, idx=idx_value, dataset=dataset_name, model=model_name)
             processed += 1
 
     elif capabilities.must_use_dataset:
-        if indices is None:
+        if dataset_indices is None or record_indices is None:
             raise ValueError("Streaming requires dataset indices for dataset-based methods.")
         filtered_kwargs = dict(runtime_config)
-        for idx in indices:
-            if idx < start_idx:
-                continue
-            result = anonymizer.anonymize_from_dataset(idx=idx, **filtered_kwargs)
-            output_handler.output(result, idx=idx, dataset=dataset_name, model=model_name)
+        for abs_idx, local_idx in zip(record_indices, dataset_indices):
+            result = anonymizer.anonymize_from_dataset(idx=local_idx, **filtered_kwargs)
+            output_handler.output(result, idx=abs_idx, dataset=dataset_name, model=model_name)
             processed += 1
 
     elif capabilities.requires_epsilon:
         if texts is None or not texts:
             raise ValueError("Streaming requires texts for DP methods.")
-        if text_indices is None or len(text_indices) != len(texts):
-            text_indices = [None] * len(texts)
+        if record_indices is None or len(record_indices) != len(texts):
+            raise ValueError("Record indices must align with texts for streaming.")
         stream = builder.anonymize_stream(**runtime_config)
         for position, per_text in enumerate(stream):
-            idx_value = text_indices[position]
-            effective_idx = idx_value if idx_value is not None else position
-            if effective_idx < start_idx:
-                continue
-            target_idx = idx_value if idx_value is not None else effective_idx
+            if position >= len(record_indices):
+                raise ValueError("Stream produced more results than record indices provided.")
+            idx_value = record_indices[position]
             for results in per_text.values():
                 for result in results:
                     output_handler.output(
                         result,
-                        idx=target_idx,
+                        idx=idx_value,
                         dataset=dataset_name,
                         model=model_name,
                     )
@@ -246,9 +305,9 @@ def stream_anonymization(
     else:
         if texts is None or not texts:
             raise ValueError("Streaming requires texts for this method.")
+        if record_indices is None or len(record_indices) != len(texts):
+            raise ValueError("Record indices must align with texts for streaming.")
         filtered_kwargs = dict(runtime_config)
-        if text_indices is None or len(text_indices) != len(texts):
-            text_indices = [None] * len(texts)
         param_name: Optional[str] = None
         values: List[Optional[float]] = [None]
         if capabilities.is_pii_classifier:
@@ -288,14 +347,13 @@ def stream_anonymization(
                 setter(value)
             stream = anonymizer.anonymize_stream(texts=texts, **filtered_kwargs)
             for pos, result in enumerate(stream):
-                idx_value = text_indices[pos] if pos < len(text_indices) else None
-                effective_idx = idx_value if idx_value is not None else pos
-                if effective_idx < start_idx:
-                    continue
+                if pos >= len(record_indices):
+                    raise ValueError("Stream produced more results than record indices provided.")
+                idx_value = record_indices[pos]
                 attach_metadata(result, param_name, value)
                 output_handler.output(
                     result,
-                    idx=idx_value if idx_value is not None else effective_idx,
+                    idx=idx_value,
                     dataset=dataset_name,
                     model=model_name,
                 )
@@ -317,14 +375,9 @@ if __name__ == "__main__":
     runtime_inputs = runtime_kwargs.pop("runtime_in", None)
     runtime_bundle = load_runtime_bundle(runtime_inputs)
     runtime_config = dict(runtime_bundle.base_config)
+    texts_arg = runtime_kwargs.pop("texts", None)
+    indices_arg = runtime_kwargs.pop("indices", None)
     stream_enabled = runtime_kwargs.pop("stream", False)
-    start_idx = runtime_kwargs.pop("start_idx", 0)
-    if start_idx is None:
-        start_idx = 0
-    if start_idx < 0:
-        raise ValueError("--start_idx must be non-negative")
-    if start_idx > 0 and not stream_enabled:
-        raise ValueError("--start_idx can only be used together with --stream")
 
     if args.list_annotations:
         print(f"Available annotations for {args.data}/{args.model}:")
@@ -457,51 +510,41 @@ if __name__ == "__main__":
     else:
         output_handler = output_handler_cls()
     
+    dataset_indices_all = compute_dataset_indices(dataset, data_kwargs, len(records))
+    index_lookup = {idx: pos for pos, idx in enumerate(dataset_indices_all)}
+
     builder = model.builder()
 
-    texts: Optional[List[str]] = None
-    indices: Optional[List[int]] = None
-    if capabilities.must_use_dataset:
-        indices = list(range(len(records)))
-        if stream_enabled and start_idx > 0:
-            indices = [idx for idx in indices if idx >= start_idx]
-            if not indices:
-                raise ValueError("No indices remain after applying --start_idx for streaming run.")
-        builder.with_indices(indices)
-        text_indices = indices  # For dataset methods, use indices as text_indices
-    
-    else:
-        record_names: Optional[List[str]] = None
-        selected_records = records
-        texts = [record.text for record in selected_records]
-        text_indices = list(range(len(texts)))
-        record_names = [
-            str(getattr(record, "uid", None) or getattr(record, "name", None) or idx)
-            for idx, record in enumerate(selected_records)
-        ]
-        if stream_enabled and start_idx > 0:
-            filtered_texts: List[str] = []
-            filtered_indices: List[Optional[int]] = []
-            filtered_names: Optional[List[str]] = [] if record_names is not None else None
-            for pos, (text, idx_val) in enumerate(zip(texts, text_indices)):
-                effective_idx = idx_val if idx_val is not None else pos
-                if effective_idx >= start_idx:
-                    filtered_texts.append(text)
-                    filtered_indices.append(idx_val)
-                    if filtered_names is not None and record_names is not None and pos < len(record_names):
-                        filtered_names.append(record_names[pos])
-            if not filtered_texts:
-                raise ValueError("No texts remain after applying --start_idx for streaming run.")
-            texts = filtered_texts
-            text_indices = filtered_indices
-            if filtered_names is not None:
-                record_names = filtered_names
-            if record_names is not None:
-                record_names = [name for name in record_names if name is not None]
+    if texts_arg is not None and indices_arg is not None:
+        raise ValueError("Cannot specify both --texts and --indices")
 
+    texts: Optional[List[str]] = None
+    record_indices: Optional[List[int]] = None
+    dataset_indices: Optional[List[int]] = None
+
+    if capabilities.must_use_dataset:
+        if texts_arg is not None:
+            raise ValueError(f"{args.model} requires dataset records, cannot use --texts. Use --indices instead or omit both to process all records.")
+        dataset_indices, record_indices = build_dataset_selection(
+            available_indices=dataset_indices_all,
+            index_lookup=index_lookup,
+            requested_indices=indices_arg,
+        )
+        builder.with_indices(dataset_indices)
+    else:
+        texts, record_indices, record_names = build_text_selection(
+            records=records,
+            available_indices=dataset_indices_all,
+            index_lookup=index_lookup,
+            requested_indices=indices_arg,
+            provided_texts=texts_arg,
+        )
         builder.with_texts(texts)
         if record_names is not None:
             runtime_config["record_names"] = record_names
+
+    if record_indices is None:
+        raise ValueError("No records resolved for processing.")
 
     if args.model in pii_confidence_models and runtime_bundle.pii_confidence_values:
         builder.with_pii_confidences(runtime_bundle.pii_confidence_values)
@@ -534,10 +577,9 @@ if __name__ == "__main__":
             dataset_name=args.data,
             model_name=args.model,
             output_handler=output_handler,
-            indices=indices,
+            dataset_indices=dataset_indices,
             texts=texts,
-            text_indices=text_indices,
-            start_idx=start_idx,
+            record_indices=record_indices,
         )
     else:
         start_time = time.time()
@@ -546,8 +588,8 @@ if __name__ == "__main__":
             results.append(result)
         end_time = time.time()
         total_time = end_time - start_time
-        num_texts = len(texts) if not capabilities.must_use_dataset else len(indices)
-        flattened = flatten_results(results, text_indices)
+        num_records = len(texts) if not capabilities.must_use_dataset else len(dataset_indices or [])
+        flattened = flatten_results(results, record_indices)
 
         flat_res, flat_indices = flattened
         output_results(
@@ -559,7 +601,7 @@ if __name__ == "__main__":
             model=args.model,
         )
 
-        processed = num_texts
+        processed = num_records
     
     avg_time = total_time / processed if processed > 0 else 0
     print(f"\n{'='*80}")
