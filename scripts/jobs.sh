@@ -12,7 +12,7 @@ cmd_tpl="python3 model.py \
   --data %s --data_in %s \
   --model %s --model_in %s \
   %s \
-  --output jsonl %s --start_idx 0"
+  --output jsonl %s"
 
 function all_methods() {
   find "$models_dir" -mindepth 1 -maxdepth 1 -print0 | while IFS= read -r -d '' path

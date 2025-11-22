@@ -1,62 +1,89 @@
 #!/usr/bin/env bash
-
-# Usage:
-#   task.sh "<base-cmd>" --init N    # run base-cmd for task ids 0..N-1 (use {} in base-cmd to place id)
-#   task.sh "<base-cmd>" --incr      # run base-cmd for next id and increment counter
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-STATE_FILE="$SCRIPT_DIR/task.state"
+DEFAULT_STATE_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)/task.state"
 
 usage() {
-    echo "Usage:"
-    echo "  $0 \"<base-cmd>\" --init N"
-    echo "  $0 \"<base-cmd>\" --incr"
+    echo "Usage:" >&2
+    echo "  $0 --init N --cmd \"<base-cmd>\" [--state path]" >&2
+    echo "  $0 --incr [--state path]" >&2
     exit 2
 }
 
-is_number() { [[ $1 =~ ^[0-9]+$ ]]; }
+is_number() { [[ ${1:-} =~ ^[0-9]+$ ]]; }
 
 extend_cmd() {
-    local cmd="$1"
-    local ntasks="$2"
-    local idx="$3"
+    local cmd="$1" ntasks="$2" idx="$3"
+    echo "${cmd} --start ${idx} --step ${ntasks}"
 }
 
-if [[ $# -lt 2 ]]; then usage; fi
+STATE_FILE="$DEFAULT_STATE_FILE"
+MODE=""
+NTASKS=""
+BASE_CMD=""
 
-BASE_CMD="$1"
-shift
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --state)
+            shift
+            STATE_FILE="${1:-}"
+            [[ -z "$STATE_FILE" ]] && usage
+            ;;
+        --init)
+            MODE="init"
+            shift
+            NTASKS="${1:-}"
+            ;;
+        --incr)
+            MODE="incr"
+            ;;
+        --cmd)
+            shift
+            BASE_CMD="${1:-}"
+            ;;
+        *)
+            usage
+            ;;
+    esac
+    shift
+done
 
-case "$1" in
-    --init)
-        if [[ $# -ne 2 ]] || ! is_number "$2"; then usage; fi
-        NTASKS="$2"
-        echo "$NTASKS,0" > "$STATE_FILE"
-        wait
-        ;;
-    --incr)
-        if [[ $# -ne 1 ]]; then usage; fi
-        if [[ ! -f "$STATE_FILE" ]]; then
-            echo "State file not found. Initialize first with --init N." >&2
-            exit 1
-        fi
-        IFS=',' read -r NTASKS CURRENT < "$STATE_FILE"
-        if ! is_number "$CURRENT" || ! is_number "$NTASKS"; then
-            echo "Invalid state file contents." >&2
-            exit 1
-        fi
-        NEXT_ID="$CURRENT"
-        echo "$NTASKS,$((CURRENT + 1))" > "$STATE_FILE"
-        if [[ "$BASE_CMD" == *'{}'* ]]; then
-            CMD="${BASE_CMD//\{\}/$NEXT_ID}"
-            bash -c "$CMD" &
-        else
-            bash -c "$BASE_CMD $NEXT_ID" &
-        fi
-        wait
-        ;;
-    *)
-        usage
-        ;;
-esac
+[[ -z "$MODE" ]] && usage
+
+if [[ "$MODE" == "init" ]]; then
+    if ! is_number "$NTASKS" || [[ -z "$BASE_CMD" ]]; then usage; fi
+    printf '%s\n%s\n%s\n' "$NTASKS" 0 "$BASE_CMD" > "$STATE_FILE"
+    exit 0
+fi
+
+if [[ "$MODE" == "incr" ]]; then
+    if [[ ! -f "$STATE_FILE" ]]; then
+        echo "State file not found. Initialize first." >&2
+        exit 1
+    fi
+    # Portable read (macOS bash 3.x lacks mapfile)
+    {
+        IFS= read -r NTASKS || true
+        IFS= read -r CURRENT || true
+        IFS= read -r BASE_CMD || true
+    } < "$STATE_FILE"
+    if [[ -z "$NTASKS" || -z "$CURRENT" || -z "$BASE_CMD" ]]; then
+        echo "Corrupt state file." >&2
+        exit 1
+    fi
+    if ! is_number "$NTASKS" || ! is_number "$CURRENT"; then
+        echo "Invalid numeric values in state." >&2
+        exit 1
+    fi
+    if (( CURRENT >= NTASKS )); then
+        echo "All tasks have been assigned." >&2
+        exit 1
+    fi
+    NEXT_ID="$CURRENT"
+    NEW_CURRENT=$((CURRENT + 1))
+    printf '%s\n%s\n%s\n' "$NTASKS" "$NEW_CURRENT" "$BASE_CMD" > "$STATE_FILE"
+    extend_cmd "$BASE_CMD" "$NTASKS" "$NEXT_ID"
+    exit 0
+fi
+
+usage
