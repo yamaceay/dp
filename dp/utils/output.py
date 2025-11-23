@@ -50,10 +50,10 @@ class JsonlOutputHandler(OutputHandler):
         self._streams: Dict[str, Any] = {}
         self._paths: Dict[str, Path] = {}
 
-    def output(self, result: AnonymizationResult, dataset: str, model: str, **kwargs):
+    def output(self, result: AnonymizationResult, dataset: str, model: str, task_id: int, **kwargs):
         idx = kwargs.get("idx", None)
         variant_key = self._derive_variant_key(result)
-        stream = self._ensure_stream(dataset, model, variant_key)
+        stream = self._ensure_stream(dataset, model, variant_key, task_id)
 
         record = {
             "idx": idx,
@@ -83,14 +83,14 @@ class JsonlOutputHandler(OutputHandler):
         path_str = pattern.format(dataset=dataset)
         return Path(path_str)
 
-    def _ensure_stream(self, dataset: str, model: str, variant_key: str):
+    def _ensure_stream(self, dataset: str, model: str, variant_key: str, task_id: int):
         if variant_key in self._streams:
             return self._streams[variant_key]
         output_dir = self._get_output_dir(dataset, model)
         output_dir.mkdir(parents=True, exist_ok=True)
         suffix = f"_{variant_key}" if variant_key else ""
         sanitized_suffix = suffix.replace(" ", "_")
-        path = output_dir / f"{self.timestamp}{sanitized_suffix}.jsonl"
+        path = output_dir / f"{self.timestamp}{sanitized_suffix}_{task_id}.jsonl"
         handle = open(path, 'w', encoding='utf-8')
         self._streams[variant_key] = handle
         self._paths[variant_key] = path

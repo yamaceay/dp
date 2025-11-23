@@ -1,2 +1,2 @@
-hello|python3 -c 'import sys, argparse; p=argparse.ArgumentParser(); p.add_argument("--start", type=int, default=1); p.add_argument("--step", type=int, default=1); p.add_argument("--end", type=int, default=None); args=p.parse_args(sys.argv[1:]); end = args.end if args.end is not None else args.start;  for i in range(args.start, end+1, args.step): print(f"This is a hello sentence with {i}")' "$@"
-bye|python3 -c 'import sys, argparse; p=argparse.ArgumentParser(); p.add_argument("--start", type=int, default=1); p.add_argument("--step", type=int, default=1); p.add_argument("--end", type=int, default=None); args=p.parse_args(sys.argv[1:]); end = args.end if args.end is not None else args.start;  for i in range(args.start, end+1, args.step): print(f"This is a goodbye sentence with {i}")' "$@"
+n=5|python hello.py --end 6
+n=10|python hello.py --end 10

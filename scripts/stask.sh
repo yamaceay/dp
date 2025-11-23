@@ -32,6 +32,8 @@ if [[ -z "$FILE_NAME" ]]; then
     exit 1
 fi
 
+TARGET_FILE="slurm/sbatches/${FILE_NAME}.sbatch"
+
 [[ -z "$TABLE_FILE" ]] && TABLE_FILE="jobs.table"
 
 mkdir -p jobs logs slurm/states
@@ -102,7 +104,7 @@ elif [[ -n "$MAIL_LINES" ]]; then
     EXTRA_LINES="${MAIL_LINES}"
 fi
 
-cat > "jobs/${FILE_NAME}.sbatch" <<EOF
+cat > "$TARGET_FILE" <<EOF
 #!/bin/bash
 
 #SBATCH --array=0-${MAX_IDX}%${MAX_CONCURRENT}
@@ -123,10 +125,10 @@ job_names=(
 EOF
 
 for name in "${job_names[@]}"; do
-    echo "  \"$name\"" >> "jobs/${FILE_NAME}.sbatch"
+    echo "  \"$name\"" >> "$TARGET_FILE"
 done
 
-cat >> "jobs/${FILE_NAME}.sbatch" <<'EOF'
+cat >> "$TARGET_FILE" <<'EOF'
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"
@@ -147,5 +149,5 @@ srun -K \
   scripts/install.sh scripts/task.sh --incr --state "$STATE_FILE"
 EOF
 
-echo "Wrote jobs/${FILE_NAME}.sbatch with $NUM_JOBS jobs × ${MAX_TASKS} parallel tasks = ${TOTAL_TASKS} total tasks"
-echo "Submit with: sbatch jobs/${FILE_NAME}.sbatch"
+echo "Wrote $TARGET_FILE with $NUM_JOBS jobs × ${MAX_TASKS} parallel tasks = ${TOTAL_TASKS} total tasks"
+echo "Submit with: sbatch $TARGET_FILE"
