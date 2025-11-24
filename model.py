@@ -583,6 +583,7 @@ if __name__ == "__main__":
             dataset_indices=dataset_indices,
             texts=texts,
             record_indices=record_indices,
+            task_id=args.start,
         )
     else:
         start_time = time.time()
