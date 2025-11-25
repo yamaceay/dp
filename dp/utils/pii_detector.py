@@ -372,13 +372,15 @@ class PIIDetector:
             evaluator = Evaluator(true_collected, pred_collected, unique_entity_types)
             results_dict = evaluator.evaluate()
             
-            assert results_dict is not None, "NER evaluation failed to produce results"
-            assert isinstance(results_dict, dict), f"NER evaluation results are not in expected dictionary format but got {type(results_dict)}"
-            assert "overall" in results_dict, "NER evaluation results missing 'overall' key"
-            assert "entities" in results_dict, "NER evaluation results missing 'entities' key"
+            overall_results, entity_results, *_ = results_dict
 
-            overall_results = results_dict.get("overall", {})
-            entity_results = results_dict.get("entities", {})
+            # assert results_dict is not None, "NER evaluation failed to produce results"
+            # assert isinstance(results_dict, dict), f"NER evaluation results are not in expected dictionary format but got {type(results_dict)}"
+            # assert "overall" in results_dict, "NER evaluation results missing 'overall' key"
+            # assert "entities" in results_dict, "NER evaluation results missing 'entities' key"
+
+            # overall_results = results_dict.get("overall", {})
+            # entity_results = results_dict.get("entities", {})
             
             for mode in modes:
                 if mode in overall_results:
@@ -521,7 +523,13 @@ class PIIDetector:
         evaluator = Evaluator(true_collected, pred_collected, unique_entity_types)
         results_dict = evaluator.evaluate()
         
-        overall_results = results_dict.get("overall", {})
+        overall_results, *_ = results_dict
+
+        # assert results_dict is not None, "NER evaluation failed to produce results"
+        # assert isinstance(results_dict, dict), f"NER evaluation results are not in expected dictionary format but got {type(results_dict)}"
+        # assert "overall" in results_dict, "NER evaluation results missing 'overall' key"
+
+        # overall_results = results_dict.get("overall", {})
         
         metrics = {}
         if mode in overall_results:
