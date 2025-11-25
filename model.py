@@ -603,6 +603,7 @@ if __name__ == "__main__":
             verbose=args.output not in ["jsonl"],
             dataset=args.data,
             model=args.model,
+            task_id=args.start,
         )
 
         processed = num_records

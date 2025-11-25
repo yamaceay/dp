@@ -14,7 +14,11 @@ is_number() { [[ ${1:-} =~ ^[0-9]+$ ]]; }
 
 extend_cmd() {
     local cmd="$1" ntasks="$2" idx="$3"
-    echo "${cmd} --start ${idx} --step ${ntasks}"
+    if [[ "$ntasks" -eq 1 ]]; then
+        echo "${cmd}"
+    else
+        echo "${cmd} --start ${idx} --step ${ntasks}"
+    fi
 }
 
 STATE_FILE="$DEFAULT_STATE_FILE"
