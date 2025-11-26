@@ -373,21 +373,13 @@ class PIIDetector:
             results_dict = evaluator.evaluate()
             
             overall_results, entity_results, *_ = results_dict
-
-            # assert results_dict is not None, "NER evaluation failed to produce results"
-            # assert isinstance(results_dict, dict), f"NER evaluation results are not in expected dictionary format but got {type(results_dict)}"
-            # assert "overall" in results_dict, "NER evaluation results missing 'overall' key"
-            # assert "entities" in results_dict, "NER evaluation results missing 'entities' key"
-
-            # overall_results = results_dict.get("overall", {})
-            # entity_results = results_dict.get("entities", {})
             
             for mode in modes:
                 if mode in overall_results:
                     result = overall_results[mode]
-                    metrics[f"{mode}_precision"] = float(result.precision)
-                    metrics[f"{mode}_recall"] = float(result.recall)
-                    metrics[f"{mode}_f1"] = float(result.f1)
+                    metrics[f"{mode}_precision"] = float(result["precision"])
+                    metrics[f"{mode}_recall"] = float(result["recall"])
+                    metrics[f"{mode}_f1"] = float(result["f1"])
             
             if entity_results:
                 metrics["per_category"] = {}
@@ -397,10 +389,10 @@ class PIIDetector:
                         if tag in entity_results and mode in entity_results[tag]:
                             result = entity_results[tag][mode]
                             metrics["per_category"][mode][tag] = {
-                                "precision": float(result.precision),
-                                "recall": float(result.recall),
-                                "f1": float(result.f1),
-                                "support": int(result.possible)
+                                "precision": float(result["precision"]),
+                                "recall": float(result["recall"]),
+                                "f1": float(result["f1"]),
+                                "support": int(result["possible"])
                             }
             
             print(f"\nNER Evaluation Results (nervaluate):")
@@ -524,22 +516,21 @@ class PIIDetector:
         results_dict = evaluator.evaluate()
         
         overall_results, *_ = results_dict
-
-        # assert results_dict is not None, "NER evaluation failed to produce results"
-        # assert isinstance(results_dict, dict), f"NER evaluation results are not in expected dictionary format but got {type(results_dict)}"
-        # assert "overall" in results_dict, "NER evaluation results missing 'overall' key"
-
-        # overall_results = results_dict.get("overall", {})
         
         metrics = {}
         if mode in overall_results:
             result = overall_results[mode]
-            metrics["precision"] = float(result.precision)
-            metrics["recall"] = float(result.recall)
-            metrics["f1"] = float(result.f1)
-            metrics[f"{mode}_precision"] = metrics["precision"]
-            metrics[f"{mode}_recall"] = metrics["recall"]
-            metrics[f"{mode}_f1"] = metrics["f1"]
+            precision = float(result["precision"])
+            recall = float(result["recall"])
+            f1 = float(result["f1"])
+            metrics = {
+                "precision": precision,
+                f"{mode}_precision": precision,
+                "recall": recall,
+                f"{mode}_recall": recall,
+                "f1": f1,
+                f"{mode}_f1": f1,
+            }
         
         return metrics
     
