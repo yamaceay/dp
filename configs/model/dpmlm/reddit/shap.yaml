@@ -3,7 +3,7 @@ delete_probability: 0.0
 
 explainer:
   name: shap
-  tri_pipeline: /netscratch/yay/tri_pipelines/reddit/20251201_091912
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/20251201_091912
   risk_scores: data/reddit/reddit_risk_shap.jsonl
   risk_temperature: 0.1
 
