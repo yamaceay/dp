@@ -7,10 +7,17 @@
 #SBATCH --partition=batch
 #SBATCH --nodes=1
 #SBATCH --mem-per-cpu=6G
-#SBATCH --ntasks=2
+#SBATCH --ntasks=1
 #SBATCH --cpus-per-task=10
 #SBATCH --gpus-per-task=1
 #SBATCH --gpu-bind=none
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=yaay01@dfki.de
+
+# Map array task ID to job index and parallel task
+MAX_TASKS=1
+JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
+TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
 job_names=(
   "greedy_reddit_0"
@@ -19,21 +26,19 @@ job_names=(
   "shap_tab_3"
 )
 
-job_cmds=(
-  "python risk.py --data reddit --data_in data/reddit/reddit.jsonl --explainer greedy --explainer_in models/tri_pipelines/reddit/20251119_152245 --save_to_jsonl data/reddit/reddit_risk_greedy.jsonl --sort_by scores"
-  "python risk.py --data reddit --data_in data/reddit/reddit.jsonl --explainer shap --explainer_in models/tri_pipelines/reddit/20251119_152245 --save_to_jsonl data/reddit/reddit_risk_shap.jsonl --sort_by scores"
-  "python risk.py --data tab --data_in data/TAB/splitted/test.json --explainer greedy --explainer_in models/tri_pipelines/tab/20251119_162236 --save_to_jsonl data/TAB/test_risk_greedy.jsonl --sort_by scores"
-  "python risk.py --data tab --data_in data/TAB/splitted/test.json --explainer shap --explainer_in models/tri_pipelines/tab/20251119_162236 --save_to_jsonl data/TAB/test_risk_shap.jsonl --sort_by scores"
-)
+JOB_NAME="${job_names[$JOB_IDX]}"
+STATE_FILE="slurm/states/${JOB_NAME}.state"
 
-JOB_NAME="${job_names[$SLURM_ARRAY_TASK_ID]}"
-JOB_CMD="${job_cmds[$SLURM_ARRAY_TASK_ID]}"
+echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
+echo "Job: $JOB_NAME (index $JOB_IDX)"
+echo "Task within job: $TASK_WITHIN_JOB"
+echo "State file: $STATE_FILE"
 
-echo "Running job $SLURM_ARRAY_TASK_ID: $JOB_NAME"
-echo "Command: $JOB_CMD"
+export TASK_WITHIN_JOB JOB_NAME STATE_FILE SLURM_ARRAY_TASK_ID
 
+# Execute the task using task.sh --incr (it will run the command directly)
 srun -K \
   --container-image=/enroot/python+3.10.4-buster.sqsh \
   --container-mounts=`pwd`:`pwd` \
   --container-workdir=`pwd` \
-  scripts/install.sh $JOB_CMD 
+  scripts/install.sh scripts/task.sh --incr --state "$STATE_FILE"

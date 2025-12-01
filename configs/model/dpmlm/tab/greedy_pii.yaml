@@ -12,7 +12,7 @@ tri_chunking:
 
 token_selection:
   name: pii_only
-  pii_annotator: models/pii_detectors/tab/20251021_093003
+  pii_annotator: /netscratch/yay/pii_detectors/tab/20251201_093118
   pii_threshold: 0.7
 
 compensate_epsilon: false
