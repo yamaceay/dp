@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --array=0-1%3
-#SBATCH --job-name=tri_jobs
+#SBATCH --array=0-0%3
+#SBATCH --job-name=pii_jobs
 #SBATCH --output=logs/%x_%a_%j.out
 #SBATCH --error=logs/%x_%a_%j.err
 #SBATCH --partition=batch
@@ -20,8 +20,7 @@ JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
 job_names=(
-  "tri_reddit_0"
-  "tri_tab_1"
+  "pii_job_0"
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"

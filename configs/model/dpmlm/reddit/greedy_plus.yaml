@@ -3,7 +3,7 @@ delete_probability: 0.1
 
 explainer:
   name: greedy
-  tri_pipeline: models/tri_pipelines/reddit/20251119_152245
+  tri_pipeline: /netscratch/yay/tri_pipelines/reddit/20251201_091912
   risk_scores: data/reddit/reddit_risk_greedy.jsonl
   risk_temperature: 0.1
 

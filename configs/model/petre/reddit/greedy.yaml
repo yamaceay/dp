@@ -1,6 +1,6 @@
 explainer:
   name: greedy
-  tri_pipeline: models/tri_pipelines/reddit/20251119_152245
+  tri_pipeline: /netscratch/yay/tri_pipelines/reddit/20251201_091912
   risk_scores: data/reddit/reddit_risk_greedy.jsonl
 
 mask_text: "[MASK]"
