@@ -39,6 +39,6 @@ export TASK_WITHIN_JOB JOB_NAME STATE_FILE SLURM_ARRAY_TASK_ID
 # Execute the task using task.sh --incr (it will run the command directly)
 srun -K \
   --container-image=/enroot/python+3.10.4-buster.sqsh \
-  --container-mounts=`pwd`:`pwd` \
+  --container-mounts=/netscratch/$USER:/netscratch/$USER,/home/$USER:/home/$USER \
   --container-workdir=`pwd` \
   scripts/install.sh scripts/task.sh --incr --state "$STATE_FILE"
