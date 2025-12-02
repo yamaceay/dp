@@ -52,8 +52,9 @@ class JsonlOutputHandler(OutputHandler):
 
     def output(self, result: AnonymizationResult, dataset: str, model: str, task_id: int, **kwargs):
         idx = kwargs.get("idx", None)
+        unique_name = kwargs.get("unique_name")
         variant_key = self._derive_variant_key(result)
-        stream = self._ensure_stream(dataset, model, variant_key, task_id)
+        stream = self._ensure_stream(dataset, model, variant_key, task_id, unique_name)
 
         record = {
             "idx": idx,
@@ -63,8 +64,12 @@ class JsonlOutputHandler(OutputHandler):
         if result.spans:
             record["spans"] = [self._serialize_annotation_minimal(ann) for ann in result.spans]
         
-        if result.metadata:
-            record["metadata"] = result.metadata
+        metadata = result.metadata or {}
+        if unique_name is not None:
+            metadata = dict(metadata)
+            metadata["unique_name"] = unique_name
+        if metadata:
+            record["metadata"] = metadata
         
         stream.write(json.dumps(record, ensure_ascii=False, cls=NumpyEncoder) + '\n')
         stream.flush()
@@ -83,17 +88,23 @@ class JsonlOutputHandler(OutputHandler):
         path_str = pattern.format(dataset=dataset)
         return Path(path_str)
 
-    def _ensure_stream(self, dataset: str, model: str, variant_key: str, task_id: int):
-        if variant_key in self._streams:
-            return self._streams[variant_key]
+    def _ensure_stream(self, dataset: str, model: str, variant_key: str, task_id: int, unique_name: Optional[str]):
+        stream_key = (variant_key, unique_name)
+        if stream_key in self._streams:
+            return self._streams[stream_key]
         output_dir = self._get_output_dir(dataset, model)
         output_dir.mkdir(parents=True, exist_ok=True)
-        suffix = f"_{variant_key}" if variant_key else ""
+        suffix_parts = []
+        if unique_name:
+            suffix_parts.append(unique_name)
+        if variant_key:
+            suffix_parts.append(variant_key)
+        suffix = "_" + "_".join(suffix_parts) if suffix_parts else ""
         sanitized_suffix = suffix.replace(" ", "_")
         path = output_dir / f"{self.timestamp}{sanitized_suffix}_{task_id}.jsonl"
         handle = open(path, 'w', encoding='utf-8')
-        self._streams[variant_key] = handle
-        self._paths[variant_key] = path
+        self._streams[stream_key] = handle
+        self._paths[stream_key] = path
         return handle
 
     def _derive_variant_key(self, result: AnonymizationResult) -> str:

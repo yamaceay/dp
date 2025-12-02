@@ -1,2 +1,0 @@
-n=5|python hello.py --end 6
-n=10|python hello.py --end 10

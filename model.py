@@ -58,7 +58,8 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--annotations_in', type=str, default=None, metavar='SOURCES', help='Load annotations from previous run (format: path/to/file.jsonl, comma-separated for multiple sources)')
     parser.add_argument('--list_annotations', action='store_true', help='List available annotation files and exit')
     parser.add_argument('--stream', action='store_true', help='Stream outputs (recommended for jsonl) instead of buffering all results')
-    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream']
+    parser.add_argument('--unique_name', type=str, default=None, help='Unique name to identify this run (added to output payloads)')
+    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream', 'unique_name']
 
 def load_config(sth_in: Optional[str]) -> dict:
     config = {}
@@ -257,6 +258,7 @@ def stream_anonymization(
     texts: Optional[List[str]],
     record_indices: Optional[List[int]],
     task_id: int,
+    unique_name: Optional[str],
 ) -> Tuple[int, float]:
     processed = 0
     run_start = time.time()
@@ -271,7 +273,7 @@ def stream_anonymization(
             idx_value = record_indices[position]
             for results in per_idx.values():
                 for result in results:
-                    output_handler.output(result, idx=idx_value, dataset=dataset_name, model=model_name, task_id=task_id)
+                    output_handler.output(result, idx=idx_value, dataset=dataset_name, model=model_name, task_id=task_id, unique_name=unique_name)
             processed += 1
 
     elif capabilities.must_use_dataset:
@@ -280,7 +282,7 @@ def stream_anonymization(
         filtered_kwargs = dict(runtime_config)
         for abs_idx, local_idx in zip(record_indices, dataset_indices):
             result = anonymizer.anonymize_from_dataset(idx=local_idx, **filtered_kwargs)
-            output_handler.output(result, idx=abs_idx, dataset=dataset_name, model=model_name, task_id=task_id)
+            output_handler.output(result, idx=abs_idx, dataset=dataset_name, model=model_name, task_id=task_id, unique_name=unique_name)
             processed += 1
 
     elif capabilities.requires_epsilon:
@@ -301,6 +303,7 @@ def stream_anonymization(
                         dataset=dataset_name,
                         model=model_name,
                         task_id=task_id,
+                        unique_name=unique_name,
                     )
             processed += 1
 
@@ -359,6 +362,7 @@ def stream_anonymization(
                     dataset=dataset_name,
                     model=model_name,
                     task_id=task_id,
+                    unique_name=unique_name,
                 )
                 processed += 1
 
@@ -584,6 +588,7 @@ if __name__ == "__main__":
             texts=texts,
             record_indices=record_indices,
             task_id=args.start,
+            unique_name=args.unique_name,
         )
     else:
         start_time = time.time()
@@ -604,6 +609,7 @@ if __name__ == "__main__":
             dataset=args.data,
             model=args.model,
             task_id=args.start,
+            unique_name=args.unique_name,
         )
 
         processed = num_records

@@ -1,3 +1,0 @@
-4
-0
-python model.py --data reddit --data_in data/reddit/reddit.jsonl --model dpmlm --model_in configs/model/dpmlm/reddit/greedy.yaml --runtime_in configs/runtime/dp/eps_*.yaml --output jsonl --stream

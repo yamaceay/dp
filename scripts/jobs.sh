@@ -40,7 +40,7 @@ cmd_tpl="python model.py \
   --data %s --data_in %s \
   --model %s --model_in %s \
   %s \
-  --output jsonl %s"
+  --output jsonl --unique_name %s %s"
 
 function all_methods() {
   find "$models_dir" -mindepth 1 -maxdepth 1 -print0 | while IFS= read -r -d '' path
@@ -157,11 +157,14 @@ function all_methods_runtimes() {
             ;;
         esac
 
-        job_name="${dataset_name}_${method_base}"
+        method_unique_config="${method_path##*/}"
+        method_unique_config="${method_unique_config%.yaml}"
+        job_name="${dataset_name}_${method_base}_${method_unique_config}"
         cmd=$(printf "$cmd_tpl" \
             "$dataset_name" "$dataset_path" \
             "$method_base" "$method_path" \
             "$runtime_args" \
+            "$job_name" \
             $flags)
         
         printf '%s|%s\n' "$job_name" "$cmd"

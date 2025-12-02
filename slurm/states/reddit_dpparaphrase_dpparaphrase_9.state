@@ -1,0 +1,3 @@
+1
+0
+python model.py --data reddit --data_in data/reddit/reddit.jsonl --model dpparaphrase --model_in configs/model/dpparaphrase.yaml --runtime_in configs/runtime/dp/eps_*.yaml --output jsonl --unique_name reddit_dpparaphrase_dpparaphrase --stream
