@@ -1,3 +1,3 @@
 1
-0
+1
 python risk.py --data reddit --data_in data/reddit/reddit.jsonl --explainer shap --explainer_in ../../../netscratch/yay/tri_pipelines/reddit/20251201_091912 --save_to_jsonl data/reddit/reddit_risk_shap.jsonl --sort_by scores
