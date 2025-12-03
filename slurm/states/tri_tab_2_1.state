@@ -1,0 +1,3 @@
+1
+1
+python tri_by_bk.py --dataset tab --data_path data/TAB/splitted/test.json --attacker_extensions data/TAB/test_bk_sum.jsonl --use_pretraining --pretraining_epochs 3 --finetuning_epochs 15 --mode train --device cpu
