@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --array=0-15%3
-#SBATCH --job-name=reddit_tasks
+#SBATCH --array=0-3%3
+#SBATCH --job-name=rest_jobs
 #SBATCH --output=logs/%x_%a_%j.out
 #SBATCH --error=logs/%x_%a_%j.err
 #SBATCH --partition=batch
@@ -20,22 +20,10 @@ JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
 job_names=(
-  "reddit_baroud_baroud_0"
-  "reddit_risk_greedy_1"
-  "reddit_risk_shap_2"
-  "reddit_spacy_spacy_3"
-  "reddit_presidio_presidio_4"
-  "reddit_manual_manual_5"
-  "reddit_petre_greedy_6"
-  "reddit_petre_shap_7"
-  "reddit_dpprompt_dpprompt_8"
-  "reddit_dpparaphrase_dpparaphrase_9"
-  "reddit_dpbart_dpbart_10"
-  "reddit_dpmlm_greedy_plus_11"
-  "reddit_dpmlm_greedy_12"
-  "reddit_dpmlm_shap_13"
-  "reddit_dpmlm_uniform_plus_14"
-  "reddit_dpmlm_uniform_15"
+  "tab_dpmlm_uniform_plus_0"
+  "tab_dpmlm_uniform_1"
+  "reddit_dpmlm_uniform_plus_2"
+  "reddit_dpmlm_uniform_3"
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"

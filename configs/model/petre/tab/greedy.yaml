@@ -1,6 +1,6 @@
 explainer:
   name: greedy
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251201_092739
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251203_134320
   risk_scores: data/TAB/test_risk_greedy.jsonl
 
 mask_text: "[MASK]"

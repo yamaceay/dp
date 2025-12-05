@@ -285,7 +285,12 @@ class DPMlmAnonymizer(DPAnonymizer):
         return text[:start] + replacement + text[end:]
 
     def _weights_to_probs(self, weights: np.ndarray, temperature: float) -> np.ndarray:
-        positive_scores = np.exp(weights / temperature)
+        if temperature is None:
+            temperature = 1.0
+        scores = np.asarray(weights, dtype=float)
+        if scores.size == 0:
+            return scores
+        positive_scores = np.exp(scores / temperature)
         probs = positive_scores / positive_scores.sum()
         return probs
 
@@ -354,21 +359,21 @@ class DPMlmAnonymizer(DPAnonymizer):
         record_name: Optional[str],
         critical_indices: Optional[Sequence[int]] = None,
     ) -> Tuple[np.ndarray, bool]:
-        scores = np.array([], dtype=float)
 
         precomputed_scores = self._lookup_precomputed_scores(text, offsets, record_name, indices=critical_indices)
-        if precomputed_scores is None:
-            if self.explainer is None:
-                return scores, False
-            
+        if precomputed_scores is not None:
+            return precomputed_scores, True
+
+        if self.explainer is not None:
             critical_offsets = offsets
             if critical_indices is not None:
                 critical_offsets = [offsets[i] for i in critical_indices]
+
             scores = self.explainer.explain(text, critical_offsets)
-            if scores is None or len(scores) != len(critical_offsets):
+            if scores is not None and len(scores) == len(critical_offsets):
                 return scores, False
-        else:
-            return precomputed_scores, True
+            
+        return np.array([], dtype=float), False
 
     def _grid_anonymize_stream(
         self,

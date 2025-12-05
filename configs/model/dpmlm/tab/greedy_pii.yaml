@@ -3,7 +3,7 @@ delete_probability: 0.0
 
 explainer:
   name: greedy
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251201_092739
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251203_134320
   risk_scores: data/TAB/test_risk_greedy.jsonl
   risk_temperature: 0.1
 
@@ -12,7 +12,7 @@ tri_chunking:
 
 token_selection:
   name: pii_only
-  pii_annotator: ../../../netscratch/yay/pii_detectors/tab/20251201_093118
+  pii_annotator: ../../../netscratch/yay/pii_detectors/tab/20251203_131104
   pii_threshold: 0.7
 
 compensate_epsilon: false
