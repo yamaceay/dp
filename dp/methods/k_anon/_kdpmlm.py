@@ -24,7 +24,7 @@ from dp.utils.memory import clear_memory
 class KDPMLMAnonymizer(KAnonymizer):
     def __init__(
         self,
-        *,
+        *args,
         epsilon: float = 1.0,
         model_checkpoint: str = "roberta-base",
         clip_min: float = -3.2093127,
@@ -37,7 +37,6 @@ class KDPMLMAnonymizer(KAnonymizer):
         mask_text: str = "[MASK]",
         device: str = "auto",
         use_chunking: bool = True,
-        *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
