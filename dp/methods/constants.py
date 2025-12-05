@@ -12,6 +12,7 @@ RISK_MASKER_MODEL_LIST: List[str] = [
 
 K_ANON_MODEL_LIST = [
     "petre",
+    "kdpmlm",
 ]
 
 DP_MODEL_LIST = [
@@ -52,6 +53,14 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
         supports_streaming=True,
     ),
     "petre": ModelCapabilities(
+        must_use_dataset=True,
+        requires_k=True,
+        must_use_non_uniform_explainer=True,
+        can_use_annotations=True,
+        can_use_scoring=True,
+        supports_streaming=True,
+    ),
+    "kdpmlm": ModelCapabilities(
         must_use_dataset=True,
         requires_k=True,
         must_use_non_uniform_explainer=True,

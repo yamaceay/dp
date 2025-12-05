@@ -16,6 +16,7 @@ from dp.methods.simple._risk import RiskAnonymizer
 
 from dp.methods.k_anon import KAnonymizer
 from dp.methods.k_anon._petre import PetreAnonymizer
+from dp.methods.k_anon._kdpmlm import KDPMLMAnonymizer
 
 from dp.methods.dp import DPAnonymizer
 from dp.methods.dp._dpbart import DPBartAnonymizer
