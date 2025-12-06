@@ -41,5 +41,5 @@ risk_greedy_risk_tolerance-0.8 | "mean": 7.0, "median": 3.0, "min": -33, "max": 
 risk_greedy_risk_tolerance-0.9 | "mean": 5.807619047619047, "median": 2.0, "min": -33, "max": 39, "improved": 329, "degraded": 64, "unchanged": 132
 risk_shap_risk_tolerance-0.8 | "mean": 9.853333333333333, "median": 7.0, "min": -33, "max": 38, "improved": 419, "degraded": 46, "unchanged": 60
 risk_shap_risk_tolerance-0.9 | "mean": 7.558095238095238, "median": 4.0, "min": -33, "max": 39, "improved": 368, "degraded": 52, "unchanged": 105
-spacy_spacy_pii_confidence-0.95 | "mean": 4.4019047619047615, "median": 0.0, "min": -33, "max": 38, "improved": 240, "degraded": 38, "unchanged": 247
-spacy_spacy_pii_confidence-0.9 | "mean": 4.4019047619047615, "median": 0.0, "min": -33, "max": 38, "improved": 240, "degraded": 38, "unchanged": 247
+spacy_pii_confidence-0.95 | "mean": 4.4019047619047615, "median": 0.0, "min": -33, "max": 38, "improved": 240, "degraded": 38, "unchanged": 247
+spacy_pii_confidence-0.9 | "mean": 4.4019047619047615, "median": 0.0, "min": -33, "max": 38, "improved": 240, "degraded": 38, "unchanged": 247
