@@ -93,6 +93,20 @@ def _tab_year(record: DatasetRecord) -> Optional[int]:
     return _int_value(value)
 
 
+def _tab_year_groups(record, year_groups=['1990-1995', '1996-1998', '1999-2001', '2002-2004', '2005-2007', '2008-2010', '2011-2013', '2014-2019']):
+    year = record.metadata.get('years', None)
+    year_bounds = [(int(group.split('-')[0]), int(group.split('-')[1])) for group in year_groups]
+    yeargroup_map = {c: group for group, (start, end) in zip(year_groups, year_bounds) for c in range(start, end + 1)}
+    if year not in yeargroup_map:
+        raise ValueError(f"Year {year} not in any defined year groups.")
+    return yeargroup_map[year]
+
+def _tab_country_groups(record, region_groups=['GBR-IRL', 'SWE-NOR-DNK']):
+    region = record.metadata.get('country', None)
+    region_map = {c: group for group in region_groups for c in group.split('-')}
+    return region_map.get(region, region)
+
+
 def _db_bio_label(record: DatasetRecord) -> Optional[str]:
     return _text_value(record.metadata.get("label"))
 
@@ -113,6 +127,8 @@ UTILITY_TARGETS: Dict[str, Dict[str, UtilityTarget]] = {
     "tab": {
         "country": UtilityTarget(name="country", source="tab", mode=UtilityTarget.Mode.NOMINAL, getter=_tab_country),
         "year": UtilityTarget(name="year", source="tab", mode=UtilityTarget.Mode.CARDINAL, getter=_tab_year),
+        "year_group": UtilityTarget(name="year_group", source="tab", mode=UtilityTarget.Mode.NOMINAL, getter=_tab_year_groups),
+        "country_group": UtilityTarget(name="country_group", source="tab", mode=UtilityTarget.Mode.NOMINAL, getter=_tab_country_groups),
     },
     "db_bio": {
         "label": UtilityTarget(name="label", source="db_bio", mode=UtilityTarget.Mode.NOMINAL, getter=_db_bio_label),

@@ -2,7 +2,7 @@ dataset: tab
 data_in: data/TAB/splitted/test.json
 annotations_in:
   - outputs/tab
-target: country
+target: country_group
 test_size: 0.2
 random_state: 42
 vectorizer:

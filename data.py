@@ -1,5 +1,6 @@
 from typing import Dict, List
 from dp.loaders import ADAPTER_REGISTRY
+from dp.experiments.utility.getters import UTILITY_TARGETS
 import argparse
 
 available_datasets = list(ADAPTER_REGISTRY.keys())
@@ -45,10 +46,11 @@ if __name__ == "__main__":
         'key': lambda r: list(r.metadata.keys()),
     }
 
-    if args.data.lower() == 'db_bio':
-        value_getters.update({
-            'label': lambda r: r.metadata.get('label', None),
-        })
+    special_value_getters = UTILITY_TARGETS.get(args.data, {})
+    for key, target in special_value_getters.items():
+        value_getters[key] = target.getter
+
+    print(value_getters)
 
     unique_values = {}
     sum_text_length = 0
