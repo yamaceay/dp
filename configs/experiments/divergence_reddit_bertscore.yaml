@@ -8,4 +8,4 @@ metric:
   batch_size: 8
 output:
   format: jsonl
-  file: logs/div_exp.jsonl
+  file: logs/reddit_div_exp.jsonl
