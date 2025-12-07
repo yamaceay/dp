@@ -1,3 +1,0 @@
-1
-1
-python model.py --data reddit --data_in data/reddit/reddit.jsonl --model baroud --model_in configs/model/baroud.yaml --runtime_in configs/runtime/pii_confidence/lambda_*.yaml --output jsonl --unique_name reddit_baroud_baroud

@@ -1,3 +1,0 @@
-1
-1
-python tri_by_bk.py --dataset reddit --data_path data/reddit/reddit.jsonl --attacker_extensions data/reddit/reddit_bk_sum.jsonl --use_pretraining --pretraining_epochs 3 --finetuning_epochs 7 --mode train --device cpu
