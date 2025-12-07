@@ -1,1 +1,2 @@
 tab_privacy|python run.py privacy --config configs/experiments/privacy_tab_tri.yaml
+reddit_privacy|python run.py privacy --config configs/experiments/privacy_reddit_tri.yaml
