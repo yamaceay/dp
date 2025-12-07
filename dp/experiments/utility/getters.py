@@ -21,6 +21,15 @@ def _text_value(value: Any) -> Optional[str]:
     return text or None
 
 
+def _int_value(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _float_value(value: Any) -> Optional[float]:
     if value is None:
         return None
@@ -38,8 +47,8 @@ def _reddit_label(record: DatasetRecord) -> Optional[str]:
     return _text_value(record.metadata.get("label"))
 
 
-def _reddit_age(record: DatasetRecord) -> Optional[float]:
-    return _float_value(record.metadata.get("persona_age"))
+def _reddit_age(record: DatasetRecord) -> Optional[int]:
+    return _int_value(record.metadata.get("persona_age"))
 
 
 def _reddit_age_group(record: DatasetRecord) -> Optional[str]:
@@ -73,15 +82,15 @@ def _tab_country(record: DatasetRecord) -> Optional[str]:
     return _text_value(record.metadata.get("country"))
 
 
-def _tab_year(record: DatasetRecord) -> Optional[float]:
+def _tab_year(record: DatasetRecord) -> Optional[int]:
     value = record.metadata.get("years")
     if isinstance(value, (list, tuple, set)):
         for item in value:
-            number = _float_value(item)
+            number = _int_value(item)
             if number is not None:
                 return number
         return None
-    return _float_value(value)
+    return _int_value(value)
 
 
 def _db_bio_label(record: DatasetRecord) -> Optional[str]:
@@ -92,17 +101,14 @@ def _trustpilot_category(record: DatasetRecord) -> Optional[str]:
     return _text_value(record.metadata.get("category"))
 
 
-def _trustpilot_stars(record: DatasetRecord) -> Optional[float]:
-    return _float_value(record.metadata.get("stars"))
+def _trustpilot_stars(record: DatasetRecord) -> Optional[int]:
+    return _int_value(record.metadata.get("stars"))
 
 UTILITY_TARGETS: Dict[str, Dict[str, UtilityTarget]] = {
     "reddit": {
         "feature": UtilityTarget(name="feature", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=_reddit_feature),
         "label": UtilityTarget(name="label", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=_reddit_label),
-        "age": UtilityTarget(name="age", source="reddit", mode=UtilityTarget.Mode.CARDINAL, getter=_reddit_age),
         "age_group": UtilityTarget(name="age_group", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=_reddit_age_group),
-        "sex": UtilityTarget(name="sex", source="reddit", mode=UtilityTarget.Mode.BINARY, getter=_reddit_sex),
-        "income_level": UtilityTarget(name="income_level", source="reddit", mode=UtilityTarget.Mode.ORDINAL, getter=_reddit_income),
     },
     "tab": {
         "country": UtilityTarget(name="country", source="tab", mode=UtilityTarget.Mode.NOMINAL, getter=_tab_country),

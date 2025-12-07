@@ -15,7 +15,6 @@ from dp.experiments.divergence.io import (
 )
 from dp.experiments.divergence.reporting import build_divergence_report, create_divergence_outputter
 from dp.experiments.privacy.io import (
-    build_privacy_evaluation_dataset,
     build_privacy_evaluation_dataset_from_texts,
     read_texts_from_jsonl,
 )
