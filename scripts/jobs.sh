@@ -78,7 +78,7 @@ function all_datasets() {
 
 function runtime_args_for_method() {
   case "$1" in
-    baroud|spacy)
+    baroud)
       echo "--runtime_in $runtime_dir/pii_confidence/lambda_*.yaml"
       ;;
     risk)
@@ -90,7 +90,7 @@ function runtime_args_for_method() {
     dpprompt|dpparaphrase|dpbart|dpmlm)
       echo "--runtime_in $runtime_dir/dp/eps_*.yaml"
       ;;
-    manual|presidio)
+    manual|presidio|spacy)
       echo ""
       ;;
     *)
