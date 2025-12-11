@@ -1,0 +1,6 @@
+gpt2-paraphraser: ../../../netscratch/yay/gpt2-paraphraser
+reddit:
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/20251203_135444
+tab:
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251203_134320
+  pii_annotator: ../../../netscratch/yay/pii_detectors/tab/20251203_131104

@@ -1,0 +1,6 @@
+gpt2-paraphraser: models/gpt2-paraphraser
+reddit:
+  tri_pipeline: models/tri_pipelines/reddit/20251119_142033/pretraining/checkpoint-72
+tab:
+  tri_pipeline: models/tri_pipelines/tab/20251110_183205
+  pii_annotator: models/pii_detectors/tab/20251021_093003

@@ -6,6 +6,7 @@ from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, EpsilonParam
 
 class DPPromptAnonymizer(Anonymizer):
+    MODEL_NAME = "dpprompt"
     def __init__(
         self,
         *args,
@@ -14,7 +15,7 @@ class DPPromptAnonymizer(Anonymizer):
         max_logit: float = 7.48324937989716,
         **kwargs
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, model=self.MODEL_NAME, **kwargs)
         
         self.model_checkpoint = model_checkpoint
         self.min_logit = min_logit

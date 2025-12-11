@@ -128,7 +128,7 @@ def build_selector(selector_config: dict):
 def build_explainer(explainer_config: dict, model_config: dict, capabilities, model_name: str):
     explainer_name = explainer_config["name"]
     
-    if capabilities.must_use_non_uniform_explainer and explainer_name == "uniform":
+    if capabilities.must_use_scoring and explainer_name == "uniform":
         raise ValueError(f"{model_name} requires non-uniform explainability")
     
     if explainer_name == "uniform":

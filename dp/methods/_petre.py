@@ -32,6 +32,7 @@ class RecordState:
 
 
 class PetreAnonymizer(Anonymizer):
+    MODEL_NAME = "petre"
     def __init__(
         self,
         mask_text: str = "[MASK]",
@@ -42,7 +43,7 @@ class PetreAnonymizer(Anonymizer):
         *args,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, model=self.MODEL_NAME, **kwargs)
         self.mask_text = mask_text
         self.use_chunking = use_chunking
         self.mask_all_instances = mask_all_instances

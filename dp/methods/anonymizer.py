@@ -32,6 +32,7 @@ class Anonymizer(ABC):
         self._dataset_records: Optional[Iterable[DatasetRecord]] = None
         self._explainer: Optional[TokenExplainer] = None
         self._selector: Optional[TokenSelector] = None
+        self.device = self._resolve_device(kwargs.get("device"))
 
         print(f"Initialized {self.__class__.__name__} with args: {args}, kwargs: {kwargs}")
 

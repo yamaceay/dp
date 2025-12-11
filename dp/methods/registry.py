@@ -43,6 +43,7 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
         must_use_dataset=True, 
         can_use_k_selector=True,
         can_use_annotations=True,
+        must_use_scoring=True,
     ),
     "dpbart": ModelCapabilities(can_work_token_level=False),
     "dpparaphrase": ModelCapabilities(can_work_token_level=False),

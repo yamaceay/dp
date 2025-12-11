@@ -1,1 +1,1 @@
-model_checkpoint: ../../../netscratch/yay/gpt2-paraphraser
+model_checkpoint: models/gpt2-paraphraser

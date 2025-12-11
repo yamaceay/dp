@@ -8,6 +8,7 @@ from dp.methods.constants import Buckets, EpsilonParam
 
 
 class DPBartAnonymizer(Anonymizer):
+    MODEL_NAME = "dpbart"
     def __init__(
         self,
         *args,
@@ -18,7 +19,7 @@ class DPBartAnonymizer(Anonymizer):
         model_name: str = "facebook/bart-base",
         **kwargs
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, model=self.MODEL_NAME, **kwargs)
         
         self.sigma = sigma
         self.num_sigmas = num_sigmas

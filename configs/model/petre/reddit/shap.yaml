@@ -1,6 +1,6 @@
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/20251203_135444
+  tri_pipeline: models/tri_pipelines/reddit/20251119_142033/pretraining/checkpoint-72
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_shap.jsonl

@@ -16,6 +16,7 @@ from dp.utils.selector.base import TokenSelector
 
 
 class DPMlmAnonymizer(Anonymizer):   
+    MODEL_NAME = "dpmlm"
     def __init__(
         self,
         *args,
@@ -31,7 +32,7 @@ class DPMlmAnonymizer(Anonymizer):
         risk_temperature: Optional[float] = None,
         **kwargs
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, model=self.MODEL_NAME, **kwargs)
 
         self.model_checkpoint = model_checkpoint
         self.clip_min = clip_min
