@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Dict, List, Union
 
-PII_CLASSIFIER_MODEL_LIST: List[str] = ["spacy", "baroud"]
+PII_CLASSIFIER_MODEL_LIST: List[str] = ["baroud"]
 RISK_MASKER_MODEL_LIST: List[str] = ["risk"]
 
 @dataclass
@@ -16,6 +16,10 @@ class ModelCapabilities:
     can_use_risk_selector: bool = False
     must_use_k_selector: bool = False
     can_use_k_selector: bool = False
+    must_use_annotations: bool = False
+    can_use_annotations: bool = False
+    must_use_scoring: bool = False
+    can_use_scoring: bool = False
 
 @dataclass
 class MultiParams:

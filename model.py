@@ -204,15 +204,18 @@ def resolve_requested_indices(available: List[int], requested: Optional[List[int
     return requested
 
 
-def initialize_builder_params(builder: AnonymizationBuilder, runtime_bundle, model_name: str, capabilities):
+def initialize_builder_params(anonymizer: Anonymizer, runtime_bundle):
     if runtime_bundle.k_values:
-        builder.with_ks(runtime_bundle.k_values)
-    elif runtime_bundle.pii_confidence_values:
-        builder.with_pii_confidences(runtime_bundle.pii_confidence_values)
-    elif runtime_bundle.risk_tolerance_values:
-        builder.with_risk_tolerances(runtime_bundle.risk_tolerance_values)
-    elif hasattr(runtime_bundle, 'epsilon_values') and runtime_bundle.epsilon_values:
-        builder.with_epsilons(runtime_bundle.epsilon_values)
+        from dp.methods.constants import KParams
+        return [KParams(ks=runtime_bundle.k_values)]
+    if runtime_bundle.pii_confidence_values:
+        return [("pii_confidence", runtime_bundle.pii_confidence_values)]
+    if runtime_bundle.risk_tolerance_values:
+        return [("risk_tolerance", runtime_bundle.risk_tolerance_values)]
+    if hasattr(runtime_bundle, 'epsilon_values') and runtime_bundle.epsilon_values:
+        from dp.methods.constants import EpsilonParam
+        return [EpsilonParam(epsilon=runtime_bundle.epsilon_values[0])]
+    return []
 
 
 def flatten_results(nested: Any, indices: List[int]) -> Tuple[List[Any], List[Optional[int]]]:
@@ -289,7 +292,7 @@ if __name__ == "__main__":
     capabilities = get_capabilities(args.model)
     explainer_config = extract_explainer_config(model_config)
     
-    model_cls = MODEL_REGISTRY[args.model]
+    model_cls = MODEL_REGISTRY[model_kwargs.pop("model")]
     model = model_cls(**model_config, **model_kwargs, **data_kwargs)
     
     if capabilities.must_use_dataset:
@@ -307,9 +310,10 @@ if __name__ == "__main__":
     batch_timestamp = args.timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
     output_handler = output_handler_cls(timestamp=batch_timestamp) if args.output == "jsonl" else output_handler_cls()
     
+    buckets = initialize_builder_params(model, runtime_bundle)
+    
     dataset_indices_all = compute_dataset_indices(len(records), data_kwargs)
     index_lookup = {idx: pos for pos, idx in enumerate(dataset_indices_all)}
-    builder = model.builder()
     
     texts_arg = runtime_kwargs.pop("texts", None)
     indices_arg = runtime_kwargs.pop("indices", None)
@@ -321,21 +325,16 @@ if __name__ == "__main__":
         if texts_arg:
             raise ValueError(f"{args.model} requires dataset records, use --indices")
         dataset_indices = resolve_requested_indices(dataset_indices_all, indices_arg)
-        builder.with_indices(dataset_indices)
         record_indices = indices_arg or dataset_indices_all
-        texts = None
     else:
         selected_indices = resolve_requested_indices(dataset_indices_all, indices_arg)
         if texts_arg:
-            texts = texts_arg
-            record_indices = list(range(len(texts)))
+            record_indices = list(range(len(texts_arg)))
+            texts_or_indices = texts_arg
         else:
-            texts = [records[index_lookup[idx]].text for idx in selected_indices]
+            texts_or_indices = [records[index_lookup[idx]].text for idx in selected_indices]
             record_indices = selected_indices
-        builder.with_texts(texts)
         dataset_indices = None
-    
-    initialize_builder_params(builder, runtime_bundle, args.model, capabilities)
     
     stream_enabled = runtime_kwargs.pop("stream", False)
     metadata = {
@@ -345,24 +344,21 @@ if __name__ == "__main__":
         "unique_name": args.unique_name
     }
     
-    if stream_enabled:
-        if args.output != "jsonl":
-            raise ValueError("--stream only works with --output jsonl")
-        if not capabilities.supports_streaming:
-            raise ValueError(f"{args.model} does not support streaming")
-        
-        processed, total_time = stream_anonymize(
-            model, builder, capabilities, output_handler, runtime_bundle.base_config,
-            record_indices, dataset_indices, texts, runtime_bundle, **metadata
-        )
+    start_time = time.time()
+    processed = 0
+    
+    if capabilities.must_use_dataset:
+        for abs_idx, local_idx in zip(record_indices, dataset_indices):
+            result = model.anonymize_from_dataset(idx=local_idx, buckets=buckets)
+            output_handler.output(result, idx=abs_idx, **metadata)
+            processed += 1
     else:
-        start_time = time.time()
-        results = [r for r in builder.anonymize(**runtime_bundle.base_config)]
-        total_time = time.time() - start_time
-        
-        flat_res, flat_indices = flatten_results(results, record_indices)
-        output_results(flat_res, flat_indices, output_handler, verbose=args.output != "jsonl", **metadata)
-        processed = len(record_indices)
+        for pos, text_or_idx in enumerate(texts_or_indices):
+            result = model.anonymize(text_or_idx=text_or_idx, buckets=buckets)
+            output_handler.output(result, idx=record_indices[pos], **metadata)
+            processed += 1
+    
+    total_time = time.time() - start_time
     
     avg_time = total_time / processed if processed > 0 else 0
     print(f"\n{'='*80}\nAnonymization Performance:\n  Total time: {total_time:.2f}s\n  Texts processed: {processed}\n  Average time per text: {avg_time:.2f}s\n  Throughput: {processed/total_time:.2f} texts/s" if total_time > 0 and processed > 0 else "\n  Throughput: N/A")

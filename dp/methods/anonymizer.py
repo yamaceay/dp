@@ -21,9 +21,11 @@ class AnonymizationResult:
 class Anonymizer(ABC):
     def __init__(self, model: str, *args, **kwargs):
         from dp.utils.output import PrintOutputHandler
+        from dp.methods.registry import get_capabilities
         self._init_args = args
         self._init_kwargs = kwargs
         self._model_name = model
+        self.capabilities = get_capabilities(model)
 
         self._output_handler: 'OutputHandler' = PrintOutputHandler()
 
@@ -43,13 +45,11 @@ class Anonymizer(ABC):
         raise NotImplementedError()
 
     def anonymize(self, *args, text_or_idx: Union[str, int] = None, buckets: Buckets = [], **kwargs) -> AnonymizationResult:
-        results = None
         if self.capabilities.must_use_dataset:
             if isinstance(text_or_idx, str):
                 raise ValueError("This anonymizer requires a dataset index for anonymization.")
-            results = self.anonymizer.anonymize_from_dataset(text_or_idx, *args, buckets=buckets, **kwargs)
-        else:
-            results = self.anonymizer.anonymize_any_text(text_or_idx, *args, buckets=buckets, **kwargs)
+            return self.anonymize_from_dataset(text_or_idx, *args, buckets=buckets, **kwargs)
+        return self.anonymize_any_text(text_or_idx, *args, buckets=buckets, **kwargs)
     
 
     def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> AnonymizationResult:

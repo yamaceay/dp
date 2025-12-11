@@ -30,10 +30,20 @@ MODEL_REGISTRY: Dict[str, Type[Anonymizer]] = {
 MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
     "spacy": ModelCapabilities(),
     "presidio": ModelCapabilities(),
-    "manual": ModelCapabilities(must_use_dataset=True),
+    "manual": ModelCapabilities(
+        must_use_dataset=True, 
+        must_use_annotations=True,
+    ),
     "baroud": ModelCapabilities(must_use_pii_selector=True),
-    "risk": ModelCapabilities(must_use_risk_selector=True),
-    "petre": ModelCapabilities(must_use_dataset=True, can_use_k_selector=True),
+    "risk": ModelCapabilities(
+        must_use_risk_selector=True,
+        must_use_scoring=True,
+    ),
+    "petre": ModelCapabilities(
+        must_use_dataset=True, 
+        can_use_k_selector=True,
+        can_use_annotations=True,
+    ),
     "dpbart": ModelCapabilities(can_work_token_level=False),
     "dpparaphrase": ModelCapabilities(can_work_token_level=False),
     "dpprompt": ModelCapabilities(can_work_token_level=False),
@@ -42,6 +52,7 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
         can_use_pii_selector=True,
         can_use_risk_selector=True,
         can_use_k_selector=True,
+        can_use_scoring=True,
     ),
 }
 
