@@ -52,7 +52,7 @@ class Anonymizer(ABC):
         return self.anonymize_any_text(text_or_idx, *args, buckets=buckets, **kwargs)
     
 
-    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> AnonymizationResult:
+    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> None:
         pass
 
     def stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, buckets: Buckets = [], **kwargs) -> Iterator[AnonymizationResult]:

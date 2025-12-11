@@ -1,6 +1,8 @@
 explainer:
   name: shap
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251203_134320
+
+precomputation:
   risk_scores: data/TAB/test_risk_shap.jsonl
 
 mask_text: "[MASK]"

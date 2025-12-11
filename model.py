@@ -81,6 +81,12 @@ def extract_explainer_config(model_config: dict) -> Dict[str, Any]:
         "name": block.get("name", "uniform"),
         "tri_pipeline": block.get("tri_pipeline"),
         "risk_temperature": block.get("risk_temperature"),
+    }
+
+
+def extract_precompute_config(model_config: dict) -> Dict[str, Any]:
+    block = model_config.pop("precomputation", {}) or {}
+    return {
         "risk_scores": block.get("risk_scores"),
     }
 
@@ -168,9 +174,6 @@ def configure_model(model: Anonymizer, model_config: dict, explainer_config: dic
     if capabilities.can_use_scoring:
         model.set_scoring_strategy(build_explainer(explainer_config, model_config, capabilities, model_name))
     
-    risk_path = explainer_config.get("risk_scores") or runtime_bundle.base_config.get("explainer", {}).get("risk_scores")
-    if risk_path and hasattr(model, "set_risk_scores"):
-        model.set_risk_scores(load_precomputed_risk(risk_path), records=records)
 
 
 def load_annotations(annotations_in: str, records: List[DatasetRecord]) -> Dict[str, List]:
@@ -289,6 +292,7 @@ if __name__ == "__main__":
     
     records = load_data(data_kwargs)
     model_config = load_config(args.model_in)
+    precompute_config = extract_precompute_config(model_config)
     capabilities = get_capabilities(args.model)
     explainer_config = extract_explainer_config(model_config)
     
@@ -343,8 +347,20 @@ if __name__ == "__main__":
         "task_id": args.start,
         "unique_name": args.unique_name
     }
-    
-    start_time = time.time()
+
+    pre_inputs = dataset_indices if capabilities.must_use_dataset else texts_or_indices
+    pre_risk_scores = None
+    if precompute_config.get("risk_scores"):
+        pre_risk_scores = load_precomputed_risk(precompute_config["risk_scores"])
+    pre_start = time.time()
+    try:
+        model.pre_stream_anonymize(texts_or_indices=pre_inputs, risk_scores=pre_risk_scores)
+    except NotImplementedError:
+        pass
+    pre_elapsed = time.time() - pre_start
+    print(f"✓ Pre-computation before anonymization completed in {pre_elapsed:.2f}s")
+
+    run_start = time.time()
     processed = 0
     
     if capabilities.must_use_dataset:
@@ -358,7 +374,7 @@ if __name__ == "__main__":
             output_handler.output(result, idx=record_indices[pos], **metadata)
             processed += 1
     
-    total_time = time.time() - start_time
+    total_time = time.time() - run_start
     
     avg_time = total_time / processed if processed > 0 else 0
     print(f"\n{'='*80}\nAnonymization Performance:\n  Total time: {total_time:.2f}s\n  Texts processed: {processed}\n  Average time per text: {avg_time:.2f}s\n  Throughput: {processed/total_time:.2f} texts/s" if total_time > 0 and processed > 0 else "\n  Throughput: N/A")

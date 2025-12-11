@@ -1,5 +1,7 @@
 explainer:
   name: greedy
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251203_134320
-  risk_scores: data/TAB/test_risk_greedy.jsonl
   risk_temperature: 0.1
+
+precomputation:
+  risk_scores: data/TAB/test_risk_greedy.jsonl

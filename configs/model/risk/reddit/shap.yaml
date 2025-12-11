@@ -1,5 +1,7 @@
 explainer:
   name: shap
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/20251203_135444
-  risk_scores: data/reddit/reddit_risk_shap.jsonl
   risk_temperature: 0.1
+
+precomputation:
+  risk_scores: data/reddit/reddit_risk_shap.jsonl

@@ -4,8 +4,10 @@ delete_probability: 0.0
 explainer:
   name: shap
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251203_134320
-  risk_scores: data/TAB/test_risk_shap.jsonl
   risk_temperature: 0.1
+
+precomputation:
+  risk_scores: data/TAB/test_risk_shap.jsonl
 
 tri_chunking:
   enabled: true

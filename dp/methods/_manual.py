@@ -14,7 +14,7 @@ class ManualAnonymizer(Anonymizer):
         self.texts: List[str] = []
         self.annotations: List[List[TextAnnotation]] = []
 
-    def pre_stream_anonymize(self, *args, texts_or_indices: Union[List[str], List[int]] = None, **kwargs) -> AnonymizationResult:
+    def pre_stream_anonymize(self, *args, texts_or_indices: Union[List[str], List[int]] = None, **kwargs) -> None:
         if not all(isinstance(i, str) for i in texts_or_indices):
             raise ValueError("ManualAnonymizer requires dataset indices for pre_stream_anonymize.")
         self.texts += [record.text for record in self._dataset_records]
