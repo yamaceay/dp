@@ -1,90 +1,62 @@
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Union
 
-PII_CLASSIFIER_MODEL_LIST: List[str] = [
-    "spacy",
-    "baroud",
-]
-
-RISK_MASKER_MODEL_LIST: List[str] = [
-    "risk",
-]
-
-K_ANON_MODEL_LIST = [
-    "petre",
-    "kdpmlm",
-]
-
-DP_MODEL_LIST = [
-    "dpbart",
-   "dpparaphrase",
-   "dpprompt",
-   "dpmlm",
-]
+PII_CLASSIFIER_MODEL_LIST: List[str] = ["spacy", "baroud"]
+RISK_MASKER_MODEL_LIST: List[str] = ["risk"]
 
 @dataclass
 class ModelCapabilities:
+    can_work_token_level: bool = True
+
     must_use_dataset: bool = False
-    requires_epsilon: bool = False
-    requires_k: bool = False
-    is_pii_classifier: bool = False
-    is_risk_masker: bool = False
-    must_use_non_uniform_explainer: bool = False
-    can_use_annotations: bool = False
-    can_use_scoring: bool = False
-    can_use_filtering: bool = False
-    supports_batch_predict: bool = False
-    supports_streaming: bool = False
+    can_use_dataset: bool = False
+    must_use_pii_selector: bool = False
+    can_use_pii_selector: bool = False
+    must_use_risk_selector: bool = False
+    can_use_risk_selector: bool = False
+    must_use_k_selector: bool = False
+    can_use_k_selector: bool = False
 
+@dataclass
+class MultiParams:
+    def values(self):
+        pass
 
-MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
-    "spacy": ModelCapabilities(is_pii_classifier=True),
-    "presidio": ModelCapabilities(),
-    "manual": ModelCapabilities(must_use_dataset=True),
-    "baroud": ModelCapabilities(
-        is_pii_classifier=True,
-        supports_batch_predict=True,
-        supports_streaming=True,
-    ),
-    "risk": ModelCapabilities(
-        is_risk_masker=True,
-        must_use_non_uniform_explainer=True,
-        can_use_scoring=True,
-        supports_streaming=True,
-    ),
-    "petre": ModelCapabilities(
-        must_use_dataset=True,
-        requires_k=True,
-        must_use_non_uniform_explainer=True,
-        can_use_annotations=True,
-        can_use_scoring=True,
-        supports_streaming=True,
-    ),
-    "kdpmlm": ModelCapabilities(
-        must_use_dataset=True,
-        requires_k=True,
-        must_use_non_uniform_explainer=True,
-        can_use_annotations=True,
-        can_use_scoring=True,
-        supports_streaming=True,
-    ),
-    "dpbart": ModelCapabilities(requires_epsilon=True, supports_streaming=True),
-    "dpparaphrase": ModelCapabilities(requires_epsilon=True, supports_streaming=True),
-    "dpprompt": ModelCapabilities(requires_epsilon=True, supports_streaming=True),
-    "dpmlm": ModelCapabilities(
-        requires_epsilon=True,
-        can_use_filtering=True,
-        can_use_scoring=True,
-        supports_streaming=True,
-    ),
-}
+@dataclass
+class KParams(MultiParams):
+    ks: List[int]
+    name: str = "k"
 
+    def values(self):
+        return sorted(self.ks)
+    
+@dataclass
+class RhoParams(MultiParams):
+    rhos: List[float]
+    name: str = "rho"
 
-def get_capabilities(model_name: str) -> ModelCapabilities:
-    if model_name not in MODEL_CAPABILITIES:
-        raise ValueError(f"Unknown model: {model_name}")
-    return MODEL_CAPABILITIES[model_name]
+    def values(self):
+        return reversed(sorted(self.rhos))
+    
+@dataclass
+class LambdaParams(MultiParams):
+    lambdas: List[float]
+    name: str = "lambda"
 
+    def values(self):
+        return reversed(sorted(self.lambdas))
 
-def requires_dataset(model_name: str) -> bool:
-    return get_capabilities(model_name).must_use_dataset
+@dataclass
+class SingleParam:
+    def value(self):
+        pass
+
+@dataclass
+class EpsilonParam(SingleParam):
+    epsilon: float
+    name: str = "epsilon"
+
+    def value(self):
+        return self.epsilon
+
+Buckets = List[Union[MultiParams, SingleParam]]

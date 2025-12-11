@@ -12,10 +12,12 @@ from dp.utils.selector.base import TokenSelector
 from dp.utils.selector.all_selector import AllSelector
 from dp.utils.selector.pii_only_selector import PIIOnlySelector
 from dp.utils.selector.by_risk_selector import ByRiskSelector
+from dp.utils.selector.until_k_selector import UntilKSelector
 
 __all__ = [
     "TokenSelector",
     "AllSelector",
     "PIIOnlySelector",
     "ByRiskSelector",
+    "UntilKSelector",
 ]

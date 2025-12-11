@@ -1,45 +1,51 @@
 from typing import Dict, Type
 from dp.methods.anonymizer import Anonymizer
+from dp.methods.constants import ModelCapabilities
 
-from dp.methods.simple import SimpleAnonymizer
-from dp.methods.simple._spacy import SpacyAnonymizer
-from dp.methods.simple._manual import ManualAnonymizer
-from dp.methods.simple._presidio import PresidioAnonymizer
-from dp.methods.simple._baroud import BaroudAnonymizer
-from dp.methods.simple._risk import RiskAnonymizer
+from dp.methods._spacy import SpacyAnonymizer
+from dp.methods._manual import ManualAnonymizer
+from dp.methods._presidio import PresidioAnonymizer
+from dp.methods._baroud import BaroudAnonymizer
+from dp.methods._risk import RiskAnonymizer
+from dp.methods._petre import PetreAnonymizer
 
-from dp.methods.k_anon import KAnonymizer
-from dp.methods.k_anon._petre import PetreAnonymizer
-from dp.methods.k_anon._kdpmlm import KDPMLMAnonymizer
+from dp.methods._dpbart import DPBartAnonymizer
+from dp.methods._dpparaphrase import DPParaphraseAnonymizer
+from dp.methods._dpprompt import DPPromptAnonymizer
+from dp.methods._dpmlm import DPMlmAnonymizer
 
-from dp.methods.dp import DPAnonymizer
-from dp.methods.dp._dpbart import DPBartAnonymizer
-from dp.methods.dp._dpparaphrase import DPParaphraseAnonymizer
-from dp.methods.dp._dpprompt import DPPromptAnonymizer
-from dp.methods.dp._dpmlm import DPMlmAnonymizer
-
-SIMPLE_MODEL_REGISTRY: Dict[str, Type[SimpleAnonymizer]] = {
+MODEL_REGISTRY: Dict[str, Type[Anonymizer]] = {
     "spacy": SpacyAnonymizer,
     "presidio": PresidioAnonymizer,
     "manual": ManualAnonymizer,
     "baroud": BaroudAnonymizer,
     "risk": RiskAnonymizer,
-}
-
-K_ANON_MODEL_REGISTRY: Dict[str, Type[KAnonymizer]] = {
     "petre": PetreAnonymizer,
-    "kdpmlm": KDPMLMAnonymizer,
-}
-
-DP_MODEL_REGISTRY: Dict[str, Type[DPAnonymizer]] = {
     "dpbart": DPBartAnonymizer,
     "dpparaphrase": DPParaphraseAnonymizer,
     "dpprompt": DPPromptAnonymizer,
     "dpmlm": DPMlmAnonymizer,
 }
 
-MODEL_REGISTRY: Dict[str, Type[Anonymizer]] = {
-    **SIMPLE_MODEL_REGISTRY,
-    **K_ANON_MODEL_REGISTRY,
-    **DP_MODEL_REGISTRY,
+MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
+    "spacy": ModelCapabilities(),
+    "presidio": ModelCapabilities(),
+    "manual": ModelCapabilities(must_use_dataset=True),
+    "baroud": ModelCapabilities(must_use_pii_selector=True),
+    "risk": ModelCapabilities(must_use_risk_selector=True),
+    "petre": ModelCapabilities(must_use_dataset=True, can_use_k_selector=True),
+    "dpbart": ModelCapabilities(can_work_token_level=False),
+    "dpparaphrase": ModelCapabilities(can_work_token_level=False),
+    "dpprompt": ModelCapabilities(can_work_token_level=False),
+    "dpmlm": ModelCapabilities(
+        can_use_dataset=True, 
+        can_use_pii_selector=True,
+        can_use_risk_selector=True,
+        can_use_k_selector=True,
+    ),
 }
+
+def get_capabilities(model_name: str) -> ModelCapabilities:
+    if model_name not in MODEL_CAPABILITIES:
+        raise ValueError(f"Unknown model: {model_name}")
+    return MODEL_CAPABILITIES[model_name]
