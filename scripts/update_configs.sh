@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# Update all config files with values from models_hpc.yaml
-
-MODELS_FILE="${1:-models_hpc.yaml}"
+MODELS_FILE="${1:-configs/environment/hpc.yaml}"
 CONFIG_DIR="configs/model"
 
 if [[ ! -f "$MODELS_FILE" ]]; then
@@ -10,7 +8,6 @@ if [[ ! -f "$MODELS_FILE" ]]; then
     exit 1
 fi
 
-# Parse models_hpc.yaml
 GPT2_PARAPHRASER=$(grep "^gpt2-paraphraser:" "$MODELS_FILE" | awk '{print $2}')
 REDDIT_TRI_PIPELINE=$(grep -A 1 "^reddit:" "$MODELS_FILE" | grep "tri_pipeline:" | awk '{print $2}')
 TAB_TRI_PIPELINE=$(grep -A 10 "^tab:" "$MODELS_FILE" | grep "tri_pipeline:" | head -1 | awk '{print $2}')
@@ -23,11 +20,10 @@ echo "  tab tri_pipeline: $TAB_TRI_PIPELINE"
 echo "  tab pii_annotator: $TAB_PII_ANNOTATOR"
 echo ""
 
-# Update model_checkpoint in dpparaphrase, dpprompt configs
 echo "Updating model_checkpoint references..."
 find "$CONFIG_DIR" -name "*.yaml" -type f | while read config; do
     if grep -q "model_checkpoint:" "$config"; then
-        # Check if it's a dpparaphrase or dpprompt config
+        
         if [[ "$config" == *"dpparaphrase"* ]] || [[ "$config" == *"dpprompt"* ]]; then
             sed -i.bak "s|model_checkpoint:.*|model_checkpoint: $GPT2_PARAPHRASER|g" "$config"
             echo "  Updated: $config"
@@ -35,7 +31,6 @@ find "$CONFIG_DIR" -name "*.yaml" -type f | while read config; do
     fi
 done
 
-# Update tri_pipeline in reddit configs
 echo "Updating tri_pipeline in reddit configs..."
 find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
     if grep -q "tri_pipeline:" "$config"; then
@@ -44,7 +39,6 @@ find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; 
     fi
 done
 
-# Update tri_pipeline in tab configs
 echo "Updating tri_pipeline in tab configs..."
 find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
     if grep -q "tri_pipeline:" "$config"; then
@@ -53,7 +47,6 @@ find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
     fi
 done
 
-# Update pii_annotator in tab configs
 echo "Updating pii_annotator in tab configs..."
 find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
     if grep -q "pii_annotator:" "$config"; then
