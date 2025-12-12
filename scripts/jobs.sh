@@ -248,6 +248,21 @@ function all_methods_runtimes() {
               eps_val="${eps_name#eps_}"
               (( ${#eps_val} > max_eps_len )) && max_eps_len=${#eps_val}
             done
+
+            # Sort eps files by the padded epsilon value (stable lexicographic order)
+            sorted_eps_files=()
+            while IFS=$'\t' read -r _ sort_path; do
+              sorted_eps_files+=("$sort_path")
+            done < <(
+              for eps_path in "${all_eps_files[@]}"; do
+                eps_name=$(basename "$eps_path")
+                eps_name="${eps_name%.yaml}"
+                eps_val="${eps_name#eps_}"
+                eps_val_padded=$(printf "%0${max_eps_len}s" "$eps_val" | tr ' ' '0')
+                printf '%s\t%s\n' "$eps_val_padded" "$eps_path"
+              done | sort
+            )
+            all_eps_files=("${sorted_eps_files[@]}")
             
             for eps_path in "${all_eps_files[@]}"; do
               eps_name=$(basename "$eps_path")
@@ -314,6 +329,20 @@ function all_methods_runtimes() {
             eps_val="${eps_name#eps_}"
             (( ${#eps_val} > max_len )) && max_len=${#eps_val}
           done
+
+          sorted_eps_files=()
+          while IFS=$'\t' read -r _ sort_path; do
+            sorted_eps_files+=("$sort_path")
+          done < <(
+            for eps_path in "${eps_files[@]}"; do
+              eps_name=$(basename "$eps_path")
+              eps_name="${eps_name%.yaml}"
+              eps_val="${eps_name#eps_}"
+              eps_val_padded=$(printf "%0${max_len}s" "$eps_val" | tr ' ' '0')
+              printf '%s\t%s\n' "$eps_val_padded" "$eps_path"
+            done | sort
+          )
+          eps_files=("${sorted_eps_files[@]}")
           
           for eps_path in "${eps_files[@]}"; do
             eps_name=$(basename "$eps_path")

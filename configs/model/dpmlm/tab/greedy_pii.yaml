@@ -1,6 +1,6 @@
 params:
   epsilon: "*"
-  lambdas: ["*"]
+  lambdas: ["05*", "09*"]
 
 explainer:
   name: greedy

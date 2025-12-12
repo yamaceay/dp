@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Mapping, List
 from pathlib import Path
 from datetime import datetime
 import json
@@ -53,7 +53,8 @@ class JsonlOutputHandler(OutputHandler):
     def output(self, result: AnonymizationResult, dataset: str, model: str, task_id: Optional[int] = None, **kwargs):
         idx = kwargs.get("idx", None)
         unique_name = kwargs.get("unique_name")
-        variant_key = self._derive_variant_key(result)
+        hyperparams = kwargs.get("hyperparams")
+        variant_key = self._derive_variant_key_from_hyperparams(hyperparams) or self._derive_variant_key(result)
         stream = self._ensure_stream(dataset, model, variant_key, task_id, unique_name)
 
         record = {
@@ -81,6 +82,10 @@ class JsonlOutputHandler(OutputHandler):
         if unique_name is not None:
             metadata = dict(metadata)
             metadata["unique_name"] = unique_name
+        if hyperparams and isinstance(hyperparams, Mapping):
+            if not isinstance(metadata, dict):
+                metadata = dict(metadata)
+            metadata["hyperparams"] = self._convert_numpy_types(dict(hyperparams))
         if metadata:
             record["metadata"] = metadata
         
@@ -107,12 +112,12 @@ class JsonlOutputHandler(OutputHandler):
             return self._streams[stream_key]
         output_dir = self._get_output_dir(dataset, model)
         output_dir.mkdir(parents=True, exist_ok=True)
-        suffix_parts = []
+        suffix = ""
         if unique_name:
-            suffix_parts.append(unique_name)
+            suffix += f"_{unique_name}"
         if variant_key:
-            suffix_parts.append(variant_key)
-        suffix = "_" + "_".join(suffix_parts) if suffix_parts else ""
+            # variant_key can be URL-param style like '?rho=090&lambda=090'
+            suffix += variant_key if variant_key.startswith("?") else f"_{variant_key}"
         sanitized_suffix = suffix.replace(" ", "_")
         path = output_dir / f"{self.timestamp}{sanitized_suffix}"
         if task_id is not None:
@@ -137,6 +142,60 @@ class JsonlOutputHandler(OutputHandler):
             return ""
         formatted_value = self._format_variant_value(value)
         return f"{param}-{formatted_value}"
+
+    def _derive_variant_key_from_hyperparams(self, hyperparams: Any) -> str:
+        if not hyperparams or not isinstance(hyperparams, Mapping):
+            return ""
+
+        normalized: Dict[str, Any] = {}
+        for key, value in hyperparams.items():
+            if value is None:
+                continue
+            if not isinstance(key, str):
+                key = str(key)
+            normalized[key] = value
+
+        if not normalized:
+            return ""
+
+        def format_value(key: str, value: Any) -> str:
+            if isinstance(value, str):
+                stripped = value.strip()
+                if stripped.isdigit():
+                    return stripped
+                try:
+                    value = float(stripped)
+                except ValueError:
+                    return stripped
+
+            if isinstance(value, bool):
+                return "1" if value else "0"
+
+            if isinstance(value, int):
+                if key in {"k"}:
+                    return str(value).zfill(3)
+                return str(value)
+
+            if isinstance(value, float):
+                if key in {"rho", "lambda"} and 0.0 <= value <= 1.0:
+                    return str(int(round(value * 100.0))).zfill(3)
+                return f"{value:.4f}".rstrip("0").rstrip(".")
+
+            return str(value)
+
+        preferred_order = ["rho", "lambda", "k", "epsilon"]
+        keys: List[str] = []
+        for key in preferred_order:
+            if key in normalized:
+                keys.append(key)
+        for key in sorted(k for k in normalized.keys() if k not in set(preferred_order)):
+            keys.append(key)
+
+        pairs: List[str] = []
+        for key in keys:
+            pairs.append(f"{key}={format_value(key, normalized[key])}")
+
+        return "?" + "&".join(pairs)
 
     def _format_variant_value(self, value: Any) -> str:
         if isinstance(value, float):
