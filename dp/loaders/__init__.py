@@ -5,7 +5,7 @@ Adapters provide a consistent way to access dataset records with a unique
 identifier, raw text, optional annotations, and optional utility metadata.
 """
 
-from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
+from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
 from dp.loaders.trustpilot_company import TrustpilotDatasetAdapter
 from dp.loaders.tab import TabDatasetAdapter
 from dp.loaders.db_bio import DBBioDatasetAdapter
@@ -18,6 +18,8 @@ from dp.loaders.annotations import (
     spans_to_annotations,
     read_batch_annotations,
     read_batch_annotations_from_path,
+    read_batch_textannotations,
+    read_batch_textannotations_from_path,
     list_batch_timestamps,
 )
 
@@ -48,6 +50,8 @@ __all__ = [
     "TabDatasetAdapter",
     "DBBioDatasetAdapter",
     "TextAnnotation",
+    "TextAnnotations",
+    "TokenEdit",
     "get_adapter",
     "read_annotations",
     "write_annotations",
@@ -56,6 +60,8 @@ __all__ = [
     "spans_to_annotations",
     "read_batch_annotations",
     "read_batch_annotations_from_path",
+    "read_batch_textannotations",
+    "read_batch_textannotations_from_path",
     "list_batch_timestamps",
     "ADAPTER_REGISTRY",
 ]

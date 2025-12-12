@@ -5,7 +5,7 @@ import json
 import numpy as np
 
 from dp.methods.anonymizer import AnonymizationResult
-from dp.loaders.base import TextAnnotation
+from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -50,7 +50,7 @@ class JsonlOutputHandler(OutputHandler):
         self._streams: Dict[str, Any] = {}
         self._paths: Dict[str, Path] = {}
 
-    def output(self, result: AnonymizationResult, dataset: str, model: str, task_id: int, **kwargs):
+    def output(self, result: AnonymizationResult, dataset: str, model: str, task_id: Optional[int] = None, **kwargs):
         idx = kwargs.get("idx", None)
         unique_name = kwargs.get("unique_name")
         variant_key = self._derive_variant_key(result)
@@ -60,9 +60,22 @@ class JsonlOutputHandler(OutputHandler):
             "idx": idx,
             "text": result.text,
         }
-        
-        if result.spans:
-            record["spans"] = [self._serialize_annotation_minimal(ann) for ann in result.spans]
+
+        spans = result.spans
+        if spans is None and isinstance(result.annotations, TextAnnotations) and result.annotations.spans:
+            spans = result.annotations.spans
+
+        if spans:
+            record["spans"] = [self._serialize_annotation_minimal(ann) for ann in spans]
+
+        if isinstance(result.annotations, TextAnnotations):
+            annotations: Dict[str, Any] = {}
+            if result.annotations.spans:
+                annotations["spans"] = [self._serialize_annotation_minimal(ann) for ann in result.annotations.spans]
+            if result.annotations.token_edits:
+                annotations["token_edits"] = [te.to_dict() for te in result.annotations.token_edits]
+            if annotations:
+                record["annotations"] = annotations
         
         metadata = result.metadata or {}
         if unique_name is not None:
@@ -88,7 +101,7 @@ class JsonlOutputHandler(OutputHandler):
         path_str = pattern.format(dataset=dataset)
         return Path(path_str)
 
-    def _ensure_stream(self, dataset: str, model: str, variant_key: str, task_id: int, unique_name: Optional[str]):
+    def _ensure_stream(self, dataset: str, model: str, variant_key: str, task_id: Optional[int], unique_name: Optional[str]):
         stream_key = (variant_key, unique_name)
         if stream_key in self._streams:
             return self._streams[stream_key]
@@ -101,7 +114,10 @@ class JsonlOutputHandler(OutputHandler):
             suffix_parts.append(variant_key)
         suffix = "_" + "_".join(suffix_parts) if suffix_parts else ""
         sanitized_suffix = suffix.replace(" ", "_")
-        path = output_dir / f"{self.timestamp}{sanitized_suffix}_{task_id}.jsonl"
+        path = output_dir / f"{self.timestamp}{sanitized_suffix}"
+        if task_id is not None:
+            path = path.with_name(f"{path.stem}_{task_id}")
+        path = path.with_suffix(".jsonl")
         handle = open(path, 'w', encoding='utf-8')
         self._streams[stream_key] = handle
         self._paths[stream_key] = path

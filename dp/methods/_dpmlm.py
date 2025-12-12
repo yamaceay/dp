@@ -11,6 +11,7 @@ from dp.methods.constants import Buckets, EpsilonParam, BucketDict, buckets_to_d
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.utils.token_ledger import TokenLedger
+from dp.loaders.base import TextAnnotations, TokenEdit
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.selector.base import TokenSelector
 
@@ -497,6 +498,7 @@ class DPMlmAnonymizer(Anonymizer):
                     "token_edits": ledger.edits_metadata(),
                     **runtime_stats,
                 }
+                token_edits = [TokenEdit.from_mapping(e) for e in metadata["token_edits"]]
                 if self.compensate_epsilon:
                     metadata["effective_epsilon"] = compensated_epsilon
                 if self.pii_detector is not None:
@@ -509,7 +511,7 @@ class DPMlmAnonymizer(Anonymizer):
                     metadata["explainer"] = self.explainer.__class__.__name__
                     metadata["critical_tokens"] = len(critical_tokens)
 
-                outputs.append((hp, AnonymizationResult(text=private_text, metadata=metadata)))
+                outputs.append((hp, AnonymizationResult(text=private_text, annotations=TextAnnotations(token_edits=token_edits), metadata=metadata)))
             finally:
                 clear_memory()
 

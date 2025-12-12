@@ -88,7 +88,7 @@ function runtime_args_for_method() {
       echo "--runtime_in $runtime_dir/k_anon/k_*.yaml"
       ;;
     dpprompt|dpparaphrase|dpbart|dpmlm)
-      echo "--runtime_in $runtime_dir/dp/eps_*.yaml"
+      echo "__EPS_FIXED__"
       ;;
     manual|presidio|spacy)
       echo ""
@@ -97,6 +97,13 @@ function runtime_args_for_method() {
       echo ""
       ;;
   esac
+}
+
+function epsilon_runtime_files() {
+  for eps_path in "$runtime_dir/dp"/eps_*.yaml; do
+    [[ -f "$eps_path" ]] || continue
+    printf '%s\n' "$eps_path"
+  done
 }
 
 function all_methods_runtimes() {
@@ -112,14 +119,12 @@ function all_methods_runtimes() {
 
   ordered_methods=("baroud" "risk" "spacy" "presidio" "manual" "petre" "dpprompt" "dpparaphrase" "dpbart" "dpmlm")
 
-  # Parse filter arrays
   IFS=',' read -ra filter_datasets_arr <<< "$FILTER_DATASETS"
   IFS=',' read -ra filter_methods_arr <<< "$FILTER_METHODS"
 
   for dataset_entry in "${dataset_entries[@]}"; do
     IFS=, read -r dataset_name dataset_path <<< "$dataset_entry"
 
-    # Filter datasets if specified
     if [[ -n "$FILTER_DATASETS" ]]; then
       match=0
       for fd in "${filter_datasets_arr[@]}"; do
@@ -129,7 +134,6 @@ function all_methods_runtimes() {
     fi
 
     for method_key in "${ordered_methods[@]}"; do
-      # Filter methods if specified
       if [[ -n "$FILTER_METHODS" ]]; then
         match=0
         for fm in "${filter_methods_arr[@]}"; do
@@ -148,24 +152,42 @@ function all_methods_runtimes() {
           fi
         fi
 
-        runtime_args=$(runtime_args_for_method "$method_base")
-
-        flags=" "
-        case "$method_base" in
-          risk|petre|dpprompt|dpparaphrase|dpbart|dpmlm)
-            flags="--stream"
-            ;;
-        esac
-
         method_unique_config="${method_path##*/}"
         method_unique_config="${method_unique_config%.yaml}"
-        job_name="${dataset_name}_${method_base}_${method_unique_config}"
+
+        runtime_args=$(runtime_args_for_method "$method_base")
+        if [[ "$runtime_args" == "__EPS_FIXED__" ]]; then
+          while IFS= read -r eps_path; do
+            eps_name=$(basename "$eps_path")
+            eps_name="${eps_name%.yaml}"
+
+            if [[ "$method_unique_config" == "$method_base" ]]; then
+              job_name="${dataset_name}_${method_base}_${eps_name}"
+            else
+              job_name="${dataset_name}_${method_base}_${method_unique_config}_${eps_name}"
+            fi
+
+            cmd=$(printf "$cmd_tpl" \
+                "$dataset_name" "$dataset_path" \
+                "$method_base" "$method_path" \
+                "--runtime_in $eps_path" \
+                "$job_name")
+
+            printf '%s|%s\n' "$job_name" "$cmd"
+          done < <(epsilon_runtime_files)
+          continue
+        fi
+
+        if [[ "$method_unique_config" == "$method_base" ]]; then
+          job_name="${dataset_name}_${method_base}"
+        else
+          job_name="${dataset_name}_${method_base}_${method_unique_config}"
+        fi
         cmd=$(printf "$cmd_tpl" \
             "$dataset_name" "$dataset_path" \
             "$method_base" "$method_path" \
             "$runtime_args" \
-            "$job_name" \
-            $flags)
+            "$job_name")
         
         printf '%s|%s\n' "$job_name" "$cmd"
       done

@@ -45,7 +45,8 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--annotations_in', type=str, default=None)
     parser.add_argument('--list_annotations', action='store_true')
     parser.add_argument('--unique_name', type=str, default=None)
-    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'unique_name']
+    parser.add_argument('--as_task', action='store_true')
+    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'unique_name', 'as_task']
 
 
 def load_config(path: Optional[str]) -> dict:
@@ -332,9 +333,10 @@ if __name__ == "__main__":
     metadata = {
         "dataset": args.data,
         "model": args.model,
-        "task_id": args.start,
         "unique_name": args.unique_name
     }
+    if args.as_task:
+        metadata["task_id"] = args.start
 
     anonymization_inputs = dataset_indices if capabilities.must_use_dataset else texts_or_indices
     pre_risk_scores = None

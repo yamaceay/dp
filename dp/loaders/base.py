@@ -6,6 +6,46 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, Iterator, Optional
 import itertools
 
+
+@dataclass(frozen=True)
+class TokenEdit:
+    kind: str
+    span: Optional[tuple[int, int]]
+    text: str
+
+    @classmethod
+    def from_mapping(cls, obj: object) -> "TokenEdit":
+        if not isinstance(obj, dict):
+            raise TypeError("TokenEdit must be built from a dict")
+        kind = obj.get("kind")
+        if not isinstance(kind, str) or not kind:
+            raise ValueError("TokenEdit.kind must be a non-empty str")
+        span_obj = obj.get("span")
+        span: Optional[tuple[int, int]] = None
+        if span_obj is not None:
+            if not isinstance(span_obj, (list, tuple)) or len(span_obj) != 2:
+                raise ValueError("TokenEdit.span must be a pair")
+            start, end = span_obj
+            if not isinstance(start, int) or not isinstance(end, int):
+                raise ValueError("TokenEdit.span values must be ints")
+            span = (start, end)
+        text = obj.get("text", "")
+        if not isinstance(text, str):
+            raise ValueError("TokenEdit.text must be a str")
+        return cls(kind=kind, span=span, text=text)
+
+    def to_dict(self) -> Dict[str, object]:
+        out: Dict[str, object] = {"kind": self.kind, "text": self.text}
+        if self.span is not None:
+            out["span"] = [self.span[0], self.span[1]]
+        return out
+
+
+@dataclass
+class TextAnnotations:
+    spans: list[TextAnnotation] = field(default_factory=list)
+    token_edits: list[TokenEdit] = field(default_factory=list)
+
 @dataclass
 class TextAnnotation:
     """Representation of a text annotation."""

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from tqdm import tqdm
 
 from dp.methods.constants import Buckets, BucketDict
-from dp.loaders.base import DatasetRecord
+from dp.loaders.base import DatasetRecord, TextAnnotations
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.selector.base import TokenSelector
 from dp.utils.splitter import TextSplitter
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 class AnonymizationResult:
     text: str
     spans: Optional[List] = None
+    annotations: Optional[TextAnnotations] = None
     metadata: Optional[dict] = None
 
 class Anonymizer(ABC):

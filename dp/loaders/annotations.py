@@ -2,7 +2,7 @@ from typing import List, Dict, Optional
 import json
 from pathlib import Path
 
-from dp.loaders.base import TextAnnotation
+from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 
 
 def read_annotations(path: str) -> Dict[str, List[TextAnnotation]]:
@@ -89,6 +89,15 @@ def read_batch_annotations_from_path(path: str) -> List[List[TextAnnotation]]:
     raise ValueError(f"Unsupported annotation file format: {jsonl_path.suffix}")
 
 
+def read_batch_textannotations_from_path(path: str) -> List[TextAnnotations]:
+    jsonl_path = Path(path)
+    if not jsonl_path.exists():
+        raise ValueError(f"Annotation file not found: {path}")
+    if jsonl_path.suffix == ".jsonl":
+        return _read_jsonl_textannotations(jsonl_path)
+    raise ValueError(f"Unsupported annotation file format: {jsonl_path.suffix}")
+
+
 def read_batch_annotations(
     dataset: str,
     model: str,
@@ -111,6 +120,24 @@ def read_batch_annotations(
     if jsonl_path.exists():
         return _read_jsonl_annotations(jsonl_path)
     
+    raise ValueError(f"No annotation files found for {dataset}/{model}/{timestamp}")
+
+
+def read_batch_textannotations(
+    dataset: str,
+    model: str,
+    timestamp: str,
+    base_path: str = "outputs",
+) -> List[TextAnnotations]:
+    from dp.utils.output import OUTPUT_STRUCTURE
+
+    pattern = OUTPUT_STRUCTURE.get(model, f"outputs/{{dataset}}/{model}")
+    output_dir = Path(pattern.format(dataset=dataset))
+    jsonl_path = output_dir / f"{timestamp}.jsonl"
+
+    if jsonl_path.exists():
+        return _read_jsonl_textannotations(jsonl_path)
+
     raise ValueError(f"No annotation files found for {dataset}/{model}/{timestamp}")
 
 
@@ -147,6 +174,54 @@ def _read_jsonl_annotations(jsonl_path: Path) -> List[List[TextAnnotation]]:
     for idx in range(max_idx + 1):
         result.append(annotations_by_idx.get(idx, []))
     
+    return result
+
+
+def _read_jsonl_textannotations(jsonl_path: Path) -> List[TextAnnotations]:
+    annotations_by_idx: Dict[int, TextAnnotations] = {}
+
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+
+            record = json.loads(line)
+            idx = record.get("idx")
+            if not isinstance(idx, int):
+                continue
+
+            spans_raw = record.get("spans")
+            spans: list[TextAnnotation] = []
+            if isinstance(spans_raw, list) and spans_raw and isinstance(spans_raw[0], dict):
+                spans = [TextAnnotation(**span) for span in spans_raw]
+
+            token_edits_raw = None
+            annotations_obj = record.get("annotations")
+            if isinstance(annotations_obj, dict):
+                token_edits_raw = annotations_obj.get("token_edits")
+            if token_edits_raw is None:
+                metadata = record.get("metadata")
+                if isinstance(metadata, dict):
+                    token_edits_raw = metadata.get("token_edits")
+
+            token_edits: list[TokenEdit] = []
+            if isinstance(token_edits_raw, list):
+                for item in token_edits_raw:
+                    try:
+                        token_edits.append(TokenEdit.from_mapping(item))
+                    except Exception:
+                        continue
+
+            annotations_by_idx[idx] = TextAnnotations(spans=spans, token_edits=token_edits)
+
+    if not annotations_by_idx:
+        return []
+
+    max_idx = max(annotations_by_idx.keys())
+    result: List[TextAnnotations] = []
+    for idx in range(max_idx + 1):
+        result.append(annotations_by_idx.get(idx, TextAnnotations()))
+
     return result
 
 def list_batch_timestamps(
