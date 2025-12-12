@@ -1,4 +1,3 @@
-reddit_baroud|python model.py   --data reddit --data_in data/reddit/reddit.jsonl   --model baroud --model_in configs/model/baroud.yaml   --runtime_in configs/runtime/pii_confidence/lambda_*.yaml   --output jsonl --unique_name reddit_baroud 
 reddit_risk_greedy|python model.py   --data reddit --data_in data/reddit/reddit.jsonl   --model risk --model_in configs/model/risk/reddit/greedy.yaml   --runtime_in configs/runtime/risk_tolerance/rho_*.yaml   --output jsonl --unique_name reddit_risk_greedy 
 reddit_risk_shap|python model.py   --data reddit --data_in data/reddit/reddit.jsonl   --model risk --model_in configs/model/risk/reddit/shap.yaml   --runtime_in configs/runtime/risk_tolerance/rho_*.yaml   --output jsonl --unique_name reddit_risk_shap 
 reddit_spacy|python model.py   --data reddit --data_in data/reddit/reddit.jsonl   --model spacy --model_in configs/model/spacy.yaml      --output jsonl --unique_name reddit_spacy 
