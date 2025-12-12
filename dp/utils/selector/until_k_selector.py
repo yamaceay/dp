@@ -1,7 +1,5 @@
 from typing import Any, Callable, Iterator, List, Optional, Tuple
 
-import numpy as np
-
 from dp.utils.selector.base import AnonymizerUnit, AnonymizationStep, ApplyFn
 from dp.utils.token_ledger import TokenLedger
 
@@ -50,6 +48,9 @@ class UntilKUnit(AnonymizerUnit):
         if not self._thresholds:
             return
 
+        if self._threshold_name != "k":
+            raise ValueError(f"UntilKUnit requires threshold name 'k', got {self._threshold_name!r}")
+
         if self._rank_evaluator is None:
             raise ValueError("UntilKUnit requires rank_evaluator to be set")
         if self._target_label is None:
@@ -58,10 +59,10 @@ class UntilKUnit(AnonymizerUnit):
         ledger = TokenLedger(text, offsets)
         processed: set[int] = set()
         k_values = self.order_thresholds(self._thresholds)
-        
-        current_text = ledger.render_offsets(text)
-        current_rank = self._rank_evaluator(current_text, self._target_label)
 
+        current_text = ledger.render_offsets(text)
+
+        current_rank = self._rank_evaluator(current_text, self._target_label)
         for target_k in k_values:
             if current_rank >= target_k:
                 yield AnonymizationStep(
@@ -78,16 +79,14 @@ class UntilKUnit(AnonymizerUnit):
                 [i for i in range(len(offsets)) if i not in processed],
                 len(offsets),
             )
-            new_indices: List[int] = []
+            new_indices = []
 
             for idx in candidates:
                 if current_rank >= target_k:
                     break
-
                 apply_fn(idx, ledger)
                 processed.add(idx)
                 new_indices.append(idx)
-
                 current_text = ledger.render_offsets(text)
                 current_rank = self._rank_evaluator(current_text, self._target_label)
 

@@ -381,11 +381,16 @@ if __name__ == "__main__":
     precompute_config = extract_precompute_config(model_config)
     capabilities = get_capabilities(args.model)
     explainer_config = extract_explainer_config(model_config)
+
+    selector_config = extract_selector_config(model_config)
+    dpmlm_requires_dataset = args.model == "dpmlm" and bool(selector_config) and selector_config.get("name") == "until_k"
     
     model_cls = MODEL_REGISTRY[model_kwargs.pop("model")]
     model = model_cls(**model_config, **model_kwargs, **data_kwargs)
     
-    if capabilities.must_use_dataset:
+    if capabilities.must_use_dataset or dpmlm_requires_dataset:
+        if not hasattr(model, "add_dataset_records"):
+            raise ValueError(f"{args.model} requires dataset records for this configuration")
         model.add_dataset_records(records)
     
     if capabilities.can_use_annotations and args.annotations_in:
@@ -421,7 +426,7 @@ if __name__ == "__main__":
     if texts_arg and indices_arg:
         raise ValueError("Cannot specify both --texts and --indices")
     
-    if capabilities.must_use_dataset:
+    if capabilities.must_use_dataset or dpmlm_requires_dataset:
         if texts_arg:
             raise ValueError(f"{args.model} requires dataset records, use --indices")
         dataset_indices = resolve_requested_indices(dataset_indices_all, indices_arg)
@@ -444,7 +449,7 @@ if __name__ == "__main__":
     if args.as_task:
         metadata["task_id"] = args.start
 
-    anonymization_inputs = dataset_indices if capabilities.must_use_dataset else texts_or_indices
+    anonymization_inputs = dataset_indices if (capabilities.must_use_dataset or dpmlm_requires_dataset) else texts_or_indices
     pre_risk_scores = None
     if precompute_config.get("risk_scores"):
         pre_risk_scores = load_precomputed_risk(precompute_config["risk_scores"])
