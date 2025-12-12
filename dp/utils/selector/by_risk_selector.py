@@ -1,46 +1,66 @@
 import string
-from typing import List, Tuple
-from dp.loaders.base import TextAnnotation
-from dp.utils.selector.base import TokenSelector
+from typing import Any, List, Tuple
 
-class ByRiskSelector(TokenSelector):
-    def __init__(
+import numpy as np
+
+from dp.utils.selector.base import AnonymizerUnit
+
+
+class ByRiskUnit(AnonymizerUnit):
+    def __init__(self, temperature: float = 1.0, **kwargs: Any) -> None:
+        super().__init__()
+        self._temperature = float(temperature) if temperature > 0 else 1.0
+
+    def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
+        return sorted([float(t) for t in thresholds], reverse=True)
+
+    def select_indices(
         self,
-        risk_tolerance: float,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.set_risk_tolerance(risk_tolerance)
-
-    def set_risk_tolerance(self, tolerance: float) -> None:
-        value = float(tolerance)
-        if value < 0 or value > 1:
-            raise ValueError("risk_tolerance must be within [0, 1]")
-        self._tolerance = value
-
-    def select(self, text: str, offsets: List[Tuple[int, int]], risks: List[float]) -> List[TextAnnotation]:
+        text: str,
+        offsets: List[Tuple[int, int]],
+        threshold: Any,
+        already_processed: set[int],
+        **context: Any,
+    ) -> List[int]:
         if not text or not text.strip():
             return []
 
-        if len(risks) != len(offsets):
+        scores = context.get("risk_scores")
+        if scores is None or len(scores) != len(offsets):
             return []
 
-        removal_limit = max(0.0, min(1.0, 1.0 - self._tolerance))
+        rho = float(threshold)
+        removal_limit = max(0.0, min(1.0, 1.0 - rho))
         if removal_limit <= 0:
             return []
 
-        filtered_spans: List[TextAnnotation] = []
-        pairs = sorted(zip(offsets, risks), key=lambda item: item[1], reverse=True)
-        removed = 0.0
-        for offset, risk in pairs:
-            if removed >= removal_limit:
+        probs = self._scores_to_probs(np.asarray(scores, dtype=float))
+        pairs = [(idx, probs[idx]) for idx in range(len(offsets)) if idx not in already_processed]
+        pairs.sort(key=lambda x: x[1], reverse=True)
+
+        cumulative = sum(probs[idx] for idx in already_processed)
+        indices: List[int] = []
+        for idx, prob in pairs:
+            if cumulative >= removal_limit:
                 break
-            contribution = float(risk) if risk is not None else 0.0
-            if contribution <= 0:
-                continue
-            token = text[offset[0]:offset[1]]
+            token = text[offsets[idx][0] : offsets[idx][1]]
             if not token or token in string.punctuation:
                 continue
-            filtered_spans.append(TextAnnotation(*offset, text=token))
-            removed += contribution
-        return filtered_spans
+            indices.append(idx)
+            cumulative += prob
+
+        return indices
+
+    def _scores_to_probs(self, scores: np.ndarray) -> np.ndarray:
+        if scores.size == 0:
+            return scores
+        scaled = scores / self._temperature
+        scaled = scaled - np.max(scaled)
+        exps = np.exp(scaled)
+        total = np.sum(exps)
+        if total <= 0:
+            return np.ones(len(scores)) / len(scores)
+        return exps / total
+
+
+ByRiskSelector = ByRiskUnit

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 from collections import defaultdict
 import re
 import nltk
@@ -13,11 +13,13 @@ from transformers import pipeline
 from dp.utils.explainer.base import TokenExplainer
 from dp.methods.anonymizer import Anonymizer, AnonymizationResult
 from dp.methods.constants import Buckets, KParams
-from dp.loaders.base import DatasetRecord, TextAnnotation
+from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
 from dp.utils.splitter import TextSplitter
 from dp.utils.chunking import TokenAwareChunker
 from dp.utils.token_ledger import TokenLedger
 from dp.methods.constants import PII_CLASSIFIER_MODEL_LIST, RISK_MASKER_MODEL_LIST
+from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
+from dp.utils.selector.until_k_selector import UntilKUnit, RankEvaluator
 
 @dataclass
 class RecordState:
@@ -51,6 +53,7 @@ class PetreAnonymizer(Anonymizer):
         self.device = self._resolve_device(device)
         self.splitter = TextSplitter()
         self.explainer = None
+        self._unit: Optional[UntilKUnit] = None
         self.tri_pipeline_path: Optional[str] = None
         self.tri_pipeline = None
         self._special_pattern = re.compile(r"[^\nA-Za-z0-9À-ÖØ-öø-ÿЀ-ӿ/]+")
@@ -67,6 +70,12 @@ class PetreAnonymizer(Anonymizer):
         self._score_order_cache: Dict[str, List[int]] = {}
         self._raw_risk_scores: Dict[str, Tuple[List[Tuple[int, int]], List[float]]] = {}
         self._prepared_risk_scores: Dict[str, np.ndarray] = {}
+
+    def set_unit(self, unit: AnonymizerUnit) -> None:
+        self._unit = unit
+
+    def set_filtering_strategy(self, detector: AnonymizerUnit) -> None:
+        self._unit = detector
 
     def add_dataset_records(self, dataset_records: List[DatasetRecord]):
         if not dataset_records:
@@ -546,6 +555,48 @@ class PetreAnonymizer(Anonymizer):
         
         return spans
 
+    def _make_rank_evaluator(self, state: RecordState) -> RankEvaluator:
+        def rank_evaluator(current_text: str, target_label: int) -> int:
+            spans = self._extract_masked_spans(state, current_text)
+            probs = self._evaluate_state(state, spans)
+            return self._rank_from_probs(probs, target_label)
+        return rank_evaluator
+
+    def _extract_masked_spans(self, state: RecordState, masked_text: str) -> List[Tuple[int, int]]:
+        spans: List[Tuple[int, int]] = []
+        for idx, span in enumerate(state.term_spans):
+            original_token = state.text[span[0]:span[1]]
+            if self.mask_text in masked_text:
+                spans.append(span)
+        return spans
+
+    def _make_apply_fn(
+        self,
+        state: RecordState,
+        runtime_stats: Dict[str, int],
+    ) -> ApplyFn:
+        def apply_fn(idx: int, ledger: TokenLedger) -> None:
+            if idx >= len(state.term_spans):
+                return
+            
+            token_text = state.term_texts[idx]
+            if self._should_ignore(token_text):
+                return
+            
+            ledger.replace(idx, self.mask_text)
+            runtime_stats["masked"] += 1
+            
+            if self.mask_all_instances:
+                for related_idx in state.term_indices_by_text.get(token_text, []):
+                    if related_idx != idx:
+                        try:
+                            ledger.replace(related_idx, self.mask_text)
+                            runtime_stats["masked"] += 1
+                        except Exception:
+                            pass
+
+        return apply_fn
+
     def anonymize_from_dataset(
         self,
         idx: int,
@@ -559,39 +610,55 @@ class PetreAnonymizer(Anonymizer):
         if len(buckets) != 1 or not isinstance(buckets[0], KParams):
             raise ValueError("PetreAnonymizer only supports KParams for grid anonymization.")
         k_params: KParams = buckets[0]
-        k_values = sorted(set(int(v) for v in k_params.values()), reverse=True)
         
         state = self._records_by_idx[idx]
         record = self.dataset_records[idx]
         text = record.text or state.text
         
-        ledger = TokenLedger(text, tuple(state.term_spans))
-        all_result_spans: List[Tuple[int, int]] = []
-        masked_token_indices: Set[int] = set()
-        current_spans: List[Tuple[int, int]] = []
+        if self._unit is None:
+            self._unit = UntilKUnit()
         
-        for k_value in k_values:
-            new_spans = self._ensure_annotations_for_k(k_value, state, current_spans)
+        self._unit.set_thresholds(k_params.values())
+        
+        scores = self._token_scores_for_state(state)
+        self._unit.set_risk_scores(scores)
+        self._unit.set_target_label(state.label)
+        self._unit.set_rank_evaluator(self._make_rank_evaluator(state))
+        
+        runtime_stats: Dict[str, int] = {"masked": 0}
+        apply_fn = self._make_apply_fn(state, runtime_stats)
+        
+        for step in self._unit.anonymize(text, state.term_spans, apply_fn):
+            k_value = step.threshold
+            private_text = step.text
+            ledger = step.ledger
             
-            for token_idx, token_span in enumerate(state.term_spans):
-                span_tuple = (token_span[0], token_span[1])
-                if span_tuple in new_spans and token_idx not in masked_token_indices:
-                    ledger.replace(token_idx, self.mask_text)
-                    masked_token_indices.add(token_idx)
+            result_spans = [
+                TextAnnotation(
+                    start=state.term_spans[idx][0],
+                    end=state.term_spans[idx][1],
+                    label="petre",
+                    text=state.term_texts[idx],
+                    replacement=self.mask_text,
+                )
+                for idx in step.new_indices
+            ]
             
-            current_spans = new_spans
-            all_result_spans = new_spans[:]
-            masked_text = ledger.render_offsets(text)
+            metadata: Dict[str, Any] = {
+                "k": k_value,
+                "perturbed_tokens": runtime_stats["masked"],
+                "method": "petre",
+                "uid": state.uid,
+                "rank": step.metadata.get("rank"),
+                **step.metadata,
+            }
+            token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
             
             yield k_value, [
                 AnonymizationResult(
-                    text=masked_text,
-                    spans=all_result_spans[:],
-                    metadata={
-                        "k": k_value,
-                        "perturbed_tokens": len(masked_token_indices),
-                        "method": "petre",
-                        "uid": state.uid,
-                    },
+                    text=private_text,
+                    spans=result_spans,
+                    annotations=TextAnnotations(token_edits=token_edits),
+                    metadata=metadata,
                 )
             ]

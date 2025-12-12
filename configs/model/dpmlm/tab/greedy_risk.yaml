@@ -15,4 +15,3 @@ tri_chunking:
 
 token_selection:
   name: by_risk
-  risk_tolerance: 0.7

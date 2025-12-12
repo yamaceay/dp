@@ -1,4 +1,7 @@
 params:
   lambdas: ["*"]
+
 pii_annotator: ../../../netscratch/yay/pii_detectors/tab/20251203_131104
-pii_threshold: 0.7
+
+token_selection:
+  name: pii_only

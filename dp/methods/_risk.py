@@ -1,13 +1,16 @@
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from hashlib import sha256
 
 import numpy as np
 
 from dp.loaders import TextAnnotation
+from dp.loaders.base import TextAnnotations, TokenEdit
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, RhoParams
 from dp.utils.splitter import TextSplitter
 from dp.utils.token_ledger import TokenLedger
+from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
+from dp.utils.selector.by_risk_selector import ByRiskUnit
 
 
 class RiskAnonymizer(Anonymizer):
@@ -20,8 +23,15 @@ class RiskAnonymizer(Anonymizer):
         self._mask_text = mask_text
         self._temperature = float(risk_temperature)
         self._splitter = TextSplitter()
+        self._unit: Optional[ByRiskUnit] = ByRiskUnit(temperature=self._temperature)
         self._risk_scores_by_uid: Dict[str, Dict[Tuple[int, int], float]] = {}
         self._scores_cache: Dict[str, Tuple[np.ndarray, List[Tuple[int, int]]]] = {}
+
+    def set_unit(self, unit: AnonymizerUnit) -> None:
+        self._unit = unit
+
+    def set_filtering_strategy(self, detector: AnonymizerUnit) -> None:
+        self._unit = detector
     
     def hash_text(self, text: str) -> str:
         return sha256(text.encode('utf-8')).hexdigest()
@@ -57,55 +67,87 @@ class RiskAnonymizer(Anonymizer):
             if span_map:
                 self._risk_scores_by_uid[uid] = span_map
 
-    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], record_name: Optional[str] = None, **kwargs) -> List[AnonymizationResult]:
-        scores, spans = self._scores_cache[self.hash_text(text)]
+    def _make_apply_fn(
+        self,
+        text: str,
+        spans: List[Tuple[int, int]],
+        runtime_stats: Dict[str, int],
+    ) -> ApplyFn:
+        def apply_fn(idx: int, ledger: TokenLedger) -> None:
+            if idx >= len(spans):
+                return
+            ledger.replace(idx, self._mask_text)
+            runtime_stats["masked"] += 1
+
+        return apply_fn
+
+    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], record_name: Optional[str] = None, **kwargs) -> List[Tuple[Dict[str, Any], AnonymizationResult]]:
+        cached = self._scores_cache.get(self.hash_text(text))
+        if cached is None:
+            tokens, spans = self._tokenize(text)
+            scores = self._compute_scores(text, spans, record_name)
+        else:
+            scores, spans = cached
         
         if len(buckets) != 1 or not isinstance(buckets[0], RhoParams):
             raise ValueError("RiskAnonymizer only supports RhoParams for grid anonymization.")
         
         rho_params: RhoParams = buckets[0]
-        sorted_tolerances = sorted(rho_params.values(), reverse=True)
         
-        ledger = TokenLedger(text, spans)
-        aggregated: List[AnonymizationResult] = []
+        if self._unit is None:
+            self._unit = ByRiskUnit(temperature=self._temperature)
         
-        probs = self._scores_to_probs(scores)
-        ordered_indices = list(np.argsort(probs)[::-1])
-        cumulative_probs = np.cumsum([float(probs[i]) for i in ordered_indices])
+        self._unit.set_thresholds(rho_params.values())
         
-        masked_so_far = 0
+        runtime_stats: Dict[str, int] = {"masked": 0}
+        apply_fn = self._make_apply_fn(text, spans, runtime_stats)
         
-        for tolerance in sorted_tolerances:
-            removal_limit = max(0.0, min(1.0, 1.0 - tolerance))
+        outputs: List[Tuple[Dict[str, Any], AnonymizationResult]] = []
+        
+        for step in self._unit.anonymize(text, spans, apply_fn, risk_scores=scores):
+            rho = step.threshold
+            hp: Dict[str, Any] = {"rho": rho}
             
-            new_indices = []
-            while masked_so_far < len(ordered_indices) and cumulative_probs[masked_so_far] <= removal_limit:
-                idx = ordered_indices[masked_so_far]
-                ledger.replace(idx, self._mask_text)
-                new_indices.append(idx)
-                masked_so_far += 1
+            private_text = step.text
+            ledger = step.ledger
             
-            if new_indices:
-                anonymized_text = ledger.render_offsets(text)
-                result_spans = [
-                    TextAnnotation(
-                        start=spans[i][0],
-                        end=spans[i][1],
-                        label="risk",
-                        text=text[spans[i][0]:spans[i][1]],
-                        replacement=self._mask_text,
-                    )
-                    for i in new_indices
-                ]
-                metadata = {
-                    "method": "risk",
-                    "rho": tolerance,
-                    "removed_count": len(new_indices),
-                    "total_tokens": len(spans),
-                }
-                aggregated.append(AnonymizationResult(text=anonymized_text, spans=result_spans, metadata=metadata))
+            result_spans = [
+                TextAnnotation(
+                    start=spans[idx][0],
+                    end=spans[idx][1],
+                    label="risk",
+                    text=text[spans[idx][0]:spans[idx][1]],
+                    replacement=self._mask_text,
+                )
+                for idx in step.new_indices
+            ]
+            
+            metadata: Dict[str, Any] = {
+                "method": "risk",
+                "rho": rho,
+                "removed_count": runtime_stats["masked"],
+                "total_tokens": len(spans),
+                **step.metadata,
+            }
+            token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
+            
+            outputs.append((
+                hp,
+                AnonymizationResult(
+                    text=private_text,
+                    spans=result_spans,
+                    annotations=TextAnnotations(token_edits=token_edits),
+                    metadata=metadata,
+                ),
+            ))
         
-        return aggregated
+        if not outputs:
+            outputs.append((
+                {"rho": 1.0},
+                AnonymizationResult(text=text, metadata={"method": "risk", "masked": 0}),
+            ))
+        
+        return outputs
 
     def anonymize_from_dataset(self, idx: int, *args, **kwargs) -> AnonymizationResult:
         raise NotImplementedError("Use anonymize_any_text for RiskAnonymizer.")
@@ -124,31 +166,6 @@ class RiskAnonymizer(Anonymizer):
             raise RuntimeError("RiskAnonymizer requires explainer")
         raw_scores = self._explainer.explain(text, spans)
         return np.asarray(raw_scores, dtype=float)
-    
-    def _scores_to_probs(self, scores: np.ndarray) -> np.ndarray:
-        if scores.size == 0:
-            return scores
-        scaled = scores / self._temperature
-        scaled = scaled - np.max(scaled)
-        exps = np.exp(scaled)
-        total = np.sum(exps)
-        if total <= 0:
-            return np.ones(len(scores)) / len(scores)
-        return exps / total
-    
-    def _select_tokens(self, probs: np.ndarray, tolerance: float) -> List[int]:
-        removal_limit = max(0.0, min(1.0, 1.0 - tolerance))
-        if removal_limit <= 0:
-            return []
-        ordered_indices = np.argsort(probs)[::-1]
-        masked_indices = []
-        removed = 0.0
-        for idx in ordered_indices:
-            if removed >= removal_limit:
-                break
-            masked_indices.append(int(idx))
-            removed += float(probs[idx])
-        return masked_indices
 
     def _lookup_precomputed_scores(self, text: str, spans: List[Tuple[int, int]], record_name: Optional[str]) -> Optional[np.ndarray]:
         if record_name and record_name in self._risk_scores_by_uid:

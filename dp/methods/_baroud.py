@@ -1,24 +1,35 @@
-from typing import Dict, List, Optional, Any, Union, Tuple
+from typing import Any, Dict, List, Optional, Union, Tuple
 from hashlib import sha256
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, LambdaParams, buckets_to_dicts, BucketDict
-from dp.loaders.base import TextAnnotation, DatasetRecord
+from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit, DatasetRecord
 from dp.utils.token_ledger import TokenLedger
+from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
+from dp.utils.selector.pii_only_selector import PIIOnlyUnit
+
 
 class BaroudAnonymizer(Anonymizer):
     MODEL_NAME = "baroud"
 
-    def __init__(self, *args, pii_annotator: Optional[str] = None, **kwargs):
+    def __init__(self, *args, pii_annotator: Optional[str] = None, mask_text: str = "[{label}]", **kwargs):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
         
         self.pii_annotator = pii_annotator
-        self.pii_detector = None
+        self.mask_text = mask_text
+        self._unit: Optional[PIIOnlyUnit] = None
         self._annotations_cache: Dict[str, List[TextAnnotation]] = {}
         
         if self.pii_annotator:
             from dp.utils.pii_detector import PIIDetector
-            self.pii_detector = PIIDetector(model_name=self.pii_annotator, use_chunking=False)
+            pii_detector = PIIDetector(model_name=self.pii_annotator, use_chunking=False)
+            self._unit = PIIOnlyUnit(pii_detector=pii_detector)
+
+    def set_unit(self, unit: AnonymizerUnit) -> None:
+        self._unit = unit
+
+    def set_filtering_strategy(self, detector: AnonymizerUnit) -> None:
+        self._unit = detector
     
     def hash_text(self, text: str) -> str:
         return sha256(text.encode('utf-8')).hexdigest()
@@ -30,54 +41,99 @@ class BaroudAnonymizer(Anonymizer):
         self._annotations_cache = {self.hash_text(text): anns for text, anns in zip(texts_or_indices, all_annotations)}
 
     def _predict_pii_annotations(self, texts: List[str]) -> List[List[TextAnnotation]]:
-        if not self.pii_detector:
+        if self._unit is None or not hasattr(self._unit, 'pii_detector'):
             raise ValueError("PII detector is not configured for BaroudAnonymizer.")
         records = [DatasetRecord(text=text) for text in texts]
-        predictions = self.pii_detector.predict(records)
+        predictions = self._unit.pii_detector.predict(records)
         return [list(pred.spans or []) for pred in predictions]
 
+    def _make_apply_fn(
+        self,
+        text: str,
+        anns: List[TextAnnotation],
+        runtime_stats: Dict[str, int],
+    ) -> ApplyFn:
+        ann_by_span: Dict[Tuple[int, int], TextAnnotation] = {}
+        for ann in anns:
+            ann_by_span[(ann.start, ann.end)] = ann
+
+        def apply_fn(idx: int, ledger: TokenLedger) -> None:
+            entry = ledger.entry(idx)
+            span_key = (entry.start, entry.end)
+            ann = ann_by_span.get(span_key)
+            if ann is None:
+                return
+            
+            label = ann.label or "MASK"
+            replacement = self.mask_text.format(label=label)
+            ledger.replace(idx, replacement)
+            runtime_stats["masked"] += 1
+
+        return apply_fn
+
     def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
-        anns = self._annotations_cache[self.hash_text(text)]
+        anns = self._annotations_cache.get(self.hash_text(text), [])
+        
         if len(buckets) != 1 or not isinstance(buckets[0], LambdaParams):
             raise ValueError("BaroudAnonymizer only supports LambdaParams for grid anonymization.")
+        
         lambda_params: LambdaParams = buckets[0]
         
-        sorted_thresholds = sorted(lambda_params.values(), reverse=True)
-        spans = [(ann.start, ann.end) for ann in anns]
-        ledger = TokenLedger(text, spans)
-        combos = buckets_to_dicts(buckets)
-
-        aggregated: List[Tuple[BucketDict, AnonymizationResult]] = []
-        all_result_spans: List[TextAnnotation] = []
-        prev_threshold = 1.0
-
-        for threshold, hp in zip(sorted_thresholds, combos):
-            for idx, ann in enumerate(anns):
-                if ann.confidence is None:
-                    continue
-                if prev_threshold > ann.confidence >= threshold:
-                    ledger.replace(idx, f"[{ann.label}]")
-                    all_result_spans.append(
-                        TextAnnotation(
-                            start=ann.start,
-                            end=ann.end,
-                            label=ann.label,
-                            text=ann.text,
-                            replacement=f"[{ann.label}]",
-                            confidence=ann.confidence,
-                            annotator="baroud",
-                        )
-                    )
-            
-            if all_result_spans:
-                anonymized_text = ledger.render_offsets(text)
-                metadata = {
-                    "method": "baroud",
-                    "pii_detected": len(all_result_spans),
-                    "lambda": threshold,
-                }
-                aggregated.append((hp, AnonymizationResult(text=anonymized_text, spans=all_result_spans[:], metadata=metadata)))
-            
-            prev_threshold = threshold
+        if self._unit is None:
+            from dp.utils.selector.all_selector import AllUnit
+            self._unit = AllUnit()
         
-        return aggregated
+        self._unit.set_thresholds(lambda_params.values())
+        
+        spans = [(ann.start, ann.end) for ann in anns]
+        
+        runtime_stats: Dict[str, int] = {"masked": 0}
+        apply_fn = self._make_apply_fn(text, anns, runtime_stats)
+        
+        outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
+        
+        for step in self._unit.anonymize(text, spans, apply_fn):
+            threshold = step.threshold
+            hp: BucketDict = {"lambda": threshold}
+            
+            private_text = step.text
+            ledger = step.ledger
+            
+            result_spans = [
+                TextAnnotation(
+                    start=spans[idx][0],
+                    end=spans[idx][1],
+                    label=anns[idx].label if idx < len(anns) else "MASK",
+                    text=text[spans[idx][0]:spans[idx][1]],
+                    replacement=self.mask_text.format(label=anns[idx].label if idx < len(anns) else "MASK"),
+                    confidence=anns[idx].confidence if idx < len(anns) else None,
+                    annotator="baroud",
+                )
+                for idx in step.new_indices
+            ]
+            
+            metadata: Dict[str, Any] = {
+                "method": "baroud",
+                "lambda": threshold,
+                "pii_detected": runtime_stats["masked"],
+                **step.metadata,
+            }
+            token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
+            
+            outputs.append((
+                hp,
+                AnonymizationResult(
+                    text=private_text,
+                    spans=result_spans,
+                    annotations=TextAnnotations(token_edits=token_edits),
+                    metadata=metadata,
+                ),
+            ))
+        
+        if not outputs:
+            outputs.append((
+                {"lambda": 1.0},
+                AnonymizationResult(text=text, metadata={"method": "baroud", "masked": 0}),
+            ))
+        
+        return outputs

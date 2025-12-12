@@ -6,7 +6,7 @@ from tqdm import tqdm
 from dp.methods.constants import Buckets, BucketDict
 from dp.loaders.base import DatasetRecord, TextAnnotations
 from dp.utils.explainer.base import TokenExplainer
-from dp.utils.selector.base import TokenSelector
+from dp.utils.selector.base import AnonymizerUnit
 from dp.utils.splitter import TextSplitter
 
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ class Anonymizer(ABC):
 
         self._dataset_records: Optional[Iterable[DatasetRecord]] = None
         self._explainer: Optional[TokenExplainer] = None
-        self._selector: Optional[TokenSelector] = None
+        self._selector: Optional[AnonymizerUnit] = None
         self.device = self._resolve_device(kwargs.get("device"))
 
         print(f"Initialized {self.__class__.__name__} with args: {args}, kwargs: {kwargs}")
@@ -65,7 +65,7 @@ class Anonymizer(ABC):
     def set_explainer(self, explainer: TokenExplainer) -> None:
         self._explainer = explainer
 
-    def set_selector(self, selector: TokenSelector) -> None:
+    def set_selector(self, selector: AnonymizerUnit) -> None:
         self._selector = selector
 
     def set_output_handler(self, output_handler: 'OutputHandler') -> None:
@@ -107,7 +107,7 @@ class AnonymizationBuilder:
         self.anonymizer.set_explainer(explainer)
         return self
     
-    def set_selector(self, selector: TokenSelector):
+    def set_selector(self, selector: AnonymizerUnit):
         self.anonymizer.set_selector(selector)
         return self
     

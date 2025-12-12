@@ -178,28 +178,32 @@ def extract_chunking_config(model_config: dict, kind: str) -> Dict[str, Any]:
     return model_config.get(f"{kind}_chunking", {})
 
 
-def build_selector(selector_config: dict):
+def build_selector(selector_config: dict, runtime_bundle=None):
     selector_type = selector_config.get("name")
     
     if selector_type == "pii_only":
         pii_path = selector_config.get("pii_annotator")
         if not pii_path:
-            raise ValueError("PIIOnlySelector requires 'pii_annotator' in config")
+            raise ValueError("PIIOnlyUnit requires 'pii_annotator' in config")
         pii_chunking = selector_config.get("pii_chunking", {}).get("enabled", False)
         detector = PIIDetector(model_name=pii_path, use_chunking=pii_chunking)
-        return PIIOnlySelector(detector, threshold=selector_config.get("pii_threshold"))
+        unit = PIIOnlySelector(pii_detector=detector)
+        if runtime_bundle and hasattr(runtime_bundle, 'pii_confidence_values') and runtime_bundle.pii_confidence_values:
+            unit.set_thresholds(runtime_bundle.pii_confidence_values)
+        return unit
     
     if selector_type == "by_risk":
-        risk_tolerance = selector_config.get("risk_tolerance")
-        if risk_tolerance is None:
-            raise ValueError("ByRiskSelector requires 'risk_tolerance'")
-        return ByRiskSelector(risk_tolerance=risk_tolerance)
+        temperature = selector_config.get("risk_temperature", 1.0)
+        unit = ByRiskSelector(temperature=temperature)
+        if runtime_bundle and hasattr(runtime_bundle, 'risk_tolerance_values') and runtime_bundle.risk_tolerance_values:
+            unit.set_thresholds(runtime_bundle.risk_tolerance_values)
+        return unit
     
     if selector_type == "until_k":
-        k = selector_config.get("k")
-        if k is None:
-            raise ValueError("UntilKSelector requires 'k' in config")
-        return UntilKSelector(k=k)
+        unit = UntilKSelector()
+        if runtime_bundle and hasattr(runtime_bundle, 'k_values') and runtime_bundle.k_values:
+            unit.set_thresholds(runtime_bundle.k_values)
+        return unit
     
     return AllSelector()
 
@@ -237,18 +241,18 @@ def configure_model(model: Anonymizer, model_config: dict, explainer_config: dic
     if capabilities.must_use_pii_selector:
         if not selector_config or selector_config.get("name") != "pii_only":
             raise ValueError(f"{model_name} requires pii_only selector")
-        model.set_filtering_strategy(build_selector(selector_config))
+        model.set_filtering_strategy(build_selector(selector_config, runtime_bundle))
     elif capabilities.must_use_risk_selector:
         if not selector_config or selector_config.get("name") != "by_risk":
             raise ValueError(f"{model_name} requires by_risk selector")
-        model.set_filtering_strategy(build_selector(selector_config))
+        model.set_filtering_strategy(build_selector(selector_config, runtime_bundle))
     elif capabilities.must_use_k_selector:
         if not selector_config or selector_config.get("name") != "until_k":
             raise ValueError(f"{model_name} requires until_k selector")
-        model.set_filtering_strategy(build_selector(selector_config))
+        model.set_filtering_strategy(build_selector(selector_config, runtime_bundle))
     elif capabilities.can_use_pii_selector or capabilities.can_use_risk_selector or capabilities.can_use_k_selector:
         if selector_config:
-            model.set_filtering_strategy(build_selector(selector_config))
+            model.set_filtering_strategy(build_selector(selector_config, runtime_bundle))
     
     if capabilities.can_use_scoring:
         model.set_scoring_strategy(build_explainer(explainer_config, model_config, capabilities, model_name))

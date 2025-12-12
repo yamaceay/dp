@@ -1,95 +1,69 @@
 import string
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
+
 from dp.loaders.base import TextAnnotation, DatasetRecord
-from dp.utils.selector.base import TokenSelector
+from dp.utils.selector.base import AnonymizerUnit
 from dp.utils.pii_detector import PIIDetector
 
 
-class PIIOnlySelector(TokenSelector):
-    """
-    Selector that identifies PII spans in text using a PIIDetector.
-    
-    This selector uses a trained PII detection model to identify personally
-    identifiable information spans in text. Only spans above a confidence
-    threshold are returned.
-    
-    Usage:
-        from dp.utils.pii_detector import PIIDetector
-        from dp.utils.selector import PIIOnlySelector
-        
-        # Load or create a trained PIIDetector
-        detector = PIIDetector(model_name="path/to/trained/model")
-        
-        # Create selector with threshold
-        selector = PIIOnlySelector(pii_detector=detector, threshold=0.7)
-        
-        # Use in anonymizer
-        anonymizer.set_filtering_strategy(selector)
-        
-        # Or use directly
-        pii_spans = selector.select("John Smith lives in New York")
-    
-    Args:
-        pii_detector: Trained PIIDetector instance
-        threshold: Minimum confidence threshold for PII detection (0.0-1.0)
-        **kwargs: Additional configuration parameters
-    """
-    
+class PIIOnlyUnit(AnonymizerUnit):
     def __init__(
         self,
-        pii_detector: Optional[PIIDetector] =None,
-        threshold: float = 0.5,
-        **kwargs
-    ):
-        """
-        Initialize PIIOnlySelector.
-        
-        Args:
-            pii_detector: PIIDetector instance (required)
-            threshold: Confidence threshold for PII detection (default: 0.5)
-            **kwargs: Additional configuration parameters
-        """
-        super().__init__(**kwargs)
-        
+        pii_detector: Optional[PIIDetector] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__()
         if pii_detector is None:
-            raise ValueError(
-                "PIIOnlySelector requires a PIIDetector instance. "
-                "Please provide a pii_detector during initialization."
-            )
-        
+            raise ValueError("PIIOnlyUnit requires a PIIDetector instance")
         self.pii_detector = pii_detector
-        self.threshold = threshold
+        self._cached_predictions: Optional[List[TextAnnotation]] = None
+        self._cached_text: Optional[str] = None
 
-    def select(self, text: str, offsets: Optional[List[Tuple[int, int]]] = None, labels: Optional[List[str]] = None) -> List[TextAnnotation]:
+    def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
+        return sorted([float(t) for t in thresholds], reverse=True)
+
+    def _get_predictions(self, text: str) -> List[TextAnnotation]:
+        if self._cached_text == text and self._cached_predictions is not None:
+            return self._cached_predictions
+        temp_record = DatasetRecord(text=text)
+        predictions = self.pii_detector.predict([temp_record])[0]
+        spans = list(predictions.spans or []) if predictions else []
+        self._cached_predictions = spans
+        self._cached_text = text
+        return spans
+
+    def select_indices(
+        self,
+        text: str,
+        offsets: List[Tuple[int, int]],
+        threshold: Any,
+        already_processed: set[int],
+        **context: Any,
+    ) -> List[int]:
         if not text or not text.strip():
             return []
-        
-        temp_record = DatasetRecord(text=text)
-        
-        predictions = self.pii_detector.predict([temp_record])[0]
-        
-        if not predictions or not predictions.spans:
-            return []
-        
-        filtered_spans = []
-        for span in predictions.spans:
-            if span.confidence is not None:
-                if span.confidence < self.threshold:
-                    continue
-                if labels and span.label not in labels:
-                    continue
-            if span.text in string.punctuation:
-                continue
-            filtered_spans.append(span)
-        
-        if offsets is None:
-            return filtered_spans
 
-        shifted_spans = []
-        for span in filtered_spans:
-            if any(
-                not (span.end <= offset[0] or span.start >= offset[1])
-                for offset in offsets
-            ):
-                shifted_spans.append(span)
-        return shifted_spans
+        predictions = self._get_predictions(text)
+        if not predictions:
+            return []
+
+        lambda_val = float(threshold)
+        indices: List[int] = []
+
+        for idx, (start, end) in enumerate(offsets):
+            if idx in already_processed:
+                continue
+            token = text[start:end]
+            if not token or token in string.punctuation:
+                continue
+            for span in predictions:
+                if span.confidence is None or span.confidence < lambda_val:
+                    continue
+                if not (end <= span.start or start >= span.end):
+                    indices.append(idx)
+                    break
+
+        return indices
+
+
+PIIOnlySelector = PIIOnlyUnit
