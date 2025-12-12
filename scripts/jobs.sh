@@ -131,10 +131,16 @@ def norm(value):
         return out
     raise ValueError("params entries must be a string or list of strings")
 
+def zero_pad(tokens):
+    if not tokens:
+        return []
+    max_len = max(len(t) for t in tokens)
+    return [t.zfill(max_len) for t in tokens]
+
 def emit(prefix, base, name, pats):
-    for pat in pats:
-        token = str(pat)
-        print(f"{prefix}\t{base}/{name}_{token}.yaml")
+    padded = zero_pad(pats)
+    for pat in padded:
+        print(f"{prefix}\t{base}/{name}_{pat}.yaml")
 
 print("HAS\t1" if has_params else "HAS\t0")
 
@@ -226,30 +232,48 @@ function all_methods_runtimes() {
 
         if [[ $has_params -eq 1 ]]; then
           if [[ ${#eps_patterns[@]} -gt 0 ]]; then
+            # Collect all eps files first to compute padding
+            all_eps_files=()
             for eps_pattern in "${eps_patterns[@]}"; do
               while IFS= read -r eps_path; do
-                eps_name=$(basename "$eps_path")
-                eps_name="${eps_name%.yaml}"
-
-                if [[ "$method_unique_config" == "$method_base" ]]; then
-                  job_name="${dataset_name}_${method_base}_${eps_name}"
-                else
-                  job_name="${dataset_name}_${method_base}_${method_unique_config}_${eps_name}"
-                fi
-
-                runtime_args="--runtime_in $eps_path"
-                if [[ ${#arg_patterns[@]} -gt 0 ]]; then
-                  runtime_args="$runtime_args ${arg_patterns[*]}"
-                fi
-
-                cmd=$(printf "$cmd_tpl" \
-                    "$dataset_name" "$dataset_path" \
-                    "$method_base" "$method_path" \
-                    "$runtime_args" \
-                    "$job_name")
-
-                printf '%s|%s\n' "$job_name" "$cmd"
+                all_eps_files+=("$eps_path")
               done < <(expand_singleton_glob_or_fail "$eps_pattern")
+            done
+            
+            # Find max length of epsilon values for zero-padding
+            max_eps_len=0
+            for eps_path in "${all_eps_files[@]}"; do
+              eps_name=$(basename "$eps_path")
+              eps_name="${eps_name%.yaml}"
+              eps_val="${eps_name#eps_}"
+              (( ${#eps_val} > max_eps_len )) && max_eps_len=${#eps_val}
+            done
+            
+            for eps_path in "${all_eps_files[@]}"; do
+              eps_name=$(basename "$eps_path")
+              eps_name="${eps_name%.yaml}"
+              eps_val="${eps_name#eps_}"
+              eps_val_padded=$(printf "%0${max_eps_len}s" "$eps_val" | tr ' ' '0')
+              eps_name_padded="eps_${eps_val_padded}"
+
+              if [[ "$method_unique_config" == "$method_base" ]]; then
+                job_name="${dataset_name}_${method_base}_${eps_name_padded}"
+              else
+                job_name="${dataset_name}_${method_base}_${method_unique_config}_${eps_name_padded}"
+              fi
+
+              runtime_args="--runtime_in $eps_path"
+              if [[ ${#arg_patterns[@]} -gt 0 ]]; then
+                runtime_args="$runtime_args ${arg_patterns[*]}"
+              fi
+
+              cmd=$(printf "$cmd_tpl" \
+                  "$dataset_name" "$dataset_path" \
+                  "$method_base" "$method_path" \
+                  "$runtime_args" \
+                  "$job_name")
+
+              printf '%s|%s\n' "$job_name" "$cmd"
             done
             continue
           fi
@@ -277,15 +301,31 @@ function all_methods_runtimes() {
 
         runtime_args=$(runtime_args_for_method "$method_base")
         if [[ "$runtime_args" == "__EPS_FIXED__" ]]; then
+          eps_files=()
           for eps_path in "$runtime_dir/dp"/eps_*.yaml; do
-            [[ -f "$eps_path" ]] || continue
+            [[ -f "$eps_path" ]] && eps_files+=("$eps_path")
+          done
+          
+          # Find max length of epsilon values for zero-padding
+          max_len=0
+          for eps_path in "${eps_files[@]}"; do
             eps_name=$(basename "$eps_path")
             eps_name="${eps_name%.yaml}"
+            eps_val="${eps_name#eps_}"
+            (( ${#eps_val} > max_len )) && max_len=${#eps_val}
+          done
+          
+          for eps_path in "${eps_files[@]}"; do
+            eps_name=$(basename "$eps_path")
+            eps_name="${eps_name%.yaml}"
+            eps_val="${eps_name#eps_}"
+            eps_val_padded=$(printf "%0${max_len}s" "$eps_val" | tr ' ' '0')
+            eps_name_padded="eps_${eps_val_padded}"
 
             if [[ "$method_unique_config" == "$method_base" ]]; then
-              job_name="${dataset_name}_${method_base}_${eps_name}"
+              job_name="${dataset_name}_${method_base}_${eps_name_padded}"
             else
-              job_name="${dataset_name}_${method_base}_${method_unique_config}_${eps_name}"
+              job_name="${dataset_name}_${method_base}_${method_unique_config}_${eps_name_padded}"
             fi
 
             cmd=$(printf "$cmd_tpl" \
