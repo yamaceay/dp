@@ -370,7 +370,7 @@ class DPMlmAnonymizer(Anonymizer):
 
                 if unit_requires_risk:
                     risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name)
-                    context["risk_scores"] = risk_scores
+                    self._unit.set_risk_scores(risk_scores)
 
                 perturbation_ratio = 1.0
                 compensated_epsilon = float(eps_val) * perturbation_ratio

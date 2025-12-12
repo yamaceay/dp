@@ -5,8 +5,8 @@ from dp.utils.token_ledger import TokenLedger
 
 
 class AllUnit(AnonymizerUnit):
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__()
+    def __init__(self, temperature: float = 1.0, **kwargs: Any) -> None:
+        super().__init__(temperature=temperature)
 
     def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
         return thresholds
@@ -35,16 +35,17 @@ class AllUnit(AnonymizerUnit):
 
         ledger = TokenLedger(text, offsets)
         indices = self.select_indices(text, offsets, None, set(), **context)
+        sorted_indices = self._sort_by_risk(indices, len(offsets))
         
-        for idx in indices:
+        for idx in sorted_indices:
             apply_fn(idx, ledger)
 
         yield AnonymizationStep(
             threshold=None,
             text=ledger.render_offsets(text),
             ledger=ledger,
-            new_indices=indices,
-            metadata={"processed_count": len(indices)},
+            new_indices=sorted_indices,
+            metadata={"processed_count": len(sorted_indices)},
         )
 
 

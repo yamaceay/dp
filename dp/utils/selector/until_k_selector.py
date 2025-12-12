@@ -16,11 +16,9 @@ class UntilKUnit(AnonymizerUnit):
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> None:
-        super().__init__()
+        super().__init__(temperature=temperature)
         self._rank_evaluator = rank_evaluator
-        self._temperature = float(temperature) if temperature > 0 else 1.0
         self._target_label: Optional[int] = None
-        self._risk_scores: Optional[np.ndarray] = None
 
     def set_rank_evaluator(self, evaluator: RankEvaluator) -> None:
         self._rank_evaluator = evaluator
@@ -28,17 +26,8 @@ class UntilKUnit(AnonymizerUnit):
     def set_target_label(self, label: int) -> None:
         self._target_label = label
 
-    def set_risk_scores(self, scores: np.ndarray) -> None:
-        self._risk_scores = scores
-
     def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
         return sorted([int(t) for t in thresholds])
-
-    def _get_ordered_candidates(self, offsets: List[Tuple[int, int]], already_processed: set[int]) -> List[int]:
-        candidates = [i for i in range(len(offsets)) if i not in already_processed]
-        if self._risk_scores is None or len(self._risk_scores) != len(offsets):
-            return candidates
-        return sorted(candidates, key=lambda i: float(self._risk_scores[i]), reverse=True)
 
     def select_indices(
         self,
@@ -48,7 +37,8 @@ class UntilKUnit(AnonymizerUnit):
         already_processed: set[int],
         **context: Any,
     ) -> List[int]:
-        return self._get_ordered_candidates(offsets, already_processed)
+        candidates = [i for i in range(len(offsets)) if i not in already_processed]
+        return self._sort_by_risk(candidates, len(offsets))
 
     def anonymize(
         self,
@@ -83,7 +73,10 @@ class UntilKUnit(AnonymizerUnit):
                 )
                 continue
 
-            candidates = self._get_ordered_candidates(offsets, processed)
+            candidates = self._sort_by_risk(
+                [i for i in range(len(offsets)) if i not in processed],
+                len(offsets),
+            )
             new_indices: List[int] = []
 
             for idx in candidates:

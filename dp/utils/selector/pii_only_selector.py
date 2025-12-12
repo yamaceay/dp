@@ -10,9 +10,10 @@ class PIIOnlyUnit(AnonymizerUnit):
     def __init__(
         self,
         pii_detector: Optional[PIIDetector] = None,
+        temperature: float = 1.0,
         **kwargs: Any,
     ) -> None:
-        super().__init__()
+        super().__init__(temperature=temperature)
         if pii_detector is None:
             raise ValueError("PIIOnlyUnit requires a PIIDetector instance")
         self.pii_detector = pii_detector

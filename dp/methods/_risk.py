@@ -98,13 +98,14 @@ class RiskAnonymizer(Anonymizer):
             self._unit = ByRiskUnit(temperature=self._temperature)
         
         self._unit.set_thresholds(rho_params.values())
+        self._unit.set_risk_scores(scores)
         
         runtime_stats: Dict[str, int] = {"masked": 0}
         apply_fn = self._make_apply_fn(text, spans, runtime_stats)
         
         outputs: List[Tuple[Dict[str, Any], AnonymizationResult]] = []
         
-        for step in self._unit.anonymize(text, spans, apply_fn, risk_scores=scores):
+        for step in self._unit.anonymize(text, spans, apply_fn):
             rho = step.threshold
             hp: Dict[str, Any] = {"rho": rho}
             

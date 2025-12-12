@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
+import numpy as np
+
 from dp.loaders.base import TextAnnotation
 from dp.utils.token_ledger import TokenLedger
 
@@ -21,11 +23,34 @@ ApplyFn = Callable[[int, TokenLedger], None]
 
 
 class AnonymizerUnit(ABC):
-    def __init__(self) -> None:
+    def __init__(self, temperature: float = 1.0) -> None:
         self._thresholds: List[Any] = []
+        self._risk_scores: Optional[np.ndarray] = None
+        self._temperature = float(temperature) if temperature > 0 else 1.0
 
     def set_thresholds(self, thresholds: List[Any]) -> None:
         self._thresholds = list(thresholds)
+
+    def set_risk_scores(self, scores: np.ndarray) -> None:
+        self._risk_scores = scores
+
+    def _scores_to_probs(self, scores: np.ndarray) -> np.ndarray:
+        if scores.size == 0:
+            return scores
+        scaled = scores / self._temperature
+        scaled = scaled - np.max(scaled)
+        exps = np.exp(scaled)
+        total = np.sum(exps)
+        if total <= 0:
+            return np.ones(len(scores)) / len(scores)
+        return exps / total
+
+    def _sort_by_risk(self, indices: List[int], n_offsets: int) -> List[int]:
+        if not indices:
+            return indices
+        if self._risk_scores is None or len(self._risk_scores) != n_offsets:
+            return indices
+        return sorted(indices, key=lambda i: float(self._risk_scores[i]), reverse=True)
 
     @abstractmethod
     def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
@@ -58,8 +83,9 @@ class AnonymizerUnit(ABC):
 
         for threshold in ordered:
             indices = self.select_indices(text, offsets, threshold, processed, ledger=ledger, **context)
+            sorted_indices = self._sort_by_risk(indices, len(offsets))
             new_indices: List[int] = []
-            for idx in indices:
+            for idx in sorted_indices:
                 if idx in processed:
                     continue
                 apply_fn(idx, ledger)
