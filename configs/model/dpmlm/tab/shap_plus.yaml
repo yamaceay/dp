@@ -1,18 +1,16 @@
 params:
   epsilon: "*"
-  rhos: ["*"]
 
 explainer:
-  name: greedy
+  name: shap
   tri_pipeline: models/tri_pipelines/tab/20251110_183205
   risk_temperature: 0.1
 
 precomputation:
-  risk_scores: data/TAB/test_risk_greedy.jsonl
+  risk_scores: data/TAB/test_risk_shap.jsonl
 
 tri_chunking:
   enabled: true
 
-token_selection:
-  name: by_risk
-  risk_tolerance: 0.7
+add_probability: 0.2
+delete_probability: 0.1

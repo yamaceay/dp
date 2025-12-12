@@ -99,11 +99,61 @@ function runtime_args_for_method() {
   esac
 }
 
-function epsilon_runtime_files() {
-  for eps_path in "$runtime_dir/dp"/eps_*.yaml; do
-    [[ -f "$eps_path" ]] || continue
-    printf '%s\n' "$eps_path"
-  done
+function runtime_specs_from_model_config() {
+  local model_config_path="$1"
+  python3 - "$model_config_path" <<'PY'
+import sys
+import yaml
+
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8') as f:
+    cfg = yaml.safe_load(f) or {}
+
+has_params = "params" in cfg
+params = cfg.get("params") if isinstance(cfg, dict) else None
+if params is None:
+    print("HAS\t0")
+    sys.exit(0)
+if not isinstance(params, dict):
+    raise ValueError("params must be a mapping")
+
+def norm(value):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        out = []
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("params entries must be strings")
+            out.append(item)
+        return out
+    raise ValueError("params entries must be a string or list of strings")
+
+def emit(prefix, base, name, pats):
+    for pat in pats:
+        token = str(pat)
+        print(f"{prefix}\t{base}/{name}_{token}.yaml")
+
+print("HAS\t1" if has_params else "HAS\t0")
+
+emit("EPS", "configs/runtime/dp", "eps", norm(params.get("epsilon")))
+emit("ARG", "configs/runtime/pii_confidence", "lambda", norm(params.get("lambdas")))
+emit("ARG", "configs/runtime/risk_tolerance", "rho", norm(params.get("rhos")))
+emit("ARG", "configs/runtime/k_anon", "k", norm(params.get("ks")))
+PY
+}
+
+function expand_singleton_glob_or_fail() {
+  local pattern="$1"
+  local matches
+  matches=$(compgen -G "$pattern" || true)
+  if [[ -z "$matches" ]]; then
+    echo "No matches for runtime pattern: $pattern" >&2
+    exit 1
+  fi
+  printf '%s\n' $matches
 }
 
 function all_methods_runtimes() {
@@ -155,9 +205,80 @@ function all_methods_runtimes() {
         method_unique_config="${method_path##*/}"
         method_unique_config="${method_unique_config%.yaml}"
 
+        has_params=0
+        eps_patterns=()
+        arg_patterns=()
+        while IFS=$'\t' read -r tag val; do
+          [[ -z "$tag" ]] && continue
+          if [[ "$tag" == "HAS" ]]; then
+            [[ "$val" == "1" ]] && has_params=1
+            continue
+          fi
+          if [[ "$tag" == "EPS" ]]; then
+            eps_patterns+=("$val")
+            continue
+          fi
+          if [[ "$tag" == "ARG" ]]; then
+            arg_patterns+=("$val")
+            continue
+          fi
+        done < <(runtime_specs_from_model_config "$method_path")
+
+        if [[ $has_params -eq 1 ]]; then
+          if [[ ${#eps_patterns[@]} -gt 0 ]]; then
+            for eps_pattern in "${eps_patterns[@]}"; do
+              while IFS= read -r eps_path; do
+                eps_name=$(basename "$eps_path")
+                eps_name="${eps_name%.yaml}"
+
+                if [[ "$method_unique_config" == "$method_base" ]]; then
+                  job_name="${dataset_name}_${method_base}_${eps_name}"
+                else
+                  job_name="${dataset_name}_${method_base}_${method_unique_config}_${eps_name}"
+                fi
+
+                runtime_args="--runtime_in $eps_path"
+                if [[ ${#arg_patterns[@]} -gt 0 ]]; then
+                  runtime_args="$runtime_args ${arg_patterns[*]}"
+                fi
+
+                cmd=$(printf "$cmd_tpl" \
+                    "$dataset_name" "$dataset_path" \
+                    "$method_base" "$method_path" \
+                    "$runtime_args" \
+                    "$job_name")
+
+                printf '%s|%s\n' "$job_name" "$cmd"
+              done < <(expand_singleton_glob_or_fail "$eps_pattern")
+            done
+            continue
+          fi
+
+          runtime_args=""
+          if [[ ${#arg_patterns[@]} -gt 0 ]]; then
+            runtime_args="--runtime_in ${arg_patterns[*]}"
+          fi
+
+          if [[ "$method_unique_config" == "$method_base" ]]; then
+            job_name="${dataset_name}_${method_base}"
+          else
+            job_name="${dataset_name}_${method_base}_${method_unique_config}"
+          fi
+
+          cmd=$(printf "$cmd_tpl" \
+              "$dataset_name" "$dataset_path" \
+              "$method_base" "$method_path" \
+              "$runtime_args" \
+              "$job_name")
+
+          printf '%s|%s\n' "$job_name" "$cmd"
+          continue
+        fi
+
         runtime_args=$(runtime_args_for_method "$method_base")
         if [[ "$runtime_args" == "__EPS_FIXED__" ]]; then
-          while IFS= read -r eps_path; do
+          for eps_path in "$runtime_dir/dp"/eps_*.yaml; do
+            [[ -f "$eps_path" ]] || continue
             eps_name=$(basename "$eps_path")
             eps_name="${eps_name%.yaml}"
 
@@ -174,7 +295,7 @@ function all_methods_runtimes() {
                 "$job_name")
 
             printf '%s|%s\n' "$job_name" "$cmd"
-          done < <(epsilon_runtime_files)
+          done
           continue
         fi
 

@@ -1,1 +1,4 @@
+params:
+  epsilon: "*"
+
 model_checkpoint: models/gpt2-paraphraser

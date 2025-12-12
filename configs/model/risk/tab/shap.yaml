@@ -1,3 +1,6 @@
+params:
+  rhos: ["*"]
+
 explainer:
   name: shap
   tri_pipeline: models/tri_pipelines/tab/20251110_183205

@@ -1,9 +1,9 @@
-add_probability: 0.0
-delete_probability: 0.0
+params:
+  epsilon: "*"
 
 explainer:
   name: shap
-  tri_pipeline: models/tri_pipelines/reddit/20251119_142033/pretraining/checkpoint-72
+  tri_pipeline: models/tri_pipelines/reddit/20251110_190043
   risk_temperature: 0.1
 
 precomputation:

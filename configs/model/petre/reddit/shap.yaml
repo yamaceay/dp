@@ -1,6 +1,9 @@
+params:
+  ks: ["*"]
+
 explainer:
   name: shap
-  tri_pipeline: models/tri_pipelines/reddit/20251119_142033/pretraining/checkpoint-72
+  tri_pipeline: models/tri_pipelines/reddit/20251110_190043
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_shap.jsonl

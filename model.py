@@ -4,6 +4,8 @@ import json
 import yaml
 import time
 from datetime import datetime
+import fnmatch
+from pathlib import Path
 
 from dp.methods.anonymizer import Anonymizer, AnonymizationBuilder
 from dp.methods.registry import MODEL_REGISTRY, get_capabilities
@@ -54,6 +56,83 @@ def load_config(path: Optional[str]) -> dict:
         return {}
     with open(path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f) or {}
+
+
+def _normalize_param_patterns(value: object) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        patterns: List[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("params entries must be strings")
+            patterns.append(item)
+        return patterns
+    raise ValueError("params entries must be a string or list of strings")
+
+
+def _match_any(value: str, patterns: List[str]) -> bool:
+    if not patterns:
+        return False
+    for pat in patterns:
+        if fnmatch.fnmatch(value, pat):
+            return True
+    return False
+
+
+def _runtime_suffix_from_source(path: str) -> Optional[Tuple[str, str]]:
+    p = Path(path)
+    name = p.name
+    if name.startswith("eps_") and name.endswith(".yaml") and p.parent.name == "dp":
+        return "epsilon", name[len("eps_") : -len(".yaml")]
+    if name.startswith("lambda_") and name.endswith(".yaml") and p.parent.name == "pii_confidence":
+        return "lambdas", name[len("lambda_") : -len(".yaml")]
+    if name.startswith("rho_") and name.endswith(".yaml") and p.parent.name == "risk_tolerance":
+        return "rhos", name[len("rho_") : -len(".yaml")]
+    if name.startswith("k_") and name.endswith(".yaml") and p.parent.name == "k_anon":
+        return "ks", name[len("k_") : -len(".yaml")]
+    return None
+
+
+def validate_runtime_params(model_config: dict, runtime_bundle: object) -> None:
+    params_obj = model_config.get("params")
+    if params_obj is None:
+        return
+    if not isinstance(params_obj, dict):
+        raise ValueError("params must be a mapping")
+
+    allowed: Dict[str, List[str]] = {
+        "epsilon": _normalize_param_patterns(params_obj.get("epsilon")),
+        "lambdas": _normalize_param_patterns(params_obj.get("lambdas")),
+        "rhos": _normalize_param_patterns(params_obj.get("rhos")),
+        "ks": _normalize_param_patterns(params_obj.get("ks")),
+    }
+
+    sources = getattr(runtime_bundle, "sources", None)
+    if sources is None:
+        return
+    if not isinstance(sources, list):
+        raise ValueError("runtime sources must be a list")
+
+    eps_seen = 0
+    for src in sources:
+        if not isinstance(src, str):
+            continue
+        parsed = _runtime_suffix_from_source(src)
+        if parsed is None:
+            continue
+        key, suffix = parsed
+        patterns = allowed.get(key, [])
+        if not patterns:
+            raise ValueError(f"Runtime config '{src}' sets '{key}', which is not allowed by model params")
+        if not _match_any(suffix, patterns):
+            raise ValueError(f"Runtime config '{src}' value '{suffix}' is not allowed for '{key}'")
+        if key == "epsilon":
+            eps_seen += 1
+            if eps_seen > 1:
+                raise ValueError("epsilon must be provided as a single runtime param")
 
 
 def load_data(data_kwargs: dict) -> List[DatasetRecord]:
@@ -272,6 +351,7 @@ if __name__ == "__main__":
     
     records = load_data(data_kwargs)
     model_config = load_config(args.model_in)
+    validate_runtime_params(model_config, runtime_bundle)
     precompute_config = extract_precompute_config(model_config)
     capabilities = get_capabilities(args.model)
     explainer_config = extract_explainer_config(model_config)
