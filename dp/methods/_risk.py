@@ -97,7 +97,7 @@ class RiskAnonymizer(Anonymizer):
         if self._unit is None:
             self._unit = ByRiskUnit(temperature=self._temperature)
         
-        self._unit.set_thresholds(rho_params.values())
+        self._unit.set_thresholds(rho_params.values(), name="rho")
         self._unit.set_risk_scores(scores)
         
         runtime_stats: Dict[str, int] = {"masked": 0}

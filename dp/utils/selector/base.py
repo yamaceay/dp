@@ -12,6 +12,7 @@ from dp.utils.token_ledger import TokenLedger
 
 @dataclass
 class AnonymizationStep:
+    threshold_type: Optional[str]
     threshold: Any
     text: str
     ledger: TokenLedger
@@ -25,11 +26,15 @@ ApplyFn = Callable[[int, TokenLedger], None]
 class AnonymizerUnit(ABC):
     def __init__(self, temperature: float = 1.0) -> None:
         self._thresholds: List[Any] = []
+        self._threshold_name: Optional[str] = None
         self._risk_scores: Optional[np.ndarray] = None
         self._temperature = float(temperature) if temperature > 0 else 1.0
 
-    def set_thresholds(self, thresholds: List[Any]) -> None:
+    def set_thresholds(self, thresholds: List[Any], name: str) -> None:
         self._thresholds = list(thresholds)
+        if not name or not str(name).strip():
+            raise ValueError("threshold name must be a non-empty string")
+        self._threshold_name = str(name)
 
     def set_risk_scores(self, scores: np.ndarray) -> None:
         self._risk_scores = scores
@@ -77,6 +82,9 @@ class AnonymizerUnit(ABC):
         if not self._thresholds:
             return
 
+        if self._threshold_name is None:
+            raise ValueError("threshold name must be set before anonymization")
+
         ledger = TokenLedger(text, offsets)
         processed: set[int] = set()
         ordered = self.order_thresholds(self._thresholds)
@@ -93,10 +101,12 @@ class AnonymizerUnit(ABC):
                 new_indices.append(idx)
 
             if new_indices:
+                metadata: Dict[str, Any] = {"processed_count": len(processed)}
                 yield AnonymizationStep(
+                    threshold_type=self._threshold_name,
                     threshold=threshold,
                     text=ledger.render_offsets(text),
                     ledger=ledger,
                     new_indices=new_indices,
-                    metadata={"processed_count": len(processed)},
+                    metadata=metadata,
                 )

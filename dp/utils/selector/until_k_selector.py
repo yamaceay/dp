@@ -65,6 +65,7 @@ class UntilKUnit(AnonymizerUnit):
         for target_k in k_values:
             if current_rank >= target_k:
                 yield AnonymizationStep(
+                    threshold_type=self._threshold_name,
                     threshold=target_k,
                     text=current_text,
                     ledger=ledger,
@@ -91,6 +92,7 @@ class UntilKUnit(AnonymizerUnit):
                 current_rank = self._rank_evaluator(current_text, self._target_label)
 
             yield AnonymizationStep(
+                threshold_type=self._threshold_name,
                 threshold=target_k,
                 text=current_text,
                 ledger=ledger,

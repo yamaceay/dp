@@ -388,13 +388,10 @@ class DPMlmAnonymizer(Anonymizer):
                     hp_with_threshold = {**hp}
                     threshold = step.threshold
                     if threshold is not None:
-                        if isinstance(threshold, float):
-                            if threshold < 1:
-                                hp_with_threshold["rho"] = threshold
-                            else:
-                                hp_with_threshold["lambda"] = threshold
-                        elif isinstance(threshold, int):
-                            hp_with_threshold["k"] = threshold
+                        threshold_type = step.threshold_type
+                        if threshold_type not in {"lambda", "rho", "k"}:
+                            raise ValueError(f"Unknown threshold name: {threshold_type!r}")
+                        hp_with_threshold[threshold_type] = threshold
 
                     private_text = step.text
                     ledger = step.ledger

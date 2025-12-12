@@ -618,7 +618,7 @@ class PetreAnonymizer(Anonymizer):
         if self._unit is None:
             self._unit = UntilKUnit()
         
-        self._unit.set_thresholds(k_params.values())
+        self._unit.set_thresholds(k_params.values(), name="k")
         
         scores = self._token_scores_for_state(state)
         self._unit.set_risk_scores(scores)

@@ -41,6 +41,7 @@ class AllUnit(AnonymizerUnit):
             apply_fn(idx, ledger)
 
         yield AnonymizationStep(
+            threshold_type=None,
             threshold=None,
             text=ledger.render_offsets(text),
             ledger=ledger,

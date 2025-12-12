@@ -189,20 +189,20 @@ def build_selector(selector_config: dict, runtime_bundle=None):
         detector = PIIDetector(model_name=pii_path, use_chunking=pii_chunking)
         unit = PIIOnlySelector(pii_detector=detector)
         if runtime_bundle and hasattr(runtime_bundle, 'pii_confidence_values') and runtime_bundle.pii_confidence_values:
-            unit.set_thresholds(runtime_bundle.pii_confidence_values)
+            unit.set_thresholds(runtime_bundle.pii_confidence_values, name="lambda")
         return unit
     
     if selector_type == "by_risk":
         temperature = selector_config.get("risk_temperature", 1.0)
         unit = ByRiskSelector(temperature=temperature)
         if runtime_bundle and hasattr(runtime_bundle, 'risk_tolerance_values') and runtime_bundle.risk_tolerance_values:
-            unit.set_thresholds(runtime_bundle.risk_tolerance_values)
+            unit.set_thresholds(runtime_bundle.risk_tolerance_values, name="rho")
         return unit
     
     if selector_type == "until_k":
         unit = UntilKSelector()
         if runtime_bundle and hasattr(runtime_bundle, 'k_values') and runtime_bundle.k_values:
-            unit.set_thresholds(runtime_bundle.k_values)
+            unit.set_thresholds(runtime_bundle.k_values, name="k")
         return unit
     
     return AllSelector()
@@ -292,14 +292,36 @@ def resolve_requested_indices(available: List[int], requested: Optional[List[int
 def initialize_builder_params(anonymizer: Anonymizer, runtime_bundle):
     from dp.methods.constants import KParams, LambdaParams, RhoParams
     from dp.methods.constants import EpsilonParam
-    if runtime_bundle.k_values:
-        return [KParams(ks=runtime_bundle.k_values)]
-    if runtime_bundle.pii_confidence_values:
-        return [LambdaParams(lambdas=runtime_bundle.pii_confidence_values)]
-    if runtime_bundle.risk_tolerance_values:
-        return [RhoParams(rhos=runtime_bundle.risk_tolerance_values)]
-    if runtime_bundle.epsilon_value:
+    model_name = getattr(anonymizer, "MODEL_NAME", None)
+
+    if model_name == "dpmlm":
+        if getattr(runtime_bundle, "epsilon_value", None) is None:
+            return []
         return [EpsilonParam(epsilon=runtime_bundle.epsilon_value)]
+
+    if model_name == "baroud":
+        if not getattr(runtime_bundle, "pii_confidence_values", None):
+            return []
+        return [LambdaParams(lambdas=runtime_bundle.pii_confidence_values)]
+
+    if model_name == "risk":
+        if not getattr(runtime_bundle, "risk_tolerance_values", None):
+            return []
+        return [RhoParams(rhos=runtime_bundle.risk_tolerance_values)]
+
+    if model_name == "petre":
+        if not getattr(runtime_bundle, "k_values", None):
+            return []
+        return [KParams(ks=runtime_bundle.k_values)]
+
+    if getattr(runtime_bundle, "epsilon_value", None) is not None:
+        return [EpsilonParam(epsilon=runtime_bundle.epsilon_value)]
+    if getattr(runtime_bundle, "k_values", None):
+        return [KParams(ks=runtime_bundle.k_values)]
+    if getattr(runtime_bundle, "pii_confidence_values", None):
+        return [LambdaParams(lambdas=runtime_bundle.pii_confidence_values)]
+    if getattr(runtime_bundle, "risk_tolerance_values", None):
+        return [RhoParams(rhos=runtime_bundle.risk_tolerance_values)]
     return []
 
 

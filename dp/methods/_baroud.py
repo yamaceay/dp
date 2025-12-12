@@ -83,7 +83,7 @@ class BaroudAnonymizer(Anonymizer):
             from dp.utils.selector.all_selector import AllUnit
             self._unit = AllUnit()
         
-        self._unit.set_thresholds(lambda_params.values())
+        self._unit.set_thresholds(lambda_params.values(), name="lambda")
         
         spans = [(ann.start, ann.end) for ann in anns]
         
