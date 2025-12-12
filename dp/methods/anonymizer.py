@@ -1,9 +1,9 @@
-from typing import Iterator, List, Optional, Iterable, Union, TYPE_CHECKING
+from typing import Iterator, List, Optional, Iterable, Union, TYPE_CHECKING, Tuple
 from abc import ABC
 from dataclasses import dataclass
 from tqdm import tqdm
 
-from dp.methods.constants import Buckets
+from dp.methods.constants import Buckets, BucketDict
 from dp.loaders.base import DatasetRecord
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.selector.base import TokenSelector
@@ -11,6 +11,7 @@ from dp.utils.splitter import TextSplitter
 
 if TYPE_CHECKING:
     from dp.utils.output import OutputHandler
+    import torch
 
 @dataclass
 class AnonymizationResult:
@@ -39,31 +40,23 @@ class Anonymizer(ABC):
     def builder(self):
         return AnonymizationBuilder(self, self._model_name)
 
-    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], **kwargs) -> AnonymizationResult:
+    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
         raise NotImplementedError()
     
-    def anonymize_from_dataset(self, idx: int, *args, buckets: Buckets = [], **kwargs) -> AnonymizationResult:
+    def anonymize_from_dataset(self, idx: int, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
         raise NotImplementedError()
 
-    def anonymize(self, *args, text_or_idx: Union[str, int] = None, buckets: Buckets = [], **kwargs) -> AnonymizationResult:
-        if self.capabilities.must_use_dataset:
-            if isinstance(text_or_idx, str):
-                raise ValueError("This anonymizer requires a dataset index for anonymization.")
-            return self.anonymize_from_dataset(text_or_idx, *args, buckets=buckets, **kwargs)
-        return self.anonymize_any_text(text_or_idx, *args, buckets=buckets, **kwargs)
-    
+    def anonymize(self, text_or_idx: Union[str, int], *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
+        if isinstance(text_or_idx, str):
+            return self.anonymize_any_text(text_or_idx, *args, buckets=buckets, **kwargs)
+        return self.anonymize_from_dataset(text_or_idx, *args, buckets=buckets, **kwargs)
 
     def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> None:
         pass
 
-    def stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, buckets: Buckets = [], **kwargs) -> Iterator[AnonymizationResult]:
-        if self.capabilities.must_use_dataset and all(isinstance(i, int) for i in texts_or_indices):
-            for idx in tqdm(texts_or_indices, desc="Anonymizing dataset records", unit="record", total=len(texts_or_indices)):
-                yield self.anonymize(idx, *args, buckets=buckets, **kwargs)
-        
-        else:
-            for text in tqdm(texts_or_indices, desc="Anonymizing texts", unit="text", total=len(texts_or_indices)):
-                yield self.anonymize(text, *args, buckets=buckets, **kwargs)
+    def stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, buckets: Buckets = [], **kwargs) -> Iterator[List[Tuple[BucketDict, AnonymizationResult]]]:
+        for text in tqdm(texts_or_indices, desc="Anonymizing texts", unit="text", total=len(texts_or_indices)):
+            yield self.anonymize(text, *args, buckets=buckets, **kwargs)
 
     def set_dataset_records(self, dataset_records: Iterable[DatasetRecord]) -> None:
         self._dataset_records = dataset_records

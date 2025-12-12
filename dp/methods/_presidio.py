@@ -1,5 +1,6 @@
+from typing import List, Tuple
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
-from dp.methods.constants import Buckets
+from dp.methods.constants import Buckets, buckets_to_dicts, BucketDict
 from dp.loaders.base import TextAnnotation
 
 class PresidioAnonymizer(Anonymizer):
@@ -21,9 +22,10 @@ class PresidioAnonymizer(Anonymizer):
                 self._analyzer = None
                 self._presidio_available = False
 
-    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], **kwargs) -> AnonymizationResult:
+    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not getattr(self, "_presidio_available", False) or self._analyzer is None:
-            return AnonymizationResult(text="[PRESIDIO ANONYMIZED TEXT]")
+            hp = {} if not buckets else buckets_to_dicts(buckets)[0]
+            return [(hp, AnonymizationResult(text="[PRESIDIO ANONYMIZED TEXT]"))]
 
         analyzer = self._analyzer
         results = analyzer.analyze(text=text, language="en")
@@ -49,4 +51,5 @@ class PresidioAnonymizer(Anonymizer):
         out_parts.append(text[last:])
         anonymized = "".join(out_parts)
         metadata = {"method": "presidio"}
-        return AnonymizationResult(text=anonymized, spans=spans, metadata=metadata)
+        hp = {} if not buckets else buckets_to_dicts(buckets)[0]
+        return [(hp, AnonymizationResult(text=anonymized, spans=spans, metadata=metadata))]

@@ -7,7 +7,7 @@ from collections import Counter
 
 from dp.loaders import DatasetRecord
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
-from dp.methods.constants import Buckets, EpsilonParam
+from dp.methods.constants import Buckets, EpsilonParam, BucketDict, buckets_to_dicts
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.utils.token_ledger import TokenLedger
@@ -58,7 +58,6 @@ class DPMlmAnonymizer(Anonymizer):
             from nltk.tokenize.treebank import TreebankWordDetokenizer
 
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)
-            # self.tokenizer.mask_token can be changed
             self.model = AutoModelForMaskedLM.from_pretrained(self.model_checkpoint).to(self.device)
             self.detokenizer = TreebankWordDetokenizer()
 
@@ -304,7 +303,11 @@ class DPMlmAnonymizer(Anonymizer):
         processing_order = list(range(len(tokens)))
         if self.explainer is not None or used_precomputed:
             risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name, critical_indices=critical_indices)
-            if len(risk_scores) == len(critical_tokens):
+            if critical_indices:
+                probs = np.ones(len(critical_indices), dtype=float) / float(len(critical_indices))
+            else:
+                probs = np.array([], dtype=float)
+            if len(risk_scores) == len(critical_indices):
                 probs = self._weights_to_probs(risk_scores, temperature=self.risk_temperature)
 
             if sort_tokens_by_risk:
@@ -379,7 +382,7 @@ class DPMlmAnonymizer(Anonymizer):
 
         if self.add_probability > 0:
             while np.random.rand() < self.add_probability:
-                context_text = ledger.render(self.detokenizer.detokenize)
+                context_text = ledger.render_offsets(text)
                 additional_token = self._generate_additional_token(context_text, token_epsilon)
                 if not additional_token:
                     break
@@ -389,109 +392,125 @@ class DPMlmAnonymizer(Anonymizer):
     def anonymize_any_text(
         self,
         text: str,
-        epsilon: float,
         *args,
+        buckets: Buckets = [],
         record_name: Optional[str] = None,
         **kwargs,
-    ) -> AnonymizationResult:
+    ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not text or not text.strip():
-            return
-        
+            return []
+
+        combos = buckets_to_dicts(buckets)
+        outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         sort_tokens_by_risk = self.sort_tokens_by_risk
 
-        try:
-            tokens, offsets = self._tokenize(text)
-            used_precomputed = False
+        for hp in combos:
+            eps_val = hp.get("epsilon")
+            if eps_val is None:
+                raise ValueError("DPMlmAnonymizer requires epsilon via Buckets (EpsilonParam)")
 
-            selector_requires_risks = self._selector_supports_risks()
-            if selector_requires_risks:
-                risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name)
+            try:
+                tokens, offsets = self._tokenize(text)
+                used_precomputed = False
 
-            pii_spans = []
-            if self.pii_detector is not None:
-                detector_kwargs = {"offsets": offsets}
+                selector_requires_risks = self._selector_supports_risks()
                 if selector_requires_risks:
-                    detector_kwargs["risks"] = self._weights_to_probs(
-                        risk_scores,
-                        temperature=self.risk_temperature or 1.0,
-                    )
-                pii_spans = self.pii_detector.select(text, **detector_kwargs)
+                    risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name)
 
-            if pii_spans:
-                critical_indices = []
-                for i, (token, (token_start, token_end)) in enumerate(zip(tokens, offsets)):
-                    if pii_spans and not any(
-                        not (token_end <= span.start or token_start >= span.end)
-                        for span in pii_spans
-                    ):
+                pii_spans = []
+                if self.pii_detector is not None:
+                    detector_kwargs = {"offsets": offsets}
+                    if selector_requires_risks:
+                        detector_kwargs["risks"] = self._weights_to_probs(
+                            risk_scores,
+                            temperature=self.risk_temperature or 1.0,
+                        )
+                    pii_spans = self.pii_detector.select(text, **detector_kwargs)
+
+                if pii_spans:
+                    critical_indices = []
+                    for i, (token, (token_start, token_end)) in enumerate(zip(tokens, offsets)):
+                        if pii_spans and not any(
+                            not (token_end <= span.start or token_start >= span.end)
+                            for span in pii_spans
+                        ):
+                            continue
+                        critical_indices.append(i)
+
+                    if not critical_indices:
+                        outputs.append((hp, AnonymizationResult(text=text, metadata={"epsilon": eps_val, "method": "dpmlm", "perturbed": 0, "total": 0})))
                         continue
-                    critical_indices.append(i)
+                else:
+                    critical_indices = list(range(len(tokens)))
 
-                if not critical_indices:
-                    for eps in epsilon:
-                        yield eps, [AnonymizationResult(text=text, metadata={"epsilon": eps, "method": "dpmlm", "perturbed": 0, "total": 0})]
-                    return
-            else:
-                critical_indices = list(range(len(tokens)))
+                critical_tokens = [tokens[i] for i in critical_indices]
 
-            critical_tokens = [tokens[i] for i in critical_indices]
+                perturbation_ratio = 1.0
+                if self.compensate_epsilon:
+                    perturbation_ratio = len(critical_tokens) / len(tokens)
+                    perturbation_ratio = max(perturbation_ratio, 1e-6)
 
-            perturbation_ratio = 1.0
-            if self.compensate_epsilon:
-                perturbation_ratio = len(critical_tokens) / len(tokens)
-                perturbation_ratio = max(perturbation_ratio, 1e-6)
+                probs = np.ones(len(critical_tokens)) / len(critical_tokens)
 
-            probs = np.ones(len(critical_tokens)) / len(critical_tokens)
-            
-            compensated_epsilon = epsilon * perturbation_ratio
-            epsilon_values = [compensated_epsilon / (w * len(probs)) for w in probs]
-            critical_map = {idx: eps_val for idx, eps_val in zip(critical_indices, epsilon_values)}
+                compensated_epsilon = float(eps_val) * perturbation_ratio
+                epsilon_values = [compensated_epsilon / (w * len(probs)) for w in probs]
+                critical_map = {idx: eps for idx, eps in zip(critical_indices, epsilon_values)}
 
-            ledger = TokenLedger(text, offsets)
-            runtime_stats = {
-                "perturbed": 0,
-                "total": 0,
-                "added": 0,
-                "deleted": 0,
-            }
-            processed_indices = set()
+                ledger = TokenLedger(text, offsets)
+                runtime_stats = {
+                    "perturbed": 0,
+                    "total": 0,
+                    "added": 0,
+                    "deleted": 0,
+                }
+                processed_indices = set()
 
-            processing_order = self._get_processing_order(
-                tokens,
-                offsets,
-                text,
-                record_name,
-                critical_indices,
-                sort_tokens_by_risk,
-                used_precomputed,
-            )
-            for i in processing_order:
-                self._anonymize_single_token(
-                    pii_spans, ledger, processed_indices, critical_map,
-                    compensated_epsilon, text, token, i, tokens, runtime_stats
+                processing_order = self._get_processing_order(
+                    tokens,
+                    offsets,
+                    text,
+                    record_name,
+                    critical_indices,
+                    sort_tokens_by_risk,
+                    used_precomputed,
                 )
+                for i in processing_order:
+                    self._anonymize_single_token(
+                        pii_spans,
+                        ledger,
+                        processed_indices,
+                        critical_map,
+                        compensated_epsilon,
+                        text,
+                        tokens[i],
+                        i,
+                        tokens,
+                        runtime_stats,
+                    )
 
-            private_text = ledger.render(self.detokenizer.detokenize)
+                private_text = ledger.render_offsets(text)
 
-            metadata = {
-                "epsilon": eps,
-                "method": "dpmlm",
-                "model": self.model_checkpoint,
-                "token_edits": ledger.edits_metadata(),
-                **runtime_stats
-            }
-            if self.compensate_epsilon:
-                metadata["effective_epsilon"] = compensated_epsilon
-            if self.pii_detector is not None:
-                metadata["pii_detection"] = "enabled"
-                metadata["pii_spans_count"] = len(pii_spans)
-            if used_precomputed:
-                metadata["explainer"] = "PrecomputedRisk"
-                metadata["critical_tokens"] = len(critical_tokens)
-            elif self.explainer is not None:
-                metadata["explainer"] = self.explainer.__class__.__name__
-                metadata["critical_tokens"] = len(critical_tokens)
+                metadata = {
+                    "epsilon": eps_val,
+                    "method": "dpmlm",
+                    "model": self.model_checkpoint,
+                    "token_edits": ledger.edits_metadata(),
+                    **runtime_stats,
+                }
+                if self.compensate_epsilon:
+                    metadata["effective_epsilon"] = compensated_epsilon
+                if self.pii_detector is not None:
+                    metadata["pii_detection"] = "enabled"
+                    metadata["pii_spans_count"] = len(pii_spans)
+                if used_precomputed:
+                    metadata["explainer"] = "PrecomputedRisk"
+                    metadata["critical_tokens"] = len(critical_tokens)
+                elif self.explainer is not None:
+                    metadata["explainer"] = self.explainer.__class__.__name__
+                    metadata["critical_tokens"] = len(critical_tokens)
 
-            yield eps, [AnonymizationResult(text=private_text, metadata=metadata)]
-        finally:
-            clear_memory()
+                outputs.append((hp, AnonymizationResult(text=private_text, metadata=metadata)))
+            finally:
+                clear_memory()
+
+        return outputs

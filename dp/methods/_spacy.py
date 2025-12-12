@@ -1,7 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
-from dp.methods.constants import Buckets
+from dp.methods.constants import Buckets, buckets_to_dicts, BucketDict
 from dp.loaders.base import TextAnnotation
 
 spacy_models = ["en_core_web_sm", "en_core_web_lg"]
@@ -29,9 +29,10 @@ class SpacyAnonymizer(Anonymizer):
             if not model_loaded:
                 raise ImportError("Could not load any spaCy model. Please install one of: " + ", ".join(spacy_models))
 
-    def anonymize_any_text(self, text: str, labels: List[str] = None, *args, buckets: Buckets = [], **kwargs) -> AnonymizationResult:
+    def anonymize_any_text(self, text: str, labels: List[str] = None, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
         entities = self._extract_entities(text, labels)
-        return self._anonymize_entities(text, entities)
+        hp = {} if not buckets else buckets_to_dicts(buckets)[0]
+        return [(hp, self._anonymize_entities(text, entities))]
 
     def _extract_entities(self, text: str, labels: Optional[List[str]]) -> List[TextAnnotation]:
         doc = self._nlp(text or "")

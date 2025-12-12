@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Any
+from itertools import product
 
 PII_CLASSIFIER_MODEL_LIST: List[str] = ["baroud"]
 RISK_MASKER_MODEL_LIST: List[str] = ["risk"]
@@ -64,3 +65,55 @@ class EpsilonParam(SingleParam):
         return self.epsilon
 
 Buckets = List[Union[MultiParams, SingleParam]]
+
+class BucketDict(dict):
+    def encode(self) -> str:
+        parts: List[str] = []
+        for key, val in self.items():
+            if key == "epsilon":
+                num = int(val)
+                parts.append(f"epsilon={num:04d}")
+            elif key in ("rho", "lambda"):
+                num = int(round(float(val) * 100))
+                parts.append(f"{key}={num:03d}")
+            elif key in ("k", "ks"):
+                values: List[int] = val if isinstance(val, list) else [int(val)]
+                encoded = ",".join(f"{v:03d}" for v in values)
+                parts.append(f"{key}={encoded}")
+            else:
+                parts.append(f"{key}={val}")
+        return "?" + "&".join(parts) if parts else ""
+
+def buckets_to_dicts(buckets: Buckets) -> List[BucketDict]:
+    if not buckets:
+        return [BucketDict()]
+
+    value_sets: List[Dict[str, List[Any]]] = []
+    singletons: Dict[str, Any] = {}
+
+    for b in buckets:
+        if isinstance(b, KParams):
+            value_sets.append({b.name: list(b.values())})
+        elif isinstance(b, RhoParams):
+            value_sets.append({b.name: list(b.values())})
+        elif isinstance(b, LambdaParams):
+            value_sets.append({b.name: list(b.values())})
+        elif isinstance(b, EpsilonParam):
+            singletons[b.name] = b.value()
+
+    combos: List[BucketDict] = []
+    if value_sets:
+        keys = [list(d.keys())[0] for d in value_sets]
+        value_lists = [list(d.values())[0] for d in value_sets]
+        for values in product(*value_lists):
+            hp = BucketDict()
+            hp.update(singletons)
+            for key, val in zip(keys, values):
+                hp[key] = val
+            combos.append(hp)
+    else:
+        hp = BucketDict()
+        hp.update(singletons)
+        combos.append(hp)
+
+    return combos

@@ -14,7 +14,7 @@ GridKey = str
 class RuntimeConfigSet:
     base_config: Dict[str, Any] = field(default_factory=dict)
     k_values: List[int] = field(default_factory=list)
-    epsilon_values: List[float] = field(default_factory=list)
+    epsilon_value: float = None
     pii_confidence_values: List[float] = field(default_factory=list)
     risk_tolerance_values: List[float] = field(default_factory=list)
     sources: List[str] = field(default_factory=list)
@@ -108,7 +108,7 @@ def _aggregate_configs(configs: Iterable[tuple[str, Dict[str, Any]]]) -> Runtime
     return RuntimeConfigSet(
         base_config=base,
         k_values=numeric_values["k"],
-        epsilon_values=numeric_values["epsilon"],
+        epsilon_value=numeric_values["epsilon"][0] if numeric_values["epsilon"] else None,
         pii_confidence_values=numeric_values["pii_confidence"],
         risk_tolerance_values=numeric_values["risk_tolerance"],
         sources=sources,

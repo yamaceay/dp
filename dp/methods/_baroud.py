@@ -1,8 +1,8 @@
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Tuple
 from hashlib import sha256
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
-from dp.methods.constants import Buckets, LambdaParams
+from dp.methods.constants import Buckets, LambdaParams, buckets_to_dicts, BucketDict
 from dp.loaders.base import TextAnnotation, DatasetRecord
 from dp.utils.token_ledger import TokenLedger
 
@@ -36,7 +36,7 @@ class BaroudAnonymizer(Anonymizer):
         predictions = self.pii_detector.predict(records)
         return [list(pred.spans or []) for pred in predictions]
 
-    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], **kwargs) -> List[AnonymizationResult]:
+    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
         anns = self._annotations_cache[self.hash_text(text)]
         if len(buckets) != 1 or not isinstance(buckets[0], LambdaParams):
             raise ValueError("BaroudAnonymizer only supports LambdaParams for grid anonymization.")
@@ -45,12 +45,13 @@ class BaroudAnonymizer(Anonymizer):
         sorted_thresholds = sorted(lambda_params.values(), reverse=True)
         spans = [(ann.start, ann.end) for ann in anns]
         ledger = TokenLedger(text, spans)
-        
-        aggregated: List[AnonymizationResult] = []
+        combos = buckets_to_dicts(buckets)
+
+        aggregated: List[Tuple[BucketDict, AnonymizationResult]] = []
         all_result_spans: List[TextAnnotation] = []
         prev_threshold = 1.0
-        
-        for threshold in sorted_thresholds:
+
+        for threshold, hp in zip(sorted_thresholds, combos):
             for idx, ann in enumerate(anns):
                 if ann.confidence is None:
                     continue
@@ -75,7 +76,7 @@ class BaroudAnonymizer(Anonymizer):
                     "pii_detected": len(all_result_spans),
                     "lambda": threshold,
                 }
-                aggregated.append(AnonymizationResult(text=anonymized_text, spans=all_result_spans[:], metadata=metadata))
+                aggregated.append((hp, AnonymizationResult(text=anonymized_text, spans=all_result_spans[:], metadata=metadata)))
             
             prev_threshold = threshold
         

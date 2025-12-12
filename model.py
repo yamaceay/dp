@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, Optional, List, Tuple, Union
 import argparse
 import json
 import yaml
@@ -44,9 +44,8 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--annotations', type=str, choices=['spacy', 'presidio', 'manual'], default=None)
     parser.add_argument('--annotations_in', type=str, default=None)
     parser.add_argument('--list_annotations', action='store_true')
-    parser.add_argument('--stream', action='store_true')
     parser.add_argument('--unique_name', type=str, default=None)
-    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'stream', 'unique_name']
+    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'unique_name']
 
 
 def load_config(path: Optional[str]) -> dict:
@@ -173,7 +172,6 @@ def configure_model(model: Anonymizer, model_config: dict, explainer_config: dic
     
     if capabilities.can_use_scoring:
         model.set_scoring_strategy(build_explainer(explainer_config, model_config, capabilities, model_name))
-    
 
 
 def load_annotations(annotations_in: str, records: List[DatasetRecord]) -> Dict[str, List]:
@@ -208,16 +206,16 @@ def resolve_requested_indices(available: List[int], requested: Optional[List[int
 
 
 def initialize_builder_params(anonymizer: Anonymizer, runtime_bundle):
+    from dp.methods.constants import KParams, LambdaParams, RhoParams
+    from dp.methods.constants import EpsilonParam
     if runtime_bundle.k_values:
-        from dp.methods.constants import KParams
         return [KParams(ks=runtime_bundle.k_values)]
     if runtime_bundle.pii_confidence_values:
-        return [("pii_confidence", runtime_bundle.pii_confidence_values)]
+        return [LambdaParams(lambdas=runtime_bundle.pii_confidence_values)]
     if runtime_bundle.risk_tolerance_values:
-        return [("risk_tolerance", runtime_bundle.risk_tolerance_values)]
-    if hasattr(runtime_bundle, 'epsilon_values') and runtime_bundle.epsilon_values:
-        from dp.methods.constants import EpsilonParam
-        return [EpsilonParam(epsilon=runtime_bundle.epsilon_values[0])]
+        return [RhoParams(rhos=runtime_bundle.risk_tolerance_values)]
+    if runtime_bundle.epsilon_value:
+        return [EpsilonParam(epsilon=runtime_bundle.epsilon_value)]
     return []
 
 
@@ -248,25 +246,6 @@ def output_results(results: List, indices: List[Optional[int]], output_handler, 
         if verbose:
             print(f"\n{'='*80}\nResult {i+1}/{len(results)}\n{'='*80}")
         output_handler.output(result, idx=idx, **kwargs)
-
-
-def stream_anonymize(anonymizer: Anonymizer, builder: AnonymizationBuilder, capabilities, output_handler, runtime_config: dict, record_indices: List[int], dataset_indices: Optional[List[int]], texts: Optional[List[str]], runtime_bundle, **metadata) -> Tuple[int, float]:
-    run_start = time.time()
-    processed = 0
-    
-    if capabilities.must_use_dataset:
-        for abs_idx, local_idx in zip(record_indices, dataset_indices):
-            result = anonymizer.anonymize_from_dataset(idx=local_idx, **runtime_config)
-            output_handler.output(result, idx=abs_idx, **metadata)
-            processed += 1
-    else:
-        stream = anonymizer.anonymize_stream(texts=texts, **runtime_config)
-        for pos, result in enumerate(stream):
-            output_handler.output(result, idx=record_indices[pos], **metadata)
-            processed += 1
-    
-    elapsed = time.time() - run_start
-    return processed, elapsed
 
 
 if __name__ == "__main__":
@@ -315,6 +294,16 @@ if __name__ == "__main__":
     output_handler = output_handler_cls(timestamp=batch_timestamp) if args.output == "jsonl" else output_handler_cls()
     
     buckets = initialize_builder_params(model, runtime_bundle)
+
+    runtime_args: Dict[str, Any] = {}
+    if getattr(runtime_bundle, 'epsilon_value', None) is not None:
+        runtime_args['epsilon'] = runtime_bundle.epsilon_value
+    if getattr(runtime_bundle, 'k_values', None):
+        runtime_args['ks'] = runtime_bundle.k_values
+    if getattr(runtime_bundle, 'pii_confidence_values', None):
+        runtime_args['lambdas'] = runtime_bundle.pii_confidence_values
+    if getattr(runtime_bundle, 'risk_tolerance_values', None):
+        runtime_args['rhos'] = runtime_bundle.risk_tolerance_values
     
     dataset_indices_all = compute_dataset_indices(len(records), data_kwargs)
     index_lookup = {idx: pos for pos, idx in enumerate(dataset_indices_all)}
@@ -340,7 +329,6 @@ if __name__ == "__main__":
             record_indices = selected_indices
         dataset_indices = None
     
-    stream_enabled = runtime_kwargs.pop("stream", False)
     metadata = {
         "dataset": args.data,
         "model": args.model,
@@ -348,32 +336,24 @@ if __name__ == "__main__":
         "unique_name": args.unique_name
     }
 
-    pre_inputs = dataset_indices if capabilities.must_use_dataset else texts_or_indices
+    anonymization_inputs = dataset_indices if capabilities.must_use_dataset else texts_or_indices
     pre_risk_scores = None
     if precompute_config.get("risk_scores"):
         pre_risk_scores = load_precomputed_risk(precompute_config["risk_scores"])
     pre_start = time.time()
-    try:
-        model.pre_stream_anonymize(texts_or_indices=pre_inputs, risk_scores=pre_risk_scores)
-    except NotImplementedError:
-        pass
+    model.pre_stream_anonymize(texts_or_indices=anonymization_inputs, risk_scores=pre_risk_scores)
     pre_elapsed = time.time() - pre_start
     print(f"✓ Pre-computation before anonymization completed in {pre_elapsed:.2f}s")
 
     run_start = time.time()
     processed = 0
-    
-    if capabilities.must_use_dataset:
-        for abs_idx, local_idx in zip(record_indices, dataset_indices):
-            result = model.anonymize_from_dataset(idx=local_idx, buckets=buckets)
-            output_handler.output(result, idx=abs_idx, **metadata)
-            processed += 1
-    else:
-        for pos, text_or_idx in enumerate(texts_or_indices):
-            result = model.anonymize(text_or_idx=text_or_idx, buckets=buckets)
-            output_handler.output(result, idx=record_indices[pos], **metadata)
-            processed += 1
-    
+
+    stream = model.stream_anonymize(texts_or_indices=anonymization_inputs, buckets=buckets)
+    for abs_idx, result_list in zip(record_indices, stream):
+        for hp, result in result_list:
+            output_handler.output(result, idx=abs_idx, **metadata, hyperparams=hp)
+        processed += 1
+
     total_time = time.time() - run_start
     
     avg_time = total_time / processed if processed > 0 else 0
