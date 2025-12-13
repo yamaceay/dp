@@ -8,3 +8,6 @@ explainer:
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_greedy.jsonl
+
+token_selection:
+  name: by_risk
