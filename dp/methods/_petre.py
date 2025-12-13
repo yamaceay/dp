@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple, Union
 from collections import defaultdict
 import re
 import nltk
@@ -241,14 +241,8 @@ class PetreAnonymizer(Anonymizer):
             self._records_by_idx.append(state)
             self._records_by_uid[uid] = state
 
-    def _resolve_device(self, device: str) -> torch.device:
-        if device == "auto":
-            if torch.cuda.is_available():
-                return torch.device("cuda")
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                return torch.device("mps")
-            return torch.device("cpu")
-        return torch.device(device)
+    def _resolve_device(self, device: Optional[Union[str, int, torch.device]]) -> torch.device:
+        return super()._resolve_device(device)
 
     def _pipeline_device(self):
         if self.device.type == "cpu":

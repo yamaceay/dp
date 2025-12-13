@@ -1,9 +1,9 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple
 
 from dp.loaders import TextAnnotation, get_adapter
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
-from dp.methods.constants import Buckets
+from dp.methods.constants import Buckets, BucketDict
 
 class ManualAnonymizer(Anonymizer):
     MODEL_NAME = "manual"
@@ -14,13 +14,15 @@ class ManualAnonymizer(Anonymizer):
         self.texts: List[str] = []
         self.annotations: List[List[TextAnnotation]] = []
 
-    def pre_stream_anonymize(self, *args, texts_or_indices: Union[List[str], List[int]] = None, **kwargs) -> None:
-        if not all(isinstance(i, str) for i in texts_or_indices):
-            raise ValueError("ManualAnonymizer requires dataset indices for pre_stream_anonymize.")
-        self.texts += [record.text for record in self._dataset_records]
-        self.annotations += [self._deduplicate_annotations(record.spans) for record in self._dataset_records]
+    def add_dataset_records(self, dataset_records) -> None:
+        self.set_dataset_records(dataset_records)
+        self.texts = [record.text for record in self._dataset_records]
+        self.annotations = [self._deduplicate_annotations(record.spans) for record in self._dataset_records]
 
-    def anonymize_from_dataset(self, idx: int, *args, buckets: Buckets = [], **kwargs) -> AnonymizationResult:
+    def pre_stream_anonymize(self, *args, **kwargs) -> None:
+        return
+
+    def anonymize_from_dataset(self, idx: int, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
         text = self.texts[idx]
         spans = self.annotations[idx]
         
@@ -34,7 +36,7 @@ class ManualAnonymizer(Anonymizer):
             offset += len(replacement) - (end - start)
         
         metadata = {"method": "manual"}
-        return AnonymizationResult(text=text, spans=spans, metadata=metadata)
+        return [(BucketDict(), AnonymizationResult(text=text, spans=spans, metadata=metadata))]
 
     def _deduplicate_annotations(self, annotations: Optional[List[TextAnnotation]]) -> List[TextAnnotation]:
         if not annotations:
