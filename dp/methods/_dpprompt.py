@@ -1,9 +1,9 @@
-from typing import Iterator, List, Optional, Tuple
+from typing import List, Tuple
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, LogitsProcessorList
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
-from dp.methods.constants import Buckets, EpsilonParam
+from dp.methods.constants import Buckets, BucketDict, EpsilonParam
 
 class DPPromptAnonymizer(Anonymizer):
     MODEL_NAME = "dpprompt"
@@ -55,12 +55,21 @@ class DPPromptAnonymizer(Anonymizer):
     def anonymize_any_text(
         self,
         text: str,
-        epsilon: float,
         *args,
+        buckets: Buckets = [],
         **kwargs,
-    ) -> AnonymizationResult:
+    ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not text or not text.strip():
-            return AnonymizationResult(text="", metadata={"epsilon": epsilon, "method": "dpprompt"})
+            return []
+
+        if len(buckets) != 1 or not isinstance(buckets[0], EpsilonParam):
+            raise ValueError("DPPromptAnonymizer expects Buckets=[EpsilonParam(...)]")
+
+        eps_val = buckets[0].value()
+        if float(eps_val) <= 0:
+            raise ValueError(f"epsilon must be > 0, got {eps_val!r}")
+
+        hp = BucketDict({"epsilon": eps_val})
 
         prompt = self._create_prompt(text)
         prompt_ids = self._encode_without_special(prompt)
@@ -73,7 +82,7 @@ class DPPromptAnonymizer(Anonymizer):
         ).to(self.device)
 
         with torch.no_grad():
-            temperature = 2 * self.sensitivity / epsilon
+            temperature = 2 * self.sensitivity / float(eps_val)
             output = self.model.generate(
                 **model_inputs,
                 do_sample=True,
@@ -85,9 +94,9 @@ class DPPromptAnonymizer(Anonymizer):
             )
             private_text = self.tokenizer.decode(output[0], skip_special_tokens=True).strip()
             metadata = {
-                "epsilon": epsilon,
+                "epsilon": eps_val,
                 "method": "dpprompt",
                 "model": self.model_checkpoint,
                 "temperature": temperature,
             }
-            return AnonymizationResult(text=private_text, metadata=metadata)
+            return [(hp, AnonymizationResult(text=private_text, metadata=metadata))]

@@ -1,10 +1,10 @@
-from typing import Iterator, List, Tuple
+from typing import List, Tuple
 import torch
 import numpy as np
 from transformers.modeling_outputs import BaseModelOutput
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
-from dp.methods.constants import Buckets, EpsilonParam
+from dp.methods.constants import Buckets, BucketDict, EpsilonParam
 
 
 class DPBartAnonymizer(Anonymizer):
@@ -55,12 +55,22 @@ class DPBartAnonymizer(Anonymizer):
     def anonymize_any_text(
         self,
         text: str,
-        epsilon: float,
         *args,
+        buckets: Buckets = [],
         **kwargs,
-    ) -> AnonymizationResult:
+    ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not text or not text.strip():
-            return AnonymizationResult(text="", metadata={"epsilon": epsilon, "delta": self.delta, "method": "dpbart"})
+            return []
+
+        if len(buckets) != 1 or not isinstance(buckets[0], EpsilonParam):
+            raise ValueError("DPBartAnonymizer expects Buckets=[EpsilonParam(...)]")
+
+        eps_val = buckets[0].value()
+        epsilon = float(eps_val)
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be > 0, got {eps_val!r}")
+
+        hp = BucketDict({"epsilon": eps_val})
 
         inputs = self.tokenizer(
             text,
@@ -70,9 +80,7 @@ class DPBartAnonymizer(Anonymizer):
         ).to(self.device)
 
         if inputs["input_ids"].shape[-1] == 0:
-            for eps in epsilon:
-                yield eps, [AnonymizationResult(text="", metadata={"epsilon": eps, "delta": self.delta, "method": "dpbart"})]
-            return
+            return [(hp, AnonymizationResult(text="", metadata={"epsilon": eps_val, "delta": self.delta, "method": "dpbart"}))]
 
         num_tokens = len(inputs["input_ids"][0])
 
@@ -88,9 +96,9 @@ class DPBartAnonymizer(Anonymizer):
             )
             private_text = self.tokenizer.decode(dec_out[0], skip_special_tokens=True).strip()
             metadata = {
-                "epsilon": epsilon,
+                "epsilon": eps_val,
                 "delta": self.delta,
                 "method": "dpbart",
                 "model": self.model_name,
             }
-            return AnonymizationResult(text=private_text, metadata=metadata)
+            return [(hp, AnonymizationResult(text=private_text, metadata=metadata))]

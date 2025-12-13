@@ -1,9 +1,9 @@
-from typing import Iterator, List, Tuple
+from typing import List, Tuple
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, LogitsProcessorList
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
-from dp.methods.constants import Buckets, EpsilonParam
+from dp.methods.constants import Buckets, BucketDict, EpsilonParam
 
 class DPParaphraseAnonymizer(Anonymizer):
     MODEL_NAME = "dpparaphrase"
@@ -70,12 +70,22 @@ class DPParaphraseAnonymizer(Anonymizer):
     def anonymize_any_text(
         self,
         text: str,
-        epsilon: float,
         *args,
+        buckets: Buckets = [],
         **kwargs,
-    ) -> AnonymizationResult:
+    ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not text or not text.strip():
-            return AnonymizationResult(text="", metadata={"epsilon": epsilon, "method": "dpparaphrase"})
+            return []
+
+        if len(buckets) != 1 or not isinstance(buckets[0], EpsilonParam):
+            raise ValueError("DPParaphraseAnonymizer expects Buckets=[EpsilonParam(...)]")
+
+        eps_val = buckets[0].value()
+        epsilon = float(eps_val)
+        if epsilon <= 0:
+            raise ValueError(f"epsilon must be > 0, got {eps_val!r}")
+
+        hp = BucketDict({"epsilon": eps_val})
 
         prompt = text + " >>>>> "
         prompt_ids = self._encode_without_special(prompt)
@@ -97,9 +107,9 @@ class DPParaphraseAnonymizer(Anonymizer):
                 .strip()
             )
             metadata = {
-                "epsilon": epsilon,
+                "epsilon": eps_val,
                 "method": "dpparaphrase",
                 "model": self.model_checkpoint,
                 "temperature": temperature,
             }
-            return AnonymizationResult(text=private_text, metadata=metadata)
+            return [(hp, AnonymizationResult(text=private_text, metadata=metadata))]
