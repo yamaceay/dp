@@ -12,7 +12,7 @@ from transformers import pipeline
 
 from dp.utils.explainer.base import TokenExplainer
 from dp.methods.anonymizer import Anonymizer, AnonymizationResult
-from dp.methods.constants import Buckets, KParams
+from dp.methods.constants import Buckets, BucketDict, KParams
 from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
 from dp.utils.splitter import TextSplitter
 from dp.utils.chunking import TokenAwareChunker
@@ -357,10 +357,6 @@ class PetreAnonymizer(Anonymizer):
         if name:
             self._annotation_name = name
 
-    def anonymize(self, text: str, *args, **kwargs) -> AnonymizationResult:
-        raise NotImplementedError("Use anonymize_from_dataset for PetreAnonymizer.")
-
-
     def _apply_spans_to_text(
         self,
         text: str,
@@ -597,7 +593,7 @@ class PetreAnonymizer(Anonymizer):
         *args,
         buckets: Buckets = [],
         **kwargs,
-    ) -> Iterator[Tuple[int, List[AnonymizationResult]]]:
+    ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if idx < 0 or idx >= len(self._records_by_idx):
             raise IndexError(f"Index {idx} is out of bounds")
         
@@ -621,6 +617,8 @@ class PetreAnonymizer(Anonymizer):
         
         runtime_stats: Dict[str, int] = {"masked": 0}
         apply_fn = self._make_apply_fn(state, runtime_stats)
+
+        outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         
         for step in self._unit.anonymize(text, state.term_spans, apply_fn):
             k_value = step.threshold
@@ -647,12 +645,18 @@ class PetreAnonymizer(Anonymizer):
                 **step.metadata,
             }
             token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
-            
-            yield k_value, [
-                AnonymizationResult(
-                    text=private_text,
-                    spans=result_spans,
-                    annotations=TextAnnotations(token_edits=token_edits),
-                    metadata=metadata,
+
+            hp = BucketDict({"k": int(k_value) if k_value is not None else None})
+            outputs.append(
+                (
+                    hp,
+                    AnonymizationResult(
+                        text=private_text,
+                        spans=result_spans,
+                        annotations=TextAnnotations(token_edits=token_edits),
+                        metadata=metadata,
+                    ),
                 )
-            ]
+            )
+
+        return outputs
