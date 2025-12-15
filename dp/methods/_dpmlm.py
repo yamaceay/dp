@@ -127,6 +127,11 @@ class DPMlmAnonymizer(Anonymizer):
     def pre_stream_anonymize(self, texts_or_indices, *args, **kwargs) -> None:
         risk_scores = kwargs.get("risk_scores")
         if risk_scores is not None:
+            if not self.dataset_records:
+                raise ValueError(
+                    "DPMlmAnonymizer received precomputed risk_scores but has no dataset records; "
+                    "run in dataset mode (use --indices) so risk scores can be matched to records"
+                )
             self.set_risk_scores(risk_scores, records=self.dataset_records or None)
 
     def anonymize_from_dataset(
@@ -355,10 +360,6 @@ class DPMlmAnonymizer(Anonymizer):
             self._risk_text_positions[text_key] = position
         return entries[position]
 
-    def _unit_requires_risk(self) -> bool:
-        from dp.utils.selector.by_risk_selector import ByRiskUnit
-        return isinstance(self._unit, ByRiskUnit)
-
     def _make_apply_fn(
         self,
         text: str,
@@ -426,6 +427,10 @@ class DPMlmAnonymizer(Anonymizer):
             return precomputed_scores, True
 
         if self.explainer is not None:
+            if record_name is None:
+                raise ValueError(
+                    "record_name is required for TRI-based risk scoring; run in dataset mode (use --indices)"
+                )
             critical_offsets = offsets
             if critical_indices is not None:
                 critical_offsets = [offsets[i] for i in critical_indices]
@@ -469,13 +474,11 @@ class DPMlmAnonymizer(Anonymizer):
                     target_label_id = self._target_label_id_for_record(record_name)
                     self._unit.set_target_label(target_label_id)
                     self._unit.set_rank_evaluator(self._make_rank_evaluator())
-
-                unit_requires_risk = self._unit_requires_risk()
                 context: Dict[str, Any] = {"record_name": record_name}
                 used_precomputed = False
 
-                if unit_requires_risk:
-                    risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name)
+                risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name)
+                if risk_scores.size and len(risk_scores) == len(offsets):
                     self._unit.set_risk_scores(risk_scores)
 
                 perturbation_ratio = 1.0

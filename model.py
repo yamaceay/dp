@@ -383,7 +383,17 @@ if __name__ == "__main__":
     explainer_config = extract_explainer_config(model_config)
 
     selector_config = extract_selector_config(model_config)
-    dpmlm_requires_dataset = args.model == "dpmlm" and bool(selector_config) and selector_config.get("name") == "until_k"
+    dpmlm_selector_name = selector_config.get("name") if isinstance(selector_config, dict) else None
+    dpmlm_has_precomputed_risk = bool(precompute_config.get("risk_scores"))
+    dpmlm_has_tri_explainer = bool(explainer_config.get("tri_pipeline"))
+    dpmlm_requires_dataset = (
+        args.model == "dpmlm"
+        and (
+            dpmlm_selector_name == "until_k"
+            or dpmlm_has_precomputed_risk
+            or dpmlm_has_tri_explainer
+        )
+    )
     
     model_cls = MODEL_REGISTRY[model_kwargs.pop("model")]
     model = model_cls(**model_config, **model_kwargs, **data_kwargs)
