@@ -9,7 +9,7 @@ precomputation:
   risk_scores: data/reddit/reddit_risk_shap.jsonl
 
 starting_anonymizations:
-  - outputs/reddit/presidio/20251216_160413_reddit_presidio.jsonl
+  - outputs/reddit/presidio/20251213_165316_reddit_presidio.jsonl
 
 tri_chunking:
   enabled: false

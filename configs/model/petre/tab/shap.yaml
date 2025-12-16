@@ -9,7 +9,7 @@ precomputation:
   risk_scores: data/TAB/test_risk_shap.jsonl
 
 starting_anonymizations:
-  - outputs/tab/presidio/20251216_160308_tab_presidio.jsonl
+  - outputs/tab/presidio/20251213_192310_tab_presidio.jsonl
 
 tri_chunking:
   enabled: false
