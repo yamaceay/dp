@@ -8,3 +8,6 @@ explainer:
 
 precomputation:
   risk_scores: data/TAB/test_risk_shap.jsonl
+
+token_selection:
+  name: by_risk
