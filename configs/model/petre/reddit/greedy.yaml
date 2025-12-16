@@ -10,5 +10,8 @@ precomputation:
 
 mask_text: "[MASK]"
 
+starting_anonymizations:
+  - outputs/reddit/spacy/20251213_165323_reddit_spacy.jsonl
+
 tri_chunking:
   enabled: false
