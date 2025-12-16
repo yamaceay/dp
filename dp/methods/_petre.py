@@ -52,7 +52,7 @@ class PetreAnonymizer(Anonymizer):
         self.batch_size = batch_size
         self.device = self._resolve_device(device)
         self.splitter = TextSplitter()
-        self.explainer = None
+        self._explainer = None
         self._unit: Optional[UntilKUnit] = None
         self.tri_pipeline_path: Optional[str] = None
         self.tri_pipeline = None
@@ -88,6 +88,11 @@ class PetreAnonymizer(Anonymizer):
         self._terms_to_ignore = self._build_terms_to_ignore({}, None)
         self._clear_score_cache()
         self._prepare_risk_scores_for_records()
+
+    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> None:
+        risk_scores = kwargs.get("risk_scores")
+        if risk_scores is not None:
+            self.set_risk_scores(risk_scores, records=self.dataset_records or None)
 
     def _clear_score_cache(self) -> None:
         self._score_cache.clear()
@@ -257,7 +262,7 @@ class PetreAnonymizer(Anonymizer):
         return int(label)
 
     def _token_scores_for_state(self, state: RecordState) -> np.ndarray:
-        if self.explainer is None:
+        if self._explainer is None:
             raise RuntimeError("Scoring strategy must be set before running PETRE")
         cached = self._score_cache.get(state.uid)
         if cached is not None:
@@ -272,7 +277,7 @@ class PetreAnonymizer(Anonymizer):
             empty = np.zeros(0, dtype=float)
             self._score_cache[state.uid] = empty
             return empty
-        raw_scores = self.explainer.explain(state.text, state.term_spans)
+        raw_scores = self._explainer.explain(state.text, state.term_spans)
         array = np.asarray(raw_scores, dtype=float).ravel()
         length = len(tokens)
         if array.size < length:
@@ -302,22 +307,18 @@ class PetreAnonymizer(Anonymizer):
         return ordered
 
     def set_scoring_strategy(self, explainer: TokenExplainer) -> None:
-        if explainer is None:
-            raise ValueError("explainer cannot be None")
-        if not hasattr(explainer, "tri_detector"):
-            raise ValueError("explainer must expose tri_detector")
-        tri_model_name = getattr(explainer.tri_detector, "model_name", None)
-        if tri_model_name is None:
-            raise ValueError("explainer.tri_detector must define model_name")
-        self.explainer = explainer
-        self.tri_pipeline_path = tri_model_name
-        self.batch_size = int(getattr(explainer, "batch_size", self.batch_size))
         self._clear_score_cache()
+        self.set_explainer(explainer)
         self._load_tri_pipeline()
 
     def _load_tri_pipeline(self) -> None:
-        if self.tri_pipeline_path is None:
-            raise ValueError("tri_pipeline_path must be set before loading pipeline")
+        if not hasattr(self._explainer, "tri_detector"):
+            raise ValueError("explainer must expose tri_detector")
+        tri_model_name = getattr(self._explainer.tri_detector, "model_name", None)
+        if tri_model_name is None:
+            raise ValueError("explainer.tri_detector must define model_name")
+        self.tri_pipeline_path = tri_model_name
+        self.batch_size = int(getattr(self._explainer, "batch_size", self.batch_size))
         device_arg = self._pipeline_device()
         self.tri_pipeline = pipeline(
             "text-classification",

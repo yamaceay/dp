@@ -233,10 +233,10 @@ def build_explainer(explainer_config: dict, model_config: dict, capabilities, mo
 
 
 def configure_model(model: Anonymizer, model_config: dict, explainer_config: dict, runtime_bundle, capabilities, model_name: str, records: List[DatasetRecord]):
-    if explainer_config.get("risk_temperature") is not None:
-        model_config["risk_temperature"] = explainer_config["risk_temperature"]
-    
     selector_config = extract_selector_config(model_config)
+    if explainer_config.get("risk_temperature") is not None:
+        if isinstance(selector_config, dict) and selector_config.get("name") == "by_risk":
+            selector_config = {"risk_temperature": explainer_config["risk_temperature"], **selector_config}
     
     if capabilities.must_use_pii_selector:
         if not selector_config or selector_config.get("name") != "pii_only":
@@ -254,7 +254,7 @@ def configure_model(model: Anonymizer, model_config: dict, explainer_config: dic
         if selector_config:
             model.set_filtering_strategy(build_selector(selector_config, runtime_bundle))
     
-    if capabilities.can_use_scoring:
+    if capabilities.must_use_scoring or capabilities.can_use_scoring:
         model.set_scoring_strategy(build_explainer(explainer_config, model_config, capabilities, model_name))
 
 
@@ -436,6 +436,7 @@ if __name__ == "__main__":
     if texts_arg and indices_arg:
         raise ValueError("Cannot specify both --texts and --indices")
     
+    record_names_for_precompute: Optional[List[str]] = None
     if capabilities.must_use_dataset or dpmlm_requires_dataset:
         if texts_arg:
             raise ValueError(f"{args.model} requires dataset records, use --indices")
@@ -447,7 +448,9 @@ if __name__ == "__main__":
             record_indices = list(range(len(texts_arg)))
             texts_or_indices = texts_arg
         else:
-            texts_or_indices = [records[index_lookup[idx]].text for idx in selected_indices]
+            selected_records = [records[index_lookup[idx]] for idx in selected_indices]
+            texts_or_indices = [r.text for r in selected_records]
+            record_names_for_precompute = [str(r.uid) for r in selected_records]
             record_indices = selected_indices
         dataset_indices = None
     
@@ -464,7 +467,10 @@ if __name__ == "__main__":
     if precompute_config.get("risk_scores"):
         pre_risk_scores = load_precomputed_risk(precompute_config["risk_scores"])
     pre_start = time.time()
-    model.pre_stream_anonymize(texts_or_indices=anonymization_inputs, risk_scores=pre_risk_scores)
+    pre_kwargs: Dict[str, Any] = {}
+    if record_names_for_precompute is not None:
+        pre_kwargs["record_names"] = record_names_for_precompute
+    model.pre_stream_anonymize(texts_or_indices=anonymization_inputs, risk_scores=pre_risk_scores, **pre_kwargs)
     pre_elapsed = time.time() - pre_start
     print(f"✓ Pre-computation before anonymization completed in {pre_elapsed:.2f}s")
 

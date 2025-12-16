@@ -50,7 +50,7 @@ class DPMlmAnonymizer(Anonymizer):
         self.risk_temperature = risk_temperature
 
         self._unit: Optional[AnonymizerUnit] = None
-        self.explainer = None
+        self._explainer = None
         self.splitter = TextSplitter()
         self._risk_scores_by_uid: Dict[str, Dict[Tuple[int, int], float]] = {}
         self._risk_text_to_uid: Dict[str, List[str]] = {}
@@ -78,7 +78,7 @@ class DPMlmAnonymizer(Anonymizer):
         self._unit = detector
 
     def set_scoring_strategy(self, explainer: TokenExplainer) -> None:
-        self.explainer = explainer
+        self.set_explainer(explainer)
 
     def set_risk_scores(
         self,
@@ -153,9 +153,9 @@ class DPMlmAnonymizer(Anonymizer):
         )
 
     def _load_tri_label_mapping(self) -> Dict[str, int]:
-        if self.explainer is None:
+        if self._explainer is None:
             raise ValueError("DPMlmAnonymizer requires explainer to load TRI label mapping")
-        model_name = getattr(self.explainer, "model_name", None)
+        model_name = getattr(self._explainer, "model_name", None)
         if not model_name:
             raise ValueError("DPMlmAnonymizer requires explainer.model_name to load TRI label mapping")
         source = str(model_name)
@@ -194,11 +194,11 @@ class DPMlmAnonymizer(Anonymizer):
         return int(mapping[record_name])
 
     def _make_rank_evaluator(self) -> Callable[[str, int], int]:
-        if self.explainer is None:
+        if self._explainer is None:
             raise ValueError("DPMlmAnonymizer requires explainer for rank evaluation")
-        if hasattr(self.explainer, "_load_pipeline"):
-            self.explainer._load_pipeline()
-        pipe = getattr(self.explainer, "pipeline", None)
+        if hasattr(self._explainer, "_load_pipeline"):
+            self._explainer._load_pipeline()
+        pipe = getattr(self._explainer, "pipeline", None)
         if pipe is None:
             raise ValueError("Explainer pipeline is not available for rank evaluation")
 
@@ -426,7 +426,7 @@ class DPMlmAnonymizer(Anonymizer):
         if precomputed_scores is not None:
             return precomputed_scores, True
 
-        if self.explainer is not None:
+        if self._explainer is not None:
             if record_name is None:
                 raise ValueError(
                     "record_name is required for TRI-based risk scoring; run in dataset mode (use --indices)"
@@ -437,7 +437,7 @@ class DPMlmAnonymizer(Anonymizer):
 
             target_label_id = self._target_label_id_for_record(record_name)
             target_label = f"LABEL_{target_label_id}"
-            scores = self.explainer.explain(text, critical_offsets, target_label=target_label)
+            scores = self._explainer.explain(text, critical_offsets, target_label=target_label)
             if scores is not None and len(scores) == len(critical_offsets):
                 return scores, False
             
@@ -519,8 +519,8 @@ class DPMlmAnonymizer(Anonymizer):
                         metadata["effective_epsilon"] = compensated_epsilon
                     if used_precomputed:
                         metadata["explainer"] = "PrecomputedRisk"
-                    elif self.explainer is not None:
-                        metadata["explainer"] = self.explainer.__class__.__name__
+                    elif self._explainer is not None:
+                        metadata["explainer"] = self._explainer.__class__.__name__
 
                     outputs.append((
                         hp_with_threshold,

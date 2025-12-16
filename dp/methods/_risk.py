@@ -11,6 +11,7 @@ from dp.utils.splitter import TextSplitter
 from dp.utils.token_ledger import TokenLedger
 from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
 from dp.utils.selector.by_risk_selector import ByRiskUnit
+from dp.utils.explainer.base import TokenExplainer
 
 
 class RiskAnonymizer(Anonymizer):
@@ -32,21 +33,29 @@ class RiskAnonymizer(Anonymizer):
 
     def set_filtering_strategy(self, detector: AnonymizerUnit) -> None:
         self._unit = detector
+
+    def set_scoring_strategy(self, explainer: TokenExplainer) -> None:
+        self.set_explainer(explainer)
     
     def hash_text(self, text: str) -> str:
         return sha256(text.encode('utf-8')).hexdigest()
     
-    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> None:
+    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], record_names: List[str], *args, **kwargs) -> None:
         if not all(isinstance(i, str) for i in texts_or_indices):
             raise ValueError("RiskAnonymizer requires texts for pre_stream_anonymize.")
+
+        if not isinstance(record_names, list) or len(record_names) != len(texts_or_indices):
+            raise ValueError("record_names must be a list aligned with texts_or_indices")
+        if not all(isinstance(name, str) for name in record_names):
+            raise ValueError("record_names entries must be strings")
         
         risk_scores = kwargs.get('risk_scores')
         if risk_scores is not None:
             self.set_risk_scores(risk_scores)
         
-        for text in texts_or_indices:
-            tokens, spans = self._tokenize(text)
-            scores = self._compute_scores(text, spans, kwargs.get('record_name'))
+        for name, text in zip(record_names, texts_or_indices):
+            _, spans = self._tokenize(text)
+            scores = self._compute_scores(text, spans, name)
             self._scores_cache[self.hash_text(text)] = (scores, spans)
 
     def set_risk_scores(self, risk_scores: Dict[str, Dict[str, object]]) -> None:
