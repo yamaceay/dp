@@ -70,6 +70,7 @@ class PetreAnonymizer(Anonymizer):
         self._score_order_cache: Dict[str, List[int]] = {}
         self._raw_risk_scores: Dict[str, Tuple[List[Tuple[int, int]], List[float]]] = {}
         self._prepared_risk_scores: Dict[str, np.ndarray] = {}
+        self._starting_annotations: Dict[str, List[Tuple[int, int]]] = {}
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
@@ -619,9 +620,28 @@ class PetreAnonymizer(Anonymizer):
         runtime_stats: Dict[str, int] = {"masked": 0}
         apply_fn = self._make_apply_fn(state, runtime_stats)
 
+        starting_indices: List[int] = []
+        if self._starting_annotations is not None:
+            starting_spans = self._starting_annotations.get(state.uid, [])
+            if starting_spans:
+                for term_idx, term_span in enumerate(state.term_spans):
+                    ts, te = term_span
+                    for ss, se in starting_spans:
+                        if te <= ss or ts >= se:
+                            continue
+                        starting_indices.append(term_idx)
+                        break
+                if self.mask_all_instances and starting_indices:
+                    expanded: set[int] = set(starting_indices)
+                    for term_idx in list(expanded):
+                        token_text = state.term_texts[term_idx]
+                        for related_idx in state.term_indices_by_text.get(token_text, []):
+                            expanded.add(related_idx)
+                    starting_indices = sorted(expanded)
+
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         
-        for step in self._unit.anonymize(text, state.term_spans, apply_fn):
+        for step in self._unit.anonymize(text, state.term_spans, apply_fn, starting_indices=starting_indices):
             k_value = step.threshold
             private_text = step.text
             ledger = step.ledger

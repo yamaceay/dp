@@ -8,10 +8,8 @@ explainer:
 precomputation:
   risk_scores: data/TAB/test_risk_greedy.jsonl
 
-mask_text: "[MASK]"
-
 starting_anonymizations:
-  - outputs/tab/spacy/20251213_191942_tab_spacy.jsonl
+  - outputs/tab/presidio/20251216_160308_tab_presidio.jsonl
 
 tri_chunking:
   enabled: false

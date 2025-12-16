@@ -34,19 +34,28 @@ class AllUnit(AnonymizerUnit):
             return
 
         ledger = TokenLedger(text, offsets)
-        indices = self.select_indices(text, offsets, None, set(), **context)
+        processed: set[int] = set()
+        seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
+
+        indices = self.select_indices(text, offsets, None, processed, **context)
         sorted_indices = self._sort_by_risk(indices, len(offsets))
-        
+        remaining: List[int] = []
         for idx in sorted_indices:
+            if idx in processed:
+                continue
             apply_fn(idx, ledger)
+            processed.add(idx)
+            remaining.append(idx)
+
+        applied = seeded + remaining
 
         yield AnonymizationStep(
             threshold_type=None,
             threshold=None,
             text=ledger.render_offsets(text),
             ledger=ledger,
-            new_indices=sorted_indices,
-            metadata={"processed_count": len(sorted_indices)},
+            new_indices=applied,
+            metadata={"processed_count": len(processed)},
         )
 
 

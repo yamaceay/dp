@@ -60,6 +60,8 @@ class UntilKUnit(AnonymizerUnit):
         processed: set[int] = set()
         k_values = self.order_thresholds(self._thresholds)
 
+        self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
+
         current_text = ledger.render_offsets(text)
 
         current_rank = self._rank_evaluator(current_text, self._target_label)

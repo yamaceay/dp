@@ -8,10 +8,8 @@ explainer:
 precomputation:
   risk_scores: data/reddit/reddit_risk_greedy.jsonl
 
-mask_text: "[MASK]"
-
 starting_anonymizations:
-  - outputs/reddit/spacy/20251213_165323_reddit_spacy.jsonl
+  - outputs/reddit/presidio/20251216_160413_reddit_presidio.jsonl
 
 tri_chunking:
   enabled: false

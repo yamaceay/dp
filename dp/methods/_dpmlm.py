@@ -149,6 +149,7 @@ class DPMlmAnonymizer(Anonymizer):
             *args,
             buckets=buckets,
             record_name=record.name,
+            record_uid=str(record.uid),
             **kwargs,
         )
 
@@ -449,6 +450,7 @@ class DPMlmAnonymizer(Anonymizer):
         *args,
         buckets: Buckets = [],
         record_name: Optional[str] = None,
+        record_uid: Optional[str] = None,
         **kwargs,
     ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not text or not text.strip():
@@ -491,6 +493,9 @@ class DPMlmAnonymizer(Anonymizer):
                     "deleted": 0,
                 }
                 apply_fn = self._make_apply_fn(text, offsets, compensated_epsilon, runtime_stats)
+
+                if record_uid is not None:
+                    context["starting_indices"] = self._starting_indices_for_uid(record_uid, offsets)
 
                 last_step: Optional[AnonymizationStep] = None
                 for step in self._unit.anonymize(text, offsets, apply_fn, **context):

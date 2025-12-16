@@ -58,6 +58,28 @@ def load_config(path: Optional[str]) -> dict:
         return yaml.safe_load(f) or {}
 
 
+def _normalize_starting_anonymizations(value: object) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        paths: List[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("starting_anonymizations entries must be strings")
+            paths.append(item)
+        return paths
+    raise ValueError("starting_anonymizations must be a string or list of strings")
+
+
+def extract_starting_anonymizations_config(model_config: dict) -> List[str]:
+    value = model_config.pop("starting_anonymizations", None)
+    if value is None:
+        value = model_config.pop("starting_anonymization", None)
+    return _normalize_starting_anonymizations(value)
+
+
 def _normalize_param_patterns(value: object) -> List[str]:
     if value is None:
         return []
@@ -268,6 +290,47 @@ def load_annotations(annotations_in: str, records: List[DatasetRecord]) -> Dict[
     return loaded_annotations
 
 
+def load_starting_anonymizations(paths: List[str], records: List[DatasetRecord]) -> Dict[str, List[dict]]:
+    annotations: Dict[str, List[dict]] = {}
+    for path in paths:
+        with open(path, "r", encoding="utf-8") as reader:
+            for line_num, raw in enumerate(reader, start=1):
+                entry = raw.strip()
+                if not entry:
+                    continue
+                payload = json.loads(entry)
+                spans = payload.get("spans") or []
+                if not isinstance(spans, list):
+                    raise ValueError(f"Invalid spans in '{path}' at line {line_num}")
+
+                uid = payload.get("uid")
+                if uid is None and isinstance(payload.get("metadata"), dict):
+                    uid = payload["metadata"].get("uid")
+
+                if uid is None:
+                    idx = payload.get("idx")
+                    if idx is None:
+                        raise ValueError(f"Missing 'uid'/'metadata.uid' and 'idx' in '{path}' at line {line_num}")
+                    if not isinstance(idx, int):
+                        raise ValueError(f"Invalid 'idx' in '{path}' at line {line_num}")
+                    if idx < 0 or idx >= len(records):
+                        raise ValueError(
+                            f"Index {idx} in '{path}' at line {line_num} is out of bounds for dataset (len={len(records)})"
+                        )
+                    rec = records[idx]
+                    uid = str(getattr(rec, "uid", idx))
+                else:
+                    uid = str(uid)
+
+                for span in spans:
+                    if not isinstance(span, dict):
+                        continue
+                    if "start" not in span or "end" not in span:
+                        continue
+                    annotations.setdefault(uid, []).append({"start": int(span["start"]), "end": int(span["end"])})
+    return annotations
+
+
 def compute_dataset_indices(dataset_len: int, data_kwargs: Dict[str, Any]) -> List[int]:
     start = data_kwargs.get("start") or 0
     end = min(data_kwargs.get("end") or dataset_len, dataset_len)
@@ -377,6 +440,7 @@ if __name__ == "__main__":
     
     records = load_data(data_kwargs)
     model_config = load_config(args.model_in)
+    starting_anonymization_paths = extract_starting_anonymizations_config(model_config)
     validate_runtime_params(model_config, runtime_bundle)
     precompute_config = extract_precompute_config(model_config)
     capabilities = get_capabilities(args.model)
@@ -402,12 +466,29 @@ if __name__ == "__main__":
         if not hasattr(model, "add_dataset_records"):
             raise ValueError(f"{args.model} requires dataset records for this configuration")
         model.add_dataset_records(records)
+
+    merged_annotations: Optional[Dict[str, List]] = None
+    if starting_anonymization_paths:
+        if args.texts:
+            raise ValueError("starting_anonymizations cannot be used with --texts")
+        if not hasattr(model, "set_annotations"):
+            raise ValueError(f"{args.model} does not support starting_anonymizations")
+        starting_annotations = load_starting_anonymizations(starting_anonymization_paths, records)
+        print(f"✓ Loaded starting anonymizations for {len(starting_annotations)} records")
+        merged_annotations = dict(starting_annotations)
     
     if capabilities.can_use_annotations and args.annotations_in:
         loaded_annotations = load_annotations(args.annotations_in, records)
         print(f"✓ Loaded annotations for {len(loaded_annotations)} records")
         if hasattr(model, 'set_annotations'):
-            model.set_annotations(loaded_annotations, name=args.annotations)
+            if merged_annotations is None:
+                merged_annotations = dict(loaded_annotations)
+            else:
+                for uid, items in loaded_annotations.items():
+                    merged_annotations.setdefault(uid, []).extend(items)
+
+    if merged_annotations is not None and hasattr(model, 'set_annotations'):
+        model.set_annotations(merged_annotations, name=args.annotations or ("starting" if starting_anonymization_paths else None))
     
     configure_model(model, model_config, explainer_config, runtime_bundle, capabilities, args.model, records)
     

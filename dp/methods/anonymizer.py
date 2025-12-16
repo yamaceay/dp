@@ -1,10 +1,10 @@
-from typing import Iterator, List, Optional, Iterable, Union, TYPE_CHECKING, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Iterable, Union, TYPE_CHECKING, Tuple
 from abc import ABC
 from dataclasses import dataclass
 from tqdm import tqdm
 
 from dp.methods.constants import Buckets, BucketDict
-from dp.loaders.base import DatasetRecord, TextAnnotations
+from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.selector.base import AnonymizerUnit
 from dp.utils.splitter import TextSplitter
@@ -35,6 +35,9 @@ class Anonymizer(ABC):
         self._explainer: Optional[TokenExplainer] = None
         self._selector: Optional[AnonymizerUnit] = None
         self.device = self._resolve_device(kwargs.get("device"))
+
+        self._starting_spans_by_uid: Dict[str, List[Tuple[int, int]]] = {}
+        self._starting_annotations_name: Optional[str] = None
 
         print(f"Initialized {self.__class__.__name__} with args: {args}, kwargs: {kwargs}")
 
@@ -73,6 +76,41 @@ class Anonymizer(ABC):
 
     def set_splitter(self, splitter: TextSplitter) -> None:
         self._splitter = splitter
+
+    def set_annotations(self, annotations: Dict[str, List[Any]], name: Optional[str] = None) -> None:
+        spans_by_uid: Dict[str, List[Tuple[int, int]]] = {}
+        for uid, raw_items in (annotations or {}).items():
+            if uid is None:
+                continue
+            uid_str = str(uid)
+            spans: List[Tuple[int, int]] = []
+            if not isinstance(raw_items, list):
+                raise ValueError("annotations values must be lists")
+            for item in raw_items:
+                if isinstance(item, TextAnnotation):
+                    spans.append((int(item.start), int(item.end)))
+                elif isinstance(item, dict) and "start" in item and "end" in item:
+                    spans.append((int(item["start"]), int(item["end"])))
+                elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                    spans.append((int(item[0]), int(item[1])))
+            spans_by_uid[uid_str] = spans
+        self._starting_spans_by_uid = spans_by_uid
+        self._starting_annotations_name = name
+
+    def _starting_indices_for_uid(self, uid: Optional[str], offsets: List[Tuple[int, int]]) -> List[int]:
+        if uid is None:
+            return []
+        spans = self._starting_spans_by_uid.get(str(uid), [])
+        if not spans or not offsets:
+            return []
+        indices: List[int] = []
+        for idx, (ts, te) in enumerate(offsets):
+            for ss, se in spans:
+                if te <= ss or ts >= se:
+                    continue
+                indices.append(idx)
+                break
+        return indices
 
     def _resolve_device(self, device: Optional[Union[str, int, 'torch.device']]) -> 'torch.device':
         import torch

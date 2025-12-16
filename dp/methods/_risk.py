@@ -27,6 +27,7 @@ class RiskAnonymizer(Anonymizer):
         self._unit: Optional[ByRiskUnit] = ByRiskUnit(temperature=self._temperature)
         self._risk_scores_by_uid: Dict[str, Dict[Tuple[int, int], float]] = {}
         self._scores_cache: Dict[str, Tuple[np.ndarray, List[Tuple[int, int]]]] = {}
+        self._starting_indices_cache: Dict[str, List[int]] = {}
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
@@ -57,6 +58,7 @@ class RiskAnonymizer(Anonymizer):
             _, spans = self._tokenize(text)
             scores = self._compute_scores(text, spans, name)
             self._scores_cache[self.hash_text(text)] = (scores, spans)
+            self._starting_indices_cache[self.hash_text(text)] = self._starting_indices_for_uid(name, spans)
 
     def set_risk_scores(self, risk_scores: Dict[str, Dict[str, object]]) -> None:
         self._risk_scores_by_uid = {}
@@ -111,10 +113,14 @@ class RiskAnonymizer(Anonymizer):
         
         runtime_stats: Dict[str, int] = {"masked": 0}
         apply_fn = self._make_apply_fn(text, spans, runtime_stats)
+
+        starting_indices = self._starting_indices_cache.get(self.hash_text(text))
+        if starting_indices is None:
+            starting_indices = self._starting_indices_for_uid(record_name, spans)
         
         outputs: List[Tuple[Dict[str, Any], AnonymizationResult]] = []
         
-        for step in self._unit.anonymize(text, spans, apply_fn):
+        for step in self._unit.anonymize(text, spans, apply_fn, starting_indices=starting_indices):
             rho = step.threshold
             hp: Dict[str, Any] = {"rho": rho}
             

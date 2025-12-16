@@ -57,6 +57,32 @@ class AnonymizerUnit(ABC):
             return indices
         return sorted(indices, key=lambda i: float(self._risk_scores[i]), reverse=True)
 
+    def _apply_starting_indices(
+        self,
+        n_offsets: int,
+        ledger: TokenLedger,
+        processed: set[int],
+        apply_fn: ApplyFn,
+        **context: Any,
+    ) -> List[int]:
+        starting_indices = context.get("starting_indices")
+        if starting_indices is None:
+            return []
+        if not isinstance(starting_indices, list):
+            raise ValueError("starting_indices must be a list of ints")
+        applied: List[int] = []
+        for idx in starting_indices:
+            if not isinstance(idx, int):
+                raise ValueError("starting_indices must be a list of ints")
+            if idx < 0 or idx >= n_offsets:
+                raise IndexError(f"starting index {idx} is out of bounds")
+            if idx in processed:
+                continue
+            apply_fn(idx, ledger)
+            processed.add(idx)
+            applied.append(idx)
+        return applied
+
     @abstractmethod
     def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
         pass
@@ -87,6 +113,7 @@ class AnonymizerUnit(ABC):
 
         ledger = TokenLedger(text, offsets)
         processed: set[int] = set()
+        self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
         ordered = self.order_thresholds(self._thresholds)
 
         for threshold in ordered:
