@@ -1,4 +1,6 @@
-from typing import List, Tuple
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Tuple
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, LogitsProcessorList
 
@@ -13,6 +15,7 @@ class DPParaphraseAnonymizer(Anonymizer):
         model_checkpoint: str = "./models/gpt2-paraphraser",
         min_logit: float = -96.85249956065758,
         max_logit: float = -8.747697966442914,
+        chunking: Optional[Dict[str, Any]] = None,
         **kwargs
     ):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
@@ -27,6 +30,26 @@ class DPParaphraseAnonymizer(Anonymizer):
             self.model_checkpoint,
             pad_token_id=self.tokenizer.eos_token_id
         ).to(self.device)
+
+        self._prompt_suffix = " >>>>> "
+        self._chunking_enabled = bool((chunking or {}).get("enabled", False))
+        self._chunk_overlap_tokens = int((chunking or {}).get("overlap_tokens", 0) or 0)
+        if self._chunk_overlap_tokens < 0:
+            raise ValueError("chunking.overlap_tokens must be >= 0")
+
+        max_total = (chunking or {}).get("max_total_tokens")
+        if max_total is None:
+            max_total = getattr(self.model.config, "n_positions", None)
+        if max_total is None:
+            max_total = getattr(self.tokenizer, "model_max_length", 1024)
+        self._max_total_tokens = int(max_total)
+        if self._max_total_tokens <= 0:
+            raise ValueError("chunking.max_total_tokens must be > 0")
+
+        prompt_fraction = float((chunking or {}).get("prompt_fraction", 0.5))
+        if not (0.0 < prompt_fraction < 1.0):
+            raise ValueError("chunking.prompt_fraction must be between 0 and 1")
+        self._max_prompt_tokens = max(1, int(self._max_total_tokens * prompt_fraction))
         
         self.logits_processor = LogitsProcessorList([
             self._create_clip_processor(self.min_logit, self.max_logit)
@@ -67,6 +90,28 @@ class DPParaphraseAnonymizer(Anonymizer):
             return input_ids[0]
         return input_ids or []
 
+    def _split_text_for_generation(self, text: str) -> List[str]:
+        from dp.utils.chunking import TokenAwareChunker
+
+        max_prompt_tokens = self._max_prompt_tokens - len(self._encode_without_special(self._prompt_suffix))
+        max_prompt_tokens = max(1, int(max_prompt_tokens))
+
+        if not self._chunking_enabled:
+            ids = self._encode_without_special(text)
+            if len(ids) <= max_prompt_tokens:
+                return [text]
+            raise ValueError(
+                f"Input is too long for {self.model_checkpoint!r} (tokens={len(ids)} > {max_prompt_tokens}). "
+                "Enable chunking in configs/model/dpparaphrase.yaml under chunking.enabled=true."
+            )
+
+        if self._chunk_overlap_tokens != 0:
+            raise ValueError("dpparaphrase chunking does not support overlap_tokens; set it to 0")
+
+        chunker = TokenAwareChunker(tokenizer=self.tokenizer, max_tokens=max_prompt_tokens)
+        chunks = chunker.chunk(text)
+        return [c.text for c in chunks]
+
     def anonymize_any_text(
         self,
         text: str,
@@ -87,29 +132,49 @@ class DPParaphraseAnonymizer(Anonymizer):
 
         hp = BucketDict({"epsilon": eps_val})
 
-        prompt = text + " >>>>> "
-        prompt_ids = self._encode_without_special(prompt)
-        length = len(prompt_ids)
+        chunks = self._split_text_for_generation(text)
 
         with torch.no_grad():
             temperature = 2 * self.sensitivity / epsilon
-            generated = self.pipe(
-                prompt,
-                max_new_tokens=length,
-                temperature=temperature,
-            )[0]["generated_text"]
-            
-            private_text = (
-                generated.replace(prompt, "")
-                .replace(prompt.strip(), "")
-                .replace("\xa0", " ")
-                .replace(">", "")
-                .strip()
-            )
+            outputs: List[str] = []
+
+            for chunk_text in chunks:
+                prompt = chunk_text + self._prompt_suffix
+                prompt_ids = self._encode_without_special(prompt)
+                prompt_len = len(prompt_ids)
+
+                max_new = min(prompt_len, max(0, self._max_total_tokens - prompt_len))
+                if max_new <= 0:
+                    raise ValueError(
+                        "dpparaphrase chunking configuration leaves no room for generation; "
+                        "reduce chunking.prompt_fraction or increase chunking.max_total_tokens"
+                    )
+
+                generated = self.pipe(
+                    prompt,
+                    max_new_tokens=max_new,
+                    temperature=temperature,
+                )[0]["generated_text"]
+
+                if generated.startswith(prompt):
+                    private_chunk = generated[len(prompt) :]
+                else:
+                    private_chunk = generated.replace(prompt, "")
+
+                private_chunk = (
+                    private_chunk.replace("\xa0", " ")
+                    .replace(">", "")
+                    .strip()
+                )
+                outputs.append(private_chunk)
+
+            private_text = " ".join([t for t in outputs if t])
             metadata = {
                 "epsilon": eps_val,
                 "method": "dpparaphrase",
                 "model": self.model_checkpoint,
                 "temperature": temperature,
+                "chunking_enabled": self._chunking_enabled,
+                "chunks": len(chunks),
             }
             return [(hp, AnonymizationResult(text=private_text, metadata=metadata))]
