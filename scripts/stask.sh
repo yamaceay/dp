@@ -1,25 +1,26 @@
 #!/bin/bash
 
 MAILTO=""
-FILE_NAME=""
 TABLE_FILE=""
-MAX_CONCURRENT=3
-MAX_TASKS=4
+MAX_CONCURRENT=1
+MAX_TASKS=1
+PARTITION="batch"
+YES=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --mail-to=*) MAILTO="${1#*=}"; shift ;;
         --max-concurrent=*) MAX_CONCURRENT="${1#*=}"; shift ;;
         --max-tasks=*) MAX_TASKS="${1#*=}"; shift ;;
+        --partition=*) PARTITION="${1#*=}"; shift ;;
+        -y) YES=1; shift ;;
         -h)
-            echo "Usage: $0 [--mail-to=email] [--max-concurrent=3] [--max-tasks=4] job_file_name table_file"
+            echo "Usage: $0 [--mail-to=email] [--max-concurrent=3] [--max-tasks=1] table_file"
             exit 0
             ;;
         -*) echo "Unknown option: $1" >&2; exit 1 ;;
         *)
-            if [[ -z "$FILE_NAME" ]]; then
-                FILE_NAME="$1"
-            elif [[ -z "$TABLE_FILE" ]]; then
+            if [[ -z "$TABLE_FILE" ]]; then
                 TABLE_FILE="$1"
             fi
             shift
@@ -27,16 +28,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$FILE_NAME" ]]; then
-    echo "Error: job file name is required" >&2
+if [[ -z "$TABLE_FILE" ]]; then
+    echo "Error: table file name is required" >&2
     exit 1
 fi
+
+FILE_NAME="$(basename "${TABLE_FILE%.*}")"
 
 TARGET_FILE="slurm/sbatches/${FILE_NAME}.sbatch"
 
 [[ -z "$TABLE_FILE" ]] && TABLE_FILE="jobs.table"
 
-mkdir -p jobs logs slurm/states
+mkdir -p jobs logs slurm/sbatches slurm/states slurm/states/${FILE_NAME} logs/${FILE_NAME}
 
 if [[ ! -f "$TABLE_FILE" ]]; then
     echo "Table file not found: $TABLE_FILE" >&2
@@ -60,10 +63,11 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ ${#parts[@]} -gt 1 ]]; then
         CMD="$(echo "${parts[1]}" | xargs)"
         if [[ -n "$CMD" ]]; then
-            job_names[$idx]="${NAME}_${idx}"
+            STATE_FILE_NAME="${FILE_NAME}/${NAME}_${idx}"
+            job_names[$idx]="$STATE_FILE_NAME"
             job_cmds[$idx]="$CMD"
-            scripts/task.sh --init "$MAX_TASKS" --cmd "$CMD" --state "slurm/states/${NAME}_${idx}.state"
-            echo "Initialized state for ${NAME}_${idx} with ${MAX_TASKS} parallel tasks"
+            scripts/task.sh --init "$MAX_TASKS" --cmd "$CMD" --state "slurm/states/${STATE_FILE_NAME}.state"
+            echo "Initialized state for ${STATE_FILE_NAME} with ${MAX_TASKS} parallel tasks"
             ((idx++))
         fi
     fi
@@ -91,7 +95,6 @@ if [[ -n "$MAX_TASKS" ]]; then
     TASK_LINES="#SBATCH --ntasks=${MAX_TASKS}
 #SBATCH --cpus-per-task=10
 #SBATCH --gpus-per-task=1
-#SBATCH --gpu-bind=none
 "
 fi
 
@@ -109,9 +112,9 @@ cat > "$TARGET_FILE" <<EOF
 
 #SBATCH --array=0-${MAX_IDX}%${MAX_CONCURRENT}
 #SBATCH --job-name=${FILE_NAME}
-#SBATCH --output=logs/%x_%a_%j.out
-#SBATCH --error=logs/%x_%a_%j.err
-#SBATCH --partition=batch
+#SBATCH --output=logs/%x/%a_%j.out
+#SBATCH --error=logs/%x/%a_%j.err
+#SBATCH --partition=${PARTITION}
 #SBATCH --nodes=1
 #SBATCH --mem-per-cpu=6G
 ${EXTRA_LINES}
@@ -149,5 +152,12 @@ srun -K \
   scripts/install.sh scripts/task.sh --incr --state "$STATE_FILE"
 EOF
 
-echo "Wrote $TARGET_FILE with $NUM_JOBS jobs × ${MAX_TASKS} parallel tasks = ${TOTAL_TASKS} total tasks"
-echo "Submit with: sbatch $TARGET_FILE"
+if [[ $YES -eq 0 ]]; then
+    echo "Wrote $TARGET_FILE with $NUM_JOBS jobs × ${MAX_TASKS} parallel tasks = ${TOTAL_TASKS} total tasks"
+    echo "Submit with: sbatch $TARGET_FILE"
+    echo ""
+    read -p "Do you want to submit the job now? (Press Enter to continue, Ctrl+C to cancel): "
+fi
+
+sbatch "$TARGET_FILE"
+exit $?

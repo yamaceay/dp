@@ -6,10 +6,14 @@ identifier, raw text, optional annotations, and optional utility metadata.
 """
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
-from dp.loaders.trustpilot_company import TrustpilotDatasetAdapter
 from dp.loaders.tab import TabDatasetAdapter
 from dp.loaders.db_bio import DBBioDatasetAdapter
 from dp.loaders.reddit import RedditDatasetAdapter
+
+try:
+    from dp.loaders.trustpilot_company import TrustpilotDatasetAdapter
+except ImportError:
+    TrustpilotDatasetAdapter = None
 from dp.loaders.annotations import (
     read_annotations,
     write_annotations,
@@ -25,11 +29,13 @@ from dp.loaders.annotations import (
 
 
 ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
-    "trustpilot": TrustpilotDatasetAdapter,
     "tab": TabDatasetAdapter,
     "db_bio": DBBioDatasetAdapter,
     "reddit": RedditDatasetAdapter,
 }
+
+if TrustpilotDatasetAdapter is not None:
+    ADAPTER_REGISTRY["trustpilot"] = TrustpilotDatasetAdapter
 
 
 def get_adapter(name: str, **kwargs) -> DatasetAdapter:
@@ -46,7 +52,6 @@ def get_adapter(name: str, **kwargs) -> DatasetAdapter:
 __all__ = [
     "DatasetAdapter",
     "DatasetRecord",
-    "TrustpilotDatasetAdapter",
     "TabDatasetAdapter",
     "DBBioDatasetAdapter",
     "TextAnnotation",
@@ -65,3 +70,6 @@ __all__ = [
     "list_batch_timestamps",
     "ADAPTER_REGISTRY",
 ]
+
+if TrustpilotDatasetAdapter is not None:
+    __all__.append("TrustpilotDatasetAdapter")

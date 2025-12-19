@@ -3,4 +3,4 @@ reddit:
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/20251203_135444
 tab:
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251203_134320
-  pii_annotator: ../../../netscratch/yay/pii_detectors/tab/20251203_131104
+  pii_annotator: ../../../netscratch/yay/pii_detectors/tab/tab__lr3e-5__bs8__m_partial_recall

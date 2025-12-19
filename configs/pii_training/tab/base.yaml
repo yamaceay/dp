@@ -1,0 +1,26 @@
+dataset: tab
+data_path: data/TAB/splitted
+model_name: roberta-base
+output_root: ../../../netscratch/yay/pii_detectors/tab
+
+evaluation:
+  use_nervaluate: true
+  modes: [strict, exact, partial, type]
+  primary_mode: partial
+
+selection:
+  metric: partial_recall
+  direction: max
+
+training:
+  epochs: 1
+  batch_size: 8
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_steps: 100
+  eval_steps: 250
+  save_steps: 250
+  logging_steps: 50
+  gradient_accumulation_steps: 1
+  seed: 42
+  fp16: null

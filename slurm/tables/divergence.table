@@ -1,2 +1,0 @@
-tab_bertscore|python run.py divergence --config configs/experiments/divergence_tab_bertscore.yaml
-reddit_bertscore|python run.py divergence --config configs/experiments/divergence_reddit_bertscore.yaml

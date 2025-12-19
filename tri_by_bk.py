@@ -1,109 +1,303 @@
+from __future__ import annotations
+
 import argparse
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
 
 from dp.tri import get_tri_detector
 from dp.tri.loaders import get_attacker_adapter, ATTACKER_ADAPTER_REGISTRY
 
+import yaml
+
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 
-def main():
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def _read_yaml_mapping(path: Path) -> dict[str, Any]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(f"YAML root must be a mapping: {path}")
+    return data
+
+
+def _parse_scalar(raw: str) -> Any:
+    value = raw.strip()
+    lowered = value.lower()
+    if lowered in {"null", "none"}:
+        return None
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    try:
+        if value.startswith("0") and len(value) > 1 and value[1].isdigit() and not value.startswith("0."):
+            raise ValueError
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+
+def _apply_set_overrides(cfg: dict[str, Any], overrides: Optional[list[str]]) -> None:
+    if not overrides:
+        return
+    for spec in overrides:
+        if not isinstance(spec, str) or "=" not in spec:
+            raise ValueError(f"Invalid --set override (expected key=value): {spec!r}")
+        key_raw, value_raw = spec.split("=", 1)
+        key_raw = key_raw.strip()
+        if not key_raw:
+            raise ValueError(f"Invalid --set override (empty key): {spec!r}")
+        value = _parse_scalar(value_raw)
+        parts = [p.strip() for p in key_raw.split(".") if p.strip()]
+        if not parts:
+            raise ValueError(f"Invalid --set override (empty key path): {spec!r}")
+        cur: Any = cfg
+        for part in parts[:-1]:
+            if not isinstance(cur, dict):
+                raise ValueError(f"Invalid --set path (not a mapping at '{part}'): {key_raw}")
+            nxt = cur.get(part)
+            if nxt is None:
+                nxt = {}
+                cur[part] = nxt
+            if not isinstance(nxt, dict):
+                raise ValueError(f"Invalid --set path (existing non-mapping at '{part}'): {key_raw}")
+            cur = nxt
+        if not isinstance(cur, dict):
+            raise ValueError(f"Invalid --set path (not a mapping): {key_raw}")
+        cur[parts[-1]] = value
+
+
+def _require_str(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Missing or invalid '{key}'")
+    return value
+
+
+def _optional_str(payload: dict[str, Any], key: str) -> Optional[str]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Invalid '{key}'")
+    return value
+
+
+def _optional_int(payload: dict[str, Any], key: str) -> Optional[int]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, int):
+        raise ValueError(f"Invalid '{key}'")
+    return int(value)
+
+
+def _optional_float(payload: dict[str, Any], key: str) -> Optional[float]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"Invalid '{key}'")
+    return float(value)
+
+
+def _optional_bool(payload: dict[str, Any], key: str) -> Optional[bool]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid '{key}'")
+    return bool(value)
+
+
+def _get_mapping(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key)
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"Invalid '{key}'")
+    return value
+
+
+def _resolve_path(project_root: Path, raw: str) -> Path:
+    p = Path(raw).expanduser()
+    if not p.is_absolute():
+        p = (project_root / p).resolve()
+    return p
+
+
+def _load_training_config(project_root: Path, config_path: Path) -> dict[str, Any]:
+    resolved = config_path
+    if not resolved.is_absolute():
+        resolved = (project_root / resolved).resolve()
+    payload = _read_yaml_mapping(resolved)
+
+    dataset = payload.get("dataset")
+    if not isinstance(dataset, str) or not dataset.strip():
+        raise ValueError("Missing or invalid 'dataset'")
+    if dataset not in available_datasets:
+        raise ValueError(f"Unknown dataset: {dataset}")
+
+    data_path = _resolve_path(project_root, _require_str(payload, "data_path"))
+    model_name = _require_str(payload, "model_name")
+    output_root = _resolve_path(project_root, _require_str(payload, "output_root"))
+    training = _get_mapping(payload, "training")
+
+    cfg: dict[str, Any] = {
+        "dataset": dataset,
+        "data_path": data_path,
+        "attacker_extensions": _optional_str(payload, "attacker_extensions"),
+        "model_name": model_name,
+        "max_records": _optional_int(payload, "max_records"),
+        "max_length": int(payload.get("max_length", 512)),
+        "device": str(payload.get("device", "cpu")),
+        "output_root": output_root,
+        "run_name": _optional_str(payload, "run_name"),
+        "training": {
+            "finetuning_epochs": int(training.get("finetuning_epochs", 15)),
+            "batch_size": int(training.get("batch_size", 16)),
+            "learning_rate": float(training.get("learning_rate", 5e-5)),
+            "use_pretraining": bool(training.get("use_pretraining", False)),
+            "pretraining_epochs": int(training.get("pretraining_epochs", 3)),
+            "per_step": _optional_int(training, "per_step"),
+            "early_stop_threshold": _optional_float(training, "early_stop_threshold"),
+        },
+    }
+    return cfg
+
+def main() -> int:
     parser = argparse.ArgumentParser(description="Train and evaluate TRI model for re-identification")
-    parser.add_argument("--dataset", type=str, default="tab", choices=available_datasets, 
-                        help="Dataset name")
-    parser.add_argument("--data_path", type=str, required=True,
-                        help="Path to dataset file")
-    parser.add_argument("--model_name", type=str, default="distilbert-base-uncased",
-                        help="Base model name")
-    parser.add_argument("--max_records", type=int, default=None,
-                        help="Maximum number of records to use")
-    parser.add_argument("--finetuning_epochs", type=int, default=15,
-                        help="Number of finetuning epochs")
-    parser.add_argument("--pretraining_epochs", type=int, default=3,
-                        help="Number of pretraining epochs")
-    parser.add_argument("--batch_size", type=int, default=16,
-                        help="Batch size for training")
-    parser.add_argument("--pretraining_batch_size", type=int, default=8,
-                        help="Batch size for pretraining")
-    parser.add_argument("--use_pretraining", action="store_true",
-                        help="Use MLM pretraining before finetuning")
-    parser.add_argument("--per_step", type=int, default=None,
-                        help="Evaluation frequency in steps (default: per epoch)")
-    parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate", "predict"],
-                        help="Mode: train, evaluate, or predict")
-    parser.add_argument("--model_path", type=str, default=None,
-                        help="Path to an existing TRI model checkpoint (optional for train/evaluate/predict)")
-    parser.add_argument("--device", type=str, default="cpu",
-                        help="Device to use (auto, cuda, mps, cpu)")
-    parser.add_argument("--attacker_extensions", type=str, default=None,
-                        help="Optional JSONL file with precomputed attacker extensions (BK + summary)")
-    parser.add_argument("--early_stop_threshold", type=float, default=None,
-                        help="Minimum accuracy threshold across all eval datasets to stop training early (0-100)")
-    
+    parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate", "predict"])
+
+    parser.add_argument("--training-in", type=str, default=None)
+    parser.add_argument("--output-root", type=str, default=None)
+    parser.add_argument("--run-name", type=str, default=None)
+    parser.add_argument(
+        "--set",
+        dest="set_overrides",
+        action="append",
+        default=None,
+    )
+
+    parser.add_argument("--dataset", type=str, default="tab", choices=available_datasets)
+    parser.add_argument("--data_path", type=str, default=None)
+    parser.add_argument("--model_name", type=str, default="distilbert-base-uncased")
+    parser.add_argument("--max_records", type=int, default=None)
+    parser.add_argument("--finetuning_epochs", type=int, default=15)
+    parser.add_argument("--pretraining_epochs", type=int, default=3)
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--pretraining_batch_size", type=int, default=8)
+    parser.add_argument("--use_pretraining", action="store_true")
+    parser.add_argument("--per_step", type=int, default=None)
+    parser.add_argument("--learning_rate", type=float, default=5e-5)
+    parser.add_argument("--model_path", type=str, default=None)
+    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--attacker_extensions", type=str, default=None)
+    parser.add_argument("--early_stop_threshold", type=float, default=None)
+
     args = parser.parse_args()
-    
-    print(f"Loading {args.dataset} dataset from {args.data_path}...")
-    
-    adapter = get_attacker_adapter(args.dataset, data=args.dataset, data_in=args.data_path, max_records=args.max_records)
-    if args.attacker_extensions:
-        adapter.load_cache_from_jsonl(args.attacker_extensions)
-    
+
+    if args.training_in is not None:
+        cfg = _load_training_config(PROJECT_ROOT, Path(args.training_in))
+        _apply_set_overrides(cfg, args.set_overrides)
+        dataset = str(cfg["dataset"])
+        data_path = Path(cfg["data_path"])
+        model_name = str(cfg["model_name"])
+        max_records = cfg.get("max_records")
+        attacker_extensions = cfg.get("attacker_extensions")
+        device = str(cfg.get("device", "cpu"))
+        max_length = int(cfg.get("max_length", 512))
+        training = cfg.get("training")
+        if not isinstance(training, dict):
+            raise SystemExit("Invalid training config")
+        finetuning_epochs = int(training.get("finetuning_epochs", 15))
+        batch_size = int(training.get("batch_size", 16))
+        learning_rate = float(training.get("learning_rate", 5e-5))
+        use_pretraining = bool(training.get("use_pretraining", False))
+        pretraining_epochs = int(training.get("pretraining_epochs", 3))
+        per_step = training.get("per_step")
+        early_stop_threshold = training.get("early_stop_threshold")
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_name = args.run_name or cfg.get("run_name") or timestamp
+        output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(cfg["output_root"]).resolve()
+        model_path: Path = (output_root / str(run_name)).resolve()
+    else:
+        if args.data_path is None:
+            raise SystemExit("--data_path is required unless --training-in is provided")
+        dataset = args.dataset
+        data_path = Path(args.data_path)
+        model_name = args.model_name
+        max_records = args.max_records
+        attacker_extensions = args.attacker_extensions
+        device = args.device
+        max_length = 512
+        finetuning_epochs = args.finetuning_epochs
+        batch_size = args.batch_size
+        learning_rate = args.learning_rate
+        use_pretraining = bool(args.use_pretraining)
+        pretraining_epochs = args.pretraining_epochs
+        per_step = args.per_step
+        early_stop_threshold = args.early_stop_threshold
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
+        run_name = args.run_name or timestamp
+        model_path = Path(args.model_path).expanduser().resolve() if args.model_path else (output_root / run_name).resolve()
+
+    adapter = get_attacker_adapter(dataset, data=dataset, data_in=str(data_path), max_records=max_records)
+    if attacker_extensions:
+        adapter.load_cache_from_jsonl(str(attacker_extensions))
     records = list(adapter.iter_records())
-    print(f"✓ Loaded {len(records)} records")
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_path = args.model_path or f"models/tri_pipelines/{args.dataset}/{timestamp}"
-    
-    tri = get_tri_detector("bk", dataset_name=args.dataset, model_name=args.model_name, max_length=512, device=args.device)
+    if not records:
+        raise SystemExit("No records loaded")
+
+    tri = get_tri_detector("bk", dataset_name=dataset, model_name=model_name, max_length=max_length, device=device)
 
     if args.mode == "train":
-        print(f"\nInitializing TRI detector for {args.dataset} (bk)...")
         if args.model_path:
-            model_path = Path(args.model_path)
-            if not model_path.exists():
-                raise ValueError(f"Model path not found: {model_path}")
-            print(f"\nLoading weights from {model_path}...")
-            tri.load(str(model_path))
-        
+            base_path = Path(args.model_path)
+            if not base_path.exists():
+                raise ValueError(f"Model path not found: {base_path}")
+            tri.load(str(base_path))
         tri.setup(records=records)
-        
-        print(f"\nFinetuning for {args.finetuning_epochs} epochs...")
+        model_path.mkdir(parents=True, exist_ok=True)
         tri.train(
-            epochs=args.finetuning_epochs,
-            batch_size=args.batch_size,
-            output_dir=model_path,
-            use_pretraining=args.use_pretraining,
-            pretraining_epochs=args.pretraining_epochs,
-            early_stop_threshold=args.early_stop_threshold,
-            per_step=args.per_step,
+            epochs=finetuning_epochs,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            output_dir=str(model_path),
+            use_pretraining=use_pretraining,
+            pretraining_epochs=pretraining_epochs,
+            early_stop_threshold=early_stop_threshold,
+            per_step=per_step,
         )
-        
-        print(f"\n✓ Model saved to {model_path}")
-        
-    elif args.mode == "evaluate":
-        print(f"\nLoading model from {model_path}...")
-        tri.load(model_path)
-        
-        tri.setup(records=records)
-        
-        print(f"\nEvaluating on test records...")
+        print(str(model_path))
+        return 0
+
+    if args.model_path is None:
+        raise SystemExit("--model_path is required")
+    tri.load(str(Path(args.model_path).expanduser().resolve()))
+    tri.setup(records=records)
+
+    if args.mode == "evaluate":
         results = tri.evaluate(tri.eval_records)
-        print(f"✓ Results: {results}")
-        
-    elif args.mode == "predict":
-        print(f"\nLoading model from {model_path}...")
-        tri.load(model_path)
-        
-        tri.setup(records=records)
-        
-        print("\nPredicting on sample records...")
-        sample_records = tri.eval_records[:5] if len(tri.eval_records) >= 5 else tri.eval_records
-        predictions = tri.predict(sample_records)
-        
-        print("\n✓ Sample predictions:")
-        for uid, probs in list(predictions.items())[:5]:
-            top_label = max(probs.items(), key=lambda x: x[1])
-            print(f"  Record {uid}: {top_label[0]} ({top_label[1]:.2%})")
+        print(results)
+        return 0
+
+    sample_records = tri.eval_records[:5] if len(tri.eval_records) >= 5 else tri.eval_records
+    predictions = tri.predict(sample_records)
+    print([{ "uid": uid, "top": max(probs.items(), key=lambda x: x[1])[0] } for uid, probs in list(predictions.items())[:5]])
+    return 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

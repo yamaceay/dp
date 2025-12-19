@@ -25,11 +25,8 @@ from dp.utils.chunking import SpanMergeAggregator, process_with_chunking, TokenA
 class PIIDetector:
     def __init__(
         self,
-        # TODO: change default model to ModernBERT when available
         model_name: str = "roberta-base",
         use_chunking: bool = True,
-        # model_name: str = "answerdotai/ModernBERT-large",
-        # use_chunking: bool = False,
         labels: Optional[List[str]] = None,
         max_length: int = 512,
         device: str = "auto",
@@ -173,11 +170,22 @@ class PIIDetector:
         output_dir: str = "./pii_model_output",
         batch_size: int = 8,
         learning_rate: float = 2e-5,
+        weight_decay: float = 0.01,
+        warmup_steps: int = 100,
+        logging_steps: int = 50,
+        eval_steps: int = 250,
+        save_steps: int = 250,
+        save_total_limit: Optional[int] = None,
+        gradient_accumulation_steps: int = 1,
+        seed: Optional[int] = None,
+        fp16: Optional[bool] = None,
         use_nervaluate: bool = True,
-        nervaluate_mode: str = "partial",
-        metric_mode: str = "recall",
+        nervaluate_modes: Optional[List[str]] = None,
+        primary_nervaluate_mode: str = "partial",
+        metric_for_best_model: Optional[str] = None,
+        return_summary: bool = False,
         **kwargs
-    ) -> None:
+    ) -> Optional[Dict[str, Any]]:
         if self.train_records is None:
             raise ValueError("Training dataset not set. Use set_train_dataset() first.")
 
@@ -198,12 +206,20 @@ class PIIDetector:
             padding=True,
         )
         
-        metric_for_best_model = None
-        if eval_dataset:
-            if use_nervaluate and NERVALUATE_AVAILABLE:
-                metric_for_best_model = metric_mode
+        resolved_metric_for_best_model: Optional[str] = None
+        if eval_dataset is not None:
+            if metric_for_best_model is not None:
+                resolved_metric_for_best_model = str(metric_for_best_model)
             else:
-                metric_for_best_model = metric_mode
+                resolved_metric_for_best_model = "f1"
+
+        resolved_fp16: bool
+        if fp16 is None:
+            resolved_fp16 = bool(torch.cuda.is_available())
+        else:
+            resolved_fp16 = bool(fp16)
+
+        resolved_seed = int(seed) if seed is not None else 42
 
         training_args = TrainingArguments(
             output_dir=output_dir,
@@ -211,26 +227,34 @@ class PIIDetector:
             per_device_train_batch_size=batch_size,
             per_device_eval_batch_size=batch_size * 2,
             learning_rate=learning_rate,
-            warmup_steps=100,
-            weight_decay=0.01,
+            warmup_steps=warmup_steps,
+            weight_decay=weight_decay,
             logging_dir=f"{output_dir}/logs",
-            logging_steps=50,
+            logging_steps=logging_steps,
             eval_strategy="steps" if eval_dataset else "no",
-            eval_steps=250 if eval_dataset else None,
+            eval_steps=eval_steps if eval_dataset else None,
             save_strategy="steps",
-            save_steps=250,
+            save_steps=save_steps,
+            save_total_limit=save_total_limit,
             load_best_model_at_end=True if eval_dataset else False,
-            metric_for_best_model=metric_for_best_model,
+            metric_for_best_model=resolved_metric_for_best_model,
             greater_is_better=True,
             report_to="none",
-            fp16=torch.cuda.is_available(),
+            fp16=resolved_fp16,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            seed=resolved_seed,
             **kwargs,
         )
         
         compute_metrics_fn = None
-        if eval_dataset:
+        if eval_dataset is not None:
             if use_nervaluate and NERVALUATE_AVAILABLE:
-                compute_metrics_fn = lambda eval_pred: self._compute_metrics_ner(eval_pred, mode=nervaluate_mode)
+                resolved_modes = nervaluate_modes if nervaluate_modes is not None else ["strict", "exact", "partial", "type"]
+                compute_metrics_fn = lambda eval_pred: self._compute_metrics_ner(
+                    eval_pred,
+                    modes=resolved_modes,
+                    primary_mode=primary_nervaluate_mode,
+                )
             else:
                 compute_metrics_fn = self._compute_metrics
         
@@ -245,11 +269,25 @@ class PIIDetector:
         )
         
         print(f"Starting training for {epochs} epochs...")
-        trainer.train()
+        train_output = trainer.train()
         
         trainer.save_model(output_dir)
         self.tokenizer.save_pretrained(output_dir)
         print(f"Training complete! Model saved to {output_dir}")
+
+        if not return_summary:
+            return None
+
+        summary: Dict[str, Any] = {
+            "output_dir": output_dir,
+            "best_model_checkpoint": getattr(trainer.state, "best_model_checkpoint", None),
+            "best_metric": getattr(trainer.state, "best_metric", None),
+            "metric_for_best_model": resolved_metric_for_best_model,
+            "train_metrics": getattr(train_output, "metrics", None),
+        }
+        if eval_dataset is not None:
+            summary["eval_metrics"] = trainer.evaluate()
+        return summary
 
     def predict(self, records: List[DatasetRecord], verbose: bool = False) -> List[DatasetRecord]:
         if not records:
@@ -355,7 +393,12 @@ class PIIDetector:
 
         if use_nervaluate and NERVALUATE_AVAILABLE:
             if modes is None:
-                modes = ["strict", "partial", "exact"]
+                modes = ["strict", "exact", "partial", "type"]
+
+            allowed = {"strict", "exact", "partial", "type"}
+            for mode in modes:
+                if mode not in allowed:
+                    raise ValueError(f"Unknown nervaluate mode: {mode}")
             
             true_labels_seq = []
             pred_labels_seq = []
@@ -495,7 +538,7 @@ class PIIDetector:
         
         return true_preds, true_labels
     
-    def _compute_metrics_ner(self, eval_pred, mode="partial"):
+    def _compute_metrics_ner(self, eval_pred, modes: List[str], primary_mode: str):
         if not NERVALUATE_AVAILABLE:
             return self._compute_metrics(eval_pred)
         
@@ -517,21 +560,32 @@ class PIIDetector:
         
         overall_results, *_ = results_dict
         
-        metrics = {}
-        if mode in overall_results:
-            result = overall_results[mode]
+        requested = [str(m) for m in modes]
+        allowed = {"strict", "exact", "partial", "type"}
+        for m in requested:
+            if m not in allowed:
+                raise ValueError(f"Unknown nervaluate mode: {m}")
+        if primary_mode not in allowed:
+            raise ValueError(f"Unknown nervaluate primary_mode: {primary_mode}")
+
+        metrics: Dict[str, float] = {}
+        for m in requested:
+            if m not in overall_results:
+                continue
+            result = overall_results[m]
             precision = float(result["precision"])
             recall = float(result["recall"])
             f1 = float(result["f1"])
-            metrics = {
-                "precision": precision,
-                f"{mode}_precision": precision,
-                "recall": recall,
-                f"{mode}_recall": recall,
-                "f1": f1,
-                f"{mode}_f1": f1,
-            }
-        
+            metrics[f"{m}_precision"] = precision
+            metrics[f"{m}_recall"] = recall
+            metrics[f"{m}_f1"] = f1
+
+        if primary_mode in overall_results:
+            result = overall_results[primary_mode]
+            metrics["precision"] = float(result["precision"])
+            metrics["recall"] = float(result["recall"])
+            metrics["f1"] = float(result["f1"])
+
         return metrics
     
     def _spans_to_char_labels(
