@@ -1,0 +1,13 @@
+index,selection_metric,batch_size,learning_rate,finetuning_epochs,use_pretraining,accuracy
+0,16,1e-4,15,false,0.9750
+1,16,1e-4,15,true,0.9500
+2,32,1e-4,15,false,1.0000
+3,32,1e-4,15,true,0.7250
+4,16,2e-5,15,false,0.9750
+5,16,2e-5,15,true,0.8750
+6,32,2e-5,15,false,0.9750
+7,32,2e-5,15,true,0.9750
+8,16,5e-5,15,false,0.9750
+9,16,5e-5,15,true,0.7750
+10,32,5e-5,15,false,0.9500
+11,32,5e-5,15,true,0.9250
