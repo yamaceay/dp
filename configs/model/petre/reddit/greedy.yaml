@@ -3,7 +3,7 @@ params:
 
 explainer:
   name: greedy
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/20251203_135444
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr1e-4__bs32__ft15__pre1
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_greedy.jsonl

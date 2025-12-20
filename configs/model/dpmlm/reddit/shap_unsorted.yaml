@@ -1,15 +1,15 @@
 params:
-  ks: ["*"]
+  epsilon: "*"
 
 explainer:
   name: shap
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr1e-4__bs32__ft15__pre1
+  risk_temperature: 0.1
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_shap.jsonl
 
-starting_anonymizations:
-  - outputs/reddit/presidio/20251213_165316_reddit_presidio.jsonl
-
 tri_chunking:
-  enabled: false
+  enabled: true
+
+sort_tokens_by_risk: false

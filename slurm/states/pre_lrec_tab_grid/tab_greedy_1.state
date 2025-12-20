@@ -1,0 +1,3 @@
+1
+0
+python risk.py --data tab --data_in data/TAB/splitted/test.json --explainer greedy --explainer_in ../../../netscratch/yay/tri_pipelines/tab/tab__lr1e-4__bs16__ft15__pre1 --save_to_jsonl data/TAB/test_risk_greedy.jsonl --sort_by scores

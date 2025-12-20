@@ -1,6 +1,5 @@
 params:
   epsilon: "*"
-  rhos: ["*"]
 
 explainer:
   name: greedy
@@ -13,5 +12,4 @@ precomputation:
 tri_chunking:
   enabled: true
 
-token_selection:
-  name: by_risk
+sort_tokens_by_risk: false
