@@ -641,7 +641,13 @@ class PetreAnonymizer(Anonymizer):
 
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         
-        for step in self._unit.anonymize(text, state.term_spans, apply_fn, starting_indices=starting_indices):
+        for step in self._unit.anonymize(
+            text,
+            state.term_spans,
+            apply_fn,
+            starting_indices=starting_indices,
+            starting_annotations_name=self._annotation_name,
+        ):
             k_value = step.threshold
             private_text = step.text
             ledger = step.ledger

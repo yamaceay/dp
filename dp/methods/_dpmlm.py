@@ -496,6 +496,7 @@ class DPMlmAnonymizer(Anonymizer):
 
                 if record_uid is not None:
                     context["starting_indices"] = self._starting_indices_for_uid(record_uid, offsets)
+                    context["starting_annotations_name"] = self._starting_annotations_name
 
                 last_step: Optional[AnonymizationStep] = None
                 for step in self._unit.anonymize(text, offsets, apply_fn, **context):

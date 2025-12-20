@@ -113,8 +113,19 @@ class AnonymizerUnit(ABC):
 
         ledger = TokenLedger(text, offsets)
         processed: set[int] = set()
-        self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
+        seeded_indices = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
+        seeded_pending = list(seeded_indices)
         ordered = self.order_thresholds(self._thresholds)
+
+        starting_annotations_name = context.get("starting_annotations_name")
+        if starting_annotations_name is not None and not isinstance(starting_annotations_name, str):
+            starting_annotations_name = str(starting_annotations_name)
+        starting_meta: Dict[str, Any] = {
+            "starting_annotations_name": starting_annotations_name,
+            "starting_applied_count": len(seeded_indices),
+        }
+        if seeded_indices:
+            starting_meta["starting_applied_indices"] = list(seeded_indices)
 
         for threshold in ordered:
             indices = self.select_indices(text, offsets, threshold, processed, ledger=ledger, **context)
@@ -127,13 +138,20 @@ class AnonymizerUnit(ABC):
                 processed.add(idx)
                 new_indices.append(idx)
 
+            step_indices: List[int] = []
+            if seeded_pending:
+                step_indices.extend(seeded_pending)
+                seeded_pending.clear()
             if new_indices:
-                metadata: Dict[str, Any] = {"processed_count": len(processed)}
+                step_indices.extend(new_indices)
+
+            if step_indices:
+                metadata: Dict[str, Any] = {"processed_count": len(processed), **starting_meta}
                 yield AnonymizationStep(
                     threshold_type=self._threshold_name,
                     threshold=threshold,
                     text=ledger.render_offsets(text),
                     ledger=ledger,
-                    new_indices=new_indices,
+                    new_indices=step_indices,
                     metadata=metadata,
                 )

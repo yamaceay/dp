@@ -1,0 +1,3 @@
+1
+1
+python model.py --data tab --data_in data/TAB/splitted/test.json --model risk --model_in configs/model/risk/tab/greedy.yaml --runtime_in configs/runtime/risk_tolerance/rho_*.yaml --output jsonl --unique_name tab_risk_greedy

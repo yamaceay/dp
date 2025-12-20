@@ -7,7 +7,12 @@ identifier, raw text, optional annotations, and optional utility metadata.
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
 from dp.loaders.tab import TabDatasetAdapter
-from dp.loaders.db_bio import DBBioDatasetAdapter
+
+try:
+    from dp.loaders.db_bio import DBBioDatasetAdapter
+except ImportError:
+    DBBioDatasetAdapter = None
+
 from dp.loaders.reddit import RedditDatasetAdapter
 
 try:
@@ -30,9 +35,11 @@ from dp.loaders.annotations import (
 
 ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "tab": TabDatasetAdapter,
-    "db_bio": DBBioDatasetAdapter,
     "reddit": RedditDatasetAdapter,
 }
+
+if DBBioDatasetAdapter is not None:
+    ADAPTER_REGISTRY["db_bio"] = DBBioDatasetAdapter
 
 if TrustpilotDatasetAdapter is not None:
     ADAPTER_REGISTRY["trustpilot"] = TrustpilotDatasetAdapter
@@ -53,7 +60,6 @@ __all__ = [
     "DatasetAdapter",
     "DatasetRecord",
     "TabDatasetAdapter",
-    "DBBioDatasetAdapter",
     "TextAnnotation",
     "TextAnnotations",
     "TokenEdit",
@@ -70,6 +76,9 @@ __all__ = [
     "list_batch_timestamps",
     "ADAPTER_REGISTRY",
 ]
+
+if DBBioDatasetAdapter is not None:
+    __all__.append("DBBioDatasetAdapter")
 
 if TrustpilotDatasetAdapter is not None:
     __all__.append("TrustpilotDatasetAdapter")
