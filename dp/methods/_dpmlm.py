@@ -451,19 +451,25 @@ class DPMlmAnonymizer(Anonymizer):
             return precomputed_scores, True
 
         if self._explainer is not None:
-            if record_name is None:
-                raise ValueError(
-                    "record_name is required for TRI-based risk scoring; run in dataset mode (use --indices)"
-                )
             critical_offsets = offsets
             if critical_indices is not None:
                 critical_offsets = [offsets[i] for i in critical_indices]
 
-            target_label_id = self._target_label_id_for_record(record_name)
-            target_label = f"LABEL_{target_label_id}"
-            scores = self._explainer.explain(text, critical_offsets, target_label=target_label)
-            if scores is not None and len(scores) == len(critical_offsets):
-                return scores, False
+            from dp.utils.explainer.uniform import UniformExplainer
+            if isinstance(self._explainer, UniformExplainer):
+                scores = self._explainer.explain(text, critical_offsets)
+                if scores is not None and len(scores) == len(critical_offsets):
+                    return scores, False
+            else:
+                if record_name is None:
+                    raise ValueError(
+                        "record_name is required for TRI-based risk scoring; run in dataset mode (use --indices)"
+                    )
+                target_label_id = self._target_label_id_for_record(record_name)
+                target_label = f"LABEL_{target_label_id}"
+                scores = self._explainer.explain(text, critical_offsets, target_label=target_label)
+                if scores is not None and len(scores) == len(critical_offsets):
+                    return scores, False
             
         return np.array([], dtype=float), False
 
