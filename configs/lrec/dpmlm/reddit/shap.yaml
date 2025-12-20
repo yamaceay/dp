@@ -1,0 +1,13 @@
+params:
+  epsilon: "*"
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr1e-4__bs32__ft15__pre1
+  risk_temperature: 0.1
+
+precomputation:
+  risk_scores: data/reddit/reddit_risk_shap.jsonl
+
+tri_chunking:
+  enabled: true

@@ -1,0 +1,20 @@
+params:
+  epsilon: "*"
+  ks: ["*"]
+
+explainer:
+  name: greedy
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr1e-4__bs32__ft15__pre1
+  risk_temperature: 0.1
+
+precomputation:
+  risk_scores: data/reddit/reddit_risk_greedy.jsonl
+
+starting_anonymizations:
+  - outputs/reddit/presidio/20251220_095433_reddit_presidio.jsonl
+
+tri_chunking:
+  enabled: true
+
+token_selection:
+  name: until_k

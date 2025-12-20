@@ -1,15 +1,13 @@
 params:
-  ks: ["*"]
+  epsilon: "*"
 
 explainer:
   name: greedy
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr1e-4__bs16__ft15__pre1
+  risk_temperature: 0.1
 
 precomputation:
   risk_scores: data/TAB/test_risk_greedy.jsonl
 
-starting_anonymizations:
-  - outputs/tab/presidio/20251220_095719_tab_presidio.jsonl
-
 tri_chunking:
-  enabled: false
+  enabled: true

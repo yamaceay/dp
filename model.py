@@ -34,7 +34,22 @@ def add_data_args(parser: argparse.ArgumentParser) -> List[str]:
 def add_model_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--model', type=str, required=True, choices=available_models)
     parser.add_argument('--model_in', type=str, default=None)
+    parser.add_argument('--config_dir', type=str, default='configs/model')
     return ['model', 'model_in']
+
+
+def resolve_model_config_path(model_in: Optional[str], config_dir: str) -> Optional[str]:
+    if model_in is None:
+        return None
+    candidate = Path(model_in)
+    if candidate.exists() and candidate.is_file():
+        return str(candidate)
+    fallback = Path(config_dir) / model_in
+    if fallback.exists() and fallback.is_file():
+        return str(fallback)
+    raise FileNotFoundError(
+        f"Model config '{model_in}' not found. Tried: '{candidate}' and '{fallback}'"
+    )
 
 
 def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
@@ -331,6 +346,19 @@ def load_starting_anonymizations(paths: List[str], records: List[DatasetRecord])
     return annotations
 
 
+def infer_starting_annotations_name(paths: List[str]) -> Optional[str]:
+    if not paths:
+        return None
+    lowered = [p.lower() for p in paths]
+    if any("presidio" in p for p in lowered):
+        return "presidio"
+    if any("spacy" in p for p in lowered):
+        return "spacy"
+    if any("manual" in p for p in lowered):
+        return "manual"
+    return "starting"
+
+
 def compute_dataset_indices(dataset_len: int, data_kwargs: Dict[str, Any]) -> List[int]:
     start = data_kwargs.get("start") or 0
     end = min(data_kwargs.get("end") or dataset_len, dataset_len)
@@ -439,7 +467,8 @@ if __name__ == "__main__":
         exit(0)
     
     records = load_data(data_kwargs)
-    model_config = load_config(args.model_in)
+    model_in_path = resolve_model_config_path(args.model_in, args.config_dir)
+    model_config = load_config(model_in_path)
     starting_anonymization_paths = extract_starting_anonymizations_config(model_config)
     validate_runtime_params(model_config, runtime_bundle)
     precompute_config = extract_precompute_config(model_config)
@@ -488,7 +517,12 @@ if __name__ == "__main__":
                     merged_annotations.setdefault(uid, []).extend(items)
 
     if merged_annotations is not None and hasattr(model, 'set_annotations'):
-        model.set_annotations(merged_annotations, name=args.annotations or ("starting" if starting_anonymization_paths else None))
+        starting_edit_source = None
+        annotation_name = args.annotations
+        if annotation_name is None and starting_anonymization_paths:
+            annotation_name = infer_starting_annotations_name(starting_anonymization_paths)
+            starting_edit_source = annotation_name
+        model.set_annotations(merged_annotations, name=annotation_name, edit_source=starting_edit_source)
     
     configure_model(model, model_config, explainer_config, runtime_bundle, capabilities, args.model, records)
     

@@ -290,8 +290,8 @@ def handle_privacy(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     normalize_output_settings(params)
     tri_cfg = params.get("tri")
     if isinstance(tri_cfg, dict):
-        if "pipeline" in tri_cfg and "tri_pipeline" not in params:
-            params["tri_pipeline"] = tri_cfg["pipeline"]
+        if "tri_pipeline" in tri_cfg and "tri_pipeline" not in params:
+            params["tri_pipeline"] = tri_cfg["tri_pipeline"]
         if "max_length" in tri_cfg and "tri_max_length" not in params:
             params["tri_max_length"] = tri_cfg["max_length"]
         if "device" in tri_cfg and "tri_device" not in params:

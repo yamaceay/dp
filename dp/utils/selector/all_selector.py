@@ -45,8 +45,6 @@ class AllUnit(AnonymizerUnit):
             "starting_annotations_name": starting_annotations_name,
             "starting_applied_count": len(seeded),
         }
-        if seeded:
-            step_metadata["starting_applied_indices"] = list(seeded)
 
         indices = self.select_indices(text, offsets, None, processed, **context)
         sorted_indices = self._sort_by_risk(indices, len(offsets))

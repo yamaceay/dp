@@ -10,6 +10,7 @@ class TokenAddition:
     text: str
     start: Optional[int] = None
     end: Optional[int] = None
+    source: Optional[str] = None
 
 
 @dataclass
@@ -21,6 +22,7 @@ class TokenEntry:
     text: str
     deleted: bool = False
     additions: List[TokenAddition] = field(default_factory=list)
+    edit_source: Optional[str] = None
 
     @property
     def span(self) -> Tuple[int, int]:
@@ -61,6 +63,19 @@ class TokenLedger:
         if prev_end < len(source_text):
             self._gaps.append(GapEntry(start=prev_end, end=len(source_text), text=source_text[prev_end:]))
 
+        self._active_edit_source: Optional[str] = None
+        self._emit_edit_sources: bool = False
+
+    @property
+    def active_edit_source(self) -> Optional[str]:
+        return self._active_edit_source
+
+    def set_active_edit_source(self, source: Optional[str]) -> None:
+        self._active_edit_source = source
+
+    def set_emit_edit_sources(self, enabled: bool) -> None:
+        self._emit_edit_sources = bool(enabled)
+
     def __len__(self) -> int:
         return len(self._entries)
 
@@ -72,17 +87,26 @@ class TokenLedger:
         if entry.deleted:
             return
         entry.text = text
+        entry.edit_source = self._active_edit_source
 
     def delete(self, index: int) -> None:
         entry = self._entries[index]
         entry.deleted = True
         entry.text = ""
         entry.additions.clear()
+        entry.edit_source = self._active_edit_source
 
     def add_after(self, index: int, text: str) -> None:
         entry = self._entries[index]
         insertion_point = entry.end
-        entry.additions.append(TokenAddition(text=text, start=insertion_point, end=insertion_point))
+        entry.additions.append(
+            TokenAddition(
+                text=text,
+                start=insertion_point,
+                end=insertion_point,
+                source=self._active_edit_source,
+            )
+        )
 
     def iter_tokens(self) -> Iterator[str]:
         sorted_entries = sorted(self._entries, key=lambda e: e.start)
@@ -118,30 +142,25 @@ class TokenLedger:
         metadata: List[Dict[str, object]] = []
         for entry in self._entries:
             if entry.deleted:
-                metadata.append(
-                    {
-                        "span": entry.span,
-                        "text": entry.original_text,
-                        "kind": "deleted",
-                    }
-                )
+                item: Dict[str, object] = {"span": entry.span, "text": entry.original_text, "kind": "deleted"}
+                if self._emit_edit_sources and entry.edit_source is not None:
+                    item["source"] = entry.edit_source
+                metadata.append(item)
                 continue
             if entry.text != entry.original_text:
-                metadata.append(
-                    {
-                        "span": entry.span,
-                        "text": entry.text,
-                        "kind": "replaced",
-                    }
-                )
+                item = {"span": entry.span, "text": entry.text, "kind": "replaced"}
+                if self._emit_edit_sources and entry.edit_source is not None:
+                    item["source"] = entry.edit_source
+                metadata.append(item)
             for addition in entry.additions:
-                metadata.append(
-                    {
-                        "span": (addition.start, addition.end) if addition.start is not None else None,
-                        "text": addition.text,
-                        "kind": "added",
-                    }
-                )
+                item = {
+                    "span": (addition.start, addition.end) if addition.start is not None else None,
+                    "text": addition.text,
+                    "kind": "added",
+                }
+                if self._emit_edit_sources and addition.source is not None:
+                    item["source"] = addition.source
+                metadata.append(item)
         return metadata
 
     def surviving_spans(self) -> Iterable[Tuple[int, int]]:

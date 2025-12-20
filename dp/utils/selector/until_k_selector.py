@@ -60,20 +60,30 @@ class UntilKUnit(AnonymizerUnit):
         processed: set[int] = set()
         k_values = self.order_thresholds(self._thresholds)
 
-        self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
+        seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
+
+        starting_annotations_name = context.get("starting_annotations_name")
+        if starting_annotations_name is not None and not isinstance(starting_annotations_name, str):
+            starting_annotations_name = str(starting_annotations_name)
 
         current_text = ledger.render_offsets(text)
 
         current_rank = self._rank_evaluator(current_text, self._target_label)
         for target_k in k_values:
             if current_rank >= target_k:
+                metadata = {
+                    "processed_count": len(processed),
+                    "rank": current_rank,
+                    "starting_annotations_name": starting_annotations_name,
+                    "starting_applied_count": len(seeded),
+                }
                 yield AnonymizationStep(
                     threshold_type=self._threshold_name,
                     threshold=target_k,
                     text=current_text,
                     ledger=ledger,
                     new_indices=[],
-                    metadata={"processed_count": len(processed), "rank": current_rank},
+                    metadata=metadata,
                 )
                 continue
 
@@ -92,13 +102,20 @@ class UntilKUnit(AnonymizerUnit):
                 current_text = ledger.render_offsets(text)
                 current_rank = self._rank_evaluator(current_text, self._target_label)
 
+            metadata = {
+                "processed_count": len(processed),
+                "rank": current_rank,
+                "starting_annotations_name": starting_annotations_name,
+                "starting_applied_count": len(seeded),
+            }
+
             yield AnonymizationStep(
                 threshold_type=self._threshold_name,
                 threshold=target_k,
                 text=current_text,
                 ledger=ledger,
                 new_indices=new_indices,
-                metadata={"processed_count": len(processed), "rank": current_rank},
+                metadata=metadata,
             )
 
 

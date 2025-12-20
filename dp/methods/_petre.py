@@ -64,13 +64,11 @@ class PetreAnonymizer(Anonymizer):
         self.label_to_name: Dict[int, str] = {}
         self.name_to_label: Dict[str, int] = {}
         self.num_labels: int = 0
-        self._annotation_name: Optional[str] = None
         self.tri_chunker: Optional[TokenAwareChunker] = None
         self._score_cache: Dict[str, np.ndarray] = {}
         self._score_order_cache: Dict[str, List[int]] = {}
         self._raw_risk_scores: Dict[str, Tuple[List[Tuple[int, int]], List[float]]] = {}
         self._prepared_risk_scores: Dict[str, np.ndarray] = {}
-        self._starting_annotations: Dict[str, List[Tuple[int, int]]] = {}
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
@@ -84,7 +82,9 @@ class PetreAnonymizer(Anonymizer):
         self.dataset_records = list(dataset_records)
         self._build_label_mappings(self.dataset_records)
         self._build_record_states(self.dataset_records)
-        self._annotation_name = None
+        self._starting_spans_by_uid = {}
+        self._starting_annotations_name = None
+        self._starting_edit_source = None
         self.tri_chunker = None
         self._terms_to_ignore = self._build_terms_to_ignore({}, None)
         self._clear_score_cache()
@@ -337,27 +337,6 @@ class PetreAnonymizer(Anonymizer):
             self.tri_chunker = TokenAwareChunker(tokenizer, max(max_tokens - 2, 1))
         else:
             self.tri_chunker = None
-
-    def set_annotations(self, annotations: Dict[str, List[TextAnnotation]], name: Optional[str] = None) -> None:
-        if not self._records_by_idx:
-            raise RuntimeError("Dataset records must be added before setting annotations")
-        spans_by_uid: Dict[str, List[Tuple[int, int]]] = {}
-        for state in self._records_by_idx:
-            uid = state.uid
-            raw_items = annotations.get(uid, []) if annotations and uid in annotations else []
-            spans: List[Tuple[int, int]] = []
-            for item in raw_items:
-                if isinstance(item, TextAnnotation):
-                    spans.append((int(item.start), int(item.end)))
-                elif isinstance(item, dict) and "start" in item and "end" in item:
-                    spans.append((int(item["start"]), int(item["end"])))
-                elif isinstance(item, (list, tuple)) and len(item) >= 2:
-                    spans.append((int(item[0]), int(item[1])))
-            spans_by_uid[uid] = spans
-        self._starting_annotations = spans_by_uid
-        self.annotations = {uid: [] for uid in spans_by_uid}
-        if name:
-            self._annotation_name = name
 
     def _apply_spans_to_text(
         self,
@@ -620,24 +599,14 @@ class PetreAnonymizer(Anonymizer):
         runtime_stats: Dict[str, int] = {"masked": 0}
         apply_fn = self._make_apply_fn(state, runtime_stats)
 
-        starting_indices: List[int] = []
-        if self._starting_annotations is not None:
-            starting_spans = self._starting_annotations.get(state.uid, [])
-            if starting_spans:
-                for term_idx, term_span in enumerate(state.term_spans):
-                    ts, te = term_span
-                    for ss, se in starting_spans:
-                        if te <= ss or ts >= se:
-                            continue
-                        starting_indices.append(term_idx)
-                        break
-                if self.mask_all_instances and starting_indices:
-                    expanded: set[int] = set(starting_indices)
-                    for term_idx in list(expanded):
-                        token_text = state.term_texts[term_idx]
-                        for related_idx in state.term_indices_by_text.get(token_text, []):
-                            expanded.add(related_idx)
-                    starting_indices = sorted(expanded)
+        starting_indices = self._starting_indices_for_uid(state.uid, state.term_spans)
+        if self.mask_all_instances and starting_indices:
+            expanded: set[int] = set(starting_indices)
+            for term_idx in list(expanded):
+                token_text = state.term_texts[term_idx]
+                for related_idx in state.term_indices_by_text.get(token_text, []):
+                    expanded.add(related_idx)
+            starting_indices = sorted(expanded)
 
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         
@@ -646,7 +615,8 @@ class PetreAnonymizer(Anonymizer):
             state.term_spans,
             apply_fn,
             starting_indices=starting_indices,
-            starting_annotations_name=self._annotation_name,
+            starting_annotations_name=self._starting_annotations_name,
+            starting_edit_source=self._starting_edit_source,
         ):
             k_value = step.threshold
             private_text = step.text

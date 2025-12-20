@@ -70,7 +70,16 @@ class AnonymizerUnit(ABC):
             return []
         if not isinstance(starting_indices, list):
             raise ValueError("starting_indices must be a list of ints")
+
+        starting_edit_source = context.get("starting_edit_source")
+        if starting_edit_source is not None and not isinstance(starting_edit_source, str):
+            starting_edit_source = str(starting_edit_source)
+        if isinstance(starting_edit_source, str) and starting_edit_source == "":
+            starting_edit_source = None
         applied: List[int] = []
+        prev_source = ledger.active_edit_source
+        if starting_edit_source is not None:
+            ledger.set_active_edit_source(starting_edit_source)
         for idx in starting_indices:
             if not isinstance(idx, int):
                 raise ValueError("starting_indices must be a list of ints")
@@ -81,6 +90,8 @@ class AnonymizerUnit(ABC):
             apply_fn(idx, ledger)
             processed.add(idx)
             applied.append(idx)
+        if starting_edit_source is not None:
+            ledger.set_active_edit_source(prev_source)
         return applied
 
     @abstractmethod
@@ -124,8 +135,6 @@ class AnonymizerUnit(ABC):
             "starting_annotations_name": starting_annotations_name,
             "starting_applied_count": len(seeded_indices),
         }
-        if seeded_indices:
-            starting_meta["starting_applied_indices"] = list(seeded_indices)
 
         for threshold in ordered:
             indices = self.select_indices(text, offsets, threshold, processed, ledger=ledger, **context)

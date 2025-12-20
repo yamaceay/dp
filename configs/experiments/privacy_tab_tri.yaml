@@ -3,7 +3,7 @@ data_in: data/TAB/splitted/test.json
 annotations_in:
   - outputs/tab
 tri:
-  pipeline: ../../../netscratch/yay/tri_pipelines/tab/20251203_134320
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr1e-4__bs16__ft15__pre1
   max_length: 512
   device: auto
 mask_token: "[MASK]"

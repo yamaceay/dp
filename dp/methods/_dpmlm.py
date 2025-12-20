@@ -1,7 +1,6 @@
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
 from pathlib import Path
 import json
-import inspect
 import torch
 import numpy as np
 import string
@@ -376,6 +375,30 @@ class DPMlmAnonymizer(Anonymizer):
             token = entry.original_text
             token_start, token_end = entry.start, entry.end
 
+            active_source = getattr(ledger, "active_edit_source", None)
+            if active_source:
+                if token in string.punctuation:
+                    ledger.replace(idx, token)
+                    runtime_stats["total"] += 1
+                    return
+
+                candidate = self._privatize_token(text, token, (token_start, token_end), epsilon)
+
+                original_text = text[token_start:token_end]
+                if len(candidate) == len(original_text):
+                    candidate = "".join(
+                        p.upper() if o.isupper() else p.lower()
+                        for p, o in zip(candidate, original_text)
+                    )
+                elif original_text and original_text[0].isupper():
+                    candidate = candidate.capitalize()
+
+                ledger.replace(idx, candidate)
+                runtime_stats["direct_rewritten"] = int(runtime_stats.get("direct_rewritten", 0)) + 1
+                runtime_stats["perturbed"] += 1
+                runtime_stats["total"] += 1
+                return
+
             if token in string.punctuation:
                 ledger.replace(idx, token)
                 runtime_stats["total"] += 1
@@ -497,6 +520,7 @@ class DPMlmAnonymizer(Anonymizer):
                 if record_uid is not None:
                     context["starting_indices"] = self._starting_indices_for_uid(record_uid, offsets)
                     context["starting_annotations_name"] = self._starting_annotations_name
+                    context["starting_edit_source"] = getattr(self, "_starting_edit_source", None)
 
                 last_step: Optional[AnonymizationStep] = None
                 for step in self._unit.anonymize(text, offsets, apply_fn, **context):

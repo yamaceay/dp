@@ -38,6 +38,7 @@ class Anonymizer(ABC):
 
         self._starting_spans_by_uid: Dict[str, List[Tuple[int, int]]] = {}
         self._starting_annotations_name: Optional[str] = None
+        self._starting_edit_source: Optional[str] = None
 
         print(f"Initialized {self.__class__.__name__} with args: {args}, kwargs: {kwargs}")
 
@@ -77,7 +78,12 @@ class Anonymizer(ABC):
     def set_splitter(self, splitter: TextSplitter) -> None:
         self._splitter = splitter
 
-    def set_annotations(self, annotations: Dict[str, List[Any]], name: Optional[str] = None) -> None:
+    def set_annotations(
+        self,
+        annotations: Dict[str, List[Any]],
+        name: Optional[str] = None,
+        edit_source: Optional[str] = None,
+    ) -> None:
         spans_by_uid: Dict[str, List[Tuple[int, int]]] = {}
         for uid, raw_items in (annotations or {}).items():
             if uid is None:
@@ -96,6 +102,9 @@ class Anonymizer(ABC):
             spans_by_uid[uid_str] = spans
         self._starting_spans_by_uid = spans_by_uid
         self._starting_annotations_name = name
+        if edit_source is not None and not isinstance(edit_source, str):
+            edit_source = str(edit_source)
+        self._starting_edit_source = edit_source
 
     def _starting_indices_for_uid(self, uid: Optional[str], offsets: List[Tuple[int, int]]) -> List[int]:
         if uid is None:
