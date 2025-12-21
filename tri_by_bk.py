@@ -203,6 +203,7 @@ def main() -> int:
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--attacker_extensions", type=str, default=None)
     parser.add_argument("--early_stop_threshold", type=float, default=None)
+    parser.add_argument("--eval_on_original", action="store_true", help="Also evaluate on original record text (in addition to deidentified/rewritten)")
 
     args = parser.parse_args()
 
@@ -269,7 +270,7 @@ def main() -> int:
             if not base_path.exists():
                 raise ValueError(f"Model path not found: {base_path}")
             tri.load(str(base_path))
-        tri.setup(records=records)
+        tri.setup(records=records, include_original_eval=bool(args.eval_on_original))
         model_path.mkdir(parents=True, exist_ok=True)
         tri.train(
             epochs=finetuning_epochs,
@@ -287,7 +288,7 @@ def main() -> int:
     if args.model_path is None:
         raise SystemExit("--model_path is required")
     tri.load(str(Path(args.model_path).expanduser().resolve()))
-    tri.setup(records=records)
+    tri.setup(records=records, include_original_eval=bool(args.eval_on_original))
 
     if args.mode == "evaluate":
         results = tri.evaluate(tri.eval_records)

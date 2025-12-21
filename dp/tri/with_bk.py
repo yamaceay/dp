@@ -8,15 +8,17 @@ class TRIDetectorWithBK(TRIDetector):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.eval_records: Optional[List[DatasetRecord]] = None
+        self.original_eval_records: Optional[List[DatasetRecord]] = None
     
-    def setup(self, records: List[AttackerDatasetRecord]) -> None:
-        self._set_dataset(records)
+    def setup(self, records: List[AttackerDatasetRecord], include_original_eval: bool = False) -> None:
+        self._set_dataset(records, include_original_eval=include_original_eval)
         self.build_label_mappings()
 
-    def _set_dataset(self, records: List[AttackerDatasetRecord]) -> None:
+    def _set_dataset(self, records: List[AttackerDatasetRecord], include_original_eval: bool) -> None:
         if not records:
             raise ValueError("Training records cannot be empty")
         self.train_records, self.eval_records = [], []
+        self.original_eval_records = [] if include_original_eval else None
         for record in records:
             eval_record = DatasetRecord(
                 uid=record.uid,
@@ -26,6 +28,16 @@ class TRIDetectorWithBK(TRIDetector):
                 metadata=record.metadata,
             )
             self.eval_records.append(eval_record)
+            if self.original_eval_records is not None:
+                self.original_eval_records.append(
+                    DatasetRecord(
+                        uid=record.uid,
+                        text=record.text,
+                        name=record.name,
+                        spans=record.spans,
+                        metadata=record.metadata,
+                    )
+                )
             for bk_key, bk_value in record.background_knowledge:
                 new_metadata = {
                     **record.metadata,
@@ -41,7 +53,16 @@ class TRIDetectorWithBK(TRIDetector):
                 self.train_records.append(train_record)
 
     def get_eval_dataset(self, best_metric_dataset: Optional[str] = None, per_step: Optional[int] = None) -> Tuple[Union[TRIDataset, Dict[str, TRIDataset]], Dict[str, Any]]:
-        eval_dataset = TRIDataset(self.eval_records, self.tokenizer, self.name_to_label, self.max_length)
+        if self.eval_records is None:
+            raise ValueError("eval_records is not set; call setup() first")
+        eval_dataset: Union[TRIDataset, Dict[str, TRIDataset]]
+        if self.original_eval_records is not None:
+            eval_dataset = {
+                "deidentified": TRIDataset(self.eval_records, self.tokenizer, self.name_to_label, self.max_length),
+                "original": TRIDataset(self.original_eval_records, self.tokenizer, self.name_to_label, self.max_length),
+            }
+        else:
+            eval_dataset = TRIDataset(self.eval_records, self.tokenizer, self.name_to_label, self.max_length)
             
         eval_kwargs = {
             "load_best_model_at_end": True,

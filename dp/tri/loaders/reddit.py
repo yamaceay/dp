@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple, cast, Optional, Any
 from dp.loaders.base import DatasetRecord
 from dp.loaders.reddit import RedditDatasetAdapter
 from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord
+from dp.loaders.base import TextAnnotation
 
 SECTION_PATTERN = re.compile(r"(Type|Inference|Guess):\s*(.*?)(?=(?:Type|Inference|Guess):|\Z)", re.S)
 
@@ -219,6 +220,14 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
         self._seed = seed
         self._persona_records: List[AttackerDatasetRecord] = self._build_persona_records()
 
+    def set_starting_anonymizations(
+        self,
+        annotations_by_idx: Optional[List[List[TextAnnotation]]],
+        replacement: Optional[str] = None,
+    ) -> None:
+        super().set_starting_anonymizations(annotations_by_idx, replacement=replacement)
+        self._persona_records = self._build_persona_records()
+
     def _persona_seed(self, persona: Dict[str, str]) -> int:
         entries = "|".join(f"{key}={normalize_space(persona.get(key, ''))}" for key in sorted(persona.keys()))
         seed_source = f"{self._seed}|{entries}"
@@ -258,14 +267,27 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
 
     def _build_persona_records(self) -> List[AttackerDatasetRecord]:
         grouped: Dict[str, Dict[str, object]] = {}
-        for record in self.adapter.iter_records():
+        for idx, record in enumerate(self.adapter.iter_records()):
             metadata = dict(record.metadata or {})
             persona = {key[len("persona_"):]: value for key, value in metadata.items() if key.startswith("persona_")}
             if not persona:
                 raise ValueError("Persona metadata is required for Reddit attacker adapter")
             persona_text = self._persona_text(persona)
             pronouns = resolve_pronouns(persona.get("sex"))
-            background_entry = self._build_background_entry(record, persona, pronouns)
+
+            record_for_processing = record
+            if self._starting_anonymizations_by_idx is not None and idx < len(self._starting_anonymizations_by_idx):
+                anns = self._starting_anonymizations_by_idx[idx]
+                if anns:
+                    record_for_processing = DatasetRecord(
+                        text=self._apply_starting_anonymizations(record.text, anns),
+                        uid=record.uid,
+                        name=record.name,
+                        spans=record.spans,
+                        metadata=record.metadata,
+                    )
+
+            background_entry = self._build_background_entry(record_for_processing, persona, pronouns)
 
             bucket = grouped.setdefault(
                 record.name,
