@@ -545,10 +545,18 @@ class PetreAnonymizer(Anonymizer):
         self,
         state: RecordState,
         runtime_stats: Dict[str, int],
+        starting_replacements: Optional[Dict[int, str]] = None,
     ) -> ApplyFn:
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
             if idx >= len(state.term_spans):
                 return
+
+            if starting_replacements is not None:
+                repl = starting_replacements.get(idx)
+                if isinstance(repl, str) and repl:
+                    ledger.replace(idx, repl)
+                    runtime_stats["masked"] += 1
+                    return
             
             token_text = state.term_texts[idx]
             if self._should_ignore(token_text):
@@ -560,11 +568,8 @@ class PetreAnonymizer(Anonymizer):
             if self.mask_all_instances:
                 for related_idx in state.term_indices_by_text.get(token_text, []):
                     if related_idx != idx:
-                        try:
-                            ledger.replace(related_idx, self.mask_text)
-                            runtime_stats["masked"] += 1
-                        except Exception:
-                            pass
+                        ledger.replace(related_idx, self.mask_text)
+                        runtime_stats["masked"] += 1
 
         return apply_fn
 
@@ -597,7 +602,47 @@ class PetreAnonymizer(Anonymizer):
         self._unit.set_rank_evaluator(self._make_rank_evaluator(state))
         
         runtime_stats: Dict[str, int] = {"masked": 0}
-        apply_fn = self._make_apply_fn(state, runtime_stats)
+        starting_indices_raw = self._starting_indices_for_uid(state.uid, state.term_spans)
+        starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
+            state.uid,
+            state.term_spans,
+            starting_indices_raw,
+        )
+        starting_indices = list(starting_indices_raw)
+        if self.mask_all_instances and starting_indices_raw:
+            by_text: Dict[str, Tuple[str, str]] = {}
+            for term_idx in starting_indices_raw:
+                token_text = state.term_texts[term_idx]
+                repl = starting_replacements.get(term_idx)
+                label = starting_labels.get(term_idx)
+                if not isinstance(repl, str) or not repl:
+                    raise ValueError("Starting anonymization token has no replacement")
+                if not isinstance(label, str) or not label:
+                    raise ValueError("Starting anonymization token has no label")
+                existing = by_text.get(token_text)
+                if existing is not None and existing != (repl, label):
+                    raise ValueError("Conflicting starting replacements for identical token text")
+                by_text[token_text] = (repl, label)
+
+            expanded: set[int] = set(starting_indices_raw)
+            for term_idx in list(expanded):
+                token_text = state.term_texts[term_idx]
+                for related_idx in state.term_indices_by_text.get(token_text, []):
+                    expanded.add(related_idx)
+            starting_indices = sorted(expanded)
+
+            for term_idx in starting_indices:
+                if term_idx in starting_replacements:
+                    continue
+                token_text = state.term_texts[term_idx]
+                repl_label = by_text.get(token_text)
+                if repl_label is None:
+                    raise ValueError("mask_all_instances expanded a token without starting replacement")
+                repl, label = repl_label
+                starting_replacements[term_idx] = repl
+                starting_labels[term_idx] = label
+
+        apply_fn = self._make_apply_fn(state, runtime_stats, starting_replacements=starting_replacements)
 
         starting_indices = self._starting_indices_for_uid(state.uid, state.term_spans)
         if self.mask_all_instances and starting_indices:
@@ -622,16 +667,36 @@ class PetreAnonymizer(Anonymizer):
             private_text = step.text
             ledger = step.ledger
             
-            result_spans = [
-                TextAnnotation(
-                    start=state.term_spans[idx][0],
-                    end=state.term_spans[idx][1],
-                    label="petre",
-                    text=state.term_texts[idx],
-                    replacement=self.mask_text,
+            result_spans: List[TextAnnotation] = []
+            starting_set = set(starting_indices or [])
+            for term_idx in starting_indices or []:
+                start, end = state.term_spans[term_idx]
+                repl = starting_replacements.get(term_idx)
+                label = starting_labels.get(term_idx)
+                if not isinstance(repl, str) or not repl:
+                    raise ValueError("Starting anonymization token has no replacement")
+                result_spans.append(
+                    TextAnnotation(
+                        start=start,
+                        end=end,
+                        label=label,
+                        text=state.term_texts[term_idx],
+                        replacement=repl,
+                    )
                 )
-                for idx in step.new_indices
-            ]
+
+            for term_idx in step.new_indices:
+                if term_idx in starting_set:
+                    continue
+                result_spans.append(
+                    TextAnnotation(
+                        start=state.term_spans[term_idx][0],
+                        end=state.term_spans[term_idx][1],
+                        label="petre",
+                        text=state.term_texts[term_idx],
+                        replacement=self.mask_text,
+                    )
+                )
             
             metadata: Dict[str, Any] = {
                 "k": k_value,
@@ -649,8 +714,7 @@ class PetreAnonymizer(Anonymizer):
                     hp,
                     AnonymizationResult(
                         text=private_text,
-                        spans=result_spans,
-                        annotations=TextAnnotations(token_edits=token_edits),
+                        annotations=TextAnnotations(spans=result_spans, token_edits=token_edits),
                         metadata=metadata,
                     ),
                 )

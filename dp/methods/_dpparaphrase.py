@@ -6,6 +6,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, LogitsPr
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, BucketDict, EpsilonParam
+from dp.loaders.base import TextAnnotations
 
 class DPParaphraseAnonymizer(Anonymizer):
     MODEL_NAME = "dpparaphrase"
@@ -177,4 +178,4 @@ class DPParaphraseAnonymizer(Anonymizer):
                 "chunking_enabled": self._chunking_enabled,
                 "chunks": len(chunks),
             }
-            return [(hp, AnonymizationResult(text=private_text, metadata=metadata))]
+            return [(hp, AnonymizationResult(text=private_text, annotations=TextAnnotations(), metadata=metadata))]

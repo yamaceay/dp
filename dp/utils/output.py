@@ -5,21 +5,21 @@ import json
 import numpy as np
 
 from dp.methods.anonymizer import AnonymizationResult
-from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
+from dp.loaders.base import TextAnnotation
 
 
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles NumPy types"""
-    def default(self, obj):
-        if isinstance(obj, (np.integer, np.int32, np.int64)):
-            return int(obj)
-        elif isinstance(obj, (np.floating, np.float32, np.float64)):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, np.bool_):
-            return bool(obj)
-        return super().default(obj)
+    def default(self, o):
+        if isinstance(o, (np.integer, np.int32, np.int64)):
+            return int(o)
+        elif isinstance(o, (np.floating, np.float32, np.float64)):
+            return float(o)
+        elif isinstance(o, np.ndarray):
+            return o.tolist()
+        elif isinstance(o, np.bool_):
+            return bool(o)
+        return super().default(o)
 
 
 OUTPUT_STRUCTURE = {
@@ -39,7 +39,7 @@ class OutputHandler:
 class PrintOutputHandler(OutputHandler):
     def output(self, result: AnonymizationResult, dataset: str, model: str, **kwargs):
         print("Anonymized Text:", result.text)
-        print("# Annotations:", len(result.spans or []))
+        print("# Annotations:", len(result.annotations.spans))
         print("Metadata:", result.metadata)
 
 
@@ -62,23 +62,15 @@ class JsonlOutputHandler(OutputHandler):
             "text": result.text,
         }
 
-        spans = result.spans
-        if spans is None and isinstance(result.annotations, TextAnnotations) and result.annotations.spans:
-            spans = result.annotations.spans
-
-        if spans:
-            record["spans"] = [self._serialize_annotation_minimal(ann) for ann in spans]
-
-        if isinstance(result.annotations, TextAnnotations):
-            annotations: Dict[str, Any] = {}
-            if result.annotations.spans:
-                annotations["spans"] = [self._serialize_annotation_minimal(ann) for ann in result.annotations.spans]
-            if result.annotations.token_edits:
-                annotations["token_edits"] = [te.to_dict() for te in result.annotations.token_edits]
-            if annotations:
-                record["annotations"] = annotations
+        annotations: Dict[str, Any] = {}
+        if result.annotations.spans:
+            annotations["spans"] = [self._serialize_annotation_minimal(ann) for ann in result.annotations.spans]
+        if result.annotations.token_edits:
+            annotations["token_edits"] = [te.to_dict() for te in result.annotations.token_edits]
+        if annotations:
+            record["annotations"] = annotations
         
-        metadata = result.metadata or {}
+        metadata = result.metadata
         if unique_name is not None:
             metadata = dict(metadata)
             metadata["unique_name"] = unique_name
@@ -86,8 +78,7 @@ class JsonlOutputHandler(OutputHandler):
             if not isinstance(metadata, dict):
                 metadata = dict(metadata)
             metadata["hyperparams"] = self._convert_numpy_types(dict(hyperparams))
-        if metadata:
-            record["metadata"] = metadata
+        record["metadata"] = metadata
         
         stream.write(json.dumps(record, ensure_ascii=False, cls=NumpyEncoder) + '\n')
         stream.flush()

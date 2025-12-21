@@ -5,6 +5,7 @@ from transformers.modeling_outputs import BaseModelOutput
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, BucketDict, EpsilonParam
+from dp.loaders.base import TextAnnotations
 
 
 class DPBartAnonymizer(Anonymizer):
@@ -80,7 +81,16 @@ class DPBartAnonymizer(Anonymizer):
         ).to(self.device)
 
         if inputs["input_ids"].shape[-1] == 0:
-            return [(hp, AnonymizationResult(text="", metadata={"epsilon": eps_val, "delta": self.delta, "method": "dpbart"}))]
+            return [
+                (
+                    hp,
+                    AnonymizationResult(
+                        text="",
+                        annotations=TextAnnotations(),
+                        metadata={"epsilon": eps_val, "delta": self.delta, "method": "dpbart"},
+                    ),
+                )
+            ]
 
         num_tokens = len(inputs["input_ids"][0])
 
@@ -101,4 +111,4 @@ class DPBartAnonymizer(Anonymizer):
                 "method": "dpbart",
                 "model": self.model_name,
             }
-            return [(hp, AnonymizationResult(text=private_text, metadata=metadata))]
+            return [(hp, AnonymizationResult(text=private_text, annotations=TextAnnotations(), metadata=metadata))]

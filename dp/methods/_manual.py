@@ -1,6 +1,7 @@
 from typing import List, Optional, Tuple
 
 from dp.loaders import TextAnnotation, get_adapter
+from dp.loaders.base import TextAnnotations
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, BucketDict
@@ -36,7 +37,16 @@ class ManualAnonymizer(Anonymizer):
             offset += len(replacement) - (end - start)
         
         metadata = {"method": "manual"}
-        return [(BucketDict(), AnonymizationResult(text=text, spans=spans, metadata=metadata))]
+        return [
+            (
+                BucketDict(),
+                AnonymizationResult(
+                    text=text,
+                    annotations=TextAnnotations(spans=spans),
+                    metadata=metadata,
+                ),
+            )
+        ]
 
     def _deduplicate_annotations(self, annotations: Optional[List[TextAnnotation]]) -> List[TextAnnotation]:
         if not annotations:

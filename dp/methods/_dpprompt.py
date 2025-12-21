@@ -4,6 +4,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, LogitsProcessorLi
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, BucketDict, EpsilonParam
+from dp.loaders.base import TextAnnotations
 
 class DPPromptAnonymizer(Anonymizer):
     MODEL_NAME = "dpprompt"
@@ -99,4 +100,4 @@ class DPPromptAnonymizer(Anonymizer):
                 "model": self.model_checkpoint,
                 "temperature": temperature,
             }
-            return [(hp, AnonymizationResult(text=private_text, metadata=metadata))]
+            return [(hp, AnonymizationResult(text=private_text, annotations=TextAnnotations(), metadata=metadata))]

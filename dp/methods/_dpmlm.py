@@ -12,7 +12,7 @@ from dp.methods.constants import Buckets, EpsilonParam, BucketDict, buckets_to_d
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.utils.token_ledger import TokenLedger
-from dp.loaders.base import TextAnnotations, TokenEdit
+from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
 
@@ -366,6 +366,7 @@ class DPMlmAnonymizer(Anonymizer):
         offsets: List[Tuple[int, int]],
         epsilon: float,
         runtime_stats: Dict[str, int],
+        starting_replacements: Optional[Dict[int, str]] = None,
     ) -> ApplyFn:
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
             if idx >= len(offsets):
@@ -377,6 +378,14 @@ class DPMlmAnonymizer(Anonymizer):
 
             active_source = getattr(ledger, "active_edit_source", None)
             if active_source:
+                if starting_replacements is not None:
+                    repl = starting_replacements.get(idx)
+                    if isinstance(repl, str) and repl:
+                        ledger.replace(idx, repl)
+                        runtime_stats["direct_masked"] = int(runtime_stats.get("direct_masked", 0)) + 1
+                        runtime_stats["perturbed"] += 1
+                        runtime_stats["total"] += 1
+                        return
                 if token in string.punctuation:
                     ledger.replace(idx, token)
                     runtime_stats["total"] += 1
@@ -521,10 +530,27 @@ class DPMlmAnonymizer(Anonymizer):
                     "added": 0,
                     "deleted": 0,
                 }
-                apply_fn = self._make_apply_fn(text, offsets, compensated_epsilon, runtime_stats)
+                starting_replacements: Optional[Dict[int, str]] = None
+                starting_labels: Optional[Dict[int, str]] = None
+                starting_indices: Optional[List[int]] = None
+                if record_uid is not None:
+                    starting_indices = self._starting_indices_for_uid(record_uid, offsets)
+                    starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
+                        record_uid,
+                        offsets,
+                        starting_indices,
+                    )
+
+                apply_fn = self._make_apply_fn(
+                    text,
+                    offsets,
+                    compensated_epsilon,
+                    runtime_stats,
+                    starting_replacements=starting_replacements,
+                )
 
                 if record_uid is not None:
-                    context["starting_indices"] = self._starting_indices_for_uid(record_uid, offsets)
+                    context["starting_indices"] = starting_indices
                     context["starting_annotations_name"] = self._starting_annotations_name
                     context["starting_edit_source"] = getattr(self, "_starting_edit_source", None)
 
@@ -546,11 +572,10 @@ class DPMlmAnonymizer(Anonymizer):
                         "method": "dpmlm",
                         "model": self.model_checkpoint,
                         "threshold": threshold,
-                        "token_edits": ledger.edits_metadata(),
                         **runtime_stats,
                         **step.metadata,
                     }
-                    token_edits = [TokenEdit.from_mapping(e) for e in metadata["token_edits"]]
+                    token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
                     if self.compensate_epsilon:
                         metadata["effective_epsilon"] = compensated_epsilon
                     if used_precomputed:
@@ -562,7 +587,23 @@ class DPMlmAnonymizer(Anonymizer):
                         hp_with_threshold,
                         AnonymizationResult(
                             text=private_text,
-                            annotations=TextAnnotations(token_edits=token_edits),
+                            annotations=TextAnnotations(
+                                spans=(
+                                    [
+                                        TextAnnotation(
+                                            start=offsets[idx][0],
+                                            end=offsets[idx][1],
+                                            label=(starting_labels or {}).get(idx),
+                                            text=text[offsets[idx][0] : offsets[idx][1]],
+                                            replacement=(starting_replacements or {}).get(idx),
+                                        )
+                                        for idx in (starting_indices or [])
+                                    ]
+                                    if record_uid is not None and starting_indices
+                                    else []
+                                ),
+                                token_edits=token_edits,
+                            ),
                             metadata=metadata,
                         ),
                     ))
@@ -576,7 +617,7 @@ class DPMlmAnonymizer(Anonymizer):
                         "perturbed": 0,
                         "total": 0,
                     }
-                    outputs.append((hp, AnonymizationResult(text=text, metadata=metadata)))
+                    outputs.append((hp, AnonymizationResult(text=text, annotations=TextAnnotations(), metadata=metadata)))
 
             finally:
                 clear_memory()

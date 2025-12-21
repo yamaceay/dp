@@ -1,13 +1,11 @@
 import string
 from typing import Any, List, Tuple
 
-import numpy as np
-
 from dp.utils.selector.base import AnonymizerUnit
 
 
 class ByRiskUnit(AnonymizerUnit):
-    def __init__(self, temperature: float = 1.0, **kwargs: Any) -> None:
+    def __init__(self, temperature: float = 1.0) -> None:
         super().__init__(temperature=temperature)
 
     def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
@@ -36,7 +34,17 @@ class ByRiskUnit(AnonymizerUnit):
         pairs = [(idx, probs[idx]) for idx in range(len(offsets)) if idx not in already_processed]
         pairs.sort(key=lambda x: x[1], reverse=True)
 
-        cumulative = sum(probs[idx] for idx in already_processed)
+        starting_indices = context.get("starting_indices")
+        starting_set: set[int] = set()
+        if starting_indices is not None:
+            if not isinstance(starting_indices, list):
+                raise ValueError("starting_indices must be a list of ints")
+            for item in starting_indices:
+                if not isinstance(item, int):
+                    raise ValueError("starting_indices must be a list of ints")
+                starting_set.add(item)
+
+        cumulative = sum(probs[idx] for idx in already_processed if idx not in starting_set)
         indices: List[int] = []
         for idx, prob in pairs:
             if cumulative >= removal_limit:

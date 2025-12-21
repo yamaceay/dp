@@ -10,7 +10,7 @@ from pathlib import Path
 from dp.methods.anonymizer import Anonymizer, AnonymizationBuilder
 from dp.methods.registry import MODEL_REGISTRY, get_capabilities
 from dp.methods.constants import PII_CLASSIFIER_MODEL_LIST, RISK_MASKER_MODEL_LIST
-from dp.loaders import ADAPTER_REGISTRY, DatasetRecord, read_batch_annotations, read_batch_annotations_from_path, list_batch_timestamps
+from dp.loaders import ADAPTER_REGISTRY, DatasetRecord, TextAnnotation, read_batch_annotations, read_batch_annotations_from_path, list_batch_timestamps
 from dp.utils.pii_detector import PIIDetector
 from dp.utils.selector import PIIOnlySelector, AllSelector, ByRiskSelector, UntilKSelector
 from dp.utils.explainer import UniformExplainer, GreedyExplainer, ShapExplainer
@@ -280,7 +280,7 @@ def configure_model(model: Anonymizer, model_config: dict, explainer_config: dic
         model.set_scoring_strategy(build_explainer(explainer_config, model_config, capabilities, model_name))
 
 
-def load_annotations(annotations_in: str, records: List[DatasetRecord]) -> Dict[str, List]:
+def load_annotations(annotations_in: str, records: List[DatasetRecord]) -> Dict[str, List[TextAnnotation]]:
     loaded_annotations = {}
     for source in annotations_in.split(','):
         for idx, annotations in enumerate(read_batch_annotations_from_path(source.strip())):
@@ -290,8 +290,8 @@ def load_annotations(annotations_in: str, records: List[DatasetRecord]) -> Dict[
     return loaded_annotations
 
 
-def load_starting_anonymizations(paths: List[str], records: List[DatasetRecord]) -> Dict[str, List[dict]]:
-    annotations: Dict[str, List[dict]] = {}
+def load_starting_anonymizations(paths: List[str], records: List[DatasetRecord]) -> Dict[str, List[TextAnnotation]]:
+    annotations: Dict[str, List[TextAnnotation]] = {}
     for path in paths:
         with open(path, "r", encoding="utf-8") as reader:
             for line_num, raw in enumerate(reader, start=1):
@@ -324,10 +324,23 @@ def load_starting_anonymizations(paths: List[str], records: List[DatasetRecord])
 
                 for span in spans:
                     if not isinstance(span, dict):
-                        continue
+                        raise ValueError(f"Invalid span entry in '{path}' at line {line_num}")
                     if "start" not in span or "end" not in span:
-                        continue
-                    annotations.setdefault(uid, []).append({"start": int(span["start"]), "end": int(span["end"])})
+                        raise ValueError(f"Missing start/end in '{path}' at line {line_num}")
+                    start = int(span["start"])
+                    end = int(span["end"])
+                    if end < start:
+                        raise ValueError(f"Invalid span (end < start) in '{path}' at line {line_num}")
+                    label = span.get("label")
+                    replacement = span.get("replacement")
+                    annotations.setdefault(uid, []).append(
+                        TextAnnotation(
+                            start=start,
+                            end=end,
+                            label=label if isinstance(label, str) and label else None,
+                            replacement=replacement if isinstance(replacement, str) and replacement else None,
+                        )
+                    )
     return annotations
 
 

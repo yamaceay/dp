@@ -9,7 +9,7 @@ from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, RhoParams
 from dp.utils.splitter import TextSplitter
 from dp.utils.token_ledger import TokenLedger
-from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
+from dp.utils.selector.base import AnonymizerUnit, ApplyFn
 from dp.utils.selector.by_risk_selector import ByRiskUnit
 from dp.utils.explainer.base import TokenExplainer
 
@@ -41,12 +41,13 @@ class RiskAnonymizer(Anonymizer):
     def hash_text(self, text: str) -> str:
         return sha256(text.encode('utf-8')).hexdigest()
     
-    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], record_names: List[str], *args, **kwargs) -> None:
+    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> None:
         if not all(isinstance(i, str) for i in texts_or_indices):
             raise ValueError("RiskAnonymizer requires texts for pre_stream_anonymize.")
 
+        record_names = kwargs.get("record_names")
         if not isinstance(record_names, list) or len(record_names) != len(texts_or_indices):
-            raise ValueError("record_names must be a list aligned with texts_or_indices")
+            raise ValueError("record_names must be provided and aligned with texts_or_indices")
         if not all(isinstance(name, str) for name in record_names):
             raise ValueError("record_names entries must be strings")
         
@@ -78,24 +79,37 @@ class RiskAnonymizer(Anonymizer):
             if span_map:
                 self._risk_scores_by_uid[uid] = span_map
 
+    def _starting_replacements_for_indices(
+        self,
+        uid: Optional[str],
+        offsets: List[Tuple[int, int]],
+        starting_indices: List[int],
+    ) -> Tuple[Dict[int, str], Dict[int, str]]:
+        return self._starting_replacements_and_labels_for_indices(uid, offsets, starting_indices)
+
     def _make_apply_fn(
         self,
-        text: str,
         spans: List[Tuple[int, int]],
         runtime_stats: Dict[str, int],
+        starting_replacements: Optional[Dict[int, str]] = None,
     ) -> ApplyFn:
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
             if idx >= len(spans):
                 return
-            ledger.replace(idx, self._mask_text)
+            repl = None
+            if starting_replacements is not None:
+                repl = starting_replacements.get(idx)
+            ledger.replace(idx, repl if isinstance(repl, str) and repl else self._mask_text)
             runtime_stats["masked"] += 1
 
         return apply_fn
 
-    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], record_name: Optional[str] = None, **kwargs) -> List[Tuple[Dict[str, Any], AnonymizationResult]]:
+    def anonymize_any_text(self, text: str, *args, buckets: Optional[Buckets] = None, record_name: Optional[str] = None, **kwargs) -> List[Tuple[Dict[str, Any], AnonymizationResult]]:
+        if buckets is None:
+            buckets = []
         cached = self._scores_cache.get(self.hash_text(text))
         if cached is None:
-            tokens, spans = self._tokenize(text)
+            _, spans = self._tokenize(text)
             scores = self._compute_scores(text, spans, record_name)
         else:
             scores, spans = cached
@@ -112,31 +126,62 @@ class RiskAnonymizer(Anonymizer):
         self._unit.set_risk_scores(scores)
         
         runtime_stats: Dict[str, int] = {"masked": 0}
-        apply_fn = self._make_apply_fn(text, spans, runtime_stats)
-
         starting_indices = self._starting_indices_cache.get(self.hash_text(text))
         if starting_indices is None:
             starting_indices = self._starting_indices_for_uid(record_name, spans)
+
+        starting_replacements, starting_labels = self._starting_replacements_for_indices(record_name, spans, starting_indices)
+        apply_fn = self._make_apply_fn(spans, runtime_stats, starting_replacements=starting_replacements)
         
         outputs: List[Tuple[Dict[str, Any], AnonymizationResult]] = []
         
-        for step in self._unit.anonymize(text, spans, apply_fn, starting_indices=starting_indices):
+        starting_set = set(starting_indices or [])
+        starting_spans: List[TextAnnotation] = []
+        for idx in starting_indices or []:
+            start, end = spans[idx]
+            original = text[start:end]
+            repl = starting_replacements.get(idx)
+            label = starting_labels.get(idx)
+            if not isinstance(repl, str) or not repl:
+                raise ValueError("Starting anonymization token has no replacement")
+            starting_spans.append(
+                TextAnnotation(
+                    start=start,
+                    end=end,
+                    label=label,
+                    text=original,
+                    replacement=repl,
+                )
+            )
+        for step in self._unit.anonymize(
+            text,
+            spans,
+            apply_fn,
+            starting_indices=starting_indices,
+            starting_edit_source=self._starting_edit_source,
+            starting_annotations_name=self._starting_annotations_name,
+        ):
             rho = step.threshold
             hp: Dict[str, Any] = {"rho": rho}
             
             private_text = step.text
             ledger = step.ledger
             
-            result_spans = [
-                TextAnnotation(
-                    start=spans[idx][0],
-                    end=spans[idx][1],
-                    label="risk",
-                    text=text[spans[idx][0]:spans[idx][1]],
-                    replacement=self._mask_text,
+            result_spans: List[TextAnnotation] = list(starting_spans)
+            for idx in step.new_indices:
+                if idx in starting_set:
+                    continue
+                start, end = spans[idx]
+                original = text[start:end]
+                result_spans.append(
+                    TextAnnotation(
+                        start=start,
+                        end=end,
+                        label="risk",
+                        text=original,
+                        replacement=self._mask_text,
+                    )
                 )
-                for idx in step.new_indices
-            ]
             
             metadata: Dict[str, Any] = {
                 "method": "risk",
@@ -151,8 +196,7 @@ class RiskAnonymizer(Anonymizer):
                 hp,
                 AnonymizationResult(
                     text=private_text,
-                    spans=result_spans,
-                    annotations=TextAnnotations(token_edits=token_edits),
+                    annotations=TextAnnotations(spans=result_spans, token_edits=token_edits),
                     metadata=metadata,
                 ),
             ))
@@ -160,7 +204,11 @@ class RiskAnonymizer(Anonymizer):
         if not outputs:
             outputs.append((
                 {"rho": 1.0},
-                AnonymizationResult(text=text, metadata={"method": "risk", "masked": 0}),
+                AnonymizationResult(
+                    text=text,
+                    annotations=TextAnnotations(),
+                    metadata={"method": "risk", "masked": 0},
+                ),
             ))
         
         return outputs
@@ -175,7 +223,7 @@ class RiskAnonymizer(Anonymizer):
         return tokens, spans
     
     def _compute_scores(self, text: str, spans: List[Tuple[int, int]], record_name: Optional[str]) -> np.ndarray:
-        precomputed = self._lookup_precomputed_scores(text, spans, record_name)
+        precomputed = self._lookup_precomputed_scores(spans, record_name)
         if precomputed is not None:
             return precomputed
         if self._explainer is None:
@@ -183,7 +231,7 @@ class RiskAnonymizer(Anonymizer):
         raw_scores = self._explainer.explain(text, spans)
         return np.asarray(raw_scores, dtype=float)
 
-    def _lookup_precomputed_scores(self, text: str, spans: List[Tuple[int, int]], record_name: Optional[str]) -> Optional[np.ndarray]:
+    def _lookup_precomputed_scores(self, spans: List[Tuple[int, int]], record_name: Optional[str]) -> Optional[np.ndarray]:
         if record_name and record_name in self._risk_scores_by_uid:
             mapping = self._risk_scores_by_uid[record_name]
             scores: List[float] = []

@@ -119,13 +119,15 @@ class BaroudAnonymizer(Anonymizer):
                 **step.metadata,
             }
             token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
+
+            annotations = TextAnnotations(token_edits=token_edits)
+            annotations.spans = result_spans
             
             outputs.append((
                 hp,
                 AnonymizationResult(
                     text=private_text,
-                    spans=result_spans,
-                    annotations=TextAnnotations(token_edits=token_edits),
+                    annotations=annotations,
                     metadata=metadata,
                 ),
             ))
@@ -133,7 +135,11 @@ class BaroudAnonymizer(Anonymizer):
         if not outputs:
             outputs.append((
                 {"lambda": 1.0},
-                AnonymizationResult(text=text, metadata={"method": "baroud", "masked": 0}),
+                AnonymizationResult(
+                    text=text,
+                    annotations=TextAnnotations(),
+                    metadata={"method": "baroud", "masked": 0},
+                ),
             ))
         
         return outputs

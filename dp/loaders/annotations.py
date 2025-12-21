@@ -1,8 +1,77 @@
-from typing import List, Dict, Optional
+from typing import List, Dict
 import json
 from pathlib import Path
 
 from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
+
+
+_ANNOTATION_KEYS = {
+    "start",
+    "end",
+    "label",
+    "text",
+    "replacement",
+    "confidence",
+    "annotator",
+    "metadata",
+}
+
+
+def _parse_text_annotation(obj: object, *, path: Path, line_num: int, span_idx: int) -> TextAnnotation:
+    if not isinstance(obj, dict):
+        raise ValueError(f"Invalid annotation span in '{path}' at line {line_num} (span {span_idx})")
+    unknown = set(obj.keys()) - _ANNOTATION_KEYS
+    if unknown:
+        raise ValueError(
+            f"Unknown annotation keys {sorted(unknown)} in '{path}' at line {line_num} (span {span_idx})"
+        )
+
+    if "start" not in obj or "end" not in obj:
+        raise ValueError(f"Missing start/end in '{path}' at line {line_num} (span {span_idx})")
+    start = obj["start"]
+    end = obj["end"]
+    if not isinstance(start, int) or not isinstance(end, int):
+        raise ValueError(f"start/end must be ints in '{path}' at line {line_num} (span {span_idx})")
+    if end < start:
+        raise ValueError(f"Invalid span (end < start) in '{path}' at line {line_num} (span {span_idx})")
+
+    label = obj.get("label")
+    if label is not None and not isinstance(label, str):
+        raise ValueError(f"label must be a string or null in '{path}' at line {line_num} (span {span_idx})")
+    text = obj.get("text")
+    if text is not None and not isinstance(text, str):
+        raise ValueError(f"text must be a string or null in '{path}' at line {line_num} (span {span_idx})")
+    replacement = obj.get("replacement")
+    if replacement is not None and not isinstance(replacement, str):
+        raise ValueError(
+            f"replacement must be a string or null in '{path}' at line {line_num} (span {span_idx})"
+        )
+    confidence = obj.get("confidence")
+    if confidence is not None and not isinstance(confidence, (int, float)):
+        raise ValueError(
+            f"confidence must be a number or null in '{path}' at line {line_num} (span {span_idx})"
+        )
+    annotator = obj.get("annotator")
+    if annotator is not None and not isinstance(annotator, str):
+        raise ValueError(
+            f"annotator must be a string or null in '{path}' at line {line_num} (span {span_idx})"
+        )
+    metadata = obj.get("metadata")
+    if metadata is None:
+        metadata = {}
+    if not isinstance(metadata, dict):
+        raise ValueError(f"metadata must be an object in '{path}' at line {line_num} (span {span_idx})")
+
+    return TextAnnotation(
+        start=start,
+        end=end,
+        label=label,
+        text=text,
+        replacement=replacement,
+        confidence=float(confidence) if isinstance(confidence, (int, float)) else None,
+        annotator=annotator,
+        metadata=metadata,
+    )
 
 
 def read_annotations(path: str) -> Dict[str, List[TextAnnotation]]:
@@ -102,7 +171,6 @@ def read_batch_annotations(
     dataset: str,
     model: str,
     timestamp: str,
-    base_path: str = "outputs"
 ) -> List[List[TextAnnotation]]:
     """
     Read batch annotations from file. Automatically detects format based on file extension.
@@ -127,7 +195,6 @@ def read_batch_textannotations(
     dataset: str,
     model: str,
     timestamp: str,
-    base_path: str = "outputs",
 ) -> List[TextAnnotations]:
     from dp.utils.output import OUTPUT_STRUCTURE
 
@@ -142,28 +209,31 @@ def read_batch_textannotations(
 
 
 def _read_jsonl_annotations(jsonl_path: Path) -> List[List[TextAnnotation]]:
-    """Read annotations from a JSONL file."""
-    annotations_by_idx = {}
-    
+    annotations_by_idx: Dict[int, List[TextAnnotation]] = {}
+
     with open(jsonl_path, 'r', encoding='utf-8') as f:
-        for line in f:
+        for line_num, line in enumerate(f, start=1):
             if not line.strip():
                 continue
-            
+
             record = json.loads(line)
+            if not isinstance(record, dict):
+                raise ValueError(f"Invalid JSONL record in '{jsonl_path}' at line {line_num}")
             idx = record.get("idx")
-            if idx is None:
-                continue
-            
-            spans = record.get("spans", [])
-            if isinstance(spans, list) and spans:
-                if isinstance(spans[0], dict):
-                    annotations = [TextAnnotation(**span) for span in spans]
-                else:
-                    annotations = []
-            else:
-                annotations = []
-            
+            if not isinstance(idx, int) or idx < 0:
+                raise ValueError(f"Invalid idx in '{jsonl_path}' at line {line_num}")
+            annotations_obj = record.get("annotations")
+            if not isinstance(annotations_obj, dict):
+                raise ValueError(f"Missing annotations object in '{jsonl_path}' at line {line_num}")
+            spans_raw = annotations_obj.get("spans")
+            if not isinstance(spans_raw, list):
+                raise ValueError(f"annotations.spans must be a list in '{jsonl_path}' at line {line_num}")
+
+            annotations: List[TextAnnotation] = [
+                _parse_text_annotation(span, path=jsonl_path, line_num=line_num, span_idx=span_idx)
+                for span_idx, span in enumerate(spans_raw)
+            ]
+
             annotations_by_idx[idx] = annotations
     
     if not annotations_by_idx:
@@ -181,36 +251,40 @@ def _read_jsonl_textannotations(jsonl_path: Path) -> List[TextAnnotations]:
     annotations_by_idx: Dict[int, TextAnnotations] = {}
 
     with open(jsonl_path, "r", encoding="utf-8") as f:
-        for line in f:
+        for line_num, line in enumerate(f, start=1):
             if not line.strip():
                 continue
 
             record = json.loads(line)
             idx = record.get("idx")
-            if not isinstance(idx, int):
-                continue
+            if not isinstance(idx, int) or idx < 0:
+                raise ValueError(f"Invalid idx in '{jsonl_path}' at line {line_num}")
 
-            spans_raw = record.get("spans")
-            spans: list[TextAnnotation] = []
-            if isinstance(spans_raw, list) and spans_raw and isinstance(spans_raw[0], dict):
-                spans = [TextAnnotation(**span) for span in spans_raw]
-
-            token_edits_raw = None
             annotations_obj = record.get("annotations")
-            if isinstance(annotations_obj, dict):
-                token_edits_raw = annotations_obj.get("token_edits")
-            if token_edits_raw is None:
-                metadata = record.get("metadata")
-                if isinstance(metadata, dict):
-                    token_edits_raw = metadata.get("token_edits")
+            if not isinstance(annotations_obj, dict):
+                raise ValueError(f"Missing annotations object in '{jsonl_path}' at line {line_num}")
+            spans_raw = annotations_obj.get("spans")
+            if not isinstance(spans_raw, list):
+                raise ValueError(f"annotations.spans must be a list in '{jsonl_path}' at line {line_num}")
+            spans: list[TextAnnotation] = [
+                _parse_text_annotation(span, path=jsonl_path, line_num=line_num, span_idx=span_idx)
+                for span_idx, span in enumerate(spans_raw)
+            ]
+
+            token_edits_raw = annotations_obj.get("token_edits")
 
             token_edits: list[TokenEdit] = []
-            if isinstance(token_edits_raw, list):
-                for item in token_edits_raw:
-                    try:
-                        token_edits.append(TokenEdit.from_mapping(item))
-                    except Exception:
-                        continue
+            if token_edits_raw is None:
+                token_edits_raw = []
+            if not isinstance(token_edits_raw, list):
+                raise ValueError(f"token_edits must be a list in '{jsonl_path}' at line {line_num}")
+            for item_idx, item in enumerate(token_edits_raw):
+                try:
+                    token_edits.append(TokenEdit.from_mapping(item))
+                except Exception as e:
+                    raise ValueError(
+                        f"Invalid token_edit in '{jsonl_path}' at line {line_num} (item {item_idx})"
+                    ) from e
 
             annotations_by_idx[idx] = TextAnnotations(spans=spans, token_edits=token_edits)
 
@@ -227,7 +301,6 @@ def _read_jsonl_textannotations(jsonl_path: Path) -> List[TextAnnotations]:
 def list_batch_timestamps(
     dataset: str,
     model: str,
-    base_path: str = "outputs"
 ) -> List[str]:
     from dp.utils.output import OUTPUT_STRUCTURE
     

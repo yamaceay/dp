@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, buckets_to_dicts, BucketDict
-from dp.loaders.base import TextAnnotation
+from dp.loaders.base import TextAnnotation, TextAnnotations
 
 spacy_models = ["en_core_web_sm", "en_core_web_lg"]
 
@@ -66,4 +66,8 @@ class SpacyAnonymizer(Anonymizer):
         out_parts.append(text[last:])
         anonymized = "".join(out_parts)
         metadata = {"method": "spacy"}
-        return AnonymizationResult(text=anonymized, spans=filtered, metadata=metadata)
+        return AnonymizationResult(
+            text=anonymized,
+            annotations=TextAnnotations(spans=filtered),
+            metadata=metadata,
+        )
