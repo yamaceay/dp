@@ -34,7 +34,7 @@ fi
 
 [[ -z "$TABLE_FILE" ]] && TABLE_FILE="jobs.table"
 
-mkdir -p jobs logs
+mkdir -p logs
 
 if [[ ! -f "$TABLE_FILE" ]]; then
     echo "Table file not found: $TABLE_FILE" >&2

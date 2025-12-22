@@ -39,7 +39,7 @@ TARGET_FILE="slurm/sbatches/${FILE_NAME}.sbatch"
 
 [[ -z "$TABLE_FILE" ]] && TABLE_FILE="jobs.table"
 
-mkdir -p jobs logs slurm/sbatches slurm/states slurm/states/${FILE_NAME} logs/${FILE_NAME}
+mkdir -p logs slurm/sbatches slurm/states slurm/states/${FILE_NAME} logs/${FILE_NAME}
 
 if [[ ! -f "$TABLE_FILE" ]]; then
     echo "Table file not found: $TABLE_FILE" >&2

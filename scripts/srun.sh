@@ -31,7 +31,7 @@ if [[ -z "$NAME" ]] || [[ -z "$CMD" ]]; then
     exit 1
 fi
 
-mkdir -p jobs logs
+mkdir -p logs
 
 MAIL_LINES=""
 if [[ -n "$MAILTO" ]]; then

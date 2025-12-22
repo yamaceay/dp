@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --array=0-35%8
+#SBATCH --array=0-3%4
 #SBATCH --job-name=tri_tab_grid
 #SBATCH --output=logs/%x/%a_%j.out
 #SBATCH --error=logs/%x/%a_%j.err
@@ -18,42 +18,10 @@ JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
 job_names=(
-  "tri_tab_grid/tri_tab_lr1e-4_bs16_ft5_pre0_0"
-  "tri_tab_grid/tri_tab_lr1e-4_bs16_ft5_pre1_1"
-  "tri_tab_grid/tri_tab_lr1e-4_bs32_ft5_pre0_2"
-  "tri_tab_grid/tri_tab_lr1e-4_bs32_ft5_pre1_3"
-  "tri_tab_grid/tri_tab_lr1e-4_bs16_ft10_pre0_4"
-  "tri_tab_grid/tri_tab_lr1e-4_bs16_ft10_pre1_5"
-  "tri_tab_grid/tri_tab_lr1e-4_bs32_ft10_pre0_6"
-  "tri_tab_grid/tri_tab_lr1e-4_bs32_ft10_pre1_7"
-  "tri_tab_grid/tri_tab_lr1e-4_bs16_ft15_pre0_8"
-  "tri_tab_grid/tri_tab_lr1e-4_bs16_ft15_pre1_9"
-  "tri_tab_grid/tri_tab_lr1e-4_bs32_ft15_pre0_10"
-  "tri_tab_grid/tri_tab_lr1e-4_bs32_ft15_pre1_11"
-  "tri_tab_grid/tri_tab_lr2e-5_bs16_ft5_pre0_12"
-  "tri_tab_grid/tri_tab_lr2e-5_bs16_ft5_pre1_13"
-  "tri_tab_grid/tri_tab_lr2e-5_bs32_ft5_pre0_14"
-  "tri_tab_grid/tri_tab_lr2e-5_bs32_ft5_pre1_15"
-  "tri_tab_grid/tri_tab_lr2e-5_bs16_ft10_pre0_16"
-  "tri_tab_grid/tri_tab_lr2e-5_bs16_ft10_pre1_17"
-  "tri_tab_grid/tri_tab_lr2e-5_bs32_ft10_pre0_18"
-  "tri_tab_grid/tri_tab_lr2e-5_bs32_ft10_pre1_19"
-  "tri_tab_grid/tri_tab_lr2e-5_bs16_ft15_pre0_20"
-  "tri_tab_grid/tri_tab_lr2e-5_bs16_ft15_pre1_21"
-  "tri_tab_grid/tri_tab_lr2e-5_bs32_ft15_pre0_22"
-  "tri_tab_grid/tri_tab_lr2e-5_bs32_ft15_pre1_23"
-  "tri_tab_grid/tri_tab_lr5e-5_bs16_ft5_pre0_24"
-  "tri_tab_grid/tri_tab_lr5e-5_bs16_ft5_pre1_25"
-  "tri_tab_grid/tri_tab_lr5e-5_bs32_ft5_pre0_26"
-  "tri_tab_grid/tri_tab_lr5e-5_bs32_ft5_pre1_27"
-  "tri_tab_grid/tri_tab_lr5e-5_bs16_ft10_pre0_28"
-  "tri_tab_grid/tri_tab_lr5e-5_bs16_ft10_pre1_29"
-  "tri_tab_grid/tri_tab_lr5e-5_bs32_ft10_pre0_30"
-  "tri_tab_grid/tri_tab_lr5e-5_bs32_ft10_pre1_31"
-  "tri_tab_grid/tri_tab_lr5e-5_bs16_ft15_pre0_32"
-  "tri_tab_grid/tri_tab_lr5e-5_bs16_ft15_pre1_33"
-  "tri_tab_grid/tri_tab_lr5e-5_bs32_ft15_pre0_34"
-  "tri_tab_grid/tri_tab_lr5e-5_bs32_ft15_pre1_35"
+  "tri_tab_grid/tri_tab_lr2e-5_0"
+  "tri_tab_grid/tri_tab_lr5e-5_1"
+  "tri_tab_grid/tri_tab_lr1e-4_2"
+  "tri_tab_grid/tri_tab_lr2e-4_3"
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"

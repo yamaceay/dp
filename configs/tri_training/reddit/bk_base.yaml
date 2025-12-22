@@ -1,6 +1,6 @@
 dataset: reddit
 data_path: data/reddit/reddit.jsonl
-attacker_extensions: data/reddit/reddit_bk_sum.jsonl
+attacker_extensions: data/reddit/reddit_bk_deid.jsonl
 model_name: distilbert-base-uncased
 output_root: /netscratch/yay/tri_detectors/reddit/bk
 max_records: null
@@ -9,9 +9,8 @@ device: cpu
 
 training:
   finetuning_epochs: 15
-  batch_size: 16
-  learning_rate: 5.0e-5
+  batch_size: 32
   use_pretraining: true
-  pretraining_epochs: 3
+  pretraining_epochs: 1
   per_step: null
   early_stop_threshold: null
