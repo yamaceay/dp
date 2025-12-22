@@ -381,12 +381,27 @@ def resolve_requested_indices(available: List[int], requested: Optional[List[int
 def initialize_builder_params(anonymizer: Anonymizer, runtime_bundle):
     from dp.methods.constants import KParams, LambdaParams, RhoParams
     from dp.methods.constants import EpsilonParam
+    from dp.utils.selector import ByRiskUnit, PIIOnlyUnit, UntilKUnit
     model_name = getattr(anonymizer, "MODEL_NAME", None)
 
     if model_name == "dpmlm":
         if getattr(runtime_bundle, "epsilon_value", None) is None:
             return []
-        return [EpsilonParam(epsilon=runtime_bundle.epsilon_value)]
+        buckets = [EpsilonParam(epsilon=runtime_bundle.epsilon_value)]
+        unit = getattr(anonymizer, "_unit", None)
+        if isinstance(unit, UntilKUnit):
+            if not getattr(runtime_bundle, "k_values", None):
+                return buckets
+            buckets.append(KParams(ks=runtime_bundle.k_values))
+        elif isinstance(unit, ByRiskUnit):
+            if not getattr(runtime_bundle, "risk_tolerance_values", None):
+                return buckets
+            buckets.append(RhoParams(rhos=runtime_bundle.risk_tolerance_values))
+        elif isinstance(unit, PIIOnlyUnit):
+            if not getattr(runtime_bundle, "pii_confidence_values", None):
+                return buckets
+            buckets.append(LambdaParams(lambdas=runtime_bundle.pii_confidence_values))
+        return buckets
 
     if model_name == "baroud":
         if not getattr(runtime_bundle, "pii_confidence_values", None):
