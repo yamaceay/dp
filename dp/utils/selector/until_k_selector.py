@@ -67,9 +67,10 @@ class UntilKUnit(AnonymizerUnit):
         processed: set[int] = set()
         k_values = self.order_thresholds(self._thresholds)
 
-        seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
+        context_without_ledger = {k: v for k, v in context.items() if k != "ledger"}
+        seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context_without_ledger)
 
-        starting_annotations_name = context.get("starting_annotations_name")
+        starting_annotations_name = context_without_ledger.get("starting_annotations_name")
         if starting_annotations_name is not None and not isinstance(starting_annotations_name, str):
             starting_annotations_name = str(starting_annotations_name)
 

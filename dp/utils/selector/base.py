@@ -136,7 +136,8 @@ class AnonymizerUnit(ABC):
             ledger = ledger_value
 
         processed: set[int] = set()
-        seeded_indices = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
+        context_without_ledger = {k: v for k, v in context.items() if k != "ledger"}
+        seeded_indices = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context_without_ledger)
         seeded_pending = list(seeded_indices)
         ordered = self.order_thresholds(self._thresholds)
 
@@ -149,7 +150,7 @@ class AnonymizerUnit(ABC):
         }
 
         for threshold in ordered:
-            indices = self.select_indices(text, offsets, threshold, processed, ledger=ledger, **context)
+            indices = self.select_indices(text, offsets, threshold, processed, ledger=ledger, **context_without_ledger)
             sorted_indices = self._sort_by_risk(indices, len(offsets))
             new_indices: List[int] = []
             for idx in sorted_indices:

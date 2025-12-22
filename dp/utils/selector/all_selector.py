@@ -42,7 +42,8 @@ class AllUnit(AnonymizerUnit):
             ledger = ledger_value
 
         processed: set[int] = set()
-        seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
+        context_without_ledger = {k: v for k, v in context.items() if k != "ledger"}
+        seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context_without_ledger)
 
         starting_annotations_name = context.get("starting_annotations_name")
         if starting_annotations_name is not None and not isinstance(starting_annotations_name, str):
@@ -53,7 +54,7 @@ class AllUnit(AnonymizerUnit):
             "starting_applied_count": len(seeded),
         }
 
-        indices = self.select_indices(text, offsets, None, processed, **context)
+        indices = self.select_indices(text, offsets, None, processed, **context_without_ledger)
         sorted_indices = self._sort_by_risk(indices, len(offsets))
         remaining: List[int] = []
         for idx in sorted_indices:
