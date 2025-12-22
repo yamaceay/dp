@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --array=0-5%6
+#SBATCH --array=0-2%3
 #SBATCH --job-name=lrec_tab_grid1
 #SBATCH --output=logs/%x/%a_%j.out
 #SBATCH --error=logs/%x/%a_%j.err
@@ -18,12 +18,9 @@ JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
 job_names=(
-  "lrec_tab_grid1/tab_baroud_0"
-  "lrec_tab_grid1/tab_risk_greedy_1"
-  "lrec_tab_grid1/tab_risk_shap_2"
-  "lrec_tab_grid1/tab_spacy_3"
-  "lrec_tab_grid1/tab_presidio_4"
-  "lrec_tab_grid1/tab_manual_5"
+  "lrec_tab_grid1/tab_spacy_0"
+  "lrec_tab_grid1/tab_presidio_1"
+  "lrec_tab_grid1/tab_manual_2"
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"

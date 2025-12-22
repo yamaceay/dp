@@ -4,7 +4,7 @@ params:
 
 explainer:
   name: greedy
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr1e-4__bs32__ft15__pre1
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
   risk_temperature: 0.1
 
 precomputation:
