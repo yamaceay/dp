@@ -256,14 +256,21 @@ def _read_jsonl_textannotations(jsonl_path: Path) -> List[TextAnnotations]:
                 continue
 
             record = json.loads(line)
+            if not isinstance(record, dict):
+                raise ValueError(f"Invalid JSONL record in '{jsonl_path}' at line {line_num}")
             idx = record.get("idx")
             if not isinstance(idx, int) or idx < 0:
                 raise ValueError(f"Invalid idx in '{jsonl_path}' at line {line_num}")
 
             annotations_obj = record.get("annotations")
+            if annotations_obj is None:
+                annotations_obj = {}
             if not isinstance(annotations_obj, dict):
-                raise ValueError(f"Missing annotations object in '{jsonl_path}' at line {line_num}")
+                raise ValueError(f"annotations must be an object in '{jsonl_path}' at line {line_num}")
+
             spans_raw = annotations_obj.get("spans")
+            if spans_raw is None:
+                spans_raw = []
             if not isinstance(spans_raw, list):
                 raise ValueError(f"annotations.spans must be a list in '{jsonl_path}' at line {line_num}")
             spans: list[TextAnnotation] = [
@@ -272,6 +279,13 @@ def _read_jsonl_textannotations(jsonl_path: Path) -> List[TextAnnotations]:
             ]
 
             token_edits_raw = annotations_obj.get("token_edits")
+            if token_edits_raw is None:
+                metadata_obj = record.get("metadata")
+                if metadata_obj is None:
+                    metadata_obj = {}
+                if not isinstance(metadata_obj, dict):
+                    raise ValueError(f"metadata must be an object in '{jsonl_path}' at line {line_num}")
+                token_edits_raw = metadata_obj.get("token_edits")
 
             token_edits: list[TokenEdit] = []
             if token_edits_raw is None:

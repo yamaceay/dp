@@ -56,7 +56,14 @@ class UntilKUnit(AnonymizerUnit):
         if self._target_label is None:
             raise ValueError("UntilKUnit requires target_label to be set")
 
-        ledger = TokenLedger(text, offsets)
+        ledger_value = context.get("ledger")
+        if ledger_value is None:
+            ledger = TokenLedger(text, offsets)
+        else:
+            if not isinstance(ledger_value, TokenLedger):
+                raise ValueError("ledger must be a TokenLedger")
+            ledger = ledger_value
+
         processed: set[int] = set()
         k_values = self.order_thresholds(self._thresholds)
 

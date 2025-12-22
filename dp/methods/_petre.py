@@ -75,6 +75,8 @@ class PetreAnonymizer(Anonymizer):
             Tuple[List[int], Dict[int, str], Dict[int, str]],
         ] = {}
 
+        self._pre_stream_direct_ledger_by_uid: Dict[str, TokenLedger] = {}
+
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
 
@@ -101,6 +103,7 @@ class PetreAnonymizer(Anonymizer):
             self.set_risk_scores(risk_scores, records=self.dataset_records or None)
 
         self._pre_stream_starting_by_uid = {}
+        self._pre_stream_direct_ledger_by_uid = {}
         if not texts_or_indices:
             return
         if isinstance(texts_or_indices[0], int):
@@ -110,32 +113,69 @@ class PetreAnonymizer(Anonymizer):
                 if idx < 0 or idx >= len(self._records_by_idx):
                     continue
                 state = self._records_by_idx[idx]
-                ledger = TokenLedger(state.text, state.term_spans)
                 starting_indices = self._starting_indices_for_uid(state.uid, state.term_spans)
                 starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
                     state.uid,
                     state.term_spans,
                     starting_indices,
                 )
+
+                expanded_indices = list(starting_indices)
+                expanded_replacements = dict(starting_replacements)
+                expanded_labels = dict(starting_labels)
+                if self.mask_all_instances and expanded_indices:
+                    by_text: Dict[str, Tuple[str, str]] = {}
+                    for term_idx in expanded_indices:
+                        token_text = state.term_texts[term_idx]
+                        repl = expanded_replacements.get(term_idx)
+                        label = expanded_labels.get(term_idx)
+                        if not isinstance(repl, str) or not repl:
+                            raise ValueError("Starting anonymization token has no replacement")
+                        if not isinstance(label, str) or not label:
+                            raise ValueError("Starting anonymization token has no label")
+                        existing = by_text.get(token_text)
+                        if existing is not None and existing != (repl, label):
+                            raise ValueError("Conflicting starting replacements for identical token text")
+                        by_text[token_text] = (repl, label)
+
+                    expanded: set[int] = set(expanded_indices)
+                    for term_idx in list(expanded):
+                        token_text = state.term_texts[term_idx]
+                        for related_idx in state.term_indices_by_text.get(token_text, []):
+                            expanded.add(related_idx)
+                    expanded_indices = sorted(expanded)
+
+                    for term_idx in expanded_indices:
+                        if term_idx in expanded_replacements:
+                            continue
+                        token_text = state.term_texts[term_idx]
+                        repl_label = by_text.get(token_text)
+                        if repl_label is None:
+                            raise ValueError("mask_all_instances expanded a token without starting replacement")
+                        repl, label = repl_label
+                        expanded_replacements[term_idx] = repl
+                        expanded_labels[term_idx] = label
+
+                ledger = TokenLedger(state.text, state.term_spans)
                 prev_source = ledger.active_edit_source
                 if self._starting_edit_source is not None:
                     ledger.set_active_edit_source(self._starting_edit_source)
-                for term_idx in starting_indices:
-                    repl = starting_replacements.get(term_idx)
-                    label = starting_labels.get(term_idx)
-                    if isinstance(repl, str) and repl:
-                        ledger.replace(term_idx, repl)
-                    elif isinstance(label, str) and label:
-                        ledger.replace(term_idx, f"[{label}]")
-                    else:
-                        ledger.replace(term_idx, self.mask_text)
+                apply_fn = self._make_apply_fn(
+                    state,
+                    {"masked": 0},
+                    starting_replacements=expanded_replacements,
+                )
+                for term_idx in expanded_indices:
+                    apply_fn(term_idx, ledger)
                 if self._starting_edit_source is not None:
                     ledger.set_active_edit_source(prev_source)
+
                 self._pre_stream_starting_by_uid[str(state.uid)] = (
                     list(starting_indices),
                     dict(starting_replacements),
                     dict(starting_labels),
                 )
+                self._pre_stream_direct_ledger_by_uid[str(state.uid)] = ledger
             return
 
         for text in texts_or_indices:
@@ -143,8 +183,7 @@ class PetreAnonymizer(Anonymizer):
                 continue
             if not text.strip():
                 continue
-            spans: List[Tuple[int, int]] = [(int(s), int(e)) for s, e, _ in self.splitter.tokenize_with_spans(text)]
-            _ = TokenLedger(text, spans)
+            _ = [(int(s), int(e)) for s, e, _ in self.splitter.tokenize_with_spans(text)]
 
     def _clear_score_cache(self) -> None:
         self._score_cache.clear()
@@ -658,6 +697,7 @@ class PetreAnonymizer(Anonymizer):
         self._unit.set_rank_evaluator(self._make_rank_evaluator(state))
         
         runtime_stats: Dict[str, int] = {"masked": 0}
+        pre_stream_ledger = self._pre_stream_direct_ledger_by_uid.get(str(state.uid))
         cached = self._pre_stream_starting_by_uid.get(str(state.uid))
         if cached is not None:
             starting_indices_raw = list(cached[0])
@@ -704,16 +744,10 @@ class PetreAnonymizer(Anonymizer):
                 starting_replacements[term_idx] = repl
                 starting_labels[term_idx] = label
 
-        apply_fn = self._make_apply_fn(state, runtime_stats, starting_replacements=starting_replacements)
+        if pre_stream_ledger is not None:
+            runtime_stats["masked"] = len(starting_indices)
 
-        starting_indices = self._starting_indices_for_uid(state.uid, state.term_spans)
-        if self.mask_all_instances and starting_indices:
-            expanded: set[int] = set(starting_indices)
-            for term_idx in list(expanded):
-                token_text = state.term_texts[term_idx]
-                for related_idx in state.term_indices_by_text.get(token_text, []):
-                    expanded.add(related_idx)
-            starting_indices = sorted(expanded)
+        apply_fn = self._make_apply_fn(state, runtime_stats, starting_replacements=starting_replacements)
 
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         
@@ -721,7 +755,9 @@ class PetreAnonymizer(Anonymizer):
             text,
             state.term_spans,
             apply_fn,
+            ledger=pre_stream_ledger,
             starting_indices=starting_indices,
+            starting_already_applied=True if pre_stream_ledger is not None else None,
             starting_annotations_name=self._starting_annotations_name,
             starting_edit_source=self._starting_edit_source,
         ):

@@ -33,7 +33,14 @@ class AllUnit(AnonymizerUnit):
         if not text or not text.strip():
             return
 
-        ledger = TokenLedger(text, offsets)
+        ledger_value = context.get("ledger")
+        if ledger_value is None:
+            ledger = TokenLedger(text, offsets)
+        else:
+            if not isinstance(ledger_value, TokenLedger):
+                raise ValueError("ledger must be a TokenLedger")
+            ledger = ledger_value
+
         processed: set[int] = set()
         seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
 

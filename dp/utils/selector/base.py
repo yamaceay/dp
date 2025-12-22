@@ -71,6 +71,10 @@ class AnonymizerUnit(ABC):
         if not isinstance(starting_indices, list):
             raise ValueError("starting_indices must be a list of ints")
 
+        starting_already_applied = context.get("starting_already_applied")
+        if starting_already_applied is not None and not isinstance(starting_already_applied, bool):
+            raise ValueError("starting_already_applied must be a bool")
+
         starting_edit_source = context.get("starting_edit_source")
         if starting_edit_source is not None and not isinstance(starting_edit_source, str):
             starting_edit_source = str(starting_edit_source)
@@ -78,7 +82,7 @@ class AnonymizerUnit(ABC):
             starting_edit_source = None
         applied: List[int] = []
         prev_source = ledger.active_edit_source
-        if starting_edit_source is not None:
+        if starting_edit_source is not None and starting_already_applied is not True:
             ledger.set_active_edit_source(starting_edit_source)
         for idx in starting_indices:
             if not isinstance(idx, int):
@@ -87,10 +91,11 @@ class AnonymizerUnit(ABC):
                 raise IndexError(f"starting index {idx} is out of bounds")
             if idx in processed:
                 continue
-            apply_fn(idx, ledger)
+            if starting_already_applied is not True:
+                apply_fn(idx, ledger)
             processed.add(idx)
             applied.append(idx)
-        if starting_edit_source is not None:
+        if starting_edit_source is not None and starting_already_applied is not True:
             ledger.set_active_edit_source(prev_source)
         return applied
 
@@ -122,7 +127,14 @@ class AnonymizerUnit(ABC):
         if self._threshold_name is None:
             raise ValueError("threshold name must be set before anonymization")
 
-        ledger = TokenLedger(text, offsets)
+        ledger_value = context.get("ledger")
+        if ledger_value is None:
+            ledger = TokenLedger(text, offsets)
+        else:
+            if not isinstance(ledger_value, TokenLedger):
+                raise ValueError("ledger must be a TokenLedger")
+            ledger = ledger_value
+
         processed: set[int] = set()
         seeded_indices = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
         seeded_pending = list(seeded_indices)
