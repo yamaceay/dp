@@ -1,3 +1,0 @@
-1
-0
-python model.py --data tab --data_in data/TAB/splitted/test.json --model dpmlm --model_in configs/model/dpmlm/tab/greedy_unsorted.yaml --runtime_in configs/runtime/dp/eps_010.yaml --output jsonl --unique_name tab_dpmlm_greedy_unsorted_eps_010

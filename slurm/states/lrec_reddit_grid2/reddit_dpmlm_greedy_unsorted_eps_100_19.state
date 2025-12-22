@@ -1,3 +1,0 @@
-1
-0
-python model.py --data reddit --data_in data/reddit/reddit.jsonl --model dpmlm --model_in configs/lrec/dpmlm/reddit/greedy_unsorted.yaml --runtime_in configs/runtime/dp/eps_100.yaml --output jsonl --unique_name reddit_dpmlm_greedy_unsorted_eps_100

@@ -70,6 +70,11 @@ class PetreAnonymizer(Anonymizer):
         self._raw_risk_scores: Dict[str, Tuple[List[Tuple[int, int]], List[float]]] = {}
         self._prepared_risk_scores: Dict[str, np.ndarray] = {}
 
+        self._pre_stream_starting_by_uid: Dict[
+            str,
+            Tuple[List[int], Dict[int, str], Dict[int, str]],
+        ] = {}
+
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
 
@@ -94,6 +99,52 @@ class PetreAnonymizer(Anonymizer):
         risk_scores = kwargs.get("risk_scores")
         if risk_scores is not None:
             self.set_risk_scores(risk_scores, records=self.dataset_records or None)
+
+        self._pre_stream_starting_by_uid = {}
+        if not texts_or_indices:
+            return
+        if isinstance(texts_or_indices[0], int):
+            for idx in texts_or_indices:
+                if not isinstance(idx, int):
+                    continue
+                if idx < 0 or idx >= len(self._records_by_idx):
+                    continue
+                state = self._records_by_idx[idx]
+                ledger = TokenLedger(state.text, state.term_spans)
+                starting_indices = self._starting_indices_for_uid(state.uid, state.term_spans)
+                starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
+                    state.uid,
+                    state.term_spans,
+                    starting_indices,
+                )
+                prev_source = ledger.active_edit_source
+                if self._starting_edit_source is not None:
+                    ledger.set_active_edit_source(self._starting_edit_source)
+                for term_idx in starting_indices:
+                    repl = starting_replacements.get(term_idx)
+                    label = starting_labels.get(term_idx)
+                    if isinstance(repl, str) and repl:
+                        ledger.replace(term_idx, repl)
+                    elif isinstance(label, str) and label:
+                        ledger.replace(term_idx, f"[{label}]")
+                    else:
+                        ledger.replace(term_idx, self.mask_text)
+                if self._starting_edit_source is not None:
+                    ledger.set_active_edit_source(prev_source)
+                self._pre_stream_starting_by_uid[str(state.uid)] = (
+                    list(starting_indices),
+                    dict(starting_replacements),
+                    dict(starting_labels),
+                )
+            return
+
+        for text in texts_or_indices:
+            if not isinstance(text, str):
+                continue
+            if not text.strip():
+                continue
+            spans: List[Tuple[int, int]] = [(int(s), int(e)) for s, e, _ in self.splitter.tokenize_with_spans(text)]
+            _ = TokenLedger(text, spans)
 
     def _clear_score_cache(self) -> None:
         self._score_cache.clear()
@@ -553,8 +604,13 @@ class PetreAnonymizer(Anonymizer):
 
             if starting_replacements is not None:
                 repl = starting_replacements.get(idx)
-                if isinstance(repl, str) and repl:
-                    ledger.replace(idx, repl)
+                if isinstance(repl, str) and repl.strip():
+                    repl_value = repl.strip()
+                    original = str(state.term_texts[idx]).strip()
+                    if repl_value.lower() != original.lower():
+                        ledger.replace(idx, repl_value)
+                    else:
+                        ledger.replace(idx, self.mask_text)
                     runtime_stats["masked"] += 1
                     return
             
@@ -602,12 +658,18 @@ class PetreAnonymizer(Anonymizer):
         self._unit.set_rank_evaluator(self._make_rank_evaluator(state))
         
         runtime_stats: Dict[str, int] = {"masked": 0}
-        starting_indices_raw = self._starting_indices_for_uid(state.uid, state.term_spans)
-        starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
-            state.uid,
-            state.term_spans,
-            starting_indices_raw,
-        )
+        cached = self._pre_stream_starting_by_uid.get(str(state.uid))
+        if cached is not None:
+            starting_indices_raw = list(cached[0])
+            starting_replacements = dict(cached[1])
+            starting_labels = dict(cached[2])
+        else:
+            starting_indices_raw = self._starting_indices_for_uid(state.uid, state.term_spans)
+            starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
+                state.uid,
+                state.term_spans,
+                starting_indices_raw,
+            )
         starting_indices = list(starting_indices_raw)
         if self.mask_all_instances and starting_indices_raw:
             by_text: Dict[str, Tuple[str, str]] = {}

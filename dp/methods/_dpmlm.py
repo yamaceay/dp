@@ -59,6 +59,16 @@ class DPMlmAnonymizer(Anonymizer):
         self._tri_label_mapping: Optional[Dict[str, int]] = None
         self._tri_label_mapping_source: Optional[str] = None
 
+        self._pre_stream_starting_by_uid: Dict[
+            str,
+            Tuple[
+                List[Tuple[int, int]],
+                List[int],
+                Dict[int, str],
+                Dict[int, str],
+            ],
+        ] = {}
+
         try:
             from transformers import AutoTokenizer, AutoModelForMaskedLM
             from nltk.tokenize.treebank import TreebankWordDetokenizer
@@ -132,6 +142,64 @@ class DPMlmAnonymizer(Anonymizer):
                     "run in dataset mode (use --indices) so risk scores can be matched to records"
                 )
             self.set_risk_scores(risk_scores, records=self.dataset_records or None)
+
+        self._pre_stream_starting_by_uid = {}
+        if not texts_or_indices:
+            return
+
+        if isinstance(texts_or_indices[0], int):
+            if not self.dataset_records:
+                return
+            for idx in texts_or_indices:
+                if not isinstance(idx, int):
+                    continue
+                if idx < 0 or idx >= len(self.dataset_records):
+                    continue
+                record = self.dataset_records[idx]
+                uid = str(record.uid)
+                text = record.text or ""
+                if not text:
+                    continue
+                offsets: List[Tuple[int, int]] = [
+                    (int(start), int(end))
+                    for start, end, _ in self.splitter.tokenize_with_spans(text)
+                ]
+                ledger = TokenLedger(text, offsets)
+                starting_indices = self._starting_indices_for_uid(uid, offsets)
+                starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
+                    uid,
+                    offsets,
+                    starting_indices,
+                )
+                prev_source = ledger.active_edit_source
+                if self._starting_edit_source is not None:
+                    ledger.set_active_edit_source(self._starting_edit_source)
+                for token_idx in starting_indices:
+                    repl = starting_replacements.get(token_idx)
+                    label = starting_labels.get(token_idx)
+                    if isinstance(repl, str) and repl:
+                        ledger.replace(token_idx, repl)
+                    elif isinstance(label, str) and label:
+                        ledger.replace(token_idx, f"[{label}]")
+                    else:
+                        ledger.replace(token_idx, "[MASK]")
+                if self._starting_edit_source is not None:
+                    ledger.set_active_edit_source(prev_source)
+                self._pre_stream_starting_by_uid[uid] = (
+                    offsets,
+                    list(starting_indices),
+                    dict(starting_replacements),
+                    dict(starting_labels),
+                )
+            return
+
+        for text in texts_or_indices:
+            if not isinstance(text, str):
+                continue
+            if not text.strip():
+                continue
+            offsets = [(int(s), int(e)) for s, e, _ in self.splitter.tokenize_with_spans(text)]
+            _ = TokenLedger(text, offsets)
 
     def anonymize_from_dataset(
         self,
@@ -367,6 +435,7 @@ class DPMlmAnonymizer(Anonymizer):
         epsilon: float,
         runtime_stats: Dict[str, int],
         starting_replacements: Optional[Dict[int, str]] = None,
+        starting_labels: Optional[Dict[int, str]] = None,
     ) -> ApplyFn:
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
             if idx >= len(offsets):
@@ -376,34 +445,23 @@ class DPMlmAnonymizer(Anonymizer):
             token = entry.original_text
             token_start, token_end = entry.start, entry.end
 
-            active_source = getattr(ledger, "active_edit_source", None)
-            if active_source:
-                if starting_replacements is not None:
-                    repl = starting_replacements.get(idx)
-                    if isinstance(repl, str) and repl:
-                        ledger.replace(idx, repl)
-                        runtime_stats["direct_masked"] = int(runtime_stats.get("direct_masked", 0)) + 1
-                        runtime_stats["perturbed"] += 1
-                        runtime_stats["total"] += 1
-                        return
-                if token in string.punctuation:
-                    ledger.replace(idx, token)
-                    runtime_stats["total"] += 1
-                    return
-
-                candidate = self._privatize_token(text, token, (token_start, token_end), epsilon)
-
-                original_text = text[token_start:token_end]
-                if len(candidate) == len(original_text):
-                    candidate = "".join(
-                        p.upper() if o.isupper() else p.lower()
-                        for p, o in zip(candidate, original_text)
-                    )
-                elif original_text and original_text[0].isupper():
-                    candidate = candidate.capitalize()
-
+            if starting_replacements is not None and idx in starting_replacements:
+                repl = starting_replacements.get(idx)
+                label = (starting_labels or {}).get(idx)
+                candidate = repl if isinstance(repl, str) and repl.strip() else None
+                if candidate is None and isinstance(label, str) and label:
+                    candidate = f"[{label}]"
+                if candidate is None:
+                    candidate = "[MASK]"
+                if candidate.strip().lower() == token.strip().lower():
+                    candidate = "[MASK]"
+                prev_source = ledger.active_edit_source
+                if self._starting_edit_source is not None:
+                    ledger.set_active_edit_source(self._starting_edit_source)
                 ledger.replace(idx, candidate)
-                runtime_stats["direct_rewritten"] = int(runtime_stats.get("direct_rewritten", 0)) + 1
+                if self._starting_edit_source is not None:
+                    ledger.set_active_edit_source(prev_source)
+                runtime_stats["direct_masked"] = int(runtime_stats.get("direct_masked", 0)) + 1
                 runtime_stats["perturbed"] += 1
                 runtime_stats["total"] += 1
                 return
@@ -509,7 +567,25 @@ class DPMlmAnonymizer(Anonymizer):
                     from dp.utils.selector.all_selector import AllUnit
                     self._unit = AllUnit()
 
+                from dp.utils.selector.by_risk_selector import ByRiskUnit
+                from dp.utils.selector.pii_only_selector import PIIOnlyUnit
                 from dp.utils.selector.until_k_selector import UntilKUnit
+                if isinstance(self._unit, UntilKUnit):
+                    k_val = hp.get("k")
+                    if k_val is None:
+                        raise ValueError("DPMlmAnonymizer using until_k selector requires KParams buckets")
+                    self._unit.set_thresholds([int(k_val)], name="k")
+                elif isinstance(self._unit, ByRiskUnit):
+                    rho_val = hp.get("rho")
+                    if rho_val is None:
+                        raise ValueError("DPMlmAnonymizer using by_risk selector requires RhoParams buckets")
+                    self._unit.set_thresholds([float(rho_val)], name="rho")
+                elif isinstance(self._unit, PIIOnlyUnit):
+                    lambda_val = hp.get("lambda")
+                    if lambda_val is None:
+                        raise ValueError("DPMlmAnonymizer using pii_only selector requires LambdaParams buckets")
+                    self._unit.set_thresholds([float(lambda_val)], name="lambda")
+
                 if isinstance(self._unit, UntilKUnit):
                     target_label_id = self._target_label_id_for_record(record_name)
                     self._unit.set_target_label(target_label_id)
@@ -534,12 +610,18 @@ class DPMlmAnonymizer(Anonymizer):
                 starting_labels: Optional[Dict[int, str]] = None
                 starting_indices: Optional[List[int]] = None
                 if record_uid is not None:
-                    starting_indices = self._starting_indices_for_uid(record_uid, offsets)
-                    starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
-                        record_uid,
-                        offsets,
-                        starting_indices,
-                    )
+                    cached = self._pre_stream_starting_by_uid.get(str(record_uid))
+                    if cached is not None and cached[0] == offsets:
+                        starting_indices = list(cached[1])
+                        starting_replacements = dict(cached[2])
+                        starting_labels = dict(cached[3])
+                    else:
+                        starting_indices = self._starting_indices_for_uid(record_uid, offsets)
+                        starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
+                            record_uid,
+                            offsets,
+                            starting_indices,
+                        )
 
                 apply_fn = self._make_apply_fn(
                     text,
@@ -547,6 +629,7 @@ class DPMlmAnonymizer(Anonymizer):
                     compensated_epsilon,
                     runtime_stats,
                     starting_replacements=starting_replacements,
+                    starting_labels=starting_labels,
                 )
 
                 if record_uid is not None:
