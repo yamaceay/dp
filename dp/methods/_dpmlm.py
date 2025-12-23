@@ -448,14 +448,9 @@ class DPMlmAnonymizer(Anonymizer):
 
             if starting_replacements is not None and idx in starting_replacements:
                 repl = starting_replacements.get(idx)
-                label = (starting_labels or {}).get(idx)
                 candidate = repl if isinstance(repl, str) and repl.strip() else None
-                if candidate is None and isinstance(label, str) and label:
-                    candidate = f"[{label}]"
-                if candidate is None:
-                    candidate = "[MASK]"
-                if candidate.strip().lower() == token.strip().lower():
-                    candidate = "[MASK]"
+                if candidate is None or candidate.strip().lower() == token.strip().lower():
+                    candidate = self._privatize_token(text, token, (token_start, token_end), epsilon)
                 prev_source = ledger.active_edit_source
                 if self._starting_edit_source is not None:
                     ledger.set_active_edit_source(self._starting_edit_source)
@@ -463,7 +458,8 @@ class DPMlmAnonymizer(Anonymizer):
                 if self._starting_edit_source is not None:
                     ledger.set_active_edit_source(prev_source)
                 runtime_stats["direct_masked"] = int(runtime_stats.get("direct_masked", 0)) + 1
-                runtime_stats["perturbed"] += 1
+                if candidate != token:
+                    runtime_stats["perturbed"] += 1
                 runtime_stats["total"] += 1
                 return
 
