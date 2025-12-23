@@ -7,7 +7,7 @@ Note: TRIDetectorWithDeid is now available from dp.tri, not dp.utils.
 """
 
 from dp.utils.pii_detector import PIIDetector, PIIDataset
-from dp.utils.selector import AnonymizerUnit, AllSelector, PIIOnlySelector, ByRiskSelector
+from dp.utils.selector import AnonymizerUnit, AllUnit, PIIOnlyUnit, ByRiskUnit
 from dp.utils.explainer import TokenExplainer, UniformExplainer, GreedyExplainer, ShapExplainer
 from dp.utils.chunking import (
     Chunk,
@@ -26,9 +26,9 @@ __all__ = [
     "PIIDetector",
     "PIIDataset",
     "AnonymizerUnit",
-    "AllSelector",
-    "PIIOnlySelector",
-    "ByRiskSelector",
+    "AllUnit",
+    "PIIOnlyUnit",
+    "ByRiskUnit",
     "TokenExplainer",
     "UniformExplainer",
     "GreedyExplainer",

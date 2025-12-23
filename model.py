@@ -12,7 +12,7 @@ from dp.methods.registry import MODEL_REGISTRY, get_capabilities
 from dp.methods.constants import PII_CLASSIFIER_MODEL_LIST, RISK_MASKER_MODEL_LIST
 from dp.loaders import ADAPTER_REGISTRY, DatasetRecord, TextAnnotation, read_batch_annotations, read_batch_annotations_from_path, list_batch_timestamps
 from dp.utils.pii_detector import PIIDetector
-from dp.utils.selector import PIIOnlySelector, AllSelector, ByRiskSelector, UntilKSelector
+from dp.utils.selector import PIIOnlyUnit, AllUnit, ByRiskUnit, UntilKUnit
 from dp.utils.explainer import UniformExplainer, GreedyExplainer, ShapExplainer
 from dp.utils.output import OUTPUT_HANDLER_REGISTRY
 from runtime import load_runtime_bundle
@@ -209,25 +209,25 @@ def build_selector(selector_config: dict, runtime_bundle=None):
             raise ValueError("PIIOnlyUnit requires 'pii_annotator' in config")
         pii_chunking = selector_config.get("pii_chunking", {}).get("enabled", False)
         detector = PIIDetector(model_name=pii_path, use_chunking=pii_chunking)
-        unit = PIIOnlySelector(pii_detector=detector)
+        unit = PIIOnlyUnit(pii_detector=detector)
         if runtime_bundle and hasattr(runtime_bundle, 'pii_confidence_values') and runtime_bundle.pii_confidence_values:
             unit.set_thresholds(runtime_bundle.pii_confidence_values, name="lambda")
         return unit
     
     if selector_type == "by_risk":
         temperature = selector_config.get("risk_temperature", 1.0)
-        unit = ByRiskSelector(temperature=temperature)
+        unit = ByRiskUnit(temperature=temperature)
         if runtime_bundle and hasattr(runtime_bundle, 'risk_tolerance_values') and runtime_bundle.risk_tolerance_values:
             unit.set_thresholds(runtime_bundle.risk_tolerance_values, name="rho")
         return unit
     
     if selector_type == "until_k":
-        unit = UntilKSelector()
+        unit = UntilKUnit()
         if runtime_bundle and hasattr(runtime_bundle, 'k_values') and runtime_bundle.k_values:
             unit.set_thresholds(runtime_bundle.k_values, name="k")
         return unit
     
-    return AllSelector()
+    return AllUnit()
 
 
 def build_explainer(explainer_config: dict, model_config: dict, capabilities, model_name: str):
@@ -260,24 +260,30 @@ def configure_model(model: Anonymizer, model_config: dict, explainer_config: dic
         if isinstance(selector_config, dict) and selector_config.get("name") == "by_risk":
             selector_config = {"risk_temperature": explainer_config["risk_temperature"], **selector_config}
     
+    if any([
+        capabilities.must_use_pii_selector,
+        capabilities.must_use_risk_selector,
+        capabilities.must_use_k_selector
+    ]) and not selector_config:
+        raise ValueError(f"{model_name} requires a token selection strategy")
+        
     if capabilities.must_use_pii_selector:
-        if not selector_config or selector_config.get("name") != "pii_only":
+        if selector_config.get("name") != "pii_only":
             raise ValueError(f"{model_name} requires pii_only selector")
-        model.set_filtering_strategy(build_selector(selector_config, runtime_bundle))
+        
     elif capabilities.must_use_risk_selector:
-        if not selector_config or selector_config.get("name") != "by_risk":
+        if selector_config.get("name") != "by_risk":
             raise ValueError(f"{model_name} requires by_risk selector")
-        model.set_filtering_strategy(build_selector(selector_config, runtime_bundle))
-    elif capabilities.must_use_k_selector:
-        if not selector_config or selector_config.get("name") != "until_k":
-            raise ValueError(f"{model_name} requires until_k selector")
-        model.set_filtering_strategy(build_selector(selector_config, runtime_bundle))
-    elif capabilities.can_use_pii_selector or capabilities.can_use_risk_selector or capabilities.can_use_k_selector:
-        if selector_config:
-            model.set_filtering_strategy(build_selector(selector_config, runtime_bundle))
     
+    elif capabilities.must_use_k_selector:
+        if selector_config.get("name") != "until_k":
+            raise ValueError(f"{model_name} requires until_k selector")
+    
+    if selector_config:
+        model.set_unit(build_selector(selector_config, runtime_bundle))
+
     if capabilities.must_use_scoring or capabilities.can_use_scoring:
-        model.set_scoring_strategy(build_explainer(explainer_config, model_config, capabilities, model_name))
+        model.set_explainer(build_explainer(explainer_config, model_config, capabilities, model_name))
 
 
 def load_annotations(annotations_in: str, records: List[DatasetRecord]) -> Dict[str, List[TextAnnotation]]:

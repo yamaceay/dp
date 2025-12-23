@@ -11,5 +11,4 @@ precomputation:
 
 tri_chunking:
   enabled: true
-
-sort_tokens_by_risk: false
+  sort_by_risk: false

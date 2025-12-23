@@ -12,9 +12,10 @@ class UntilKUnit(AnonymizerUnit):
         self,
         rank_evaluator: Optional[RankEvaluator] = None,
         temperature: float = 1.0,
+        sort_by_risk: bool = True,
         **kwargs: Any,
     ) -> None:
-        super().__init__(temperature=temperature)
+        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk)
         self._rank_evaluator = rank_evaluator
         self._target_label: Optional[int] = None
 
@@ -36,13 +37,16 @@ class UntilKUnit(AnonymizerUnit):
         **context: Any,
     ) -> List[int]:
         candidates = [i for i in range(len(offsets)) if i not in already_processed]
-        return self._sort_by_risk(candidates, len(offsets))
+        if self._sort_by_risk_enabled:
+            candidates = self._sort_by_risk(candidates, len(offsets))
+        return candidates
 
     def anonymize(
         self,
         text: str,
         offsets: List[Tuple[int, int]],
         apply_fn: ApplyFn,
+        ledger: Optional[TokenLedger] = None,
         **context: Any,
     ) -> Iterator[AnonymizationStep]:
         if not self._thresholds:
@@ -56,21 +60,18 @@ class UntilKUnit(AnonymizerUnit):
         if self._target_label is None:
             raise ValueError("UntilKUnit requires target_label to be set")
 
-        ledger_value = context.get("ledger")
-        if ledger_value is None:
+        if ledger is None:
             ledger = TokenLedger(text, offsets)
         else:
-            if not isinstance(ledger_value, TokenLedger):
+            if not isinstance(ledger, TokenLedger):
                 raise ValueError("ledger must be a TokenLedger")
-            ledger = ledger_value
 
         processed: set[int] = set()
         k_values = self.order_thresholds(self._thresholds)
 
-        context_without_ledger = {k: v for k, v in context.items() if k != "ledger"}
-        seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context_without_ledger)
+        seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
 
-        starting_annotations_name = context_without_ledger.get("starting_annotations_name")
+        starting_annotations_name = context.get("starting_annotations_name")
         if starting_annotations_name is not None and not isinstance(starting_annotations_name, str):
             starting_annotations_name = str(starting_annotations_name)
 
@@ -125,6 +126,3 @@ class UntilKUnit(AnonymizerUnit):
                 new_indices=new_indices,
                 metadata=metadata,
             )
-
-
-UntilKSelector = UntilKUnit

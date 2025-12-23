@@ -31,12 +31,6 @@ class RiskAnonymizer(Anonymizer):
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
-
-    def set_filtering_strategy(self, detector: AnonymizerUnit) -> None:
-        self._unit = detector
-
-    def set_scoring_strategy(self, explainer: TokenExplainer) -> None:
-        self.set_explainer(explainer)
     
     def hash_text(self, text: str) -> str:
         return sha256(text.encode('utf-8')).hexdigest()

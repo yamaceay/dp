@@ -5,8 +5,8 @@ from dp.utils.selector.base import AnonymizerUnit
 
 
 class ByRiskUnit(AnonymizerUnit):
-    def __init__(self, temperature: float = 1.0) -> None:
-        super().__init__(temperature=temperature)
+    def __init__(self, temperature: float = 1.0, sort_by_risk: bool = True) -> None:
+        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk)
 
     def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
         return sorted([float(t) for t in thresholds], reverse=True)
@@ -32,7 +32,9 @@ class ByRiskUnit(AnonymizerUnit):
 
         probs = self._scores_to_probs(self._risk_scores)
         pairs = [(idx, probs[idx]) for idx in range(len(offsets)) if idx not in already_processed]
-        pairs.sort(key=lambda x: x[1], reverse=True)
+        
+        if self._sort_by_risk_enabled:
+            pairs.sort(key=lambda x: float(self._risk_scores[x[0]]), reverse=True)
 
         starting_indices = context.get("starting_indices")
         starting_set: set[int] = set()
@@ -56,6 +58,3 @@ class ByRiskUnit(AnonymizerUnit):
             cumulative += prob
 
         return indices
-
-
-ByRiskSelector = ByRiskUnit

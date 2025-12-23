@@ -1,19 +1,19 @@
 from dp.utils.selector.base import AnonymizerUnit, AnonymizationStep, ApplyFn
-from dp.utils.selector.all_selector import AllUnit, AllSelector
-from dp.utils.selector.pii_only_selector import PIIOnlyUnit, PIIOnlySelector
-from dp.utils.selector.by_risk_selector import ByRiskUnit, ByRiskSelector
-from dp.utils.selector.until_k_selector import UntilKUnit, UntilKSelector
+from dp.utils.selector.all_selector import AllUnit, AllUnit
+from dp.utils.selector.pii_only_selector import PIIOnlyUnit, PIIOnlyUnit
+from dp.utils.selector.by_risk_selector import ByRiskUnit, ByRiskUnit
+from dp.utils.selector.until_k_selector import UntilKUnit, UntilKUnit
 
 __all__ = [
     "AnonymizerUnit",
     "AnonymizationStep",
     "ApplyFn",
     "AllUnit",
-    "AllSelector",
+    "AllUnit",
     "PIIOnlyUnit",
-    "PIIOnlySelector",
+    "PIIOnlyUnit",
     "ByRiskUnit",
-    "ByRiskSelector",
+    "ByRiskUnit",
     "UntilKUnit",
-    "UntilKSelector",
+    "UntilKUnit",
 ]

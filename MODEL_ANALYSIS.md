@@ -46,7 +46,7 @@ if isinstance(explainer_block, dict):
 ### 3. **Selector Instantiation Logic (Lines 439-456)**
 **Vulnerability**: Nested if-elif with implicit state management
 - 3 conditional branches with `None` type checking
-- `PIIOnlySelector` requires `pii_annotator_path`, `ByRiskSelector` requires `risk_tolerance`
+- `PIIOnlyUnit` requires `pii_annotator_path`, `ByRiskUnit` requires `risk_tolerance`
 - **Risk**: Missing validation on intermediate values, unclear dependency ordering
 
 ```python
@@ -205,9 +205,9 @@ Replace conditional selector instantiation:
 
 ```python
 SELECTOR_REGISTRY = {
-    "pii_only": PIIOnlySelector.from_config,
-    "by_risk": ByRiskSelector.from_config,
-    None: AllSelector,
+    "pii_only": PIIOnlyUnit.from_config,
+    "by_risk": ByRiskUnit.from_config,
+    None: AllUnit,
 }
 
 selector_type = token_selection_config.get("name")

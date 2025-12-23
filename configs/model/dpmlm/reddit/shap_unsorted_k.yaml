@@ -15,5 +15,4 @@ tri_chunking:
 
 token_selection:
   name: until_k
-
-sort_tokens_by_risk: false
+  sort_by_risk: false

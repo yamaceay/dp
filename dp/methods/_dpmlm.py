@@ -30,7 +30,6 @@ class DPMlmAnonymizer(Anonymizer):
         compensate_epsilon: bool = False,
         add_probability: float = 0.0,
         delete_probability: float = 0.0,
-        sort_tokens_by_risk: bool = True,
         risk_temperature: Optional[float] = None,
         **kwargs
     ):
@@ -45,7 +44,6 @@ class DPMlmAnonymizer(Anonymizer):
         self.compensate_epsilon = compensate_epsilon
         self.add_probability = add_probability
         self.delete_probability = delete_probability
-        self.sort_tokens_by_risk = sort_tokens_by_risk
         self.risk_temperature = risk_temperature
 
         self._unit: Optional[AnonymizerUnit] = None
@@ -84,12 +82,6 @@ class DPMlmAnonymizer(Anonymizer):
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
-
-    def set_filtering_strategy(self, detector: AnonymizerUnit) -> None:
-        self._unit = detector
-
-    def set_scoring_strategy(self, explainer: TokenExplainer) -> None:
-        self.set_explainer(explainer)
 
     def set_risk_scores(
         self,
@@ -447,10 +439,9 @@ class DPMlmAnonymizer(Anonymizer):
             token_start, token_end = entry.start, entry.end
 
             if starting_replacements is not None and idx in starting_replacements:
-                repl = starting_replacements.get(idx)
-                candidate = repl if isinstance(repl, str) and repl.strip() else None
-                if candidate is None or candidate.strip().lower() == token.strip().lower():
-                    candidate = self._privatize_token(text, token, (token_start, token_end), epsilon)
+                candidate = starting_replacements.get(idx)
+                if not isinstance(candidate, str) or not candidate.strip():
+                    raise ValueError(f"Invalid starting replacement for token index {idx}")
                 prev_source = ledger.active_edit_source
                 if self._starting_edit_source is not None:
                     ledger.set_active_edit_source(self._starting_edit_source)

@@ -40,7 +40,7 @@ class PetreAnonymizer(Anonymizer):
         mask_text: str = "[MASK]",
         device: str = "auto",
         use_chunking: bool = True,
-        mask_all_instances: bool = True,
+        mask_all_instances: bool = False,
         batch_size: int = 32,
         *args,
         **kwargs,
@@ -79,9 +79,6 @@ class PetreAnonymizer(Anonymizer):
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
-
-    def set_filtering_strategy(self, detector: AnonymizerUnit) -> None:
-        self._unit = detector
 
     def add_dataset_records(self, dataset_records: List[DatasetRecord]):
         if not dataset_records:
@@ -127,16 +124,16 @@ class PetreAnonymizer(Anonymizer):
                     by_text: Dict[str, Tuple[str, str]] = {}
                     for term_idx in expanded_indices:
                         token_text = state.term_texts[term_idx]
-                        repl = expanded_replacements.get(term_idx)
+                        candidate = expanded_replacements.get(term_idx)
                         label = expanded_labels.get(term_idx)
-                        if not isinstance(repl, str) or not repl:
+                        if not isinstance(candidate, str) or not candidate:
                             raise ValueError("Starting anonymization token has no replacement")
                         if not isinstance(label, str) or not label:
                             raise ValueError("Starting anonymization token has no label")
                         existing = by_text.get(token_text)
-                        if existing is not None and existing != (repl, label):
+                        if existing is not None and existing != (candidate, label):
                             raise ValueError("Conflicting starting replacements for identical token text")
-                        by_text[token_text] = (repl, label)
+                        by_text[token_text] = (candidate, label)
 
                     expanded: set[int] = set(expanded_indices)
                     for term_idx in list(expanded):
@@ -397,9 +394,9 @@ class PetreAnonymizer(Anonymizer):
         self._score_order_cache[state.uid] = ordered
         return ordered
 
-    def set_scoring_strategy(self, explainer: TokenExplainer) -> None:
+    def set_explainer(self, explainer: TokenExplainer) -> None:
         self._clear_score_cache()
-        self.set_explainer(explainer)
+        super().set_explainer(explainer)
         self._load_tri_pipeline()
 
     def _load_tri_pipeline(self) -> None:

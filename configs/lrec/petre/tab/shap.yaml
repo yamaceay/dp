@@ -13,3 +13,6 @@ starting_anonymizations:
 
 tri_chunking:
   enabled: false
+
+token_selection:
+  name: until_k

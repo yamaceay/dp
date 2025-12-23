@@ -74,6 +74,3 @@ class AllUnit(AnonymizerUnit):
             new_indices=applied,
             metadata=step_metadata,
         )
-
-
-AllSelector = AllUnit

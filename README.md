@@ -54,7 +54,7 @@ The adapters live in `dp/loaders/` and always emit a `DatasetRecord` with `.text
 | `spacy` | `dp/methods/_spacy.py` | Deterministic entity masking with spaCy NER. | Masks tokens as `[LABEL]`. Optionally filter by entity labels. |
 | `presidio` | `dp/methods/_presidio.py` | Microsoft Presidio analyzer. | Falls back to a placeholder if Presidio is unavailable. |
 | `manual` | `dp/methods/_manual.py` | Uses dataset-provided spans. | Requires dataset mode (`--indices`) and annotations. |
-| `baroud` | `dp/methods/_baroud.py` | Trainable PII detector + λ thresholding. | Wraps `PIIOnlySelector`; sweeps λ via runtime configs. |
+| `baroud` | `dp/methods/_baroud.py` | Trainable PII detector + λ thresholding. | Wraps `PIIOnlyUnit`; sweeps λ via runtime configs. |
 | `risk` | `dp/methods/_risk.py` | Risk-scored masking. | Needs a `TokenExplainer` (e.g., Greedy/SHAP) or precomputed scores and accepts ρ sweeps. |
 | `petre` | `dp/methods/_petre.py` | PETRE k-anonymity with TRI ranking. | Iteratively masks high-risk spans until TRI rank ≥ k. |
 | `dpmlm` | `dp/methods/_dpmlm.py` | DP masked language model editing. | Supports explainers, selectors, and k/λ/ρ sweeps plus precomputed risk. |
@@ -67,7 +67,7 @@ Method capabilities are recorded in `dp/methods/constants.py` and enforced via `
 ## Token explainers and selectors
 
 - **Explainers (`dp/utils/explainer`)**: `UniformExplainer` assigns equal risk, `GreedyExplainer` measures TRI score drops when masking tokens, and `ShapExplainer` uses SHAP over TRI classifiers. All expose `.explain(text, offsets)` and integrate with TRI detectors stored under `models/tri_pipelines`.
-- **Selectors (`dp/utils/selector`)**: `PIIOnlyUnit` filters tokens above a λ confidence threshold, `ByRiskUnit` masks high-risk spans until remaining probability mass ≤ ρ, `UntilKUnit` keeps anonymizing until the TRI attacker rank exceeds k, and `AllSelector` simply applies edits everywhere.
+- **Selectors (`dp/utils/selector`)**: `PIIOnlyUnit` filters tokens above a λ confidence threshold, `ByRiskUnit` masks high-risk spans until remaining probability mass ≤ ρ, `UntilKUnit` keeps anonymizing until the TRI attacker rank exceeds k, and `AllUnit` simply applies edits everywhere.
 - **Token splitting**: `dp/utils/splitter.TextSplitter` and `dp/utils/chunking` provide character-span aware tokenization and chunking strategies used by selectors, explainers, and DP generators.
 
 Configure these components inside the model YAMLs under `configs/model/**`. Typical blocks include `token_selection`, `explainer`, `precomputation`, and chunking policies.

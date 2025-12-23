@@ -24,11 +24,12 @@ ApplyFn = Callable[[int, TokenLedger], None]
 
 
 class AnonymizerUnit(ABC):
-    def __init__(self, temperature: float = 1.0) -> None:
+    def __init__(self, temperature: float = 1.0, sort_by_risk: bool = True) -> None:
         self._thresholds: List[Any] = []
         self._threshold_name: Optional[str] = None
         self._risk_scores: Optional[np.ndarray] = None
         self._temperature = float(temperature) if temperature > 0 else 1.0
+        self._sort_by_risk_enabled = bool(sort_by_risk)
 
     def set_thresholds(self, thresholds: List[Any], name: str) -> None:
         self._thresholds = list(thresholds)
@@ -119,6 +120,7 @@ class AnonymizerUnit(ABC):
         text: str,
         offsets: List[Tuple[int, int]],
         apply_fn: ApplyFn,
+        ledger: Optional[TokenLedger] = None,
         **context: Any,
     ) -> Iterator[AnonymizationStep]:
         if not self._thresholds:
@@ -127,17 +129,14 @@ class AnonymizerUnit(ABC):
         if self._threshold_name is None:
             raise ValueError("threshold name must be set before anonymization")
 
-        ledger_value = context.get("ledger")
-        if ledger_value is None:
+        if ledger is None:
             ledger = TokenLedger(text, offsets)
         else:
-            if not isinstance(ledger_value, TokenLedger):
+            if not isinstance(ledger, TokenLedger):
                 raise ValueError("ledger must be a TokenLedger")
-            ledger = ledger_value
 
         processed: set[int] = set()
-        context_without_ledger = {k: v for k, v in context.items() if k != "ledger"}
-        seeded_indices = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context_without_ledger)
+        seeded_indices = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
         seeded_pending = list(seeded_indices)
         ordered = self.order_thresholds(self._thresholds)
 
@@ -150,10 +149,9 @@ class AnonymizerUnit(ABC):
         }
 
         for threshold in ordered:
-            indices = self.select_indices(text, offsets, threshold, processed, ledger=ledger, **context_without_ledger)
-            sorted_indices = self._sort_by_risk(indices, len(offsets))
+            applied_indices = self.select_indices(text, offsets, threshold, processed, ledger=ledger, **context)
             new_indices: List[int] = []
-            for idx in sorted_indices:
+            for idx in applied_indices:
                 if idx in processed:
                     continue
                 apply_fn(idx, ledger)

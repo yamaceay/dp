@@ -11,9 +11,10 @@ class PIIOnlyUnit(AnonymizerUnit):
         self,
         pii_detector: Optional[PIIDetector] = None,
         temperature: float = 1.0,
+        sort_by_risk: bool = True,
         **kwargs: Any,
     ) -> None:
-        super().__init__(temperature=temperature)
+        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk)
         if pii_detector is None:
             raise ValueError("PIIOnlyUnit requires a PIIDetector instance")
         self.pii_detector = pii_detector
@@ -64,7 +65,7 @@ class PIIOnlyUnit(AnonymizerUnit):
                     indices.append(idx)
                     break
 
+        if self._sort_by_risk_enabled:
+            indices = self._sort_by_risk(indices, len(offsets))
+
         return indices
-
-
-PIIOnlySelector = PIIOnlyUnit
