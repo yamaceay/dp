@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --array=0-36%10
+#SBATCH --array=0-26%9
 #SBATCH --job-name=lrec_tab_grid2
 #SBATCH --output=logs/%x/%a_%j.out
 #SBATCH --error=logs/%x/%a_%j.err
@@ -35,26 +35,16 @@ job_names=(
   "lrec_tab_grid2/tab_dpmlm_greedy_unsorted_k_eps_100_14"
   "lrec_tab_grid2/tab_dpmlm_greedy_unsorted_k_eps_250_15"
   "lrec_tab_grid2/tab_dpmlm_greedy_unsorted_k_eps_500_16"
-  "lrec_tab_grid2/tab_dpmlm_greedy_unsorted_eps_010_17"
-  "lrec_tab_grid2/tab_dpmlm_greedy_unsorted_eps_025_18"
-  "lrec_tab_grid2/tab_dpmlm_greedy_unsorted_eps_100_19"
-  "lrec_tab_grid2/tab_dpmlm_greedy_unsorted_eps_250_20"
-  "lrec_tab_grid2/tab_dpmlm_greedy_unsorted_eps_500_21"
-  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_010_22"
-  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_025_23"
-  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_100_24"
-  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_250_25"
-  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_500_26"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_010_27"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_025_28"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_100_29"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_250_30"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_500_31"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_eps_010_32"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_eps_025_33"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_eps_100_34"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_eps_250_35"
-  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_eps_500_36"
+  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_010_17"
+  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_025_18"
+  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_100_19"
+  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_250_20"
+  "lrec_tab_grid2/tab_dpmlm_shap_k_eps_500_21"
+  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_010_22"
+  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_025_23"
+  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_100_24"
+  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_250_25"
+  "lrec_tab_grid2/tab_dpmlm_shap_unsorted_k_eps_500_26"
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"
