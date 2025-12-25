@@ -38,11 +38,6 @@ class Anonymizer(ABC):
         self._splitter: Optional[TextSplitter] = None
         self.device = self._resolve_device(kwargs.get("device"))
 
-        self._starting_annotations_by_uid: Dict[str, List[TextAnnotation]] = {}
-        self._starting_spans_by_uid: Dict[str, List[Tuple[int, int]]] = {}
-        self._starting_annotations_name: Optional[str] = None
-        self._starting_edit_source: Optional[str] = None
-
         print(f"Initialized {self.__class__.__name__} with args: {args}, kwargs: {kwargs}")
 
     def builder(self):
@@ -59,7 +54,7 @@ class Anonymizer(ABC):
             return self.anonymize_any_text(text_or_idx, *args, buckets=buckets, **kwargs)
         return self.anonymize_from_dataset(text_or_idx, *args, buckets=buckets, **kwargs)
 
-    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> None:
+    def pre_stream_anonymize(self, texts_or_indices: Optional[Union[List[str], List[int]]] = None, risk_scores: Optional[Dict[str, Dict[str, object]]] = None, *args, **kwargs) -> None:
         pass
 
     def stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, buckets: Buckets = [], **kwargs) -> Iterator[List[Tuple[BucketDict, AnonymizationResult]]]:
@@ -80,102 +75,6 @@ class Anonymizer(ABC):
 
     def set_splitter(self, splitter: TextSplitter) -> None:
         self._splitter = splitter
-
-    def set_annotations(
-        self,
-        annotations: Dict[str, List[TextAnnotation]],
-        name: Optional[str] = None,
-        edit_source: Optional[str] = None,
-    ) -> None:
-        spans_by_uid: Dict[str, List[Tuple[int, int]]] = {}
-        normalized: Dict[str, List[TextAnnotation]] = {}
-        for uid, items in (annotations or {}).items():
-            if uid is None:
-                raise ValueError("annotations keys must be non-null")
-            uid_str = str(uid)
-            if not isinstance(items, list):
-                raise ValueError("annotations values must be lists")
-            spans: List[Tuple[int, int]] = []
-            normalized_items: List[TextAnnotation] = []
-            for item in items:
-                if not isinstance(item, TextAnnotation):
-                    raise ValueError("annotations entries must be TextAnnotation")
-                start = int(item.start)
-                end = int(item.end)
-                spans.append((start, end))
-                normalized_items.append(item)
-            spans_by_uid[uid_str] = spans
-            normalized[uid_str] = normalized_items
-        self._starting_annotations_by_uid = normalized
-        self._starting_spans_by_uid = spans_by_uid
-        self._starting_annotations_name = name
-        if edit_source is not None and not isinstance(edit_source, str):
-            edit_source = str(edit_source)
-        self._starting_edit_source = edit_source
-
-    def _starting_indices_for_uid(self, uid: Optional[str], offsets: List[Tuple[int, int]]) -> List[int]:
-        if uid is None:
-            return []
-        spans = self._starting_spans_by_uid.get(str(uid), [])
-        if not spans or not offsets:
-            return []
-        indices: List[int] = []
-        for idx, (ts, te) in enumerate(offsets):
-            for ss, se in spans:
-                if te <= ss or ts >= se:
-                    continue
-                indices.append(idx)
-                break
-        return indices
-
-    def _starting_replacements_and_labels_for_indices(
-        self,
-        uid: Optional[str],
-        offsets: List[Tuple[int, int]],
-        starting_indices: List[int],
-    ) -> Tuple[Dict[int, str], Dict[int, str]]:
-        if uid is None:
-            return {}, {}
-        anns = self._starting_annotations_by_uid.get(str(uid))
-        if not anns:
-            return {}, {}
-        if not isinstance(starting_indices, list):
-            raise ValueError("starting_indices must be a list of ints")
-
-        replacements: Dict[int, str] = {}
-        labels: Dict[int, str] = {}
-
-        for idx in starting_indices:
-            if not isinstance(idx, int):
-                raise ValueError("starting_indices must be a list of ints")
-            if idx < 0 or idx >= len(offsets):
-                raise IndexError(f"starting index {idx} is out of bounds")
-
-            ts, te = offsets[idx]
-            chosen: Optional[TextAnnotation] = None
-            for ann in anns:
-                ss = int(ann.start)
-                se = int(ann.end)
-                if te <= ss or ts >= se:
-                    continue
-                chosen = ann
-                break
-            if chosen is None:
-                raise ValueError("starting_indices contains a token with no matching starting span")
-
-            replacement = chosen.replacement
-            label = chosen.label
-            if isinstance(replacement, str) and replacement:
-                replacements[idx] = replacement
-                labels[idx] = label if isinstance(label, str) and label else "starting"
-                continue
-            if isinstance(label, str) and label:
-                replacements[idx] = f"[{label}]"
-                labels[idx] = label
-                continue
-            raise ValueError("Starting anonymization span has no label/replacement; cannot mask")
-
-        return replacements, labels
 
     def _spans_for_indices(
         self,

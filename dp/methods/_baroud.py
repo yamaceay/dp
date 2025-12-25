@@ -31,7 +31,7 @@ class BaroudAnonymizer(Anonymizer):
     def hash_text(self, text: str) -> str:
         return sha256(text.encode('utf-8')).hexdigest()
 
-    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> None:
+    def pre_stream_anonymize(self, *args, texts_or_indices: Optional[Union[List[str], List[int]]] = None, **kwargs) -> None:
         if not all(isinstance(i, str) for i in texts_or_indices):
             raise ValueError("BaroudAnonymizer requires texts for pre_stream_anonymize.")
         all_annotations = self._predict_pii_annotations(texts_or_indices)
@@ -110,7 +110,7 @@ class BaroudAnonymizer(Anonymizer):
             ]
             
             metadata: Dict[str, Any] = {
-                "method": "baroud",
+                "method": self._model_name,
                 "lambda": threshold,
                 "pii_detected": runtime_stats["masked"],
                 **step.metadata,

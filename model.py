@@ -7,10 +7,9 @@ from datetime import datetime
 import fnmatch
 from pathlib import Path
 
-from dp.methods.anonymizer import Anonymizer, AnonymizationBuilder
+from dp.methods.anonymizer import Anonymizer
 from dp.methods.registry import MODEL_REGISTRY, get_capabilities
-from dp.methods.constants import PII_CLASSIFIER_MODEL_LIST, RISK_MASKER_MODEL_LIST
-from dp.loaders import ADAPTER_REGISTRY, DatasetRecord, TextAnnotation, read_batch_annotations, read_batch_annotations_from_path, list_batch_timestamps
+from dp.loaders import ADAPTER_REGISTRY, DatasetRecord
 from dp.utils.pii_detector import PIIDetector
 from dp.utils.selector import PIIOnlyUnit, AllUnit, ByRiskUnit, UntilKUnit
 from dp.utils.explainer import UniformExplainer, GreedyExplainer, ShapExplainer
@@ -22,13 +21,12 @@ available_datasets = list(ADAPTER_REGISTRY.keys())
 
 
 def add_data_args(parser: argparse.ArgumentParser) -> List[str]:
-    parser.add_argument('--data', type=str, required=True, choices=available_datasets)
-    parser.add_argument('--data_in', type=str, required=True)
+    parser.add_argument('--result_in', type=str, required=True)
     parser.add_argument('--start', type=int, default=None)
     parser.add_argument('--end', type=int, default=None)
     parser.add_argument('--step', type=int, default=None)
     parser.add_argument('--max_records', type=int, default=None)
-    return ['data', 'data_in', 'start', 'end', 'step', 'max_records']
+    return ['result_in', 'start', 'end', 'step', 'max_records']
 
 
 def add_model_args(parser: argparse.ArgumentParser) -> List[str]:
@@ -43,12 +41,9 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--indices', type=int, nargs='+')
     parser.add_argument('--output', type=str, default='print', choices=list(OUTPUT_HANDLER_REGISTRY.keys()))
     parser.add_argument('--timestamp', type=str, default=None)
-    parser.add_argument('--annotations', type=str, choices=['spacy', 'presidio', 'manual'], default=None)
-    parser.add_argument('--annotations_in', type=str, default=None)
-    parser.add_argument('--list_annotations', action='store_true')
     parser.add_argument('--unique_name', type=str, default=None)
     parser.add_argument('--as_task', action='store_true')
-    return ['runtime_in', 'texts', 'indices', 'output', 'annotations_in', 'list_annotations', 'unique_name', 'as_task']
+    return ['runtime_in', 'texts', 'indices', 'output', 'unique_name', 'as_task']
 
 
 def load_config(path: Optional[str]) -> dict:
@@ -158,9 +153,17 @@ def validate_runtime_params(model_config: dict, runtime_bundle: object) -> None:
 
 
 def load_data(data_kwargs: dict) -> List[DatasetRecord]:
-    adapter = ADAPTER_REGISTRY[data_kwargs["data"]]
-    return list(adapter(**data_kwargs).iter_records())
-
+    result_file_name = data_kwargs.pop("result_in")
+    with open(result_file_name, "r", encoding="utf-8") as reader:
+        records: List[DatasetRecord] = []
+        for line in reader:
+            entry = line.strip()
+            if not entry:
+                continue
+            payload = json.loads(entry)
+            record = DatasetRecord(**payload)
+            records.append(record)
+    return records
 
 def load_precomputed_risk(path: str) -> Dict[str, Dict[str, object]]:
     risk_map: Dict[str, Dict[str, object]] = {}
@@ -285,84 +288,6 @@ def configure_model(model: Anonymizer, model_config: dict, explainer_config: dic
     if capabilities.must_use_scoring or capabilities.can_use_scoring:
         model.set_explainer(build_explainer(explainer_config, model_config, capabilities, model_name))
 
-
-def load_annotations(annotations_in: str, records: List[DatasetRecord]) -> Dict[str, List[TextAnnotation]]:
-    loaded_annotations = {}
-    for source in annotations_in.split(','):
-        for idx, annotations in enumerate(read_batch_annotations_from_path(source.strip())):
-            if annotations and idx < len(records):
-                uid = str(records[idx].uid if hasattr(records[idx], 'uid') else idx)
-                loaded_annotations.setdefault(uid, []).extend(annotations)
-    return loaded_annotations
-
-
-def load_starting_anonymizations(paths: List[str], records: List[DatasetRecord]) -> Dict[str, List[TextAnnotation]]:
-    annotations: Dict[str, List[TextAnnotation]] = {}
-    for path in paths:
-        with open(path, "r", encoding="utf-8") as reader:
-            for line_num, raw in enumerate(reader, start=1):
-                entry = raw.strip()
-                if not entry:
-                    continue
-                payload = json.loads(entry)
-                spans = payload.get("spans") or []
-                if not isinstance(spans, list):
-                    raise ValueError(f"Invalid spans in '{path}' at line {line_num}")
-
-                uid = payload.get("uid")
-                if uid is None and isinstance(payload.get("metadata"), dict):
-                    uid = payload["metadata"].get("uid")
-
-                if uid is None:
-                    idx = payload.get("idx")
-                    if idx is None:
-                        raise ValueError(f"Missing 'uid'/'metadata.uid' and 'idx' in '{path}' at line {line_num}")
-                    if not isinstance(idx, int):
-                        raise ValueError(f"Invalid 'idx' in '{path}' at line {line_num}")
-                    if idx < 0 or idx >= len(records):
-                        raise ValueError(
-                            f"Index {idx} in '{path}' at line {line_num} is out of bounds for dataset (len={len(records)})"
-                        )
-                    rec = records[idx]
-                    uid = str(getattr(rec, "uid", idx))
-                else:
-                    uid = str(uid)
-
-                for span in spans:
-                    if not isinstance(span, dict):
-                        raise ValueError(f"Invalid span entry in '{path}' at line {line_num}")
-                    if "start" not in span or "end" not in span:
-                        raise ValueError(f"Missing start/end in '{path}' at line {line_num}")
-                    start = int(span["start"])
-                    end = int(span["end"])
-                    if end < start:
-                        raise ValueError(f"Invalid span (end < start) in '{path}' at line {line_num}")
-                    label = span.get("label")
-                    replacement = span.get("replacement")
-                    annotations.setdefault(uid, []).append(
-                        TextAnnotation(
-                            start=start,
-                            end=end,
-                            label=label if isinstance(label, str) and label else None,
-                            replacement=replacement if isinstance(replacement, str) and replacement else None,
-                        )
-                    )
-    return annotations
-
-
-def infer_starting_annotations_name(paths: List[str]) -> Optional[str]:
-    if not paths:
-        return None
-    lowered = [p.lower() for p in paths]
-    if any("presidio" in p for p in lowered):
-        return "presidio"
-    if any("spacy" in p for p in lowered):
-        return "spacy"
-    if any("manual" in p for p in lowered):
-        return "manual"
-    return "starting"
-
-
 def compute_dataset_indices(dataset_len: int, data_kwargs: Dict[str, Any]) -> List[int]:
     start = data_kwargs.get("start") or 0
     end = min(data_kwargs.get("end") or dataset_len, dataset_len)
@@ -476,18 +401,8 @@ if __name__ == "__main__":
     runtime_kwargs = {k: getattr(args, k) for k in runtime_keys}
     runtime_bundle = load_runtime_bundle(runtime_kwargs.pop("runtime_in", None))
     
-    if args.list_annotations:
-        print(f"Available annotations for {args.data}/{args.model}:")
-        timestamps = list_batch_timestamps(dataset=args.data, model=args.model)
-        for ts in (timestamps or ["(none)"]):
-            if ts != "(none)":
-                annotations = read_batch_annotations(args.data, args.model, ts)
-                print(f"  - {ts} ({len(annotations)} records)")
-        exit(0)
-    
     records = load_data(data_kwargs)
     model_config = load_config(args.model_in)
-    starting_anonymization_paths = extract_starting_anonymizations_config(model_config)
     validate_runtime_params(model_config, runtime_bundle)
     precompute_config = extract_precompute_config(model_config)
     capabilities = get_capabilities(args.model)
@@ -514,34 +429,6 @@ if __name__ == "__main__":
             raise ValueError(f"{args.model} requires dataset records for this configuration")
         model.add_dataset_records(records)
 
-    merged_annotations: Optional[Dict[str, List]] = None
-    if starting_anonymization_paths:
-        if args.texts:
-            raise ValueError("starting_anonymizations cannot be used with --texts")
-        if not hasattr(model, "set_annotations"):
-            raise ValueError(f"{args.model} does not support starting_anonymizations")
-        starting_annotations = load_starting_anonymizations(starting_anonymization_paths, records)
-        print(f"✓ Loaded starting anonymizations for {len(starting_annotations)} records")
-        merged_annotations = dict(starting_annotations)
-    
-    if capabilities.can_use_annotations and args.annotations_in:
-        loaded_annotations = load_annotations(args.annotations_in, records)
-        print(f"✓ Loaded annotations for {len(loaded_annotations)} records")
-        if hasattr(model, 'set_annotations'):
-            if merged_annotations is None:
-                merged_annotations = dict(loaded_annotations)
-            else:
-                for uid, items in loaded_annotations.items():
-                    merged_annotations.setdefault(uid, []).extend(items)
-
-    if merged_annotations is not None and hasattr(model, 'set_annotations'):
-        starting_edit_source = None
-        annotation_name = args.annotations
-        if annotation_name is None and starting_anonymization_paths:
-            annotation_name = infer_starting_annotations_name(starting_anonymization_paths)
-            starting_edit_source = annotation_name
-        model.set_annotations(merged_annotations, name=annotation_name, edit_source=starting_edit_source)
-    
     configure_model(model, model_config, explainer_config, runtime_bundle, capabilities, args.model, records)
     
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])

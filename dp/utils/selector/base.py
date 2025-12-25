@@ -6,7 +6,6 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 
-from dp.loaders.base import TextAnnotation
 from dp.utils.token_ledger import TokenLedger
 
 
@@ -24,12 +23,13 @@ ApplyFn = Callable[[int, TokenLedger], None]
 
 
 class AnonymizerUnit(ABC):
-    def __init__(self, temperature: float = 1.0, sort_by_risk: bool = True) -> None:
+    def __init__(self, temperature: float = 1.0, sort_by_risk: bool = True, selector_name: Optional[str] = None) -> None:
         self._thresholds: List[Any] = []
         self._threshold_name: Optional[str] = None
         self._risk_scores: Optional[np.ndarray] = None
         self._temperature = float(temperature) if temperature > 0 else 1.0
         self._sort_by_risk_enabled = bool(sort_by_risk)
+        self._selector_name = selector_name
 
     def set_thresholds(self, thresholds: List[Any], name: str) -> None:
         self._thresholds = list(thresholds)
@@ -58,48 +58,6 @@ class AnonymizerUnit(ABC):
             return indices
         return sorted(indices, key=lambda i: float(self._risk_scores[i]), reverse=True)
 
-    def _apply_starting_indices(
-        self,
-        n_offsets: int,
-        ledger: TokenLedger,
-        processed: set[int],
-        apply_fn: ApplyFn,
-        **context: Any,
-    ) -> List[int]:
-        starting_indices = context.get("starting_indices")
-        if starting_indices is None:
-            return []
-        if not isinstance(starting_indices, list):
-            raise ValueError("starting_indices must be a list of ints")
-
-        starting_already_applied = context.get("starting_already_applied")
-        if starting_already_applied is not None and not isinstance(starting_already_applied, bool):
-            raise ValueError("starting_already_applied must be a bool")
-
-        starting_edit_source = context.get("starting_edit_source")
-        if starting_edit_source is not None and not isinstance(starting_edit_source, str):
-            starting_edit_source = str(starting_edit_source)
-        if isinstance(starting_edit_source, str) and starting_edit_source == "":
-            starting_edit_source = None
-        applied: List[int] = []
-        prev_source = ledger.active_edit_source
-        if starting_edit_source is not None and starting_already_applied is not True:
-            ledger.set_active_edit_source(starting_edit_source)
-        for idx in starting_indices:
-            if not isinstance(idx, int):
-                raise ValueError("starting_indices must be a list of ints")
-            if idx < 0 or idx >= n_offsets:
-                raise IndexError(f"starting index {idx} is out of bounds")
-            if idx in processed:
-                continue
-            if starting_already_applied is not True:
-                apply_fn(idx, ledger)
-            processed.add(idx)
-            applied.append(idx)
-        if starting_edit_source is not None and starting_already_applied is not True:
-            ledger.set_active_edit_source(prev_source)
-        return applied
-
     @abstractmethod
     def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
         pass
@@ -110,7 +68,6 @@ class AnonymizerUnit(ABC):
         text: str,
         offsets: List[Tuple[int, int]],
         threshold: Any,
-        already_processed: set[int],
         **context: Any,
     ) -> List[int]:
         pass
@@ -120,7 +77,6 @@ class AnonymizerUnit(ABC):
         text: str,
         offsets: List[Tuple[int, int]],
         apply_fn: ApplyFn,
-        ledger: Optional[TokenLedger] = None,
         **context: Any,
     ) -> Iterator[AnonymizationStep]:
         if not self._thresholds:
@@ -129,24 +85,10 @@ class AnonymizerUnit(ABC):
         if self._threshold_name is None:
             raise ValueError("threshold name must be set before anonymization")
 
-        if ledger is None:
-            ledger = TokenLedger(text, offsets)
-        else:
-            if not isinstance(ledger, TokenLedger):
-                raise ValueError("ledger must be a TokenLedger")
+        ledger = TokenLedger(text, offsets)
 
         processed: set[int] = set()
-        seeded_indices = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
-        seeded_pending = list(seeded_indices)
         ordered = self.order_thresholds(self._thresholds)
-
-        starting_annotations_name = context.get("starting_annotations_name")
-        if starting_annotations_name is not None and not isinstance(starting_annotations_name, str):
-            starting_annotations_name = str(starting_annotations_name)
-        starting_meta: Dict[str, Any] = {
-            "starting_annotations_name": starting_annotations_name,
-            "starting_applied_count": len(seeded_indices),
-        }
 
         for threshold in ordered:
             applied_indices = self.select_indices(text, offsets, threshold, processed, ledger=ledger, **context)
@@ -158,20 +100,16 @@ class AnonymizerUnit(ABC):
                 processed.add(idx)
                 new_indices.append(idx)
 
-            step_indices: List[int] = []
-            if seeded_pending:
-                step_indices.extend(seeded_pending)
-                seeded_pending.clear()
             if new_indices:
-                step_indices.extend(new_indices)
-
-            if step_indices:
-                metadata: Dict[str, Any] = {"processed_count": len(processed), **starting_meta}
+                metadata: Dict[str, Any] = {
+                    "selector": self._selector_name,
+                    "processed_count": len(processed)
+                }
                 yield AnonymizationStep(
                     threshold_type=self._threshold_name,
                     threshold=threshold,
                     text=ledger.render_offsets(text),
                     ledger=ledger,
-                    new_indices=step_indices,
+                    new_indices=new_indices,
                     metadata=metadata,
                 )

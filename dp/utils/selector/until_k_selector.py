@@ -8,6 +8,8 @@ RankEvaluator = Callable[[str, int], int]
 
 
 class UntilKUnit(AnonymizerUnit):
+    SELECTOR_NAME = "until_k"
+
     def __init__(
         self,
         rank_evaluator: Optional[RankEvaluator] = None,
@@ -15,7 +17,7 @@ class UntilKUnit(AnonymizerUnit):
         sort_by_risk: bool = True,
         **kwargs: Any,
     ) -> None:
-        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk)
+        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk, selector_name=self.SELECTOR_NAME)
         self._rank_evaluator = rank_evaluator
         self._target_label: Optional[int] = None
 
@@ -33,20 +35,17 @@ class UntilKUnit(AnonymizerUnit):
         text: str,
         offsets: List[Tuple[int, int]],
         threshold: Any,
-        already_processed: set[int],
         **context: Any,
     ) -> List[int]:
-        candidates = [i for i in range(len(offsets)) if i not in already_processed]
         if self._sort_by_risk_enabled:
-            candidates = self._sort_by_risk(candidates, len(offsets))
-        return candidates
+            offsets = self._sort_by_risk(offsets, len(offsets))
+        return offsets
 
     def anonymize(
         self,
         text: str,
         offsets: List[Tuple[int, int]],
         apply_fn: ApplyFn,
-        ledger: Optional[TokenLedger] = None,
         **context: Any,
     ) -> Iterator[AnonymizationStep]:
         if not self._thresholds:
@@ -60,20 +59,10 @@ class UntilKUnit(AnonymizerUnit):
         if self._target_label is None:
             raise ValueError("UntilKUnit requires target_label to be set")
 
-        if ledger is None:
-            ledger = TokenLedger(text, offsets)
-        else:
-            if not isinstance(ledger, TokenLedger):
-                raise ValueError("ledger must be a TokenLedger")
+        ledger = TokenLedger(text, offsets)
 
         processed: set[int] = set()
         k_values = self.order_thresholds(self._thresholds)
-
-        seeded = self._apply_starting_indices(len(offsets), ledger, processed, apply_fn, **context)
-
-        starting_annotations_name = context.get("starting_annotations_name")
-        if starting_annotations_name is not None and not isinstance(starting_annotations_name, str):
-            starting_annotations_name = str(starting_annotations_name)
 
         current_text = ledger.render_offsets(text)
 
@@ -81,17 +70,16 @@ class UntilKUnit(AnonymizerUnit):
         for target_k in k_values:
             if current_rank >= target_k:
                 metadata = {
+                    "selector": self.SELECTOR_NAME,
                     "processed_count": len(processed),
                     "rank": current_rank,
-                    "starting_annotations_name": starting_annotations_name,
-                    "starting_applied_count": len(seeded),
                 }
                 yield AnonymizationStep(
                     threshold_type=self._threshold_name,
                     threshold=target_k,
                     text=current_text,
-                    ledger=ledger,
                     new_indices=[],
+                    ledger=ledger,
                     metadata=metadata,
                 )
                 continue
@@ -112,10 +100,9 @@ class UntilKUnit(AnonymizerUnit):
                 current_rank = self._rank_evaluator(current_text, self._target_label)
 
             metadata = {
+                "selector": self.SELECTOR_NAME,
                 "processed_count": len(processed),
                 "rank": current_rank,
-                "starting_annotations_name": starting_annotations_name,
-                "starting_applied_count": len(seeded),
             }
 
             yield AnonymizationStep(

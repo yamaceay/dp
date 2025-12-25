@@ -5,8 +5,10 @@ from dp.utils.selector.base import AnonymizerUnit
 
 
 class ByRiskUnit(AnonymizerUnit):
+    SELECTOR_NAME = "by_risk"
+
     def __init__(self, temperature: float = 1.0, sort_by_risk: bool = True) -> None:
-        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk)
+        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk, selector_name=self.SELECTOR_NAME)
 
     def order_thresholds(self, thresholds: List[Any]) -> List[Any]:
         return sorted([float(t) for t in thresholds], reverse=True)
@@ -16,7 +18,6 @@ class ByRiskUnit(AnonymizerUnit):
         text: str,
         offsets: List[Tuple[int, int]],
         threshold: Any,
-        already_processed: set[int],
         **context: Any,
     ) -> List[int]:
         if not text or not text.strip():
@@ -31,22 +32,12 @@ class ByRiskUnit(AnonymizerUnit):
             return []
 
         probs = self._scores_to_probs(self._risk_scores)
-        pairs = [(idx, probs[idx]) for idx in range(len(offsets)) if idx not in already_processed]
+        pairs = [(idx, probs[idx]) for idx in range(len(offsets))]
         
         if self._sort_by_risk_enabled:
             pairs.sort(key=lambda x: float(self._risk_scores[x[0]]), reverse=True)
 
-        starting_indices = context.get("starting_indices")
-        starting_set: set[int] = set()
-        if starting_indices is not None:
-            if not isinstance(starting_indices, list):
-                raise ValueError("starting_indices must be a list of ints")
-            for item in starting_indices:
-                if not isinstance(item, int):
-                    raise ValueError("starting_indices must be a list of ints")
-                starting_set.add(item)
-
-        cumulative = sum(probs[idx] for idx in already_processed if idx not in starting_set)
+        cumulative = sum(probs)
         indices: List[int] = []
         for idx, prob in pairs:
             if cumulative >= removal_limit:

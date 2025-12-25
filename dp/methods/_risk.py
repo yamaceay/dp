@@ -35,7 +35,7 @@ class RiskAnonymizer(Anonymizer):
     def hash_text(self, text: str) -> str:
         return sha256(text.encode('utf-8')).hexdigest()
     
-    def pre_stream_anonymize(self, texts_or_indices: Union[List[str], List[int]], *args, **kwargs) -> None:
+    def pre_stream_anonymize(self, *args, texts_or_indices: Optional[Union[List[str], List[int]]] = None, risk_scores: Optional[Dict[str, Dict[str, object]]] = None, **kwargs) -> None:
         if not all(isinstance(i, str) for i in texts_or_indices):
             raise ValueError("RiskAnonymizer requires texts for pre_stream_anonymize.")
 
@@ -45,7 +45,6 @@ class RiskAnonymizer(Anonymizer):
         if not all(isinstance(name, str) for name in record_names):
             raise ValueError("record_names entries must be strings")
         
-        risk_scores = kwargs.get('risk_scores')
         if risk_scores is not None:
             self.set_risk_scores(risk_scores)
         
@@ -53,7 +52,6 @@ class RiskAnonymizer(Anonymizer):
             _, spans = self._tokenize(text)
             scores = self._compute_scores(text, spans, name)
             self._scores_cache[self.hash_text(text)] = (scores, spans)
-            self._starting_indices_cache[self.hash_text(text)] = self._starting_indices_for_uid(name, spans)
 
     def set_risk_scores(self, risk_scores: Dict[str, Dict[str, object]]) -> None:
         self._risk_scores_by_uid = {}
@@ -77,23 +75,18 @@ class RiskAnonymizer(Anonymizer):
         self,
         uid: Optional[str],
         offsets: List[Tuple[int, int]],
-        starting_indices: List[int],
     ) -> Tuple[Dict[int, str], Dict[int, str]]:
-        return self._starting_replacements_and_labels_for_indices(uid, offsets, starting_indices)
+        return self._starting_replacements_and_labels_for_indices(uid, offsets)
 
     def _make_apply_fn(
         self,
         spans: List[Tuple[int, int]],
         runtime_stats: Dict[str, int],
-        starting_replacements: Optional[Dict[int, str]] = None,
     ) -> ApplyFn:
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
             if idx >= len(spans):
                 return
-            repl = None
-            if starting_replacements is not None:
-                repl = starting_replacements.get(idx)
-            ledger.replace(idx, repl if isinstance(repl, str) and repl else self._mask_text)
+            ledger.replace(idx, self._mask_text)
             runtime_stats["masked"] += 1
 
         return apply_fn
@@ -120,40 +113,15 @@ class RiskAnonymizer(Anonymizer):
         self._unit.set_risk_scores(scores)
         
         runtime_stats: Dict[str, int] = {"masked": 0}
-        starting_indices = self._starting_indices_cache.get(self.hash_text(text))
-        if starting_indices is None:
-            starting_indices = self._starting_indices_for_uid(record_name, spans)
 
-        starting_replacements, starting_labels = self._starting_replacements_for_indices(record_name, spans, starting_indices)
-        apply_fn = self._make_apply_fn(spans, runtime_stats, starting_replacements=starting_replacements)
+        apply_fn = self._make_apply_fn(spans, runtime_stats)
         
         outputs: List[Tuple[Dict[str, Any], AnonymizationResult]] = []
         
-        starting_set = set(starting_indices or [])
-        starting_spans: List[TextAnnotation] = []
-        for idx in starting_indices or []:
-            start, end = spans[idx]
-            original = text[start:end]
-            repl = starting_replacements.get(idx)
-            label = starting_labels.get(idx)
-            if not isinstance(repl, str) or not repl:
-                raise ValueError("Starting anonymization token has no replacement")
-            starting_spans.append(
-                TextAnnotation(
-                    start=start,
-                    end=end,
-                    label=label,
-                    text=original,
-                    replacement=repl,
-                )
-            )
         for step in self._unit.anonymize(
             text,
             spans,
             apply_fn,
-            starting_indices=starting_indices,
-            starting_edit_source=self._starting_edit_source,
-            starting_annotations_name=self._starting_annotations_name,
         ):
             rho = step.threshold
             hp: Dict[str, Any] = {"rho": rho}
@@ -161,10 +129,8 @@ class RiskAnonymizer(Anonymizer):
             private_text = step.text
             ledger = step.ledger
             
-            result_spans: List[TextAnnotation] = list(starting_spans)
+            result_spans: List[TextAnnotation] = []
             for idx in step.new_indices:
-                if idx in starting_set:
-                    continue
                 start, end = spans[idx]
                 original = text[start:end]
                 result_spans.append(

@@ -7,6 +7,8 @@ from dp.utils.pii_detector import PIIDetector
 
 
 class PIIOnlyUnit(AnonymizerUnit):
+    SELECTOR_NAME = "pii_only"
+
     def __init__(
         self,
         pii_detector: Optional[PIIDetector] = None,
@@ -14,7 +16,7 @@ class PIIOnlyUnit(AnonymizerUnit):
         sort_by_risk: bool = True,
         **kwargs: Any,
     ) -> None:
-        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk)
+        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk, selector_name=self.SELECTOR_NAME)
         if pii_detector is None:
             raise ValueError("PIIOnlyUnit requires a PIIDetector instance")
         self.pii_detector = pii_detector
@@ -39,7 +41,6 @@ class PIIOnlyUnit(AnonymizerUnit):
         text: str,
         offsets: List[Tuple[int, int]],
         threshold: Any,
-        already_processed: set[int],
         **context: Any,
     ) -> List[int]:
         if not text or not text.strip():
@@ -53,8 +54,6 @@ class PIIOnlyUnit(AnonymizerUnit):
         indices: List[int] = []
 
         for idx, (start, end) in enumerate(offsets):
-            if idx in already_processed:
-                continue
             token = text[start:end]
             if not token or token in string.punctuation:
                 continue

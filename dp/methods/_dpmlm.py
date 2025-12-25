@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 from pathlib import Path
 import json
 import torch
@@ -127,8 +127,7 @@ class DPMlmAnonymizer(Anonymizer):
     def add_dataset_records(self, dataset_records: Sequence[DatasetRecord]) -> None:
         self.dataset_records = list(dataset_records)
 
-    def pre_stream_anonymize(self, texts_or_indices, *args, **kwargs) -> None:
-        risk_scores = kwargs.get("risk_scores")
+    def pre_stream_anonymize(self, *args, risk_scores: Optional[Dict[str, Dict[str, object]]] = None, **kwargs) -> None:
         if risk_scores is not None:
             if not self.dataset_records:
                 raise ValueError(
@@ -136,63 +135,6 @@ class DPMlmAnonymizer(Anonymizer):
                     "run in dataset mode (use --indices) so risk scores can be matched to records"
                 )
             self.set_risk_scores(risk_scores, records=self.dataset_records or None)
-
-        self._pre_stream_starting_by_uid = {}
-        self._pre_stream_direct_ledger_by_uid = {}
-        if not texts_or_indices:
-            return
-
-        if isinstance(texts_or_indices[0], int):
-            if not self.dataset_records:
-                return
-            for idx in texts_or_indices:
-                if not isinstance(idx, int):
-                    continue
-                if idx < 0 or idx >= len(self.dataset_records):
-                    continue
-                record = self.dataset_records[idx]
-                uid = str(record.uid)
-                text = record.text or ""
-                if not text:
-                    continue
-                offsets: List[Tuple[int, int]] = [
-                    (int(start), int(end))
-                    for start, end, _ in self.splitter.tokenize_with_spans(text)
-                ]
-                starting_indices = self._starting_indices_for_uid(uid, offsets)
-                starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
-                    uid,
-                    offsets,
-                    starting_indices,
-                )
-
-                ledger = TokenLedger(text, offsets)
-                apply_fn = self._make_apply_fn(
-                    text,
-                    offsets,
-                    1.0,
-                    {"perturbed": 0, "total": 0, "added": 0, "deleted": 0},
-                    starting_replacements=starting_replacements,
-                    starting_labels=starting_labels,
-                )
-                for token_idx in starting_indices:
-                    apply_fn(token_idx, ledger)
-
-                self._pre_stream_starting_by_uid[uid] = (
-                    offsets,
-                    list(starting_indices),
-                    dict(starting_replacements),
-                    dict(starting_labels),
-                )
-                self._pre_stream_direct_ledger_by_uid[uid] = ledger
-            return
-
-        for text in texts_or_indices:
-            if not isinstance(text, str):
-                continue
-            if not text.strip():
-                continue
-            _ = [(int(s), int(e)) for s, e, _ in self.splitter.tokenize_with_spans(text)]
 
     def anonymize_from_dataset(
         self,
@@ -427,8 +369,6 @@ class DPMlmAnonymizer(Anonymizer):
         offsets: List[Tuple[int, int]],
         epsilon: float,
         runtime_stats: Dict[str, int],
-        starting_replacements: Optional[Dict[int, str]] = None,
-        starting_labels: Optional[Dict[int, str]] = None,
     ) -> ApplyFn:
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
             if idx >= len(offsets):
@@ -437,22 +377,6 @@ class DPMlmAnonymizer(Anonymizer):
             entry = ledger.entry(idx)
             token = entry.original_text
             token_start, token_end = entry.start, entry.end
-
-            if starting_replacements is not None and idx in starting_replacements:
-                candidate = starting_replacements.get(idx)
-                if not isinstance(candidate, str) or not candidate.strip():
-                    raise ValueError(f"Invalid starting replacement for token index {idx}")
-                prev_source = ledger.active_edit_source
-                if self._starting_edit_source is not None:
-                    ledger.set_active_edit_source(self._starting_edit_source)
-                ledger.replace(idx, candidate)
-                if self._starting_edit_source is not None:
-                    ledger.set_active_edit_source(prev_source)
-                runtime_stats["direct_masked"] = int(runtime_stats.get("direct_masked", 0)) + 1
-                if candidate != token:
-                    runtime_stats["perturbed"] += 1
-                runtime_stats["total"] += 1
-                return
 
             if token in string.punctuation:
                 ledger.replace(idx, token)
@@ -594,50 +518,18 @@ class DPMlmAnonymizer(Anonymizer):
                     "added": 0,
                     "deleted": 0,
                 }
-                starting_replacements: Optional[Dict[int, str]] = None
-                starting_labels: Optional[Dict[int, str]] = None
-                starting_indices: Optional[List[int]] = None
-                pre_stream_ledger: Optional[TokenLedger] = None
-                if record_uid is not None:
-                    cached = self._pre_stream_starting_by_uid.get(str(record_uid))
-                    if cached is not None and cached[0] == offsets:
-                        starting_indices = list(cached[1])
-                        starting_replacements = dict(cached[2])
-                        starting_labels = dict(cached[3])
-                        pre_stream_ledger = self._pre_stream_direct_ledger_by_uid.get(str(record_uid))
-                    else:
-                        starting_indices = self._starting_indices_for_uid(record_uid, offsets)
-                        starting_replacements, starting_labels = self._starting_replacements_and_labels_for_indices(
-                            record_uid,
-                            offsets,
-                            starting_indices,
-                        )
-
-                if pre_stream_ledger is not None and starting_indices is not None:
-                    direct_count = len(starting_indices)
-                    runtime_stats["direct_masked"] = int(runtime_stats.get("direct_masked", 0)) + direct_count
-                    runtime_stats["perturbed"] += direct_count
-                    runtime_stats["total"] += direct_count
+                
+                ledger = TokenLedger(text, offsets)
 
                 apply_fn = self._make_apply_fn(
                     text,
                     offsets,
                     compensated_epsilon,
                     runtime_stats,
-                    starting_replacements=starting_replacements,
-                    starting_labels=starting_labels,
                 )
 
-                if record_uid is not None:
-                    context["starting_indices"] = starting_indices
-                    if pre_stream_ledger is not None and starting_indices is not None:
-                        context["ledger"] = pre_stream_ledger
-                        context["starting_already_applied"] = True
-                    context["starting_annotations_name"] = self._starting_annotations_name
-                    context["starting_edit_source"] = getattr(self, "_starting_edit_source", None)
-
                 last_step: Optional[AnonymizationStep] = None
-                for step in self._unit.anonymize(text, offsets, apply_fn, **context):
+                for step in self._unit.anonymize(text, offsets, apply_fn, ledger, **context):
                     hp_with_threshold = {**hp}
                     threshold = step.threshold
                     if threshold is not None:
@@ -670,20 +562,7 @@ class DPMlmAnonymizer(Anonymizer):
                         AnonymizationResult(
                             text=private_text,
                             annotations=TextAnnotations(
-                                spans=(
-                                    [
-                                        TextAnnotation(
-                                            start=offsets[idx][0],
-                                            end=offsets[idx][1],
-                                            label=(starting_labels or {}).get(idx),
-                                            text=text[offsets[idx][0] : offsets[idx][1]],
-                                            replacement=(starting_replacements or {}).get(idx),
-                                        )
-                                        for idx in (starting_indices or [])
-                                    ]
-                                    if record_uid is not None and starting_indices
-                                    else []
-                                ),
+                                spans=[],
                                 token_edits=token_edits,
                             ),
                             metadata=metadata,
