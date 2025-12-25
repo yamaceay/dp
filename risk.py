@@ -3,6 +3,7 @@ from tqdm import tqdm
 
 from dp.utils.explainer import GreedyExplainer, ShapExplainer
 from dp.loaders import get_adapter
+from dp.loaders.results import build_dataset_from_results
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 
@@ -11,6 +12,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test RiskAnonymizer")
     parser.add_argument('--data', type=str, default=None, help='Dataset name')
     parser.add_argument('--data_in', type=str, default=None, help='Path to input data file')
+    parser.add_argument('--result_in', type=str, default=None, help='Path to anonymization results JSONL file')
     parser.add_argument('--explainer', type=str, required=True, choices=['greedy', 'shap'], help='Anonymization model name')
     parser.add_argument('--explainer_in', type=str, required=True, help='Path to model config file')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load')
@@ -28,7 +30,15 @@ if __name__ == "__main__":
     elif args.explainer == 'shap':
         explainer = ShapExplainer(model_name=args.explainer_in)
     splitter = TextSplitter()
-    records = list(adapter.iter_records())
+    if args.result_in:
+        if not args.data or not args.data_in:
+            raise ValueError("data and data_in are required to load result_in")
+        original_records = list(get_adapter(args.data, **data_kwargs).iter_records())
+        records, _ = build_dataset_from_results(args.result_in, original_records)
+    else:
+        if adapter is None:
+            raise ValueError("data and data_in are required when result_in is not provided")
+        records = list(adapter.iter_records())
     records = records[args.starting_index:]
     for record in tqdm(records, desc="Explaining records"):
         tokens = []

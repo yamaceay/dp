@@ -31,6 +31,7 @@ from dp.loaders.annotations import (
     read_batch_textannotations_from_path,
     list_batch_timestamps,
 )
+from dp.loaders.results import build_dataset_from_results
 
 
 ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
@@ -74,6 +75,7 @@ __all__ = [
     "read_batch_textannotations",
     "read_batch_textannotations_from_path",
     "list_batch_timestamps",
+    "build_dataset_from_results",
     "ADAPTER_REGISTRY",
 ]
 

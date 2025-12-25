@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, Iterator, Optional
+from typing import Any, Dict, Iterable, Iterator, List, Optional
 import itertools
 
 
@@ -66,7 +66,7 @@ class DatasetRecord:
     text: str
     uid: str = ""
     name: str = ""
-    spans: Optional[list[TextAnnotation]] = None
+    spans: Optional[List[TextAnnotation]] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

@@ -9,7 +9,8 @@ from pathlib import Path
 
 from dp.methods.anonymizer import Anonymizer
 from dp.methods.registry import MODEL_REGISTRY, get_capabilities
-from dp.loaders import ADAPTER_REGISTRY, DatasetRecord
+from dp.loaders import ADAPTER_REGISTRY, DatasetRecord, get_adapter
+from dp.loaders.results import build_dataset_from_results
 from dp.utils.pii_detector import PIIDetector
 from dp.utils.selector import PIIOnlyUnit, AllUnit, ByRiskUnit, UntilKUnit
 from dp.utils.explainer import UniformExplainer, GreedyExplainer, ShapExplainer
@@ -21,12 +22,14 @@ available_datasets = list(ADAPTER_REGISTRY.keys())
 
 
 def add_data_args(parser: argparse.ArgumentParser) -> List[str]:
-    parser.add_argument('--result_in', type=str, required=True)
+    parser.add_argument('--data', type=str, default=None)
+    parser.add_argument('--data_in', type=str, default=None)
+    parser.add_argument('--result_in', type=str, default=None)
     parser.add_argument('--start', type=int, default=None)
     parser.add_argument('--end', type=int, default=None)
     parser.add_argument('--step', type=int, default=None)
     parser.add_argument('--max_records', type=int, default=None)
-    return ['result_in', 'start', 'end', 'step', 'max_records']
+    return ['data', 'data_in', 'result_in', 'start', 'end', 'step', 'max_records']
 
 
 def add_model_args(parser: argparse.ArgumentParser) -> List[str]:
@@ -152,18 +155,30 @@ def validate_runtime_params(model_config: dict, runtime_bundle: object) -> None:
                 raise ValueError("epsilon must be provided as a single runtime param")
 
 
-def load_data(data_kwargs: dict) -> List[DatasetRecord]:
-    result_file_name = data_kwargs.pop("result_in")
-    with open(result_file_name, "r", encoding="utf-8") as reader:
-        records: List[DatasetRecord] = []
-        for line in reader:
-            entry = line.strip()
-            if not entry:
-                continue
-            payload = json.loads(entry)
-            record = DatasetRecord(**payload)
-            records.append(record)
-    return records
+def _data_source_for_model(model_name: str) -> str:
+    indirect_only = {"petre", "risk", "dpmlm"}
+    if model_name in indirect_only:
+        return "anonymized"
+    return "original"
+
+
+def load_data(data_kwargs: dict, model_name: str) -> Tuple[List[DatasetRecord], Optional[List[int]]]:
+    data = data_kwargs.get("data")
+    data_in = data_kwargs.get("data_in")
+    result_in = data_kwargs.get("result_in")
+    data_source = _data_source_for_model(model_name)
+    if data_source == "original":
+        if not data or not data_in:
+            raise ValueError("data and data_in are required for original dataset loading")
+        adapter = get_adapter(data, data=data, data_in=data_in)
+        return list(adapter.iter_records()), None
+    if not result_in:
+        raise ValueError("result_in is required for anonymized dataset loading")
+    if not data or not data_in:
+        raise ValueError("data and data_in are required to align anonymized results with dataset records")
+    original_records = list(get_adapter(data, data=data, data_in=data_in).iter_records())
+    records, source_indices = build_dataset_from_results(result_in, original_records)
+    return records, source_indices
 
 def load_precomputed_risk(path: str) -> Dict[str, Dict[str, object]]:
     risk_map: Dict[str, Dict[str, object]] = {}
@@ -309,6 +324,17 @@ def resolve_requested_indices(available: List[int], requested: Optional[List[int
     return requested
 
 
+def map_output_indices(record_positions: List[int], source_indices: Optional[List[int]]) -> List[Optional[int]]:
+    if source_indices is None:
+        return [int(pos) for pos in record_positions]
+    mapped: List[Optional[int]] = []
+    for pos in record_positions:
+        if pos < 0 or pos >= len(source_indices):
+            raise ValueError(f"Record position {pos} is out of range for source indices")
+        mapped.append(source_indices[pos])
+    return mapped
+
+
 def initialize_builder_params(anonymizer: Anonymizer, runtime_bundle):
     from dp.methods.constants import KParams, LambdaParams, RhoParams
     from dp.methods.constants import EpsilonParam
@@ -401,7 +427,7 @@ if __name__ == "__main__":
     runtime_kwargs = {k: getattr(args, k) for k in runtime_keys}
     runtime_bundle = load_runtime_bundle(runtime_kwargs.pop("runtime_in", None))
     
-    records = load_data(data_kwargs)
+    records, source_indices = load_data(data_kwargs, args.model)
     model_config = load_config(args.model_in)
     validate_runtime_params(model_config, runtime_bundle)
     precompute_config = extract_precompute_config(model_config)
@@ -457,21 +483,22 @@ if __name__ == "__main__":
         raise ValueError("Cannot specify both --texts and --indices")
     
     record_names_for_precompute: Optional[List[str]] = None
+    record_positions: List[int]
     if capabilities.must_use_dataset or dpmlm_requires_dataset:
         if texts_arg:
             raise ValueError(f"{args.model} requires dataset records, use --indices")
         dataset_indices = resolve_requested_indices(dataset_indices_all, indices_arg)
-        record_indices = indices_arg or dataset_indices_all
+        record_positions = indices_arg or dataset_indices_all
     else:
         selected_indices = resolve_requested_indices(dataset_indices_all, indices_arg)
         if texts_arg:
-            record_indices = list(range(len(texts_arg)))
+            record_positions = list(range(len(texts_arg)))
             texts_or_indices = texts_arg
         else:
             selected_records = [records[index_lookup[idx]] for idx in selected_indices]
             texts_or_indices = [r.text for r in selected_records]
             record_names_for_precompute = [str(r.uid) for r in selected_records]
-            record_indices = selected_indices
+            record_positions = selected_indices
         dataset_indices = None
     
     metadata = {
@@ -497,8 +524,10 @@ if __name__ == "__main__":
     run_start = time.time()
     processed = 0
 
+    output_source = source_indices if texts_arg is None else None
+    output_indices = map_output_indices(record_positions, output_source)
     stream = model.stream_anonymize(texts_or_indices=anonymization_inputs, buckets=buckets)
-    for abs_idx, result_list in zip(record_indices, stream):
+    for abs_idx, result_list in zip(output_indices, stream):
         for hp, result in result_list:
             output_handler.output(result, idx=abs_idx, **metadata, hyperparams=hp)
         processed += 1
