@@ -14,7 +14,7 @@ class SpacyAnonymizer(Anonymizer):
         try:
             import spacy
         except Exception:
-            raise ImportError("spaCy is not installed. Please install it with 'pip install spacy'.")
+            raise ImportError("spaCy is not installed. Please install it with 'uv pip install spacy'.")
 
         if not hasattr(self, '_nlp'):
             model_loaded = False

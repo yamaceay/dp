@@ -36,7 +36,7 @@ class DPBartAnonymizer(Anonymizer):
             self.model = BartModel.from_pretrained(self.model_name).to(self.device)
             self.decoder = BartForConditionalGeneration.from_pretrained(self.model_name).to(self.device)
         except ImportError as exc:
-            raise ImportError("transformers package is required for DPBartAnonymizer. Install with: pip install transformers") from exc
+            raise ImportError("transformers package is required for DPBartAnonymizer. Install with: uv pip install transformers") from exc
         
         self.c_min = -self.sigma
         self.c_max = self.num_sigmas * self.sigma

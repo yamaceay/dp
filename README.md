@@ -16,12 +16,15 @@ git clone https://github.com/yay/dp.git
 cd dp
 
 # Install the dp package and core dependencies
-pip install -e .
-pip install -r requirements.txt
+uv venv
+source .venv/bin/activate
+uv pip install -e .
+uv pip install -r requirements.txt
 
 # Optional extras
 python -m spacy download en_core_web_sm   # needed for spaCy baselines
-pip install presidio-analyzer             # needed for Presidio baselines
+uv pip install presidio-analyzer          # needed for Presidio baselines
+uv pip install "en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.0/en_core_web_lg-3.7.0-py3-none-any.whl"
 ```
 
 GPU acceleration is recommended for transformer-based anonymizers, TRI attackers, and SHAP explainers. Set `PYTORCH_ENABLE_MPS_FALLBACK=1` when running on Apple Silicon with the MPS backend.

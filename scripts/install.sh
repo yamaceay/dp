@@ -5,8 +5,11 @@ if [[ $SLURM_LOCALID == 0 ]]; then
   apt install -y [...]
   apt clean
   python -m pip install --upgrade pip
+  if ! command -v uv >/dev/null 2>&1; then
+    python -m pip install uv
+  fi
   if [ -f requirements.txt ]; then
-    pip install -r requirements.txt
+    uv pip install -r requirements.txt
   else
     echo "requirements.txt not found, skipping pip install."
     exit 1

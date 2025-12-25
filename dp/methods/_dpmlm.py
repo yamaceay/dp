@@ -78,7 +78,7 @@ class DPMlmAnonymizer(Anonymizer):
             self.detokenizer = TreebankWordDetokenizer()
 
         except ImportError as exc:
-            raise ImportError("Required packages not found. Install with: pip install transformers nltk") from exc
+            raise ImportError("Required packages not found. Install with: uv pip install transformers nltk") from exc
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
