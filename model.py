@@ -56,26 +56,13 @@ def load_config(path: Optional[str]) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def _normalize_starting_anonymizations(value: object) -> List[str]:
+def extract_result_in_config(model_config: dict) -> Optional[str]:
+    value = model_config.pop("result_in", None)
     if value is None:
-        return []
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, list):
-        paths: List[str] = []
-        for item in value:
-            if not isinstance(item, str):
-                raise ValueError("starting_anonymizations entries must be strings")
-            paths.append(item)
-        return paths
-    raise ValueError("starting_anonymizations must be a string or list of strings")
-
-
-def extract_starting_anonymizations_config(model_config: dict) -> List[str]:
-    value = model_config.pop("starting_anonymizations", None)
-    if value is None:
-        value = model_config.pop("starting_anonymization", None)
-    return _normalize_starting_anonymizations(value)
+        return None
+    if not isinstance(value, str):
+        raise ValueError("result_in must be a string")
+    return value
 
 
 def _normalize_param_patterns(value: object) -> List[str]:
@@ -427,8 +414,11 @@ if __name__ == "__main__":
     runtime_kwargs = {k: getattr(args, k) for k in runtime_keys}
     runtime_bundle = load_runtime_bundle(runtime_kwargs.pop("runtime_in", None))
     
-    records, source_indices = load_data(data_kwargs, args.model)
     model_config = load_config(args.model_in)
+    model_result_in = extract_result_in_config(model_config)
+    if data_kwargs.get("result_in") is None and model_result_in is not None:
+        data_kwargs["result_in"] = model_result_in
+    records, source_indices = load_data(data_kwargs, args.model)
     validate_runtime_params(model_config, runtime_bundle)
     precompute_config = extract_precompute_config(model_config)
     capabilities = get_capabilities(args.model)

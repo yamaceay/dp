@@ -1,10 +1,11 @@
 import argparse
 import os
 import json
+from typing import Iterable
 
 from dp.tri.loaders import ATTACKER_ADAPTER_REGISTRY, get_attacker_adapter
-from dp.loaders import read_batch_annotations_from_path
-from dp.loaders.base import TextAnnotation
+from dp.loaders.base import DatasetAdapter, DatasetRecord
+from dp.loaders.results import build_dataset_from_results
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 
@@ -19,29 +20,20 @@ def add_data_args(parser: argparse.ArgumentParser) -> list[str]:
     return ['data', 'data_in', 'start', 'end', 'step', 'max_records']
 
 
-def _load_starting_anonymizations_by_idx(paths: list[str]) -> list[list[TextAnnotation]]:
-    merged: list[list[TextAnnotation]] = []
-    for path in paths:
-        batch = read_batch_annotations_from_path(path)
-        if not batch:
-            continue
-        if len(batch) > len(merged):
-            merged.extend([[] for _ in range(len(batch) - len(merged))])
-        for idx, annots in enumerate(batch):
-            if annots:
-                merged[idx].extend(annots)
-    return merged
+class InMemoryDatasetAdapter(DatasetAdapter):
+    def __init__(self, records: list[DatasetRecord]) -> None:
+        self._records = records
+
+    def iter_records(self, *args, **kwargs) -> Iterable[DatasetRecord]:
+        return iter(self._records)
+
+    def __len__(self) -> int:
+        return len(self._records)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate/load attacker record extensions (BK + summary)")
     data_keys = add_data_args(parser)
-    parser.add_argument('--starting_anonymizations', type=str, nargs='*', default=None, help='Paths to starting anonymizations (JSONL)')
-    parser.add_argument(
-        '--starting_replacement',
-        type=str,
-        default=None,
-        help='Optional explicit replacement token; if omitted, uses per-span replacement or label-derived token',
-    )
+    parser.add_argument('--result_in', type=str, required=True, help='Path to anonymization results (JSONL)')
     parser.add_argument('--full_record', action='store_true', help='Print full record details')
     parser.add_argument('--save_to_jsonl', type=str, help='Path to save processed extensions (JSONL)')
     parser.add_argument('--load_from_jsonl', type=str, help='Path to load processed extensions (JSONL)')
@@ -51,12 +43,11 @@ def main() -> None:
     data_kwargs = {k: getattr(args, k) for k in data_keys}
     adapter = get_attacker_adapter(data_kwargs.pop("data"), **data_kwargs)
 
-    if args.starting_anonymizations:
-        starting_by_idx = _load_starting_anonymizations_by_idx(args.starting_anonymizations)
-        if hasattr(adapter, "set_starting_anonymizations"):
-            adapter.set_starting_anonymizations(starting_by_idx, replacement=args.starting_replacement)
-        else:
-            raise ValueError("Selected attacker adapter does not support starting anonymizations")
+    original_records = list(adapter.adapter.iter_records())
+    records, _ = build_dataset_from_results(args.result_in, original_records)
+    adapter.adapter = InMemoryDatasetAdapter(records)
+    if hasattr(adapter, "_build_persona_records"):
+        adapter._persona_records = adapter._build_persona_records()
 
     if args.load_from_jsonl and os.path.exists(args.load_from_jsonl):
         print(f"Loading record extensions from {args.load_from_jsonl}...")
