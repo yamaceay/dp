@@ -133,9 +133,12 @@ def validate_runtime_params(model_config: dict, runtime_bundle: object) -> None:
                 raise ValueError("epsilon must be provided as a single runtime param")
 
 
-def _data_source_for_model(model_name: str) -> str:
-    indirect_only = {"petre", "risk", "dpmlm"}
-    if model_name in indirect_only:
+def _data_source_for_model(model_name: str, has_result_in: bool) -> str:
+    requires_anonymized = {"petre", "risk"}
+    supports_anonymized = {"dpmlm"}
+    if model_name in requires_anonymized:
+        return "anonymized"
+    if model_name in supports_anonymized and has_result_in:
         return "anonymized"
     return "original"
 
@@ -144,7 +147,7 @@ def load_data(data_kwargs: dict, model_name: str) -> Tuple[List[DatasetRecord], 
     data = data_kwargs.get("data")
     data_in = data_kwargs.get("data_in")
     result_in = data_kwargs.get("result_in")
-    data_source = _data_source_for_model(model_name)
+    data_source = _data_source_for_model(model_name, bool(result_in))
     if data_source == "original":
         if not data or not data_in:
             raise ValueError("data and data_in are required for original dataset loading")
@@ -419,12 +422,14 @@ if __name__ == "__main__":
     dpmlm_selector_name = selector_config.get("name") if isinstance(selector_config, dict) else None
     dpmlm_has_precomputed_risk = bool(precompute_config.get("risk_scores"))
     dpmlm_has_tri_explainer = bool(explainer_config.get("tri_pipeline"))
+    dpmlm_has_result_in = bool(data_kwargs.get("result_in"))
     dpmlm_requires_dataset = (
         args.model == "dpmlm"
         and (
             dpmlm_selector_name == "until_k"
             or dpmlm_has_precomputed_risk
             or dpmlm_has_tri_explainer
+            or dpmlm_has_result_in
         )
     )
     
