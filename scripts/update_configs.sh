@@ -105,21 +105,21 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
         fi
     done
 
-    echo "Updating result_ins in reddit configs under $CONFIG_DIR..."
+    echo "Updating result_in in reddit configs under $CONFIG_DIR..."
     if [[ -n "$REDDIT_RESULT_IN" ]]; then
         find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
             if grep -q "result_in:" "$config"; then
-                sed -i.bak "s|outputs/reddit/presidio/.*\\.jsonl|$REDDIT_RESULT_IN|g" "$config"
+                sed -i.bak "s|result_in:.*|result_in: $REDDIT_RESULT_IN|g" "$config"
                 echo "  Updated: $config"
             fi
         done
     fi
 
-    echo "Updating result_ins in tab configs under $CONFIG_DIR..."
+    echo "Updating result_in in tab configs under $CONFIG_DIR..."
     if [[ -n "$TAB_RESULT_IN" ]]; then
         find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
             if grep -q "result_in:" "$config"; then
-                sed -i.bak "s|outputs/tab/presidio/.*\\.jsonl|$TAB_RESULT_IN|g" "$config"
+                sed -i.bak "s|result_in:.*|result_in: $TAB_RESULT_IN|g" "$config"
                 echo "  Updated: $config"
             fi
         done
