@@ -3,13 +3,11 @@ params:
 
 explainer:
   name: greedy
-  tri_pipeline: models/tri_pipelines/reddit/20251110_190043
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_greedy.jsonl
-
-starting_anonymizations:
-  - outputs/reddit/presidio/20251216_160413_reddit_presidio.jsonl
+  result_in: outputs/reddit/presidio/20251222_105712_reddit_presidio.jsonl
 
 tri_chunking:
   enabled: false

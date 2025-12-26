@@ -1,8 +1,8 @@
 gpt2-paraphraser: ../../../netscratch/yay/gpt2-paraphraser
 reddit:
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
-  starting_anonymization: outputs/reddit/presidio/20251222_105712_reddit_presidio.jsonl
+  result_in: outputs/reddit/presidio/20251222_105712_reddit_presidio.jsonl
 tab:
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
   pii_annotator: ../../../netscratch/yay/pii_detectors/tab/tab__lr3e-5__bs8__m_partial_recall
-  starting_anonymization: outputs/tab/presidio/20251222_105949_tab_presidio.jsonl
+  result_in: outputs/tab/presidio/20251222_105949_tab_presidio.jsonl

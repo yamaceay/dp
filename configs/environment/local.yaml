@@ -1,8 +1,8 @@
 gpt2-paraphraser: models/gpt2-paraphraser
 reddit:
   tri_pipeline: models/tri_pipelines/reddit/20251110_190043
-  starting_anonymization: outputs/reddit/presidio/20251216_160413_reddit_presidio.jsonl
+  result_in: outputs/reddit/presidio/20251216_160413_reddit_presidio.jsonl
 tab:
   tri_pipeline: models/tri_pipelines/tab/20251110_183205
   pii_annotator: models/pii_detectors/tab/20251021_093003
-  starting_anonymization: outputs/tab/presidio/20251216_160308_tab_presidio.jsonl
+  result_in: outputs/tab/presidio/20251216_160308_tab_presidio.jsonl

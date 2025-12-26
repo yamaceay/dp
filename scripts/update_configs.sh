@@ -38,10 +38,10 @@ yaml_section_value() {
 
 GPT2_PARAPHRASER=$(yaml_top_value "gpt2-paraphraser")
 REDDIT_TRI_PIPELINE=$(yaml_section_value "reddit" "tri_pipeline")
-REDDIT_STARTING_ANON=$(yaml_section_value "reddit" "starting_anonymization")
+REDDIT_RESULT_IN=$(yaml_section_value "reddit" "result_in")
 TAB_TRI_PIPELINE=$(yaml_section_value "tab" "tri_pipeline")
 TAB_PII_ANNOTATOR=$(yaml_section_value "tab" "pii_annotator")
-TAB_STARTING_ANON=$(yaml_section_value "tab" "starting_anonymization")
+TAB_RESULT_IN=$(yaml_section_value "tab" "result_in")
 
 if [[ -z "$GPT2_PARAPHRASER" ]]; then
     echo "Error: failed to extract gpt2-paraphraser from $MODELS_FILE" >&2
@@ -59,10 +59,10 @@ fi
 echo "Extracted values:"
 echo "  gpt2-paraphraser: $GPT2_PARAPHRASER"
 echo "  reddit tri_pipeline: $REDDIT_TRI_PIPELINE"
-echo "  reddit starting_anonymization: $REDDIT_STARTING_ANON"
+echo "  reddit result_in: $REDDIT_RESULT_IN"
 echo "  tab tri_pipeline: $TAB_TRI_PIPELINE"
 echo "  tab pii_annotator: $TAB_PII_ANNOTATOR"
-echo "  tab starting_anonymization: $TAB_STARTING_ANON"
+echo "  tab result_in: $TAB_RESULT_IN"
 echo ""
 
 for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
@@ -105,21 +105,21 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
         fi
     done
 
-    echo "Updating starting_anonymizations in reddit configs under $CONFIG_DIR..."
-    if [[ -n "$REDDIT_STARTING_ANON" ]]; then
+    echo "Updating result_ins in reddit configs under $CONFIG_DIR..."
+    if [[ -n "$REDDIT_RESULT_IN" ]]; then
         find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
-            if grep -q "starting_anonymizations:" "$config"; then
-                sed -i.bak "s|- outputs/reddit/presidio/.*\\.jsonl|- $REDDIT_STARTING_ANON|g" "$config"
+            if grep -q "result_in:" "$config"; then
+                sed -i.bak "s|outputs/reddit/presidio/.*\\.jsonl|$REDDIT_RESULT_IN|g" "$config"
                 echo "  Updated: $config"
             fi
         done
     fi
 
-    echo "Updating starting_anonymizations in tab configs under $CONFIG_DIR..."
-    if [[ -n "$TAB_STARTING_ANON" ]]; then
+    echo "Updating result_ins in tab configs under $CONFIG_DIR..."
+    if [[ -n "$TAB_RESULT_IN" ]]; then
         find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
-            if grep -q "starting_anonymizations:" "$config"; then
-                sed -i.bak "s|- outputs/tab/presidio/.*\\.jsonl|- $TAB_STARTING_ANON|g" "$config"
+            if grep -q "result_in:" "$config"; then
+                sed -i.bak "s|outputs/tab/presidio/.*\\.jsonl|$TAB_RESULT_IN|g" "$config"
                 echo "  Updated: $config"
             fi
         done

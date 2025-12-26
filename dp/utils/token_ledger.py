@@ -168,3 +168,26 @@ class TokenLedger:
             if entry.deleted:
                 continue
             yield entry.span
+
+    def apply_prior_edits(self, edits: Sequence[Dict[str, object]]) -> None:
+        for edit in edits:
+            kind = str(edit.get("kind", ""))
+            span_raw = edit.get("span")
+            if not isinstance(span_raw, (list, tuple)) or len(span_raw) < 2:
+                continue
+            edit_start = int(span_raw[0])
+            edit_end = int(span_raw[1])
+            replacement = str(edit.get("text", ""))
+            
+            for i, entry in enumerate(self._entries):
+                if entry.end <= edit_start or entry.start >= edit_end:
+                    continue
+                if kind == "replaced":
+                    entry.text = replacement
+                elif kind == "deleted":
+                    entry.deleted = True
+                    entry.text = ""
+
+    def is_modified(self, index: int) -> bool:
+        entry = self._entries[index]
+        return entry.deleted or entry.text != entry.original_text

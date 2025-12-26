@@ -68,6 +68,8 @@ class DPMlmAnonymizer(Anonymizer):
         ] = {}
 
         self._pre_stream_direct_ledger_by_uid: Dict[str, TokenLedger] = {}
+        
+        self._prior_edits_cache: Dict[str, List[Dict[str, object]]] = {}
 
         try:
             from transformers import AutoTokenizer, AutoModelForMaskedLM
@@ -127,7 +129,13 @@ class DPMlmAnonymizer(Anonymizer):
     def add_dataset_records(self, dataset_records: Sequence[DatasetRecord]) -> None:
         self.dataset_records = list(dataset_records)
 
-    def pre_stream_anonymize(self, *args, risk_scores: Optional[Dict[str, Dict[str, object]]] = None, **kwargs) -> None:
+    def pre_stream_anonymize(
+        self,
+        *args,
+        risk_scores: Optional[Dict[str, Dict[str, object]]] = None,
+        prior_edits_list: Optional[List[List[Dict[str, object]]]] = None,
+        **kwargs,
+    ) -> None:
         if risk_scores is not None:
             if not self.dataset_records:
                 raise ValueError(
@@ -135,6 +143,13 @@ class DPMlmAnonymizer(Anonymizer):
                     "run in dataset mode (use --indices) so risk scores can be matched to records"
                 )
             self.set_risk_scores(risk_scores, records=self.dataset_records or None)
+        
+        if prior_edits_list is not None and self.dataset_records:
+            import hashlib
+            for record, edits in zip(self.dataset_records, prior_edits_list):
+                if edits:
+                    text_hash = hashlib.sha256((record.text or "").encode()).hexdigest()
+                    self._prior_edits_cache[text_hash] = edits
 
     def anonymize_from_dataset(
         self,
@@ -146,12 +161,16 @@ class DPMlmAnonymizer(Anonymizer):
         if idx < 0 or idx >= len(self.dataset_records):
             raise IndexError(f"Index {idx} is out of bounds")
         record = self.dataset_records[idx]
+        
+        prior_edits = record.metadata.get("prior_token_edits", []) if record.metadata else []
+        
         return self.anonymize_any_text(
             record.text,
             *args,
             buckets=buckets,
             record_name=record.name,
             record_uid=str(record.uid),
+            prior_edits=prior_edits,
             **kwargs,
         )
 
@@ -459,10 +478,16 @@ class DPMlmAnonymizer(Anonymizer):
         buckets: Buckets = [],
         record_name: Optional[str] = None,
         record_uid: Optional[str] = None,
+        prior_edits: Optional[List[Dict[str, object]]] = None,
         **kwargs,
     ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not text or not text.strip():
             return []
+        
+        if prior_edits is None:
+            import hashlib
+            text_hash = hashlib.sha256(text.encode()).hexdigest()
+            prior_edits = self._prior_edits_cache.get(text_hash, [])
 
         combos = buckets_to_dicts(buckets)
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
@@ -520,6 +545,8 @@ class DPMlmAnonymizer(Anonymizer):
                 }
                 
                 ledger = TokenLedger(text, offsets)
+                if prior_edits:
+                    ledger.apply_prior_edits(prior_edits)
 
                 apply_fn = self._make_apply_fn(
                     text,
@@ -529,7 +556,7 @@ class DPMlmAnonymizer(Anonymizer):
                 )
 
                 last_step: Optional[AnonymizationStep] = None
-                for step in self._unit.anonymize(text, offsets, apply_fn, ledger, **context):
+                for step in self._unit.anonymize(text, offsets, apply_fn, ledger, prior_edits=prior_edits, **context):
                     hp_with_threshold = {**hp}
                     threshold = step.threshold
                     if threshold is not None:

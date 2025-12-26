@@ -28,6 +28,7 @@ class RiskAnonymizer(Anonymizer):
         self._risk_scores_by_uid: Dict[str, Dict[Tuple[int, int], float]] = {}
         self._scores_cache: Dict[str, Tuple[np.ndarray, List[Tuple[int, int]]]] = {}
         self._starting_indices_cache: Dict[str, List[int]] = {}
+        self._prior_edits_cache: Dict[str, List[Dict[str, object]]] = {}
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
@@ -45,13 +46,21 @@ class RiskAnonymizer(Anonymizer):
         if not all(isinstance(name, str) for name in record_names):
             raise ValueError("record_names entries must be strings")
         
+        prior_edits_list = kwargs.get("prior_edits_list")
+        
         if risk_scores is not None:
             self.set_risk_scores(risk_scores)
         
-        for name, text in zip(record_names, texts_or_indices):
+        for idx, (name, text) in enumerate(zip(record_names, texts_or_indices)):
             _, spans = self._tokenize(text)
             scores = self._compute_scores(text, spans, name)
-            self._scores_cache[self.hash_text(text)] = (scores, spans)
+            text_hash = self.hash_text(text)
+            self._scores_cache[text_hash] = (scores, spans)
+            
+            if prior_edits_list is not None and idx < len(prior_edits_list):
+                edits = prior_edits_list[idx]
+                if edits:
+                    self._prior_edits_cache[text_hash] = edits
 
     def set_risk_scores(self, risk_scores: Dict[str, Dict[str, object]]) -> None:
         self._risk_scores_by_uid = {}
@@ -91,15 +100,19 @@ class RiskAnonymizer(Anonymizer):
 
         return apply_fn
 
-    def anonymize_any_text(self, text: str, *args, buckets: Optional[Buckets] = None, record_name: Optional[str] = None, **kwargs) -> List[Tuple[Dict[str, Any], AnonymizationResult]]:
+    def anonymize_any_text(self, text: str, *args, buckets: Optional[Buckets] = None, record_name: Optional[str] = None, prior_edits: Optional[List[Dict[str, object]]] = None, **kwargs) -> List[Tuple[Dict[str, Any], AnonymizationResult]]:
         if buckets is None:
             buckets = []
-        cached = self._scores_cache.get(self.hash_text(text))
+        text_hash = self.hash_text(text)
+        cached = self._scores_cache.get(text_hash)
         if cached is None:
             _, spans = self._tokenize(text)
             scores = self._compute_scores(text, spans, record_name)
         else:
             scores, spans = cached
+        
+        if prior_edits is None:
+            prior_edits = self._prior_edits_cache.get(text_hash)
         
         if len(buckets) != 1 or not isinstance(buckets[0], RhoParams):
             raise ValueError("RiskAnonymizer only supports RhoParams for grid anonymization.")
@@ -122,6 +135,7 @@ class RiskAnonymizer(Anonymizer):
             text,
             spans,
             apply_fn,
+            prior_edits=prior_edits,
         ):
             rho = step.threshold
             hp: Dict[str, Any] = {"rho": rho}

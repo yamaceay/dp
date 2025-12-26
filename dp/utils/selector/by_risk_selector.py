@@ -37,7 +37,7 @@ class ByRiskUnit(AnonymizerUnit):
         if self._sort_by_risk_enabled:
             pairs.sort(key=lambda x: float(self._risk_scores[x[0]]), reverse=True)
 
-        cumulative = sum(probs)
+        cumulative = 0.0
         indices: List[int] = []
         for idx, prob in pairs:
             if cumulative >= removal_limit:
@@ -47,5 +47,4 @@ class ByRiskUnit(AnonymizerUnit):
                 continue
             indices.append(idx)
             cumulative += prob
-
         return indices

@@ -603,12 +603,17 @@ class PetreAnonymizer(Anonymizer):
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         
         ledger = TokenLedger(text, state.term_spans)
+        
+        prior_edits = record.metadata.get("prior_token_edits", []) if record.metadata else []
+        if prior_edits:
+            ledger.apply_prior_edits(prior_edits)
 
         for step in self._unit.anonymize(
             text,
             state.term_spans,
             apply_fn,
             ledger=ledger,
+            prior_edits=prior_edits,
         ):
             k_value = step.threshold
             private_text = step.text

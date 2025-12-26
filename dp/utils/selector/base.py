@@ -77,6 +77,8 @@ class AnonymizerUnit(ABC):
         text: str,
         offsets: List[Tuple[int, int]],
         apply_fn: ApplyFn,
+        ledger: Optional[TokenLedger] = None,
+        prior_edits: Optional[List[Dict[str, object]]] = None,
         **context: Any,
     ) -> Iterator[AnonymizationStep]:
         if not self._thresholds:
@@ -85,13 +87,21 @@ class AnonymizerUnit(ABC):
         if self._threshold_name is None:
             raise ValueError("threshold name must be set before anonymization")
 
-        ledger = TokenLedger(text, offsets)
+        if ledger is None:
+            ledger = TokenLedger(text, offsets)
+        
+        if prior_edits:
+            ledger.apply_prior_edits(prior_edits)
 
         processed: set[int] = set()
+        for idx in range(len(offsets)):
+            if ledger.is_modified(idx):
+                processed.add(idx)
+        
         ordered = self.order_thresholds(self._thresholds)
 
         for threshold in ordered:
-            applied_indices = self.select_indices(text, offsets, threshold, processed, ledger=ledger, **context)
+            applied_indices = self.select_indices(text, offsets, threshold, **context)
             new_indices: List[int] = []
             for idx in applied_indices:
                 if idx in processed:

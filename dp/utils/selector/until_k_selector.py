@@ -1,4 +1,4 @@
-from typing import Any, Callable, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from dp.utils.selector.base import AnonymizerUnit, AnonymizationStep, ApplyFn
 from dp.utils.token_ledger import TokenLedger
@@ -37,15 +37,15 @@ class UntilKUnit(AnonymizerUnit):
         threshold: Any,
         **context: Any,
     ) -> List[int]:
-        if self._sort_by_risk_enabled:
-            offsets = self._sort_by_risk(offsets, len(offsets))
-        return offsets
+        raise NotImplementedError("UntilKUnit uses custom anonymize() and does not implement select_indices()")
 
     def anonymize(
         self,
         text: str,
         offsets: List[Tuple[int, int]],
         apply_fn: ApplyFn,
+        ledger: Optional[TokenLedger] = None,
+        prior_edits: Optional[List[dict]] = None,
         **context: Any,
     ) -> Iterator[AnonymizationStep]:
         if not self._thresholds:
@@ -59,9 +59,16 @@ class UntilKUnit(AnonymizerUnit):
         if self._target_label is None:
             raise ValueError("UntilKUnit requires target_label to be set")
 
-        ledger = TokenLedger(text, offsets)
+        if ledger is None:
+            ledger = TokenLedger(text, offsets)
+        
+        if prior_edits:
+            ledger.apply_prior_edits(prior_edits)
 
         processed: set[int] = set()
+        for idx in range(len(offsets)):
+            if ledger.is_modified(idx):
+                processed.add(idx)
         k_values = self.order_thresholds(self._thresholds)
 
         current_text = ledger.render_offsets(text)

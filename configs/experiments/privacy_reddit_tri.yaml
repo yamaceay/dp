@@ -3,7 +3,7 @@ data_in: data/reddit/reddit.jsonl
 annotations_in:
   - outputs/reddit
 tri:
-  tri_pipeline: models/tri_pipelines/reddit/20251110_190043
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
   max_length: 512
   device: auto
 mask_token: "[MASK]"

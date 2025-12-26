@@ -1,4 +1,4 @@
-from typing import Any, Iterator, List, Tuple
+from typing import Any, Iterator, List, Optional, Tuple
 
 from dp.utils.selector.base import AnonymizerUnit, AnonymizationStep, ApplyFn
 from dp.utils.token_ledger import TokenLedger
@@ -22,28 +22,37 @@ class AllUnit(AnonymizerUnit):
     ) -> List[int]:
         if not text or not text.strip():
             return []
-        return offsets
+        return list(range(len(offsets)))
 
     def anonymize(
         self,
         text: str,
         offsets: List[Tuple[int, int]],
         apply_fn: ApplyFn,
+        ledger: Optional[TokenLedger] = None,
+        prior_edits: Optional[List[dict]] = None,
         **context: Any,
     ) -> Iterator[AnonymizationStep]:
         if not text or not text.strip():
             return
 
-        ledger = TokenLedger(text, offsets)
+        if ledger is None:
+            ledger = TokenLedger(text, offsets)
+        
+        if prior_edits:
+            ledger.apply_prior_edits(prior_edits)
         
         processed: set[int] = set()
+        for idx in range(len(offsets)):
+            if ledger.is_modified(idx):
+                processed.add(idx)
 
         step_metadata: dict = {
             "selector": self.SELECTOR_NAME,
             "processed_count": len(processed),
         }
 
-        indices = self.select_indices(text, offsets, None, processed, **context)
+        indices = self.select_indices(text, offsets, None, **context)
         sorted_indices = self._sort_by_risk(indices, len(offsets))
         applied: List[int] = []
         for idx in sorted_indices:

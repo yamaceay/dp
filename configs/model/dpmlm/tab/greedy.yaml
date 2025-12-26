@@ -3,7 +3,7 @@ params:
 
 explainer:
   name: greedy
-  tri_pipeline: models/tri_pipelines/tab/20251110_183205
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
   risk_temperature: 0.1
 
 precomputation:

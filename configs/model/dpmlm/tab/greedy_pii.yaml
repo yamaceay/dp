@@ -4,7 +4,7 @@ params:
 
 explainer:
   name: greedy
-  tri_pipeline: models/tri_pipelines/tab/20251110_183205
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
   risk_temperature: 0.1
 
 precomputation:
@@ -15,7 +15,7 @@ tri_chunking:
 
 token_selection:
   name: pii_only
-  pii_annotator: models/pii_detectors/tab/20251021_093003
+  pii_annotator: ../../../netscratch/yay/pii_detectors/tab/tab__lr3e-5__bs8__m_partial_recall
 
 pii_chunking:
   enabled: true

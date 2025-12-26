@@ -56,15 +56,6 @@ def load_config(path: Optional[str]) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def extract_result_in_config(model_config: dict) -> Optional[str]:
-    value = model_config.pop("result_in", None)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError("result_in must be a string")
-    return value
-
-
 def _normalize_param_patterns(value: object) -> List[str]:
     if value is None:
         return []
@@ -194,6 +185,7 @@ def extract_precompute_config(model_config: dict) -> Dict[str, Any]:
     block = model_config.pop("precomputation", {}) or {}
     return {
         "risk_scores": block.get("risk_scores"),
+        "result_in": block.get("result_in"),
     }
 
 
@@ -415,12 +407,11 @@ if __name__ == "__main__":
     runtime_bundle = load_runtime_bundle(runtime_kwargs.pop("runtime_in", None))
     
     model_config = load_config(args.model_in)
-    model_result_in = extract_result_in_config(model_config)
-    if data_kwargs.get("result_in") is None and model_result_in is not None:
-        data_kwargs["result_in"] = model_result_in
+    precompute_config = extract_precompute_config(model_config)
+    if data_kwargs.get("result_in") is None and precompute_config.get("result_in") is not None:
+        data_kwargs["result_in"] = precompute_config.get("result_in")
     records, source_indices = load_data(data_kwargs, args.model)
     validate_runtime_params(model_config, runtime_bundle)
-    precompute_config = extract_precompute_config(model_config)
     capabilities = get_capabilities(args.model)
     explainer_config = extract_explainer_config(model_config)
 
@@ -473,6 +464,7 @@ if __name__ == "__main__":
         raise ValueError("Cannot specify both --texts and --indices")
     
     record_names_for_precompute: Optional[List[str]] = None
+    prior_edits_for_precompute: Optional[List[List[Dict[str, object]]]] = None
     record_positions: List[int]
     if capabilities.must_use_dataset or dpmlm_requires_dataset:
         if texts_arg:
@@ -488,6 +480,10 @@ if __name__ == "__main__":
             selected_records = [records[index_lookup[idx]] for idx in selected_indices]
             texts_or_indices = [r.text for r in selected_records]
             record_names_for_precompute = [str(r.uid) for r in selected_records]
+            prior_edits_for_precompute = [
+                r.metadata.get("prior_token_edits", []) if isinstance(r.metadata, dict) else []
+                for r in selected_records
+            ]
             record_positions = selected_indices
         dataset_indices = None
     
@@ -507,6 +503,8 @@ if __name__ == "__main__":
     pre_kwargs: Dict[str, Any] = {}
     if record_names_for_precompute is not None:
         pre_kwargs["record_names"] = record_names_for_precompute
+    if prior_edits_for_precompute is not None:
+        pre_kwargs["prior_edits_list"] = prior_edits_for_precompute
     model.pre_stream_anonymize(texts_or_indices=anonymization_inputs, risk_scores=pre_risk_scores, **pre_kwargs)
     pre_elapsed = time.time() - pre_start
     print(f"✓ Pre-computation before anonymization completed in {pre_elapsed:.2f}s")

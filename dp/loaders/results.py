@@ -73,6 +73,8 @@ def _parse_text_annotations(payload: Dict[str, Any], line_num: int) -> TextAnnot
         raise ValueError(f"annotations must be an object at line {line_num}")
     spans_raw = annotations_obj.get("spans")
     if spans_raw is None:
+        spans_raw = payload.get("spans")
+    if spans_raw is None:
         spans_raw = []
     if not isinstance(spans_raw, list):
         raise ValueError(f"annotations.spans must be a list at line {line_num}")
@@ -150,8 +152,6 @@ def _merge_result_record(
     original_text = original.text if original is not None else result.text
     replacements = _build_replacements(result.annotations, original_text)
     merged_spans: List[TextAnnotation] = []
-    if original is not None and original.spans:
-        merged_spans.extend(_shift_annotations(original.spans, replacements, result.text))
     if result.annotations.spans:
         merged_spans.extend(_shift_annotations(result.annotations.spans, replacements, result.text))
     merged_spans = _dedupe_spans(sorted(merged_spans, key=lambda ann: (ann.start, ann.end)))
@@ -161,18 +161,56 @@ def _merge_result_record(
         metadata.update(original.metadata)
     if isinstance(result.metadata, dict):
         metadata.update(result.metadata)
+    
+    token_edits_list = [te.to_dict() for te in result.annotations.token_edits]
+    if not token_edits_list and result.annotations.spans:
+        token_edits_list = _spans_to_prior_edits(result.annotations.spans, original_text)
+    if token_edits_list:
+        metadata["prior_token_edits"] = token_edits_list
+    if original is not None:
+        metadata["original_text"] = original.text
+    
     uid = ""
     name = ""
     if original is not None:
         uid = original.uid
         name = original.name
     return DatasetRecord(
-        text=result.text,
+        text=original_text,
         uid=uid,
         name=name,
         spans=spans_out,
         metadata=metadata,
     )
+
+
+def _spans_to_prior_edits(spans: List[TextAnnotation], original_text: str) -> List[Dict[str, Any]]:
+    edits: List[Dict[str, Any]] = []
+    cursor = 0
+    for ann in sorted(spans, key=lambda a: a.start):
+        original_span_text = ann.text
+        if not original_span_text:
+            continue
+        replacement = ann.replacement
+        if replacement is None and ann.label:
+            replacement = f"[{ann.label}]"
+        if replacement is None:
+            continue
+        
+        pos = original_text.find(original_span_text, cursor)
+        if pos < 0:
+            continue
+        
+        start = pos
+        end = pos + len(original_span_text)
+        cursor = end
+        
+        edits.append({
+            "kind": "replaced",
+            "span": [start, end],
+            "text": replacement,
+        })
+    return edits
 
 
 def _build_replacements(annotations: TextAnnotations, original_text: str) -> List[Replacement]:
