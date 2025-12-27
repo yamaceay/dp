@@ -60,6 +60,7 @@ class ShapExplainer(TokenExplainer):
         if target_label is not None:
             label_name = str(target_label)
         else:
+            raise ValueError("target_label must be provided for ShapExplainer")
             predictions = self.pipeline(text)
             if isinstance(predictions, list) and predictions:
                 prediction = predictions[0]
@@ -67,9 +68,7 @@ class ShapExplainer(TokenExplainer):
                     label_name = prediction.get("label")
                 elif isinstance(prediction, list) and prediction:
                     label_name = prediction[0].get("label")
-        if not label_name:
-            raise ValueError("target label is not defined for the provided text")
-        
+
         label_int: Optional[int] = None
         self._ensure_tri_mapping()
         if label_int is None and label_name in self.label_to_id:
@@ -82,6 +81,8 @@ class ShapExplainer(TokenExplainer):
         if label_int is None:
             raise ValueError(f"target label '{label_name}' cannot be mapped to an output index")
         term_spans = normalized_offsets
+        if self.shap_explainer is None:
+            raise ValueError("ShapExplainer pipeline is not loaded properly")
         shap_values = self.shap_explainer([text], batch_size=1)
         subword_weights = shap_values.values[0, :, label_int]
         shap_tokens = shap_values.data[0]

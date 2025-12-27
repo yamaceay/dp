@@ -13,7 +13,8 @@ from dp.loaders import ADAPTER_REGISTRY, DatasetRecord, get_adapter
 from dp.loaders.results import build_dataset_from_results
 from dp.utils.pii_detector import PIIDetector
 from dp.utils.selector import PIIOnlyUnit, AllUnit, ByRiskUnit, UntilKUnit
-from dp.utils.explainer import UniformExplainer, GreedyExplainer, ShapExplainer
+from dp.utils.explainer import UniformExplainer, ShapExplainer
+# from dp.utils.explainer import GreedyExplainer
 from dp.utils.output import OUTPUT_HANDLER_REGISTRY
 from runtime import load_runtime_bundle
 
@@ -245,8 +246,8 @@ def build_explainer(explainer_config: dict, model_config: dict, capabilities, mo
     
     tri_chunking = extract_chunking_config(model_config, "tri").get("enabled", False)
     
-    if explainer_name == "greedy":
-        return GreedyExplainer(model_name=tri_pipeline, use_chunking=tri_chunking)
+    # if explainer_name == "greedy":
+    #     return GreedyExplainer(model_name=tri_pipeline, use_chunking=tri_chunking)
     
     if explainer_name == "shap":
         return ShapExplainer(model_name=tri_pipeline, use_chunking=tri_chunking)

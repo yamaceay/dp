@@ -1,3 +1,0 @@
-1
-0
-uv run python model.py --data tab --data_in data/TAB/splitted/test.json --model dpmlm --model_in configs/lrec/dpmlm/tab/greedy.yaml --runtime_in configs/runtime/dp/eps_010.yaml configs/runtime/k_anon/k_*.yaml --output jsonl --unique_name tab_dpmlm_greedy_eps_010

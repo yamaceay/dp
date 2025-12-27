@@ -18,6 +18,7 @@ if __name__ == "__main__":
     parser.add_argument('--step', type=int, default=1, help='Step size for records to process')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load')
     parser.add_argument('--full_record', action='store_true', help='Whether to display full record information')
+    parser.add_argument('--save_to_jsonl', type=str, default=None, help='Path to save the output records as JSONL')
     args = parser.parse_args()
 
     data_kwargs = dict(
@@ -66,11 +67,19 @@ if __name__ == "__main__":
         ranks.append(rank)
 
     j = 0
+    f = None
+    if args.save_to_jsonl:
+        f = open(args.save_to_jsonl, 'w', encoding='utf-8')
     for i in range(args.start, args.end, args.step):
         if args.max_records and j >= args.max_records:
             break
-        print(f"Record UID: {records[i].uid} | Evaluated Rank: {ranks[i]}")
-        if args.full_record:
+        if not args.save_to_jsonl:
+            print(f"Record UID: {records[i].uid} | Evaluated Rank: {ranks[i]}")
+            if args.full_record:
+                for token, offset, score in zip(tokens[i], offsets[i], scores[i]):
+                    print(f"Token: '{token}' | Offset: {offset} | Score: {score}")
+        else:
+            f.write(json.dumps({"uid": records[i].uid, "rank": ranks[i]}) + '\n')
             for token, offset, score in zip(tokens[i], offsets[i], scores[i]):
-                print(f"Token: '{token}' | Offset: {offset} | Score: {score}")
+                f.write(json.dumps({"uid": records[i].uid, "token": token, "offset": offset, "score": score}) + '\n')
         j += 1

@@ -13,7 +13,7 @@ if __name__ == "__main__":
     parser.add_argument('--data', type=str, default=None, help='Dataset name')
     parser.add_argument('--data_in', type=str, default=None, help='Path to input data file')
     parser.add_argument('--result_in', type=str, default=None, help='Path to anonymization results JSONL file')
-    parser.add_argument('--explainer', type=str, required=True, choices=['greedy', 'shap'], help='Anonymization model name')
+    parser.add_argument('--explainer', type=str, required=True, choices=['shap'], help='Anonymization model name')
     parser.add_argument('--explainer_in', type=str, required=True, help='Path to model config file')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load')
     parser.add_argument('--save_to_jsonl', type=str, default=None, help='Path to save output JSONL file')
@@ -25,8 +25,8 @@ if __name__ == "__main__":
         data=args.data, data_in=args.data_in, max_records=args.max_records
     )
     adapter = get_adapter(args.data, **data_kwargs) if args.data and args.data_in else None
-    if args.explainer == 'greedy':
-        explainer = GreedyExplainer(model_name=args.explainer_in)
+    # if args.explainer == 'greedy':
+    #     explainer = GreedyExplainer(model_name=args.explainer_in)
     elif args.explainer == 'shap':
         explainer = ShapExplainer(model_name=args.explainer_in)
     splitter = TextSplitter()
