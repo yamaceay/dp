@@ -13,7 +13,7 @@ from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.utils.token_ledger import TokenLedger
 from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
-from dp.utils.explainer.base import TokenExplainer
+from dp.utils.explainer.base import TokenExplainer, load_tri_label_mapping
 from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
 
 
@@ -174,43 +174,12 @@ class DPMlmAnonymizer(Anonymizer):
             **kwargs,
         )
 
-    def _load_tri_label_mapping(self) -> Dict[str, int]:
-        if self._explainer is None:
-            raise ValueError("DPMlmAnonymizer requires explainer to load TRI label mapping")
-        model_name = getattr(self._explainer, "model_name", None)
-        if not model_name:
-            raise ValueError("DPMlmAnonymizer requires explainer.model_name to load TRI label mapping")
-        source = str(model_name)
-        if self._tri_label_mapping is not None and self._tri_label_mapping_source == source:
-            return self._tri_label_mapping
-
-        mapping_path = Path(source) / "label_mapping.json"
-        if not mapping_path.exists():
-            raise ValueError(f"TRI label mapping not found at {mapping_path}")
-        with mapping_path.open("r", encoding="utf-8") as handle:
-            mapping = json.load(handle)
-        if not isinstance(mapping, dict) or not mapping:
-            raise ValueError(f"Invalid TRI label mapping at {mapping_path}")
-
-        normalized: Dict[str, int] = {}
-        for name, value in mapping.items():
-            if not isinstance(name, str):
-                continue
-            try:
-                normalized[name] = int(value)
-            except (TypeError, ValueError):
-                continue
-        if not normalized:
-            raise ValueError(f"TRI label mapping at {mapping_path} has no usable entries")
-
-        self._tri_label_mapping = normalized
-        self._tri_label_mapping_source = source
-        return normalized
-
     def _target_label_id_for_record(self, record_name: Optional[str]) -> int:
         if not record_name:
             raise ValueError("record_name is required for TRI rank evaluation")
-        mapping = self._load_tri_label_mapping()
+        mapping, source = load_tri_label_mapping(self._explainer, self._tri_label_mapping, self._tri_label_mapping_source)
+        self._tri_label_mapping = mapping
+        self._tri_label_mapping_source = source
         if record_name not in mapping:
             raise ValueError(f"record_name {record_name!r} not present in TRI label mapping")
         return int(mapping[record_name])
@@ -448,28 +417,13 @@ class DPMlmAnonymizer(Anonymizer):
         if precomputed_scores is not None:
             return precomputed_scores, True
 
-        if self._explainer is not None:
-            critical_offsets = offsets
-            if critical_indices is not None:
-                critical_offsets = [offsets[i] for i in critical_indices]
+        critical_offsets = offsets if critical_indices is None else [offsets[i] for i in critical_indices]
+        from dp.utils.explainer.uniform import UniformExplainer
+        if self._explainer is not None and isinstance(self._explainer, UniformExplainer):
+            scores = self._explainer.explain(text, critical_offsets)
+            return scores, False
 
-            from dp.utils.explainer.uniform import UniformExplainer
-            if isinstance(self._explainer, UniformExplainer):
-                scores = self._explainer.explain(text, critical_offsets)
-                if scores is not None and len(scores) == len(critical_offsets):
-                    return scores, False
-            else:
-                if record_name is None:
-                    raise ValueError(
-                        "record_name is required for TRI-based risk scoring; run in dataset mode (use --indices)"
-                    )
-                target_label_id = self._target_label_id_for_record(record_name)
-                target_label = f"LABEL_{target_label_id}"
-                scores = self._explainer.explain(text, critical_offsets, target_label=target_label)
-                if scores is not None and len(scores) == len(critical_offsets):
-                    return scores, False
-            
-        return np.array([], dtype=float), False
+        raise NotImplementedError("DPMlmAnonymizer requires precomputed risk scores for each record.")
 
     def anonymize_any_text(
         self,

@@ -276,27 +276,7 @@ class PetreAnonymizer(Anonymizer):
             self._score_cache[state.uid] = precomputed
             self._score_order_cache[state.uid] = list(np.argsort(-precomputed, kind="mergesort"))
             return precomputed
-        tokens = list(state.term_texts)
-        if not tokens:
-            empty = np.zeros(0, dtype=float)
-            self._score_cache[state.uid] = empty
-            return empty
-        raw_scores = self._explainer.explain(state.text, state.term_spans)
-        array = np.asarray(raw_scores, dtype=float).ravel()
-        length = len(tokens)
-        if array.size < length:
-            padded = np.full(length, float("-inf"), dtype=float)
-            if array.size > 0:
-                padded[: array.size] = array
-            array = padded
-        elif array.size > length:
-            array = array[:length]
-        invalid_mask = ~np.isfinite(array)
-        if invalid_mask.any():
-            array = array.copy()
-            array[invalid_mask] = float("-inf")
-        self._score_cache[state.uid] = array
-        return array
+        raise ValueError(f"No risk scores available for record UID '{state.uid}'")
 
     def _ordered_token_indices_for_state(self, state: RecordState) -> List[int]:
         cached = self._score_order_cache.get(state.uid)
@@ -431,18 +411,19 @@ class PetreAnonymizer(Anonymizer):
     ) -> List[Tuple[int, int]]:
         if not self.mask_all_instances:
             return [base_span]
-        expanded: List[Tuple[int, int]] = []
-        for idx in state.term_indices_by_text.get(term_text, []):
-            candidate_span = state.term_spans[idx]
-            span_tuple = (candidate_span[0], candidate_span[1])
-            if span_tuple in span_set:
-                continue
-            if self._span_overlaps_existing(span_tuple, span_set):
-                continue
-            expanded.append(span_tuple)
-        if not expanded:
-            expanded.append(base_span)
-        return expanded
+        raise NotImplementedError("mask_all_instances is not supported yet")
+        # expanded: List[Tuple[int, int]] = []
+        # for idx in state.term_indices_by_text.get(term_text, []):
+        #     candidate_span = state.term_spans[idx]
+        #     span_tuple = (candidate_span[0], candidate_span[1])
+        #     if span_tuple in span_set:
+        #         continue
+        #     if self._span_overlaps_existing(span_tuple, span_set):
+        #         continue
+        #     expanded.append(span_tuple)
+        # if not expanded:
+        #     expanded.append(base_span)
+        # return expanded
 
 
     def _ensure_annotations_for_k(self, target_k: int, state: RecordState, starting_spans: List[Tuple[int, int]]) -> List[Tuple[int, int]]:

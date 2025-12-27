@@ -1,7 +1,8 @@
 import json
 from tqdm import tqdm
 
-from dp.utils.explainer import GreedyExplainer, ShapExplainer
+from dp.utils.explainer.base import load_tri_label_mapping
+from dp.utils.explainer import ShapExplainer
 from dp.loaders import get_adapter
 from dp.loaders.results import build_dataset_from_results
 from dp.utils.splitter import TextSplitter
@@ -25,9 +26,7 @@ if __name__ == "__main__":
         data=args.data, data_in=args.data_in, max_records=args.max_records
     )
     adapter = get_adapter(args.data, **data_kwargs) if args.data and args.data_in else None
-    # if args.explainer == 'greedy':
-    #     explainer = GreedyExplainer(model_name=args.explainer_in)
-    elif args.explainer == 'shap':
+    if args.explainer == 'shap':
         explainer = ShapExplainer(model_name=args.explainer_in)
     splitter = TextSplitter()
     if args.result_in:
@@ -40,13 +39,18 @@ if __name__ == "__main__":
             raise ValueError("data and data_in are required when result_in is not provided")
         records = list(adapter.iter_records())
     records = records[args.starting_index:]
+
+    mapping, _ = load_tri_label_mapping(explainer)
+
     for record in tqdm(records, desc="Explaining records"):
         tokens = []
         offsets = []
         for start, end, token in splitter.tokenize_with_spans(record.text):
             tokens.append(token)
             offsets.append((start, end))
-        scores = explainer.explain(record.text, offsets)
+        target_label_id = mapping.get(record.name)
+        target_label = f"LABEL_{target_label_id}"
+        scores = explainer.explain(record.text, offsets, target_label=target_label)
         clear_memory()
         if args.sort_by == 'scores':
             sorted_indices = sorted(range(len(offsets)), key=lambda i: scores[i], reverse=True)
@@ -63,4 +67,4 @@ if __name__ == "__main__":
         else:
             print(f"Record UID: {record.uid}")
             for (start, end), score in zip(offsets, scores):
-                print(f"  Offset: ({start}, {end}), Score: {score}")
+                print(f"  Offset: ({start}, {end}), Score: {score}, Token: '{record.text[start:end]}'")

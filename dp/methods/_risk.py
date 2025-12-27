@@ -200,10 +200,7 @@ class RiskAnonymizer(Anonymizer):
         precomputed = self._lookup_precomputed_scores(spans, record_name)
         if precomputed is not None:
             return precomputed
-        if self._explainer is None:
-            raise RuntimeError("RiskAnonymizer requires explainer")
-        raw_scores = self._explainer.explain(text, spans)
-        return np.asarray(raw_scores, dtype=float)
+        raise NotImplementedError("RiskAnonymizer requires precomputed risk scores for each record.")
 
     def _lookup_precomputed_scores(self, spans: List[Tuple[int, int]], record_name: Optional[str]) -> Optional[np.ndarray]:
         if record_name and record_name in self._risk_scores_by_uid:
