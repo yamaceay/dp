@@ -42,12 +42,21 @@ if __name__ == "__main__":
     offsets = []
     tokens = []
     with open(args.risk_in, 'r', encoding='utf-8') as f:
-        for line, record in zip(f, records):
+        for line in f:
             risk_record = json.loads(line)
+            record = None
+            for r in records:
+                if r.uid == risk_record['uid']:
+                    record = r
+                    break
             scores.append(risk_record['scores'])
             offsets.append(risk_record['offsets'])
-            tokens_for_record = [record.text[offset[0]:offset[1]] for offset in offsets[-1]]
-            tokens.append(tokens_for_record)
+            tokens.append([record.text[offset[0]:offset[1]] for offset in offsets[-1]])
+
+    records = records[args.start:args.end:args.step][:args.max_records or len(records)]
+    scores = scores[args.start:args.end:args.step][:args.max_records or len(scores)]
+    offsets = offsets[args.start:args.end:args.step][:args.max_records or len(offsets)]
+    tokens = tokens[args.start:args.end:args.step][:args.max_records or len(tokens)]
 
     if not args.pipeline_in:
         raise ValueError("pipeline_in is required")
@@ -76,10 +85,10 @@ if __name__ == "__main__":
         if not args.save_to_jsonl:
             print(f"Record UID: {records[i].uid} | Evaluated Rank: {ranks[i]}")
             if args.full_record:
-                for token, offset, score in zip(tokens[i], offsets[i], scores[i]):
+                for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
                     print(f"Token: '{token}' | Offset: {offset} | Score: {score}")
         else:
             f.write(json.dumps({"uid": records[i].uid, "rank": ranks[i]}) + '\n')
-            for token, offset, score in zip(tokens[i], offsets[i], scores[i]):
+            for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
                 f.write(json.dumps({"uid": records[i].uid, "token": token, "offset": offset, "score": score}) + '\n')
         j += 1

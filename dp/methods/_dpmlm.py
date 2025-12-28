@@ -329,9 +329,11 @@ class DPMlmAnonymizer(Anonymizer):
             span = offsets[idx]
             key = (int(span[0]), int(span[1]))
             if key not in mapping:
+                print(f"Warning: no precomputed risk score for span {key} in UID={uid!r}")
                 return None
             values.append(float(mapping[key]))
         if not values:
+            print("Warning: no risk scores collected from precomputed mapping")
             return None
         return np.asarray(values, dtype=float)
 

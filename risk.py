@@ -23,7 +23,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     data_kwargs = dict(
-        data=args.data, data_in=args.data_in, max_records=args.max_records
+        data=args.data, data_in=args.data_in
     )
     adapter = get_adapter(args.data, **data_kwargs) if args.data and args.data_in else None
     if args.explainer == 'shap':
@@ -34,23 +34,29 @@ if __name__ == "__main__":
             raise ValueError("data and data_in are required to load result_in")
         original_records = list(get_adapter(args.data, **data_kwargs).iter_records())
         records, _ = build_dataset_from_results(args.result_in, original_records)
+        result_texts = []
+        with open(args.result_in, 'r', encoding='utf-8') as f:
+            for line in f:
+                result_texts.append(json.loads(line)['text'])
     else:
         if adapter is None:
             raise ValueError("data and data_in are required when result_in is not provided")
         records = list(adapter.iter_records())
-    records = records[args.starting_index:]
+        result_texts = [r.text for r in records]
+    records = records[args.starting_index:args.starting_index + (args.max_records or len(records) - args.starting_index)]
+    result_texts = result_texts[args.starting_index:args.starting_index + (args.max_records or len(result_texts) - args.starting_index)]
 
     mapping, _ = load_tri_label_mapping(explainer)
 
-    for record in tqdm(records, desc="Explaining records"):
+    for record, text in tqdm(zip(records, result_texts), desc="Explaining records", total=len(records)):
         tokens = []
         offsets = []
-        for start, end, token in splitter.tokenize_with_spans(record.text):
+        for start, end, token in splitter.tokenize_with_spans(text):
             tokens.append(token)
             offsets.append((start, end))
         target_label_id = mapping.get(record.name)
         target_label = f"LABEL_{target_label_id}"
-        scores = explainer.explain(record.text, offsets, target_label=target_label)
+        scores = explainer.explain(text, offsets, target_label=target_label)
         clear_memory()
         if args.sort_by == 'scores':
             sorted_indices = sorted(range(len(offsets)), key=lambda i: scores[i], reverse=True)
@@ -60,6 +66,7 @@ if __name__ == "__main__":
             with open(args.save_to_jsonl, 'a', encoding='utf-8') as f:
                 output_record = {
                     'uid': record.uid,
+                    'text': text,
                     'offsets': offsets,
                     'scores': scores.tolist() if hasattr(scores, 'tolist') else scores,
                 }
@@ -67,4 +74,4 @@ if __name__ == "__main__":
         else:
             print(f"Record UID: {record.uid}")
             for (start, end), score in zip(offsets, scores):
-                print(f"  Offset: ({start}, {end}), Score: {score}, Token: '{record.text[start:end]}'")
+                print(f"  Offset: ({start}, {end}), Score: {score}, Token: '{text[start:end]}'")
