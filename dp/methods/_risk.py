@@ -143,17 +143,21 @@ class RiskAnonymizer(Anonymizer):
             private_text = step.text
             ledger = step.ledger
             
+            result_edits = ledger.result_edits_metadata()
             result_spans: List[TextAnnotation] = []
-            for idx in step.new_indices:
-                start, end = spans[idx]
-                original = text[start:end]
+            for edit in result_edits:
+                if edit.get("kind") != "replaced":
+                    continue
+                span = edit.get("span")
+                if not span:
+                    continue
                 result_spans.append(
                     TextAnnotation(
-                        start=start,
-                        end=end,
+                        start=span[0],
+                        end=span[1],
                         label="risk",
-                        text=original,
-                        replacement=self._mask_text,
+                        text=str(edit.get("text", "")),
+                        replacement=str(edit.get("replacement", "")),
                     )
                 )
             
@@ -164,7 +168,7 @@ class RiskAnonymizer(Anonymizer):
                 "total_tokens": len(spans),
                 **step.metadata,
             }
-            token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
+            token_edits = [TokenEdit.from_mapping(e) for e in result_edits]
             
             outputs.append((
                 hp,

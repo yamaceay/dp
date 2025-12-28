@@ -27,22 +27,39 @@ class ManualAnonymizer(Anonymizer):
         text = self.texts[idx]
         spans = self.annotations[idx]
         
-        offset = 0
+        result_spans: List[TextAnnotation] = []
+        out_parts: List[str] = []
+        last = 0
+        result_cursor = 0
+        
         for annotation in spans:
-            start = annotation.start + offset
-            end = annotation.end + offset
+            prefix = text[last:annotation.start]
             replacement = f"[{annotation.label}]"
-            
-            text = text[:start] + replacement + text[end:]
-            offset += len(replacement) - (end - start)
+            result_start = result_cursor + len(prefix)
+            result_end = result_start + len(replacement)
+            result_spans.append(TextAnnotation(
+                start=result_start,
+                end=result_end,
+                label=annotation.label,
+                text=text[annotation.start:annotation.end],
+                replacement=replacement,
+                annotator="manual",
+            ))
+            out_parts.append(prefix)
+            out_parts.append(replacement)
+            result_cursor = result_end
+            last = annotation.end
+        
+        out_parts.append(text[last:])
+        anonymized = "".join(out_parts)
         
         metadata = {"method": "manual"}
         return [
             (
                 BucketDict(),
                 AnonymizationResult(
-                    text=text,
-                    annotations=TextAnnotations(spans=spans),
+                    text=anonymized,
+                    annotations=TextAnnotations(spans=result_spans),
                     metadata=metadata,
                 ),
             )
