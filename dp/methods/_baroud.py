@@ -89,6 +89,10 @@ class BaroudAnonymizer(Anonymizer):
         
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         
+        ann_by_source_span: Dict[Tuple[int, int], TextAnnotation] = {}
+        for ann in anns:
+            ann_by_source_span[(ann.start, ann.end)] = ann
+
         for step in self._unit.anonymize(text, spans, apply_fn):
             threshold = step.threshold
             hp: BucketDict = {"lambda": threshold}
@@ -96,18 +100,32 @@ class BaroudAnonymizer(Anonymizer):
             private_text = step.text
             ledger = step.ledger
             
-            result_spans = [
-                TextAnnotation(
-                    start=spans[idx][0],
-                    end=spans[idx][1],
-                    label=anns[idx].label if idx < len(anns) else "MASK",
-                    text=text[spans[idx][0]:spans[idx][1]],
-                    replacement=self.mask_text.format(label=anns[idx].label if idx < len(anns) else "MASK"),
-                    confidence=anns[idx].confidence if idx < len(anns) else None,
-                    annotator="baroud",
+            result_edits = ledger.result_edits_metadata()
+            result_spans: List[TextAnnotation] = []
+            for edit in result_edits:
+                if edit.get("kind") != "replaced":
+                    continue
+                span = edit.get("span")
+                if not span:
+                    continue
+                original_text = str(edit.get("text", ""))
+                replacement = str(edit.get("replacement", ""))
+                source_ann = None
+                for src_span, ann in ann_by_source_span.items():
+                    if text[src_span[0]:src_span[1]] == original_text:
+                        source_ann = ann
+                        break
+                result_spans.append(
+                    TextAnnotation(
+                        start=span[0],
+                        end=span[1],
+                        label=source_ann.label if source_ann else "MASK",
+                        text=original_text,
+                        replacement=replacement,
+                        confidence=source_ann.confidence if source_ann else None,
+                        annotator="baroud",
+                    )
                 )
-                for idx in step.new_indices
-            ]
             
             metadata: Dict[str, Any] = {
                 "method": self._model_name,
@@ -115,7 +133,7 @@ class BaroudAnonymizer(Anonymizer):
                 "pii_detected": runtime_stats["masked"],
                 **step.metadata,
             }
-            token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
+            token_edits = [TokenEdit.from_mapping(e) for e in result_edits]
 
             annotations = TextAnnotations(token_edits=token_edits)
             annotations.spans = result_spans

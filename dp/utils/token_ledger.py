@@ -163,6 +163,59 @@ class TokenLedger:
                 metadata.append(item)
         return metadata
 
+    def result_edits_metadata(self) -> List[Dict[str, object]]:
+        metadata: List[Dict[str, object]] = []
+        sorted_entries = sorted(self._entries, key=lambda e: e.start)
+        result_cursor = 0
+        gap_idx = 0
+        
+        for entry in sorted_entries:
+            if gap_idx < len(self._gaps) and self._gaps[gap_idx].start < entry.start:
+                result_cursor += len(self._gaps[gap_idx].text)
+                gap_idx += 1
+            
+            if entry.deleted:
+                item: Dict[str, object] = {
+                    "span": (result_cursor, result_cursor),
+                    "text": entry.original_text,
+                    "kind": "deleted",
+                }
+                if self._emit_edit_sources and entry.edit_source is not None:
+                    item["source"] = entry.edit_source
+                metadata.append(item)
+                continue
+            
+            result_start = result_cursor
+            result_end = result_start + len(entry.text)
+            
+            if entry.text != entry.original_text:
+                item = {
+                    "span": (result_start, result_end),
+                    "text": entry.original_text,
+                    "replacement": entry.text,
+                    "kind": "replaced",
+                }
+                if self._emit_edit_sources and entry.edit_source is not None:
+                    item["source"] = entry.edit_source
+                metadata.append(item)
+            
+            result_cursor = result_end
+            
+            for addition in entry.additions:
+                add_start = result_cursor
+                add_end = add_start + len(addition.text)
+                item = {
+                    "span": (add_start, add_end),
+                    "text": addition.text,
+                    "kind": "added",
+                }
+                if self._emit_edit_sources and addition.source is not None:
+                    item["source"] = addition.source
+                metadata.append(item)
+                result_cursor = add_end
+        
+        return metadata
+
     def surviving_spans(self) -> Iterable[Tuple[int, int]]:
         for entry in self._entries:
             if entry.deleted:

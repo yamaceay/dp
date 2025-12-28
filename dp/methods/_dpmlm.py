@@ -66,8 +66,6 @@ class DPMlmAnonymizer(Anonymizer):
         ] = {}
 
         self._pre_stream_direct_ledger_by_uid: Dict[str, TokenLedger] = {}
-        
-        self._prior_edits_cache: Dict[str, List[Dict[str, object]]] = {}
 
         try:
             from transformers import AutoTokenizer, AutoModelForMaskedLM
@@ -88,7 +86,6 @@ class DPMlmAnonymizer(Anonymizer):
         risk_scores: Dict[str, Dict[str, object]],
         records: Optional[Sequence[DatasetRecord]] = None,
     ) -> None:
-        """Set precomputed risk scores. Offsets must be in original-text coordinates."""
         self._risk_scores_by_uid = {}
         if not risk_scores:
             return
@@ -118,7 +115,6 @@ class DPMlmAnonymizer(Anonymizer):
         self,
         *args,
         risk_scores: Optional[Dict[str, Dict[str, object]]] = None,
-        prior_edits_list: Optional[List[List[Dict[str, object]]]] = None,
         **kwargs,
     ) -> None:
         if risk_scores is not None:
@@ -128,13 +124,6 @@ class DPMlmAnonymizer(Anonymizer):
                     "run in dataset mode (use --indices) so risk scores can be matched to records"
                 )
             self.set_risk_scores(risk_scores, records=self.dataset_records or None)
-        
-        if prior_edits_list is not None and self.dataset_records:
-            import hashlib
-            for record, edits in zip(self.dataset_records, prior_edits_list):
-                if edits:
-                    text_hash = hashlib.sha256((record.text or "").encode()).hexdigest()
-                    self._prior_edits_cache[text_hash] = edits
 
     def anonymize_from_dataset(
         self,
@@ -147,7 +136,7 @@ class DPMlmAnonymizer(Anonymizer):
             raise IndexError(f"Index {idx} is out of bounds")
         record = self.dataset_records[idx]
         
-        prior_edits = record.metadata.get("prior_token_edits", []) if record.metadata else []
+        masked_spans = record.spans or []
         
         return self.anonymize_any_text(
             record.text,
@@ -155,7 +144,7 @@ class DPMlmAnonymizer(Anonymizer):
             buckets=buckets,
             record_name=record.name,
             record_uid=str(record.uid),
-            prior_edits=prior_edits,
+            masked_spans=masked_spans,
             **kwargs,
         )
 
@@ -297,9 +286,10 @@ class DPMlmAnonymizer(Anonymizer):
         text: str,
         offsets: Sequence[Tuple[int, int]],
         record_name: Optional[str],
+        record_uid: Optional[str] = None,
         indices: Optional[Sequence[int]] = None,
     ) -> Optional[np.ndarray]:
-        uid = self._resolve_risk_uid(text, record_name)
+        uid = self._resolve_risk_uid(text, record_name, record_uid)
         if uid is None:
             return None
         mapping = self._risk_scores_by_uid.get(uid)
@@ -314,20 +304,15 @@ class DPMlmAnonymizer(Anonymizer):
             span = offsets[idx]
             key = (int(span[0]), int(span[1]))
             if key not in mapping:
-                if idx == 0:
-                    import sys
-                    stored_keys = list(mapping.keys())[:5]
-                    token = text[span[0]:span[1]] if span[1] <= len(text) else "<OOB>"
-                    print(f"DEBUG: Offset mismatch for uid={uid}", file=sys.stderr)
-                    print(f"  Queried: {key} -> '{token}'", file=sys.stderr)
-                    print(f"  Stored (first 5): {stored_keys}", file=sys.stderr)
                 return None
             values.append(float(mapping[key]))
         if not values:
             return None
         return np.asarray(values, dtype=float)
 
-    def _resolve_risk_uid(self, text: str, record_name: Optional[str]) -> Optional[str]:
+    def _resolve_risk_uid(self, text: str, record_name: Optional[str], record_uid: Optional[str] = None) -> Optional[str]:
+        if record_uid and record_uid in self._risk_scores_by_uid:
+            return record_uid
         if record_name and record_name in self._risk_scores_by_uid:
             return record_name
         return None
@@ -338,6 +323,7 @@ class DPMlmAnonymizer(Anonymizer):
         offsets: List[Tuple[int, int]],
         epsilon: float,
         runtime_stats: Dict[str, int],
+        masked_spans: Sequence[TextAnnotation],
     ) -> ApplyFn:
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
             if idx >= len(offsets):
@@ -346,6 +332,11 @@ class DPMlmAnonymizer(Anonymizer):
             entry = ledger.entry(idx)
             token = entry.original_text
             token_start, token_end = entry.start, entry.end
+
+            if self._is_token_masked(token_start, token_end, masked_spans):
+                ledger.replace(idx, token)
+                runtime_stats["total"] += 1
+                return
 
             if token in string.punctuation:
                 ledger.replace(idx, token)
@@ -361,17 +352,14 @@ class DPMlmAnonymizer(Anonymizer):
 
             private_token = self._privatize_token(text, token, (token_start, token_end), epsilon)
 
-            original_text = text[token_start:token_end]
-            if len(private_token) == len(original_text):
+            original_text_span = text[token_start:token_end]
+            if len(private_token) == len(original_text_span):
                 private_token = "".join(
                     p.upper() if o.isupper() else p.lower()
-                    for p, o in zip(private_token, original_text)
+                    for p, o in zip(private_token, original_text_span)
                 )
-            elif original_text and original_text[0].isupper():
+            elif original_text_span and original_text_span[0].isupper():
                 private_token = private_token.capitalize()
-
-            else:
-                print(private_token, original_text)
 
             ledger.replace(idx, private_token)
             if private_token != token:
@@ -394,10 +382,10 @@ class DPMlmAnonymizer(Anonymizer):
         text: str,
         offsets: Sequence[Tuple[int, int]],
         record_name: Optional[str],
+        record_uid: Optional[str] = None,
         critical_indices: Optional[Sequence[int]] = None,
     ) -> Tuple[np.ndarray, bool]:
-
-        precomputed_scores = self._lookup_precomputed_scores(text, offsets, record_name, indices=critical_indices)
+        precomputed_scores = self._lookup_precomputed_scores(text, offsets, record_name, record_uid=record_uid, indices=critical_indices)
         if precomputed_scores is not None:
             return precomputed_scores, True
 
@@ -409,6 +397,17 @@ class DPMlmAnonymizer(Anonymizer):
 
         raise NotImplementedError("DPMlmAnonymizer requires precomputed risk scores for each record.")
 
+    def _is_token_masked(
+        self,
+        token_start: int,
+        token_end: int,
+        masked_spans: Sequence[TextAnnotation],
+    ) -> bool:
+        for span in masked_spans:
+            if token_start >= span.start and token_end <= span.end:
+                return True
+        return False
+
     def anonymize_any_text(
         self,
         text: str,
@@ -416,16 +415,14 @@ class DPMlmAnonymizer(Anonymizer):
         buckets: Buckets = [],
         record_name: Optional[str] = None,
         record_uid: Optional[str] = None,
-        prior_edits: Optional[List[Dict[str, object]]] = None,
+        masked_spans: Optional[Sequence[TextAnnotation]] = None,
         **kwargs,
     ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not text or not text.strip():
             return []
         
-        if prior_edits is None:
-            import hashlib
-            text_hash = hashlib.sha256(text.encode()).hexdigest()
-            prior_edits = self._prior_edits_cache.get(text_hash, [])
+        if masked_spans is None:
+            masked_spans = []
 
         combos = buckets_to_dicts(buckets)
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
@@ -468,7 +465,7 @@ class DPMlmAnonymizer(Anonymizer):
                 context: Dict[str, Any] = {"record_name": record_name}
                 used_precomputed = False
 
-                risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name)
+                risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name, record_uid=record_uid)
                 if risk_scores.size and len(risk_scores) == len(offsets):
                     self._unit.set_risk_scores(risk_scores)
 
@@ -483,18 +480,17 @@ class DPMlmAnonymizer(Anonymizer):
                 }
                 
                 ledger = TokenLedger(text, offsets)
-                if prior_edits:
-                    ledger.apply_prior_edits(prior_edits)
 
                 apply_fn = self._make_apply_fn(
                     text,
                     offsets,
                     compensated_epsilon,
                     runtime_stats,
+                    masked_spans,
                 )
 
                 last_step: Optional[AnonymizationStep] = None
-                for step in self._unit.anonymize(text, offsets, apply_fn, ledger, prior_edits=prior_edits, **context):
+                for step in self._unit.anonymize(text, offsets, apply_fn, ledger, **context):
                     hp_with_threshold = {**hp}
                     threshold = step.threshold
                     if threshold is not None:
@@ -514,7 +510,7 @@ class DPMlmAnonymizer(Anonymizer):
                         **runtime_stats,
                         **step.metadata,
                     }
-                    token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
+                    token_edits = [TokenEdit.from_mapping(e) for e in ledger.result_edits_metadata()]
                     if self.compensate_epsilon:
                         metadata["effective_epsilon"] = compensated_epsilon
                     if used_precomputed:

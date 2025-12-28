@@ -38,24 +38,31 @@ class PresidioAnonymizer(Anonymizer):
 
         analyzer = self._analyzer
         results = analyzer.analyze(text=text, language="en")
-        spans = []
-        out_parts = []
+        spans: List[TextAnnotation] = []
+        out_parts: List[str] = []
         last = 0
+        result_cursor = 0
         results_sorted = sorted(results, key=lambda r: r.start)
         for r in results_sorted:
             start = int(r.start)
             end = int(r.end)
             if start < last:
                 continue
+            prefix = text[last:start]
+            replacement = f"[{r.entity_type}]"
+            result_start = result_cursor + len(prefix)
+            result_end = result_start + len(replacement)
             spans.append(TextAnnotation(
-                start=start,
-                end=end,
+                start=result_start,
+                end=result_end,
                 label=r.entity_type,
                 text=text[start:end],
+                replacement=replacement,
                 annotator="presidio"
             ))
-            out_parts.append(text[last:start])
-            out_parts.append(f"[{r.entity_type}]")
+            out_parts.append(prefix)
+            out_parts.append(replacement)
+            result_cursor = result_end
             last = end
         out_parts.append(text[last:])
         anonymized = "".join(out_parts)

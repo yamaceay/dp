@@ -611,16 +611,21 @@ class PetreAnonymizer(Anonymizer):
             private_text = step.text
             ledger = step.ledger
             
+            result_edits = ledger.result_edits_metadata()
             result_spans: List[TextAnnotation] = []
-
-            for term_idx in step.new_indices:
+            for edit in result_edits:
+                if edit.get("kind") != "replaced":
+                    continue
+                span = edit.get("span")
+                if not span:
+                    continue
                 result_spans.append(
                     TextAnnotation(
-                        start=state.term_spans[term_idx][0],
-                        end=state.term_spans[term_idx][1],
+                        start=span[0],
+                        end=span[1],
                         label="petre",
-                        text=state.term_texts[term_idx],
-                        replacement=self.mask_text,
+                        text=str(edit.get("text", "")),
+                        replacement=str(edit.get("replacement", "")),
                     )
                 )
             
@@ -632,7 +637,7 @@ class PetreAnonymizer(Anonymizer):
                 "rank": step.metadata.get("rank"),
                 **step.metadata,
             }
-            token_edits = [TokenEdit.from_mapping(e) for e in ledger.edits_metadata()]
+            token_edits = [TokenEdit.from_mapping(e) for e in result_edits]
 
             hp = BucketDict({"k": int(k_value) if k_value is not None else None})
             outputs.append(

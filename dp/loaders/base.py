@@ -12,6 +12,7 @@ class TokenEdit:
     kind: str
     span: Optional[tuple[int, int]]
     text: str
+    replacement: Optional[str] = None
 
     @classmethod
     def from_mapping(cls, obj: object) -> "TokenEdit":
@@ -32,12 +33,17 @@ class TokenEdit:
         text = obj.get("text", "")
         if not isinstance(text, str):
             raise ValueError("TokenEdit.text must be a str")
-        return cls(kind=kind, span=span, text=text)
+        replacement = obj.get("replacement")
+        if replacement is not None and not isinstance(replacement, str):
+            raise ValueError("TokenEdit.replacement must be a str or null")
+        return cls(kind=kind, span=span, text=text, replacement=replacement)
 
     def to_dict(self) -> Dict[str, object]:
         out: Dict[str, object] = {"kind": self.kind, "text": self.text}
         if self.span is not None:
             out["span"] = [self.span[0], self.span[1]]
+        if self.replacement is not None:
+            out["replacement"] = self.replacement
         return out
 
 

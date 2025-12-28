@@ -58,16 +58,31 @@ class SpacyAnonymizer(Anonymizer):
     ) -> AnonymizationResult:
         filtered = list(entities)
         out_parts: List[str] = []
+        result_spans: List[TextAnnotation] = []
         last = 0
+        result_cursor = 0
         for ann in filtered:
-            out_parts.append(text[last:ann.start])
-            out_parts.append(f"[{ann.label}]")
+            prefix = text[last:ann.start]
+            replacement = f"[{ann.label}]"
+            result_start = result_cursor + len(prefix)
+            result_end = result_start + len(replacement)
+            result_spans.append(TextAnnotation(
+                start=result_start,
+                end=result_end,
+                label=ann.label,
+                text=ann.text,
+                replacement=replacement,
+                annotator="spacy",
+            ))
+            out_parts.append(prefix)
+            out_parts.append(replacement)
+            result_cursor = result_end
             last = ann.end
         out_parts.append(text[last:])
         anonymized = "".join(out_parts)
         metadata = {"method": "spacy"}
         return AnonymizationResult(
             text=anonymized,
-            annotations=TextAnnotations(spans=filtered),
+            annotations=TextAnnotations(spans=result_spans),
             metadata=metadata,
         )

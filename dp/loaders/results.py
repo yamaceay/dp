@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import json
 
-from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
+from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations
 
 
 @dataclass(frozen=True)
@@ -13,9 +13,6 @@ class ResultRecord:
     text: str
     annotations: TextAnnotations
     metadata: Dict[str, Any]
-
-
-Replacement = Tuple[int, int, str]
 
 
 def load_result_records(path: str) -> List[ResultRecord]:
@@ -149,26 +146,18 @@ def _merge_result_record(
     result: ResultRecord,
     original: Optional[DatasetRecord],
 ) -> DatasetRecord:
-    original_text = original.text if original is not None else result.text
-    replacements = _build_replacements(result.annotations, original_text)
-    merged_spans: List[TextAnnotation] = []
-    if result.annotations.spans:
-        merged_spans.extend(_shift_annotations(result.annotations.spans, replacements, result.text))
-    merged_spans = _dedupe_spans(sorted(merged_spans, key=lambda ann: (ann.start, ann.end)))
-    spans_out = merged_spans if merged_spans else None
     metadata: Dict[str, Any] = {}
     if original is not None and isinstance(original.metadata, dict):
         metadata.update(original.metadata)
     if isinstance(result.metadata, dict):
         metadata.update(result.metadata)
     
-    token_edits_list = [te.to_dict() for te in result.annotations.token_edits]
-    if not token_edits_list and result.annotations.spans:
-        token_edits_list = _spans_to_prior_edits(result.annotations.spans, original_text)
-    if token_edits_list:
-        metadata["prior_token_edits"] = token_edits_list
     if original is not None:
         metadata["original_text"] = original.text
+    
+    spans_out: Optional[List[TextAnnotation]] = None
+    if result.annotations.spans:
+        spans_out = list(result.annotations.spans)
     
     uid = ""
     name = ""
@@ -176,105 +165,9 @@ def _merge_result_record(
         uid = original.uid
         name = original.name
     return DatasetRecord(
-        text=original_text,
+        text=result.text,
         uid=uid,
         name=name,
         spans=spans_out,
         metadata=metadata,
     )
-
-
-def _spans_to_prior_edits(spans: List[TextAnnotation], original_text: str) -> List[Dict[str, Any]]:
-    edits: List[Dict[str, Any]] = []
-    cursor = 0
-    for ann in sorted(spans, key=lambda a: a.start):
-        original_span_text = ann.text
-        if not original_span_text:
-            continue
-        replacement = ann.replacement
-        if replacement is None and ann.label:
-            replacement = f"[{ann.label}]"
-        if replacement is None:
-            continue
-        
-        pos = original_text.find(original_span_text, cursor)
-        if pos < 0:
-            continue
-        
-        start = pos
-        end = pos + len(original_span_text)
-        cursor = end
-        
-        edits.append({
-            "kind": "replaced",
-            "span": [start, end],
-            "text": replacement,
-        })
-    return edits
-
-
-def _build_replacements(annotations: TextAnnotations, original_text: str) -> List[Replacement]:
-    replacements: List[Replacement] = []
-    for ann in sorted(annotations.spans or [], key=lambda a: a.start):
-        if ann.start < 0 or ann.end < ann.start or ann.end > len(original_text):
-            raise ValueError("Invalid annotation span for replacements")
-        replacement = ann.replacement
-        if replacement is None and ann.label:
-            replacement = f"[{ann.label}]"
-        if replacement is None:
-            replacement = original_text[ann.start:ann.end]
-        replacements.append((ann.start, ann.end, replacement))
-    return replacements
-
-
-def _shift_annotations(
-    annotations: Iterable[TextAnnotation],
-    replacements: List[Replacement],
-    new_text: str,
-) -> List[TextAnnotation]:
-    shifted: List[TextAnnotation] = []
-    for ann in annotations:
-        new_start, new_end = _shift_span(ann.start, ann.end, replacements)
-        if new_start < 0 or new_end > len(new_text) or new_end < new_start:
-            raise ValueError("Shifted annotation span is out of bounds")
-        new_text_value = new_text[new_start:new_end]
-        shifted.append(
-            TextAnnotation(
-                start=new_start,
-                end=new_end,
-                label=ann.label,
-                text=new_text_value,
-                replacement=ann.replacement,
-                confidence=ann.confidence,
-                annotator=ann.annotator,
-                metadata=dict(ann.metadata) if isinstance(ann.metadata, dict) else {},
-            )
-        )
-    return shifted
-
-
-def _shift_span(start: int, end: int, replacements: List[Replacement]) -> Tuple[int, int]:
-    if not replacements:
-        return start, end
-    delta = 0
-    for rep_start, rep_end, rep_text in replacements:
-        if end <= rep_start:
-            break
-        if start >= rep_end:
-            delta += len(rep_text) - (rep_end - rep_start)
-            continue
-        new_start = rep_start + delta
-        return new_start, new_start + len(rep_text)
-    return start + delta, end + delta
-
-
-def _dedupe_spans(spans: Sequence[TextAnnotation]) -> List[TextAnnotation]:
-    seen: set[Tuple[int, int, Optional[str], Optional[str], Optional[str], Optional[float]]] = set()
-    deduped: List[TextAnnotation] = []
-    for ann in spans:
-        key = (ann.start, ann.end, ann.label, ann.annotator, ann.replacement, ann.confidence)
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(ann)
-    return deduped
