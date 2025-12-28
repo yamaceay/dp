@@ -314,6 +314,13 @@ class DPMlmAnonymizer(Anonymizer):
             span = offsets[idx]
             key = (int(span[0]), int(span[1]))
             if key not in mapping:
+                if idx == 0:
+                    import sys
+                    stored_keys = list(mapping.keys())[:5]
+                    token = text[span[0]:span[1]] if span[1] <= len(text) else "<OOB>"
+                    print(f"DEBUG: Offset mismatch for uid={uid}", file=sys.stderr)
+                    print(f"  Queried: {key} -> '{token}'", file=sys.stderr)
+                    print(f"  Stored (first 5): {stored_keys}", file=sys.stderr)
                 return None
             values.append(float(mapping[key]))
         if not values:

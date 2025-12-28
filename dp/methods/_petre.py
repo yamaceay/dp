@@ -169,11 +169,20 @@ class PetreAnonymizer(Anonymizer):
             for span, value in zip(offsets, scores):
                 span_map[span] = float(value)
             token_scores = np.full(len(term_spans), float("-inf"), dtype=float)
+            misses = 0
             for idx, span in enumerate(term_spans):
                 key = (span[0], span[1])
                 if key not in span_map:
+                    misses += 1
                     continue
                 token_scores[idx] = float(span_map[key])
+            if misses > 0 and misses == len(term_spans):
+                import sys
+                stored_keys = list(span_map.keys())[:5]
+                queried_keys = [(s[0], s[1]) for s in term_spans[:5]]
+                print(f"DEBUG: All risk score lookups failed for uid={uid}", file=sys.stderr)
+                print(f"  Stored (first 5): {stored_keys}", file=sys.stderr)
+                print(f"  Queried (first 5): {queried_keys}", file=sys.stderr)
             self._prepared_risk_scores[uid] = token_scores
         self._refresh_prepared_risk_cache()
 

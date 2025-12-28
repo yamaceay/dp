@@ -1,4 +1,5 @@
 import json
+import sys
 from tqdm import tqdm
 
 from dp.utils.explainer.base import load_tri_label_mapping
@@ -44,6 +45,10 @@ if __name__ == "__main__":
             edits = [te.to_dict() for te in rr.annotations.token_edits]
             if edits:
                 token_edits_by_idx[i] = edits
+        if args.offset_mode == 'original' and not token_edits_by_idx:
+            print(f"WARNING: --offset_mode=original but no token_edits found in result file.", file=sys.stderr)
+            print(f"  Offsets will be in result-text coordinates, not original-text.", file=sys.stderr)
+            print(f"  Use --offset_mode=result or ensure result file has token_edits.", file=sys.stderr)
     else:
         if adapter is None:
             raise ValueError("data and data_in are required when result_in is not provided")

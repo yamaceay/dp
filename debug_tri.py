@@ -1,4 +1,5 @@
 import json
+import sys
 from tqdm import tqdm
 
 from dp.loaders import get_adapter
@@ -19,6 +20,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load')
     parser.add_argument('--full_record', action='store_true', help='Whether to display full record information')
     parser.add_argument('--save_to_jsonl', type=str, default=None, help='Path to save the output records as JSONL')
+    parser.add_argument('--offset_mode', type=str, choices=['original', 'result'], default='result', help='Whether risk offsets are in original or result text coordinates')
     args = parser.parse_args()
 
     data_kwargs = dict(
@@ -28,6 +30,7 @@ if __name__ == "__main__":
     if not args.data or not args.data_in or not args.risk_in or not args.result_in:
         raise ValueError("data, data_in, risk_in and result_in are required")
     original_records = list(get_adapter(args.data, **data_kwargs).iter_records())
+    original_text_by_uid = {r.uid: r.text for r in original_records}
     args.end = args.end or len(original_records)
 
     records, indices = build_dataset_from_results(args.result_in, original_records)
@@ -47,12 +50,24 @@ if __name__ == "__main__":
         entry = risk_by_uid.get(record.uid)
         if entry is None:
             raise ValueError(f"No risk entry found for UID={record.uid}")
-        result_text = result_text_by_uid.get(record.uid)
-        if result_text is None:
-            raise ValueError(f"No result text found for UID={record.uid}")
+        if args.offset_mode == 'result':
+            text_for_lookup = result_text_by_uid.get(record.uid)
+            if text_for_lookup is None:
+                raise ValueError(f"No result text found for UID={record.uid}")
+        else:
+            text_for_lookup = original_text_by_uid.get(record.uid)
+            if text_for_lookup is None:
+                raise ValueError(f"No original text found for UID={record.uid}")
         scores.append(entry['scores'])
         offsets.append(entry['offsets'])
-        tokens.append([result_text[s:e] for s, e in entry['offsets']])
+        record_tokens = []
+        for s, e in entry['offsets']:
+            if s < 0 or e > len(text_for_lookup):
+                print(f"WARNING: Offset ({s}, {e}) out of bounds for text length {len(text_for_lookup)} (uid={record.uid})", file=sys.stderr)
+                record_tokens.append("<OOB>")
+            else:
+                record_tokens.append(text_for_lookup[s:e])
+        tokens.append(record_tokens)
 
     records = records[args.start:args.end:args.step][:args.max_records or len(records)]
     scores = scores[args.start:args.end:args.step][:args.max_records or len(scores)]
