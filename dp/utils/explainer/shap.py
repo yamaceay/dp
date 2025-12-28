@@ -5,6 +5,7 @@ from dp.tri.with_bk import TRIDetectorWithBK
 
 
 class _SpanTokenizer:
+
     def __init__(self, text: str, spans: Sequence[Tuple[int, int]]):
         if text is None:
             raise ValueError("text cannot be None")
@@ -13,6 +14,20 @@ class _SpanTokenizer:
         self._text = text
         self._spans = list(spans)
         self._tokens = [text[s:e] for s, e in spans]
+        self._sorted_order = sorted(range(len(spans)), key=lambda i: spans[i][0])
+        self._gaps = self._compute_gaps(text, spans)
+
+    def _compute_gaps(self, text: str, spans: Sequence[Tuple[int, int]]) -> List[str]:
+        if not spans:
+            return [text]
+        gaps = []
+        prev_end = 0
+        for idx in self._sorted_order:
+            start, end = spans[idx]
+            gaps.append(text[prev_end:start])
+            prev_end = end
+        gaps.append(text[prev_end:])
+        return gaps
 
     def __call__(self, s: str, return_offsets_mapping: bool = True, **_: Any) -> Dict[str, Any]:
         if s is None:
@@ -23,14 +38,12 @@ class _SpanTokenizer:
                 out["offset_mapping"] = []
             return out
         if s == self._text:
-            spans = self._spans
             tokens = self._tokens
         else:
-            spans = self._spans
-            tokens = [s[start:end] if end <= len(s) else "" for start, end in spans]
+            tokens = [s[start:end] if end <= len(s) else "" for start, end in self._spans]
         out = {"input_ids": tokens}
         if return_offsets_mapping:
-            out["offset_mapping"] = spans
+            out["offset_mapping"] = self._spans
         return out
 
     def convert_ids_to_tokens(self, ids: Sequence[int]) -> List[str]:
@@ -41,7 +54,15 @@ class _SpanTokenizer:
     def decode(self, ids: Sequence[int], **_: Any) -> str:
         if ids is None:
             raise ValueError("ids cannot be None")
-        return " ".join(t for t in self.convert_ids_to_tokens(ids) if t)
+        if not self._spans:
+            return self._gaps[0] if self._gaps else ""
+        id_set = set(ids)
+        parts = [self._gaps[0]]
+        for pos, original_idx in enumerate(self._sorted_order):
+            if original_idx in id_set:
+                parts.append(self._tokens[original_idx])
+            parts.append(self._gaps[pos + 1])
+        return "".join(parts)
 
 
 class ShapExplainer(TokenExplainer):

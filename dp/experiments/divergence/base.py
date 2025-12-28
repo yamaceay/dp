@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from statistics import mean, median
 from typing import Any, Dict, Iterable, List, Optional, Sequence
+from tqdm import tqdm
 
 from dp.experiments import Experiment, ExperimentResult
 
@@ -78,7 +79,7 @@ class TextDivergenceExperiment(Experiment, ABC):
         evaluations: Dict[str, Dict[str, Any]] = {}
         divergence_means: List[float] = []
         total_records = len(self.original_texts)
-        for name, payload in self.evaluation_datasets.items():
+        for name, payload in tqdm(self.evaluation_datasets.items(), desc="Evaluating datasets"):
             texts = payload["texts"]
             total = payload["total"]
             matched_keys = [key for key in self.original_texts if key in texts]

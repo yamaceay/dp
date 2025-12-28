@@ -132,3 +132,117 @@ def validate_offsets(
         "applied_len": len(applied),
         "target_len": len(target_text),
     }
+
+
+def build_offset_map(edits: Sequence[Dict[str, object]]) -> List[Tuple[int, int, int]]:
+    """Build a list of (original_pos, result_pos, delta) checkpoints from edits.
+
+    Each edit changes the delta between original and result coordinates.
+    Returns sorted checkpoints that can be used to map offsets.
+    """
+    if not edits:
+        return []
+    checkpoints: List[Tuple[int, int, int]] = []
+    delta = 0
+    ops: List[Tuple[int, int, str, str]] = []
+    for edit in edits:
+        kind = str(edit.get("kind", ""))
+        text = str(edit.get("text", ""))
+        span_val = edit.get("span")
+        if not isinstance(span_val, (list, tuple)) or len(span_val) < 2:
+            continue
+        start, end = int(span_val[0]), int(span_val[1])
+        ops.append((start, end, kind, text))
+    ops.sort(key=lambda x: (x[0], 1 if x[2] == "added" else 0))
+    for start, end, kind, text in ops:
+        result_pos = start + delta
+        if kind == "deleted":
+            removed = end - start
+            delta -= removed
+            checkpoints.append((end, result_pos, delta))
+        elif kind == "replaced":
+            removed = end - start
+            added = len(text)
+            delta += added - removed
+            checkpoints.append((end, result_pos + added, delta))
+        elif kind == "added":
+            added = len(text)
+            delta += added
+            checkpoints.append((start, result_pos + added, delta))
+    return checkpoints
+
+
+def map_result_offset_to_original(
+    result_start: int,
+    result_end: int,
+    edits: Sequence[Dict[str, object]],
+) -> Tuple[int, int]:
+    """Map a (start, end) offset from result text back to original text coordinates.
+
+    Uses the edits metadata to reverse the transformation. If the offset falls
+    inside a replacement/insertion region, raises ValueError.
+    """
+    if result_start < 0:
+        raise ValueError(f"result_start must be non-negative, got {result_start}")
+    if result_end < result_start:
+        raise ValueError(f"result_end ({result_end}) < result_start ({result_start})")
+    if not edits:
+        return (result_start, result_end)
+    checkpoints = build_offset_map(edits)
+    if not checkpoints:
+        return (result_start, result_end)
+
+    def _map_pos(result_pos: int) -> int:
+        delta = 0
+        for orig_end, res_pos, new_delta in checkpoints:
+            if result_pos < res_pos:
+                break
+            delta = new_delta
+        return result_pos - delta
+
+    return (_map_pos(result_start), _map_pos(result_end))
+
+
+def map_original_offset_to_result(
+    orig_start: int,
+    orig_end: int,
+    edits: Sequence[Dict[str, object]],
+) -> Optional[Tuple[int, int]]:
+    """Map a (start, end) offset from original text to result text coordinates.
+
+    Returns None if the span was deleted or modified by an edit.
+    """
+    if orig_start < 0:
+        raise ValueError(f"orig_start must be non-negative, got {orig_start}")
+    if orig_end < orig_start:
+        raise ValueError(f"orig_end ({orig_end}) < orig_start ({orig_start})")
+    if not edits:
+        return (orig_start, orig_end)
+    ops: List[Tuple[int, int, str, str]] = []
+    for edit in edits:
+        kind = str(edit.get("kind", ""))
+        text = str(edit.get("text", ""))
+        span_val = edit.get("span")
+        if not isinstance(span_val, (list, tuple)) or len(span_val) < 2:
+            continue
+        start, end = int(span_val[0]), int(span_val[1])
+        ops.append((start, end, kind, text))
+    ops.sort(key=lambda x: (x[0], 1 if x[2] == "added" else 0))
+    for start, end, kind, _ in ops:
+        if kind in ("deleted", "replaced"):
+            if not (orig_end <= start or orig_start >= end):
+                return None
+    delta = 0
+    for start, end, kind, text in ops:
+        if start >= orig_end:
+            break
+        if kind == "deleted":
+            if end <= orig_start:
+                delta -= (end - start)
+        elif kind == "replaced":
+            if end <= orig_start:
+                delta += len(text) - (end - start)
+        elif kind == "added":
+            if start <= orig_start:
+                delta += len(text)
+    return (orig_start + delta, orig_end + delta)

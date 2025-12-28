@@ -161,18 +161,30 @@ def load_data(data_kwargs: dict, model_name: str) -> Tuple[List[DatasetRecord], 
     records, source_indices = build_dataset_from_results(result_in, original_records)
     return records, source_indices
 
+
 def load_precomputed_risk(path: str) -> Dict[str, Dict[str, object]]:
-    risk_map: Dict[str, Dict[str, object]] = {}
-    with open(path, "r", encoding="utf-8") as reader:
-        for line in reader:
+    """Load precomputed risk scores from JSONL.
+    
+    Each line: {"uid": ..., "offsets": [...], "scores": [...]}
+    Returns: {uid: {"offsets": [...], "scores": [...]}}
+    """
+    if not path:
+        raise ValueError("path cannot be empty")
+    result: Dict[str, Dict[str, object]] = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
             entry = line.strip()
             if not entry:
                 continue
             payload = json.loads(entry)
             uid = payload.get("uid")
-            if uid and payload.get("offsets") and payload.get("scores"):
-                risk_map[str(uid)] = {"offsets": payload["offsets"], "scores": payload["scores"]}
-    return risk_map
+            if uid is None:
+                raise ValueError("Missing uid in risk file")
+            result[str(uid)] = {
+                "offsets": payload.get("offsets", []),
+                "scores": payload.get("scores", []),
+            }
+    return result
 
 
 def extract_explainer_config(model_config: dict) -> Dict[str, Any]:

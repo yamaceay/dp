@@ -3,11 +3,11 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
+  tri_pipeline: models/tri_pipelines/reddit/20251110_190043
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_shap.jsonl
-  result_in: outputs/reddit/presidio/20251222_105712_reddit_presidio.jsonl
+  result_in: outputs/reddit/presidio/20251216_160413_reddit_presidio.jsonl
 
 tri_chunking:
   enabled: false

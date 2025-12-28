@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from dp.experiments import Experiment, ExperimentResult
 from dp.loaders.base import DatasetRecord
-from dp.tri.with_deid import TRIDetectorWithDeid
+from dp.tri.with_bk import TRIDetectorWithBK
 
 
 class TextPrivacyExperiment(Experiment):
@@ -25,7 +25,7 @@ class TextPrivacyExperiment(Experiment):
         self.dataset_name: Optional[str] = None
         self.original_dataset: List[DatasetRecord] = []
         self.evaluation_datasets: Dict[str, List[DatasetRecord]] = {}
-        self.detector: Optional[TRIDetectorWithDeid] = None
+        self.detector: Optional[TRIDetectorWithBK] = None
         self.original_ranks: Dict[str, int] = {}
         self.record_keys: List[str] = []
         self.record_info: Dict[str, Dict[str, Any]] = {}
@@ -51,7 +51,7 @@ class TextPrivacyExperiment(Experiment):
         self.dataset_name = dataset_name
         self.original_dataset = list(original_dataset)
         self.evaluation_datasets = filtered_evaluations
-        self.detector = TRIDetectorWithDeid(
+        self.detector = TRIDetectorWithBK(
             dataset_name=self.dataset_name,
             max_length=self.tri_max_length,
             device=self.tri_device,
@@ -78,7 +78,7 @@ class TextPrivacyExperiment(Experiment):
         if not self.detector:
             raise RuntimeError("setup must be completed before run")
         evaluations: Dict[str, Dict[str, Any]] = {}
-        for name, records in self.evaluation_datasets.items():
+        for name, records in tqdm(self.evaluation_datasets.items(), desc="Evaluating datasets"):
             ranks = self._compute_ranks(records, keys=self.record_keys, **kwargs)
             deltas = self._compute_rank_deltas(ranks)
             evaluations[name] = {

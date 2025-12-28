@@ -126,6 +126,7 @@ class PetreAnonymizer(Anonymizer):
         risk_scores: Dict[str, Dict[str, object]],
         records: Optional[Sequence[DatasetRecord]] = None,
     ) -> None:
+        """Set precomputed risk scores. Offsets must be in original-text coordinates."""
         self._raw_risk_scores = {}
         self._prepared_risk_scores = {}
         if not risk_scores:
@@ -162,12 +163,13 @@ class PetreAnonymizer(Anonymizer):
             raw = self._raw_risk_scores.get(uid)
             if raw is None:
                 continue
+            term_spans = state.term_spans
             offsets, scores = raw
             span_map: Dict[Tuple[int, int], float] = {}
             for span, value in zip(offsets, scores):
                 span_map[span] = float(value)
-            token_scores = np.full(len(state.term_spans), float("-inf"), dtype=float)
-            for idx, span in enumerate(state.term_spans):
+            token_scores = np.full(len(term_spans), float("-inf"), dtype=float)
+            for idx, span in enumerate(term_spans):
                 key = (span[0], span[1])
                 if key not in span_map:
                     continue

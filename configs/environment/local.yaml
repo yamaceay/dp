@@ -3,6 +3,6 @@ reddit:
   tri_pipeline: models/tri_pipelines/reddit/20251110_190043
   result_in: outputs/reddit/presidio/20251216_160413_reddit_presidio.jsonl
 tab:
-  tri_pipeline: models/tri_pipelines/tab/20251110_183205
+  tri_pipeline: models/tri_pipelines/tab/new_pipeline
   pii_annotator: models/pii_detectors/tab/20251021_093003
   result_in: outputs/tab/presidio/20251216_160308_tab_presidio.jsonl

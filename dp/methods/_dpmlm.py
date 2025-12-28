@@ -50,8 +50,6 @@ class DPMlmAnonymizer(Anonymizer):
         self._explainer = None
         self.splitter = TextSplitter()
         self._risk_scores_by_uid: Dict[str, Dict[Tuple[int, int], float]] = {}
-        self._risk_text_to_uid: Dict[str, List[str]] = {}
-        self._risk_text_positions: Dict[str, int] = {}
         self.dataset_records: List[DatasetRecord] = []
 
         self._tri_label_mapping: Optional[Dict[str, int]] = None
@@ -90,10 +88,9 @@ class DPMlmAnonymizer(Anonymizer):
         risk_scores: Dict[str, Dict[str, object]],
         records: Optional[Sequence[DatasetRecord]] = None,
     ) -> None:
+        """Set precomputed risk scores. Offsets must be in original-text coordinates."""
         self._risk_scores_by_uid = {}
         if not risk_scores:
-            self._risk_text_to_uid = {}
-            self._risk_text_positions = {}
             return
         for uid, payload in risk_scores.items():
             if not isinstance(payload, dict):
@@ -113,18 +110,6 @@ class DPMlmAnonymizer(Anonymizer):
                     continue
             if span_map:
                 self._risk_scores_by_uid[uid] = span_map
-        self._risk_text_to_uid = {}
-        self._risk_text_positions = {}
-        if records is None:
-            return
-        for record in records:
-            uid = record.uid
-            if uid not in self._risk_scores_by_uid:
-                continue
-            text_key = record.text or ""
-            entries = self._risk_text_to_uid.setdefault(text_key, [])
-            entries.append(uid)
-            self._risk_text_positions.setdefault(text_key, 0)
 
     def add_dataset_records(self, dataset_records: Sequence[DatasetRecord]) -> None:
         self.dataset_records = list(dataset_records)
@@ -329,29 +314,16 @@ class DPMlmAnonymizer(Anonymizer):
             span = offsets[idx]
             key = (int(span[0]), int(span[1]))
             if key not in mapping:
-                print(f"Warning: no precomputed risk score for span {key} in UID={uid!r}")
                 return None
             values.append(float(mapping[key]))
         if not values:
-            print("Warning: no risk scores collected from precomputed mapping")
             return None
         return np.asarray(values, dtype=float)
 
     def _resolve_risk_uid(self, text: str, record_name: Optional[str]) -> Optional[str]:
         if record_name and record_name in self._risk_scores_by_uid:
             return record_name
-        text_key = text or ""
-        entries = self._risk_text_to_uid.get(text_key)
-        if not entries:
-            return None
-        position = self._risk_text_positions.get(text_key, 0)
-        if position >= len(entries):
-            position = len(entries) - 1
-        if position < len(entries) - 1:
-            self._risk_text_positions[text_key] = position + 1
-        else:
-            self._risk_text_positions[text_key] = position
-        return entries[position]
+        return None
 
     def _make_apply_fn(
         self,
@@ -390,6 +362,9 @@ class DPMlmAnonymizer(Anonymizer):
                 )
             elif original_text and original_text[0].isupper():
                 private_token = private_token.capitalize()
+
+            else:
+                print(private_token, original_text)
 
             ledger.replace(idx, private_token)
             if private_token != token:

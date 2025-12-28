@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from sklearn.model_selection import StratifiedShuffleSplit
+from tqdm import tqdm
 
 from dp.loaders.base import DatasetRecord
 from dp.experiments import Experiment, ExperimentResult
@@ -160,7 +161,7 @@ class TextUtilityExperiment(Experiment):
         if self._model is None or self._vectorizer is None or self._baseline_metrics is None or self._target is None:
             raise RuntimeError("setup must be completed before run")
         evaluations: Dict[str, Dict[str, Any]] = {}
-        for name, mapping in evaluation_texts.items():
+        for name, mapping in tqdm(evaluation_texts.items(), desc="Evaluating datasets"):
             aligned_keys = [key for key in mapping.keys() if key in self._test_key_set]
             if not aligned_keys:
                 continue

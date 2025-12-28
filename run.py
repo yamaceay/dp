@@ -34,7 +34,7 @@ from dp.experiments.utility.vectorizer import TfidfTextVectorizer, BERTVectorize
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
 from dp.loaders.annotations import read_batch_annotations_from_path
-
+from dp.loaders.results import build_dataset_from_results
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_CONFIG_DIR = PROJECT_ROOT / "configs" / "experiments"
@@ -180,9 +180,12 @@ def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     dry_run = params.get("dry_run", False)
     output_format = params.get("output_format", "text")
     output_file = params.get("output_file")
-    records = load_records(dataset, data_in, max_records)
-    if not records:
+    original_records = load_records(dataset, data_in, max_records)
+    if not original_records:
         raise RuntimeError("no records loaded")
+    if "result_in" not in params:
+        raise ValueError("result_in is required for utility experiments")
+    records = build_dataset_from_results(params.get("result_in"), original_records)
     spec_key = f"{dataset}_{target}"
     spec: Optional[UtilitySpec] = UTILITY_EXPERIMENTS_REGISTRY.get(spec_key)
     if spec is None:
