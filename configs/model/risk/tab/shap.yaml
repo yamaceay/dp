@@ -3,7 +3,7 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: models/tri_pipelines/tab/new_pipeline
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
   risk_temperature: 0.1
 
 precomputation:

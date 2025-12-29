@@ -3,12 +3,12 @@ data_in: data/TAB/splitted/test.json
 annotations_in:
   - outputs/tab
 tri:
-  tri_pipeline: models/tri_pipelines/tab/new_pipeline
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
   max_length: 512
   device: auto
 mask_token: "[MASK]"
 output:
   format: jsonl
   file: logs/tab_priv_exp.jsonl
-result_in: outputs/tab/presidio/20251216_160308_tab_presidio.jsonl
+result_in: outputs/tab/presidio/20251222_105949_tab_presidio.jsonl
 progress: false
