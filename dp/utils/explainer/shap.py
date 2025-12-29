@@ -1,11 +1,10 @@
 from typing import Optional, Sequence, Tuple, Dict, List, Any
+from enum import Enum
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
 from dp.tri.with_bk import TRIDetectorWithBK
 
-
 class _SpanTokenizer:
-
     def __init__(self, text: str, spans: Sequence[Tuple[int, int]]):
         if text is None:
             raise ValueError("text cannot be None")
@@ -65,8 +64,12 @@ class _SpanTokenizer:
         return "".join(parts)
 
 
+class ShapType(Enum):
+    DEFAULT = "default"
+    PERMUTATION = "permutation"
+
 class ShapExplainer(TokenExplainer):
-    def __init__(self, model_name: str = None, device: str = "auto", use_chunking: bool = False, **kwargs):
+    def __init__(self, model_name: str = None, device: str = "auto", use_chunking: bool = False, explainer_type: Optional[ShapType] = None, **kwargs):
         super().__init__(**kwargs)
         if model_name is None:
             raise ValueError("ShapExplainer requires model_name")
@@ -77,7 +80,8 @@ class ShapExplainer(TokenExplainer):
         self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}
-    
+        self.explainer_type: ShapType = explainer_type or ShapType.DEFAULT
+
     def _resolve_device(self, device: str) -> str:
         if device == "auto":
             import torch
@@ -134,7 +138,13 @@ class ShapExplainer(TokenExplainer):
 
         tokenizer = _SpanTokenizer(text, normalized_offsets)
         masker = shap.maskers.Text(tokenizer=tokenizer, collapse_mask_token=True)
-        explainer = shap.Explainer(self.pipeline, masker, silent=True)
+        explainer = None
+        match self.explainer_type:
+            case ShapType.PERMUTATION:
+                num_features = max(2 * len(normalized_offsets) + 1, 500)
+                explainer = shap.PermutationExplainer(self.pipeline, masker, max_evals=num_features)
+            case _:
+                explainer = shap.Explainer(self.pipeline, masker, silent=True)
         shap_values = explainer([text], batch_size=1)
 
         values = shap_values.values[0, :, label_int]

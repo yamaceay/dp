@@ -1,8 +1,8 @@
 dataset: reddit
 data_path: data/reddit/reddit.jsonl
-attacker_extensions: data/reddit/reddit_bk_deid.jsonl
+attacker_extensions: data/reddit/reddit_bk_sum.jsonl
 model_name: distilbert-base-uncased
-output_root: /netscratch/yay/tri_detectors/reddit/bk
+output_root: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints
 max_records: null
 max_length: 512
 device: cpu

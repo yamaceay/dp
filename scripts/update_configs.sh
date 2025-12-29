@@ -7,7 +7,7 @@ if [[ ! -f "$MODELS_FILE" ]]; then
     exit 1
 fi
 
-CONFIG_DIRS=("configs/model" "configs/lrec" "configs/experiments")
+CONFIG_DIRS=("configs/model" "configs/lrec" "configs/experiments" "configs/tri_training")
 
 yaml_top_value() {
     local key="$1"

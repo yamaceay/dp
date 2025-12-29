@@ -8,7 +8,7 @@ explainer:
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_shap.jsonl
-  result_in: outputs/reddit/presidio/20251222_105712_reddit_presidio.jsonl
+  result_in: REDDIT_RESULT
 
 token_selection:
   name: by_risk
