@@ -110,16 +110,15 @@ class AnonymizerUnit(ABC):
                 processed.add(idx)
                 new_indices.append(idx)
 
-            if new_indices:
-                metadata: Dict[str, Any] = {
-                    "selector": self._selector_name,
-                    "processed_count": len(processed)
-                }
-                yield AnonymizationStep(
-                    threshold_type=self._threshold_name,
-                    threshold=threshold,
-                    text=ledger.render_offsets(text),
-                    ledger=ledger,
-                    new_indices=new_indices,
-                    metadata=metadata,
-                )
+            metadata: Dict[str, Any] = {
+                "selector": self._selector_name,
+                "processed_count": len(processed)
+            }
+            yield AnonymizationStep(
+                threshold_type=self._threshold_name,
+                threshold=threshold,
+                text=ledger.render_offsets(text),
+                ledger=ledger,
+                new_indices=new_indices,
+                metadata=metadata,
+            )

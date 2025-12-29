@@ -10,5 +10,4 @@ mask_token: "[MASK]"
 output:
   format: jsonl
   file: logs/tab_priv_exp.jsonl
-result_in: outputs/tab/presidio/20251222_105949_tab_presidio.jsonl
 progress: false

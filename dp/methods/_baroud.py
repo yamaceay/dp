@@ -147,14 +147,4 @@ class BaroudAnonymizer(Anonymizer):
                 ),
             ))
         
-        if not outputs:
-            outputs.append((
-                {"lambda": 1.0},
-                AnonymizationResult(
-                    text=text,
-                    annotations=TextAnnotations(),
-                    metadata={"method": "baroud", "masked": 0},
-                ),
-            ))
-        
         return outputs

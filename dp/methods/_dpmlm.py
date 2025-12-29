@@ -531,16 +531,6 @@ class DPMlmAnonymizer(Anonymizer):
                     ))
                     last_step = step
 
-                if last_step is None:
-                    metadata = {
-                        "epsilon": eps_val,
-                        "method": "dpmlm",
-                        "model": self.model_checkpoint,
-                        "perturbed": 0,
-                        "total": 0,
-                    }
-                    outputs.append((hp, AnonymizationResult(text=text, annotations=TextAnnotations(), metadata=metadata)))
-
             finally:
                 clear_memory()
 
