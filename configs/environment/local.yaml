@@ -4,5 +4,5 @@ reddit:
   result_in: outputs/reddit/presidio/20251228_165756_reddit_presidio.jsonl
 tab:
   tri_pipeline: models/tri_pipelines/tab/new_pipeline
-  pii_annotator: models/pii_detectors/tab/20251021_093003
+  pii_annotator: models/pii_detectors/tab/new_detector
   result_in: outputs/tab/presidio/20251228_165931_tab_presidio.jsonl
