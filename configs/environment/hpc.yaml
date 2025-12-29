@@ -2,11 +2,11 @@ gpt2-paraphraser: ../../../netscratch/yay/gpt2-paraphraser
 reddit:
   tri_location: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
-  tri_pipeline_no_mask: ../../../netscratch/yay/tri_pipelines/reddit/reddit_no_mask__lr5e-5
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit_no_mask__lr5e-5
   result_in: REDDIT_RESULT
 tab:
   tri_location: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
-  tri_pipeline_no_mask: ../../../netscratch/yay/tri_pipelines/tab/tab_no_mask__lr5e-5
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab_no_mask__lr5e-5
   result_in: TAB_RESULT
   pii_annotator: ../../../netscratch/yay/pii_detectors/tab/tab__lr3e-5__bs8__m_partial_recall

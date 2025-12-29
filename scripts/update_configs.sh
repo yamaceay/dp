@@ -38,9 +38,11 @@ yaml_section_value() {
 
 GPT2_PARAPHRASER=$(yaml_top_value "gpt2-paraphraser")
 REDDIT_TRI_PIPELINE=$(yaml_section_value "reddit" "tri_pipeline")
+REDDIT_UNIVERSAL_TRI_PIPELINE=$(yaml_section_value "reddit" "universal_tri_pipeline")
 REDDIT_RESULT_IN=$(yaml_section_value "reddit" "result_in")
 TAB_TRI_PIPELINE=$(yaml_section_value "tab" "tri_pipeline")
 TAB_PII_ANNOTATOR=$(yaml_section_value "tab" "pii_annotator")
+TAB_UNIVERSAL_TRI_PIPELINE=$(yaml_section_value "tab" "universal_tri_pipeline")
 TAB_RESULT_IN=$(yaml_section_value "tab" "result_in")
 
 if [[ -z "$GPT2_PARAPHRASER" ]]; then
@@ -113,6 +115,7 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
         fi
     done
 
+
     echo "Updating tri_pipeline in reddit configs under $CONFIG_DIR..."
     find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
         if grep -q "tri_pipeline:" "$config"; then
@@ -129,6 +132,22 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
         fi
     done
 
+    echo "Updating universal_tri_pipeline in reddit configs under $CONFIG_DIR..."
+    find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
+        if grep -q "universal_tri_pipeline:" "$config"; then
+            sed -i.bak "s|universal_tri_pipeline:.*|universal_tri_pipeline: $REDDIT_UNIVERSAL_TRI_PIPELINE|g" "$config"
+            echo "  Updated: $config"
+        fi
+    done
+
+    echo "Updating universal_tri_pipeline in tab configs under $CONFIG_DIR..."
+    find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
+        if grep -q "universal_tri_pipeline:" "$config"; then
+            sed -i.bak "s|universal_tri_pipeline:.*|universal_tri_pipeline: $TAB_UNIVERSAL_TRI_PIPELINE|g" "$config"
+            echo "  Updated: $config"
+        fi
+    done
+    
     echo "Updating pii_annotator in tab configs under $CONFIG_DIR..."
     find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
         if grep -q "pii_annotator:" "$config"; then

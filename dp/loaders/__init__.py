@@ -14,11 +14,8 @@ except ImportError:
     DBBioDatasetAdapter = None
 
 from dp.loaders.reddit import RedditDatasetAdapter
+from dp.loaders.trustpilot import TrustpilotDatasetAdapter
 
-try:
-    from dp.loaders.trustpilot_company import TrustpilotDatasetAdapter
-except ImportError:
-    TrustpilotDatasetAdapter = None
 from dp.loaders.annotations import (
     read_annotations,
     write_annotations,
@@ -37,14 +34,11 @@ from dp.loaders.results import build_dataset_from_results
 ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "tab": TabDatasetAdapter,
     "reddit": RedditDatasetAdapter,
+    "trustpilot": TrustpilotDatasetAdapter,
 }
 
 if DBBioDatasetAdapter is not None:
     ADAPTER_REGISTRY["db_bio"] = DBBioDatasetAdapter
-
-if TrustpilotDatasetAdapter is not None:
-    ADAPTER_REGISTRY["trustpilot"] = TrustpilotDatasetAdapter
-
 
 def get_adapter(name: str, **kwargs) -> DatasetAdapter:
     """Instantiate a dataset adapter by name."""

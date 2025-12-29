@@ -12,7 +12,7 @@ available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 
 def add_data_args(parser: argparse.ArgumentParser) -> list[str]:
     parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
-    parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
+    parser.add_argument('--data_in', type=str, nargs='+', required=True, help='Path to input data file or directory')
     parser.add_argument('--start', type=int, default=None, help='Start index for slicing (inclusive, python slicing semantics)')
     parser.add_argument('--end', type=int, default=None, help='End index for slicing (exclusive, python slicing semantics)')
     parser.add_argument('--step', type=int, default=None, help='Step for slicing (python slicing semantics)')

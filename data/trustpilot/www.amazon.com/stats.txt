@@ -1,3 +1,0 @@
-Mean stars: 3.0
-Variance of stars: 2.0
-Number of reviews: 100

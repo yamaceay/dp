@@ -293,8 +293,8 @@ def handle_privacy(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     normalize_output_settings(params)
     tri_cfg = params.get("tri")
     if isinstance(tri_cfg, dict):
-        if "tri_pipeline" in tri_cfg and "tri_pipeline" not in params:
-            params["tri_pipeline"] = tri_cfg["tri_pipeline"]
+        if "universal_tri_pipeline" in tri_cfg and "universal_tri_pipeline" not in params:
+            params["universal_tri_pipeline"] = tri_cfg["universal_tri_pipeline"]
         if "max_length" in tri_cfg and "tri_max_length" not in params:
             params["tri_max_length"] = tri_cfg["max_length"]
         if "device" in tri_cfg and "tri_device" not in params:
@@ -303,13 +303,13 @@ def handle_privacy(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     annotations = list(dict.fromkeys(annotation_values))
     dataset = params.get("dataset")
     data_in = params.get("data_in")
-    tri_pipeline = params.get("tri_pipeline")
+    tri_pipeline = params.get("universal_tri_pipeline")
     if not dataset:
         raise ValueError("dataset is required")
     if not data_in:
         raise ValueError("data_in is required")
     if not tri_pipeline:
-        raise ValueError("tri_pipeline is required")
+        raise ValueError("universal_tri_pipeline is required")
     if not annotations:
         raise ValueError("annotations are required")
     max_records = params.get("max_records")

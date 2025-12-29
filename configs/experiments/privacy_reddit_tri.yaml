@@ -3,10 +3,11 @@ data_in: data/reddit/reddit.jsonl
 annotations_in:
   - outputs/reddit
 tri:
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit_no_mask__lr5e-5
   max_length: 512
   device: auto
 mask_token: "[MASK]"
 output:
   format: jsonl
   file: logs/reddit_priv_exp.jsonl
+progress: false

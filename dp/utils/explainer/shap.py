@@ -139,12 +139,13 @@ class ShapExplainer(TokenExplainer):
         tokenizer = _SpanTokenizer(text, normalized_offsets)
         masker = shap.maskers.Text(tokenizer=tokenizer, collapse_mask_token=True)
         explainer = None
+        explainer_args = dict(silent=True)
         match self.explainer_type:
             case ShapType.PERMUTATION:
                 num_features = max(2 * len(normalized_offsets) + 1, 500)
-                explainer = shap.PermutationExplainer(self.pipeline, masker, max_evals=num_features)
+                explainer = shap.PermutationExplainer(self.pipeline, masker, max_evals=num_features, **explainer_args)
             case _:
-                explainer = shap.Explainer(self.pipeline, masker, silent=True)
+                explainer = shap.Explainer(self.pipeline, masker, **explainer_args)
         shap_values = explainer([text], batch_size=1)
 
         values = shap_values.values[0, :, label_int]

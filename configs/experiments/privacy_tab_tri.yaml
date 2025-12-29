@@ -3,7 +3,7 @@ data_in: data/TAB/splitted/test.json
 annotations_in:
   - outputs/tab
 tri:
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab_no_mask__lr5e-5
   max_length: 512
   device: auto
 mask_token: "[MASK]"
