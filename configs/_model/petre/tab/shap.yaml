@@ -1,18 +1,12 @@
 params:
-  epsilon: "*"
   ks: ["*"]
 
 explainer:
   name: shap
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
-  risk_temperature: 0.1
 
 precomputation:
   risk_scores: data/TAB/test_risk_shap.jsonl
-  result_in: outputs/tab/presidio/20251222_105949_tab_presidio.jsonl
 
 tri_chunking:
-  enabled: true
-
-token_selection:
-  name: until_k
+  enabled: false
