@@ -65,8 +65,8 @@ class _SpanTokenizer:
 
 
 class ShapType(Enum):
-    DEFAULT = "default"
-    PERMUTATION = "permutation"
+    DEFAULT = "shap"
+    PERMUTATION = "shap_permutation"
 
 class ShapExplainer(TokenExplainer):
     def __init__(self, model_name: str = None, device: str = "auto", use_chunking: bool = False, explainer_type: Optional[ShapType] = None, **kwargs):

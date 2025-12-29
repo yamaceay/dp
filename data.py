@@ -89,6 +89,6 @@ if __name__ == "__main__":
         unique_count_list.append(len(unique_values))
     table_str = format_table(unique_key_list, unique_count_list, unique_value_list)
     print(table_str)
-    print(f"Average text length: {sum_text_length / len(dataset)}" if dataset else "No records found.")
+    print(f"Average text length: {sum_text_length / len(all_text_lengths)}" if dataset else "No records found.")
     print(f"Maximum text length: {max_text_length}" if dataset else "No records found.")
     print(f"All text lengths: {all_text_lengths}" if dataset else "No records found.")

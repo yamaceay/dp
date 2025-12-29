@@ -6,7 +6,7 @@ explainer:
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
 
 precomputation:
-  risk_scores: data/reddit/reddit_risk_shap.jsonl
+  risk_scores: data/reddit/reddit_risk_shap_perm.jsonl
 
 tri_chunking:
   enabled: false

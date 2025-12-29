@@ -12,7 +12,7 @@ available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 
 def add_data_args(parser: argparse.ArgumentParser) -> list[str]:
     parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
-    parser.add_argument('--data_in', type=str, nargs='+', required=True, help='Path to input data file or directory')
+    parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
     parser.add_argument('--start', type=int, default=None, help='Start index for slicing (inclusive, python slicing semantics)')
     parser.add_argument('--end', type=int, default=None, help='End index for slicing (exclusive, python slicing semantics)')
     parser.add_argument('--step', type=int, default=None, help='Step for slicing (python slicing semantics)')
@@ -33,7 +33,7 @@ class InMemoryDatasetAdapter(DatasetAdapter):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate/load attacker record extensions (BK + summary)")
     data_keys = add_data_args(parser)
-    parser.add_argument('--result_in', type=str, required=True, help='Path to anonymization results (JSONL)')
+    parser.add_argument('--result_in', type=str, default=None, help='Path to anonymization results (JSONL)')
     parser.add_argument('--full_record', action='store_true', help='Print full record details')
     parser.add_argument('--save_to_jsonl', type=str, help='Path to save processed extensions (JSONL)')
     parser.add_argument('--load_from_jsonl', type=str, help='Path to load processed extensions (JSONL)')
@@ -44,7 +44,10 @@ def main() -> None:
     adapter = get_attacker_adapter(data_kwargs.pop("data"), **data_kwargs)
 
     original_records = list(adapter.adapter.iter_records())
-    records, _ = build_dataset_from_results(args.result_in, original_records)
+    if args.result_in:
+        records, _ = build_dataset_from_results(args.result_in, original_records)
+    else:
+        records = original_records
     adapter.adapter = InMemoryDatasetAdapter(records)
     if hasattr(adapter, "_build_persona_records"):
         adapter._persona_records = adapter._build_persona_records()

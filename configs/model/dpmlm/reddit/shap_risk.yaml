@@ -8,7 +8,7 @@ explainer:
   risk_temperature: 0.1
 
 precomputation:
-  risk_scores: data/reddit/reddit_risk_shap.jsonl
+  risk_scores: data/reddit/reddit_risk_shap_perm.jsonl
   result_in: REDDIT_RESULT
 
 tri_chunking:

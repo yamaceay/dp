@@ -16,7 +16,7 @@ if __name__ == "__main__":
     parser.add_argument('--data', type=str, default=None, help='Dataset name')
     parser.add_argument('--data_in', type=str, default=None, help='Path to input data file')
     parser.add_argument('--result_in', type=str, default=None, help='Path to anonymization results JSONL file')
-    parser.add_argument('--explainer', type=str, required=True, choices=['default', 'permutation'], help='Anonymization model name')
+    parser.add_argument('--explainer', type=str, required=True, choices=['shap', 'shap_permutation'], help='Anonymization model name')
     parser.add_argument('--explainer_in', type=str, required=True, help='Path to model config file')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load')
     parser.add_argument('--save_to_jsonl', type=str, default=None, help='Path to save output JSONL file')
