@@ -74,7 +74,7 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
     echo "Updating model_checkpoint references in $CONFIG_DIR..."
     find "$CONFIG_DIR" -name "*.yaml" -type f | while read config; do
         if grep -q "model_checkpoint:" "$config"; then
-            if [[ "$config" == *"dpparaphrase"* ]] || [[ "$config" == *"dpprompt"* ]]; then
+            if [[ "$config" == *"dpparaphrase"* ]]; then
                 sed -i.bak "s|model_checkpoint:.*|model_checkpoint: $GPT2_PARAPHRASER|g" "$config"
                 echo "  Updated: $config"
             fi

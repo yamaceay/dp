@@ -1,0 +1,10 @@
+params:
+  epsilon: "*"
+
+model_checkpoint: ../../../netscratch/yay/gpt2-paraphraser
+
+chunking:
+  enabled: true
+  max_total_tokens: 1024
+  prompt_fraction: 0.5
+  overlap_tokens: 0

@@ -1,6 +1,6 @@
 params:
   epsilon: "*"
-  ks: ["*"]
+  rhos: ["*"]
 
 explainer:
   name: shap
@@ -15,4 +15,4 @@ tri_chunking:
   enabled: true
 
 token_selection:
-  name: until_k
+  name: by_risk
