@@ -91,8 +91,8 @@ class TrustpilotDatasetAdapter(DatasetAdapter):
             category = category.strip()
 
             metadata = dict(
-                review_stars=review_stars,
-                review_title=review_title,
+                stars=review_stars,
+                title=review_title,
                 category=category,
                 company_description=company_description,
             )

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import random
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Iterable
+
+from tqdm import tqdm
 
 from dp.loaders.base import DatasetRecord
 from dp.loaders.trustpilot import TrustpilotDatasetAdapter
-from dp.tri.loaders.base import AttackerDatasetAdapter
-
+from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord
 
 class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
@@ -18,9 +19,6 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
         end: Optional[int] = None,
         step: Optional[int] = None,
         max_records: Optional[int] = None,
-        max_worst_review_per_company: int = 10,
-        max_best_review_per_company: int = 10,
-        max_num_companies: int = 50,
         seed: int = 42,
     ) -> None:
         adapter = TrustpilotDatasetAdapter(
@@ -33,6 +31,7 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
         )
         super().__init__(
             adapter=adapter,
+            use_records_list=True,
         )
         self._seed = seed
 
@@ -49,6 +48,39 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
                 self._analyzer = None
                 self._presidio_available = False
 
+        self._records_original = self.adapter.iter_records()
+        self._records = self._group_by_company(self._records_original)
+
+    def _group_by_company(self, records: Iterable[DatasetRecord]) -> Iterable[DatasetRecord]:
+        records_by_company: Dict[str, DatasetRecord] = {}
+        company_descs: Dict[str, str] = {}
+        for record in records:
+            company_name = record.name
+            if company_name not in company_descs:
+                company_desc = record.metadata.pop("company_description")
+                company_desc = company_desc.strip() if isinstance(company_desc, str) else ""
+                deid_company_desc = self._deidentify(company_desc)
+                company_descs[company_name] = deid_company_desc
+            company_desc = company_descs[company_name]
+            category = record.metadata.pop("category")
+            deid_text = self._deidentify(record.text)
+            review = {
+                "review_id": record.uid,
+                "text": deid_text,
+                **record.metadata,
+            }
+            target_record = records_by_company.get(company_name, DatasetRecord(
+                text=company_desc,
+                uid=company_name,
+                name=company_name,
+                spans=[],
+                metadata={"category": category, "records": []}
+            ))
+            target_record.metadata["records"].append(review)
+            records_by_company[company_name] = target_record
+        
+        for record in records_by_company.values():
+            yield record
 
     def _deidentify(self, text: str) -> str:
         if not text or not self._presidio_available or self._analyzer is None:
@@ -85,33 +117,24 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
         ]
         return rng.choice(templates)
 
-    def _format_review_entry(self, entry: dict, rng: random.Random) -> Tuple[str, str]:
-        review_id = entry.get("review_id")
-        stars = entry.get("stars")
-        title = entry.get("title")
-        text = entry.get("text")
-        company_description = entry.get("company_description")
-        deid_desc = self._deidentify(company_description).strip()
-        title_clean = title.strip() if isinstance(title, str) else ""
-        text_clean = text.strip() if isinstance(text, str) else ""
-        content = self._review_template(rng).format(stars=stars, title=title_clean, text=text_clean)
-        if deid_desc:
-            content = f"{content} {self._bio_template(rng).format(bio=deid_desc)}"
-        return f"review_{review_id}", content
-
     def extract_background_knowledge(self, record: DatasetRecord) -> List[Tuple[str, str]]:
-        records = record.metadata.get("records") if record.metadata else None
-        if not isinstance(records, list):
-            raise ValueError("records must be a list")
-        rng = random.Random(self._background_seed(record))
-        shuffled_records = list(records)
-        rng.shuffle(shuffled_records)
-        background: List[Tuple[str, str]] = []
-        for entry in shuffled_records:
-            if not isinstance(entry, dict):
-                raise ValueError("records entries must be dicts")
-            background.append(self._format_review_entry(entry, rng))
-        return background
+        background_knowledge: List[Tuple[str, str]] = []
+
+        for entry in record.metadata.get("records", []):
+            review_id = entry.get("review_id")
+            stars = entry.get("stars")
+            title = entry.get("title")
+            text = entry.get("text")
+            company_description = record.text.strip() if record.text else ""
+            rng = random.Random(self._background_seed(record) + int(review_id, 36))
+            title_clean = title.strip() if isinstance(title, str) else ""
+            text_clean = text.strip() if isinstance(text, str) else ""
+            content = self._review_template(rng).format(stars=stars, title=title_clean, text=text_clean)
+            if company_description:
+                content = f"{content} {self._bio_template(rng).format(bio=company_description)}"
+            background_knowledge.append((review_id, content))
+
+        return background_knowledge
 
 
 __all__ = ["TrustpilotAttackerDatasetAdapter"]

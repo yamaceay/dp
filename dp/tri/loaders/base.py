@@ -21,18 +21,17 @@ class AttackerDatasetAdapter:
     def __init__(
         self,
         adapter: DatasetAdapter,
-        max_background_tokens: int = 512,
-        rewriter_max_length: int = 150,
-        rewriter_min_length: int = 40,
+        **kwargs,
     ) -> None:
         self.adapter = adapter
-        self.max_background_tokens = max_background_tokens
-        self.rewriter_max_length = rewriter_max_length
-        self.rewriter_min_length = rewriter_min_length
+        self.max_background_tokens = kwargs.get("max_background_tokens", 512)
+        self.rewriter_max_length = kwargs.get("rewriter_max_length", 150)
+        self.rewriter_min_length = kwargs.get("rewriter_min_length", 40)
         self.rewriter: Optional[RewriterProtocol] = None
         self._cache_map: Optional[Dict[str, Dict[str, Any]]] = None
         self._starting_anonymizations_by_idx: Optional[List[List[TextAnnotation]]] = None
         self._starting_replacement: Optional[str] = None
+        self._use_records_list: bool = kwargs.get("use_records_list", False)
 
     def set_rewriter(self, rewriter: RewriterProtocol) -> None:
         self.rewriter = rewriter
@@ -114,7 +113,10 @@ class AttackerDatasetAdapter:
         return masked
 
     def iter_records(self, progress: bool = False) -> Iterable[AttackerDatasetRecord]:
-        records_list = list(self.adapter.iter_records())
+        if self._use_records_list and hasattr(self, "_records"):
+            records_list = list(getattr(self, "_records", []))
+        else:
+            records_list = list(self.adapter.iter_records())
         iterator = iter(records_list)
         if progress:
             iterator = tqdm(records_list, desc="Processing attacker records", total=len(records_list))
