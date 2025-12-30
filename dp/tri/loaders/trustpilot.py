@@ -4,11 +4,9 @@ import hashlib
 import random
 from typing import List, Optional, Tuple, Dict, Iterable
 
-from tqdm import tqdm
-
 from dp.loaders.base import DatasetRecord
 from dp.loaders.trustpilot import TrustpilotDatasetAdapter
-from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord
+from dp.tri.loaders.base import AttackerDatasetAdapter
 
 class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
@@ -20,6 +18,7 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
         step: Optional[int] = None,
         max_records: Optional[int] = None,
         seed: int = 42,
+        deidentify: bool = False,
     ) -> None:
         adapter = TrustpilotDatasetAdapter(
             data=data,
@@ -34,6 +33,7 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
             use_records_list=True,
         )
         self._seed = seed
+        self._deidentify = deidentify
 
         try:
             from presidio_analyzer import AnalyzerEngine
@@ -59,11 +59,11 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
             if company_name not in company_descs:
                 company_desc = record.metadata.pop("company_description")
                 company_desc = company_desc.strip() if isinstance(company_desc, str) else ""
-                deid_company_desc = self._deidentify(company_desc)
+                deid_company_desc = self._deidentify(company_desc) if self._deidentify else company_desc
                 company_descs[company_name] = deid_company_desc
             company_desc = company_descs[company_name]
             category = record.metadata.pop("category")
-            deid_text = self._deidentify(record.text)
+            deid_text = self._deidentify(record.text) if self._deidentify else record.text
             review = {
                 "review_id": record.uid,
                 "text": deid_text,
