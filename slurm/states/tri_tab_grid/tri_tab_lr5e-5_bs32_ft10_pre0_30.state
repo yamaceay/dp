@@ -1,3 +1,0 @@
-1
-0
-python tri_by_bk.py --mode train --training-in configs/tri_training/tab/bk_base.yaml --run-name tab__lr5e-5__bs32__ft10__pre0 --set training.learning_rate=5e-5 --set training.batch_size=32 --set training.finetuning_epochs=10 --set training.use_pretraining=false

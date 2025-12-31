@@ -1,3 +1,0 @@
-1
-1
-python tri_by_bk.py --mode train --training-in configs/tri_training/reddit/bk_base.yaml --run-name reddit__lr2e-5__bs32__ft5__pre0 --set training.learning_rate=2e-5 --set training.batch_size=32 --set training.finetuning_epochs=5 --set training.use_pretraining=false

@@ -1,3 +1,0 @@
-1
-1
-uv run python model.py --data reddit --data_in data/reddit/reddit.jsonl --model risk --model_in configs/model/risk/reddit/shap.yaml --runtime_in configs/runtime/risk_tolerance/rho_*.yaml --output jsonl --unique_name reddit_risk_shap

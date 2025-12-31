@@ -1,4 +1,2 @@
-tri_tab_lr2e-5 | python tri_by_bk.py --mode train --training-in configs/tri_training/tab/bk_base.yaml --run-name tab__lr2e-5 --set training.learning_rate=2e-5
 tri_tab_lr5e-5 | python tri_by_bk.py --mode train --training-in configs/tri_training/tab/bk_base.yaml --run-name tab__lr5e-5 --set training.learning_rate=5e-5
-tri_tab_lr1e-4 | python tri_by_bk.py --mode train --training-in configs/tri_training/tab/bk_base.yaml --run-name tab__lr1e-4 --set training.learning_rate=1e-4
-tri_tab_lr2e-4 | python tri_by_bk.py --mode train --training-in configs/tri_training/tab/bk_base.yaml --run-name tab__lr2e-4 --set training.learning_rate=2e-4
+tri_tab_deid_lr5e-5 | python tri_by_bk.py --mode train --training-in configs/tri_training/tab/bk_deid.yaml --run-name tab__deid__lr5e-5 --set training.learning_rate=5e-5
