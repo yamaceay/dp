@@ -27,52 +27,61 @@ if __name__ == "__main__":
         data=args.data, data_in=args.data_in
     )
 
-    if not args.data or not args.data_in or not args.risk_in or not args.result_in:
-        raise ValueError("data, data_in, risk_in and result_in are required")
+    if not args.data or not args.data_in:
+        raise ValueError("data and data_in are required")
     original_records = list(get_adapter(args.data, **data_kwargs).iter_records())
     original_text_by_uid = {r.uid: r.text for r in original_records}
     args.end = args.end or len(original_records)
 
-    records, indices = build_dataset_from_results(args.result_in, original_records)
-    result_records = load_result_records(args.result_in)
-    result_text_by_uid = {original_records[rr.idx].uid: rr.text for rr in result_records if rr.idx is not None}
+    if args.result_in is not None:
+        records, indices = build_dataset_from_results(args.result_in, original_records)
+        result_records = load_result_records(args.result_in)
+        result_text_by_uid = {original_records[rr.idx].uid: rr.text for rr in result_records if rr.idx is not None}
+    else:
+        records = original_records
+        result_records = original_records
+        result_text_by_uid = {r.uid: r.text for r in result_records}
 
-    risk_by_uid = {}
-    with open(args.risk_in, 'r', encoding='utf-8') as f:
-        for line in f:
-            entry = json.loads(line.strip())
-            risk_by_uid[entry['uid']] = entry
+    if args.risk_in is not None:
+        risk_by_uid = {}
+        with open(args.risk_in, 'r', encoding='utf-8') as f:
+            for line in f:
+                entry = json.loads(line.strip())
+                risk_by_uid[entry['uid']] = entry
 
-    scores = []
-    offsets = []
-    tokens = []
-    for record in records:
-        entry = risk_by_uid.get(record.uid)
-        if entry is None:
-            raise ValueError(f"No risk entry found for UID={record.uid}")
-        if args.offset_mode == 'result':
-            text_for_lookup = result_text_by_uid.get(record.uid)
-            if text_for_lookup is None:
-                raise ValueError(f"No result text found for UID={record.uid}")
-        else:
-            text_for_lookup = original_text_by_uid.get(record.uid)
-            if text_for_lookup is None:
-                raise ValueError(f"No original text found for UID={record.uid}")
-        scores.append(entry['scores'])
-        offsets.append(entry['offsets'])
-        record_tokens = []
-        for s, e in entry['offsets']:
-            if s < 0 or e > len(text_for_lookup):
-                print(f"WARNING: Offset ({s}, {e}) out of bounds for text length {len(text_for_lookup)} (uid={record.uid})", file=sys.stderr)
-                record_tokens.append("<OOB>")
+        scores = []
+        offsets = []
+        tokens = []
+        for record in records:
+            entry = risk_by_uid.get(record.uid)
+            if entry is None:
+                raise ValueError(f"No risk entry found for UID={record.uid}")
+            if args.offset_mode == 'result':
+                text_for_lookup = result_text_by_uid.get(record.uid)
+                if text_for_lookup is None:
+                    raise ValueError(f"No result text found for UID={record.uid}")
             else:
-                record_tokens.append(text_for_lookup[s:e])
-        tokens.append(record_tokens)
+                text_for_lookup = original_text_by_uid.get(record.uid)
+                if text_for_lookup is None:
+                    raise ValueError(f"No original text found for UID={record.uid}")
+            scores.append(entry['scores'])
+            offsets.append(entry['offsets'])
+            record_tokens = []
+            for s, e in entry['offsets']:
+                if s < 0 or e > len(text_for_lookup):
+                    print(f"WARNING: Offset ({s}, {e}) out of bounds for text length {len(text_for_lookup)} (uid={record.uid})", file=sys.stderr)
+                    record_tokens.append("<OOB>")
+                else:
+                    record_tokens.append(text_for_lookup[s:e])
+            tokens.append(record_tokens)
+
+        scores = scores[args.start:args.end:args.step][:args.max_records or len(scores)]
+        offsets = offsets[args.start:args.end:args.step][:args.max_records or len(offsets)]
+        tokens = tokens[args.start:args.end:args.step][:args.max_records or len(tokens)]
+    else:
+        risk_by_uid = {}
 
     records = records[args.start:args.end:args.step][:args.max_records or len(records)]
-    scores = scores[args.start:args.end:args.step][:args.max_records or len(scores)]
-    offsets = offsets[args.start:args.end:args.step][:args.max_records or len(offsets)]
-    tokens = tokens[args.start:args.end:args.step][:args.max_records or len(tokens)]
 
     if not args.pipeline_in:
         raise ValueError("pipeline_in is required")
@@ -100,11 +109,12 @@ if __name__ == "__main__":
             break
         if not args.save_to_jsonl:
             print(f"Record UID: {records[j].uid} | Evaluated Rank: {ranks[j]}")
-            if args.full_record:
+            if args.full_record and args.risk_in and args.result_in:
                 for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
                     print(f"Token: '{token}' | Offset: {offset} | Score: {score}")
         else:
             f.write(json.dumps({"uid": records[j].uid, "rank": ranks[j]}) + '\n')
-            for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
-                f.write(json.dumps({"uid": records[j].uid, "token": token, "offset": offset, "score": score}) + '\n')
+            if args.risk_in and args.result_in:
+                for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
+                    f.write(json.dumps({"uid": records[j].uid, "token": token, "offset": offset, "score": score}) + '\n')
         j += 1
