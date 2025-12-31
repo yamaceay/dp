@@ -1,3 +1,0 @@
-tab_spacy|python model.py   --data tab --data_in data/TAB/splitted/test.json   --model spacy --model_in configs/lrec/spacy.yaml      --output jsonl --unique_name tab_spacy 
-tab_presidio|python model.py   --data tab --data_in data/TAB/splitted/test.json   --model presidio --model_in configs/lrec/presidio.yaml      --output jsonl --unique_name tab_presidio 
-tab_manual|python model.py   --data tab --data_in data/TAB/splitted/test.json   --model manual --model_in configs/lrec/manual.yaml      --output jsonl --unique_name tab_manual 
