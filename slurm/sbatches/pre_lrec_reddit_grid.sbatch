@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --array=0-1%2
+#SBATCH --array=0-0%1
 #SBATCH --job-name=pre_lrec_reddit_grid
 #SBATCH --output=logs/%x/%a_%j.out
 #SBATCH --error=logs/%x/%a_%j.err
@@ -19,7 +19,6 @@ TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
 job_names=(
   "pre_lrec_reddit_grid/reddit_shap_0"
-  "pre_lrec_reddit_grid/reddit_greedy_1"
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"
