@@ -7,8 +7,8 @@ explainer:
   risk_temperature: 0.1
 
 precomputation:
-  risk_scores: data/reddit/reddit_risk_shap_perm.jsonl
-  result_in: REDDIT_RESULT
+  risk_scores: data/reddit/reddit_risk_shap.jsonl
+  result_in: outputs/reddit/presidio/20251231_120522_reddit_presidio.jsonl
 
 token_selection:
   name: by_risk

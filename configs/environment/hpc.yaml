@@ -3,10 +3,12 @@ reddit:
   tri_location: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit_no_mask__lr5e-5
-  result_in: REDDIT_RESULT
+  result_in: outputs/reddit/presidio/20251231_120522_reddit_presidio.jsonl
+  risk_in: data/reddit/reddit_risk_shap.jsonl
 tab:
   tri_location: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab_no_mask__lr5e-5
-  result_in: TAB_RESULT
+  result_in: outputs/tab/presidio/20251231_120524_tab_presidio.jsonl
+  risk_in: data/TAB/test_risk_shap.jsonl
   pii_annotator: ../../../netscratch/yay/pii_detectors/tab/tab__lr3e-5__bs8__m_partial_recall

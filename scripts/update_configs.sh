@@ -40,10 +40,12 @@ GPT2_PARAPHRASER=$(yaml_top_value "gpt2-paraphraser")
 REDDIT_TRI_PIPELINE=$(yaml_section_value "reddit" "tri_pipeline")
 REDDIT_UNIVERSAL_TRI_PIPELINE=$(yaml_section_value "reddit" "universal_tri_pipeline")
 REDDIT_RESULT_IN=$(yaml_section_value "reddit" "result_in")
+REDDIT_RISK_IN=$(yaml_section_value "reddit" "risk_in")
 TAB_TRI_PIPELINE=$(yaml_section_value "tab" "tri_pipeline")
 TAB_PII_ANNOTATOR=$(yaml_section_value "tab" "pii_annotator")
 TAB_UNIVERSAL_TRI_PIPELINE=$(yaml_section_value "tab" "universal_tri_pipeline")
 TAB_RESULT_IN=$(yaml_section_value "tab" "result_in")
+TAB_RISK_IN=$(yaml_section_value "tab" "risk_in")
 
 if [[ -z "$GPT2_PARAPHRASER" ]]; then
     echo "Error: failed to extract gpt2-paraphraser from $MODELS_FILE" >&2
@@ -61,10 +63,14 @@ fi
 echo "Extracted values:"
 echo "  gpt2-paraphraser: $GPT2_PARAPHRASER"
 echo "  reddit tri_pipeline: $REDDIT_TRI_PIPELINE"
+echo "  reddit universal_tri_pipeline: $REDDIT_UNIVERSAL_TRI_PIPELINE"
 echo "  reddit result_in: $REDDIT_RESULT_IN"
+echo "  reddit risk_in: $REDDIT_RISK_IN"
 echo "  tab tri_pipeline: $TAB_TRI_PIPELINE"
+echo "  tab universal_tri_pipeline: $TAB_UNIVERSAL_TRI_PIPELINE"
 echo "  tab pii_annotator: $TAB_PII_ANNOTATOR"
 echo "  tab result_in: $TAB_RESULT_IN"
+echo "  tab risk_in: $TAB_RISK_IN"
 echo ""
 
 # Extract tri_location for output_root
@@ -171,6 +177,26 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
         find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
             if grep -q "result_in:" "$config"; then
                 sed -i.bak "s|result_in:.*|result_in: $TAB_RESULT_IN|g" "$config"
+                echo "  Updated: $config"
+            fi
+        done
+    fi
+
+    echo "Updating risk_in in reddit configs under $CONFIG_DIR..."
+    if [[ -n "$REDDIT_RISK_IN" ]]; then
+        find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
+            if grep -q "risk_scores:" "$config"; then
+                sed -i.bak "s|risk_scores:.*|risk_scores: $REDDIT_RISK_IN|g" "$config"
+                echo "  Updated: $config"
+            fi
+        done
+    fi
+
+    echo "Updating risk_in in tab configs under $CONFIG_DIR..."
+    if [[ -n "$TAB_RISK_IN" ]]; then
+        find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
+            if grep -q "risk_scores:" "$config"; then
+                sed -i.bak "s|risk_scores:.*|risk_scores: $TAB_RISK_IN|g" "$config"
                 echo "  Updated: $config"
             fi
         done
