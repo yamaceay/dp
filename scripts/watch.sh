@@ -41,7 +41,11 @@ case "$CHOICE" in
         echo "Available task groups:"
         for i in "${!task_groups[@]}"; do
             idx=$((i+1))
-            echo "$idx) ${task_groups[$i]}"
+            TASK_GROUP_IS_IN_LOGS=false
+            if [[ -d "logs/${task_groups[$i]}" ]]; then
+                TASK_GROUP_IS_IN_LOGS=true
+            fi
+            echo "$([[ "$TASK_GROUP_IS_IN_LOGS" == false ]] && echo "-)" || echo "$idx)") ${task_groups[$i]}"
         done
         echo "Enter the number of the task group to select:"
         read -r TASK_GROUP_IDX
