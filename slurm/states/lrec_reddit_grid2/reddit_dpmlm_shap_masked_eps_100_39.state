@@ -1,3 +1,0 @@
-1
-0
-uv run python model.py --data reddit --data_in data/reddit/reddit.jsonl --model dpmlm --model_in configs/lrec/dpmlm/reddit/shap_masked.yaml --runtime_in configs/runtime/dp/eps_100.yaml configs/runtime/k_anon/k_*.yaml --output jsonl --unique_name reddit_dpmlm_shap_masked_eps_100

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --array=0-1%2
-#SBATCH --job-name=lrec_reddit_grid1
+#SBATCH --array=0-0%1
+#SBATCH --job-name=pre_lrec_tab_grid
 #SBATCH --output=logs/%x/%a_%j.out
 #SBATCH --error=logs/%x/%a_%j.err
 #SBATCH --partition=batch
@@ -18,8 +18,7 @@ JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
 job_names=(
-  "lrec_reddit_grid1/reddit_spacy_0"
-  "lrec_reddit_grid1/reddit_presidio_1"
+  "pre_lrec_tab_grid/tab_shap_0"
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"
