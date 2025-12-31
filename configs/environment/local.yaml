@@ -4,9 +4,11 @@ reddit:
   tri_pipeline: models/tri_pipelines/reddit/new_pipeline
   universal_tri_pipeline: models/tri_pipelines/reddit/old_pipeline
   result_in: outputs/reddit/presidio/20251229_111213_reddit_presidio.jsonl
+  risk_in: data/reddit/reddit_risk_shap.jsonl
 tab:
   tri_location: models/tri_pipelines/tab/_checkpoints
   tri_pipeline: models/tri_pipelines/tab/new_pipeline
   universal_tri_pipeline: models/tri_pipelines/tab/old_pipeline
   result_in: outputs/tab/presidio/20251229_110657_tab_presidio.jsonl
   pii_annotator: models/pii_detectors/tab/new_detector
+  risk_in: data/TAB/test_risk_shap.jsonl
