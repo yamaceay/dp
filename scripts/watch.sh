@@ -69,7 +69,7 @@ case "$CHOICE" in
         fi
         JOB_NUM="${jobs[$((JOB_IDX-1))]}"
         LOG_DIR="logs/$TASK_GROUP"
-        mapfile -t log_files < <(find "$LOG_DIR" -maxdepth 1 -type f -regextype posix-extended -regex "$LOG_DIR/${JOB_IDX}_[^/]+\\.(out|err)" | sort)
+        mapfile -t log_files < <(find "$LOG_DIR" -maxdepth 1 -type f -regextype posix-extended -regex "$LOG_DIR/$((JOB_IDX-1))_[^/]+\\.(out|err)" | sort)
         if [[ ${#log_files[@]} -eq 0 ]]; then
             echo "No matching log files found in $LOG_DIR"
             exit 1
