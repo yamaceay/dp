@@ -93,7 +93,7 @@ Crucially, the attacker is assumed to be \emph{static}: it does not adapt its pa
 
 \subsection{Token-Level Re-Identification Risk}
 
-To guide selective anonymization, we associate each token in a text with a \emph{re-identification risk score} that estimates its contribution to successful re-identification. These scores are computed with respect to the TRI attacker using explainability methods, such as SHAP-based attribution, which quantify the marginal impact of individual tokens on the attacker’s prediction.
+To guide selective anonymization, we associate each token in a text with a \emph{re-identification risk score} that estimates its contribution to successful re-identification. These scores are computed with respect to the TRI attacker using explainability methods, such as SHAP-based attribution \cite{lundberg_unified_2017}, which quantify the marginal impact of individual tokens on the attacker’s prediction.
 
 We denote the risk score of token $t_j$ as $r_j \geq 0$, where larger values indicate higher disclosiveness. Risk scores may reflect direct identifiers (e.g., names) as well as indirect or contextual identifiers. In practice, direct identifiers detected by prior de-identification can be assigned arbitrarily large risk or an effectively zero privacy budget, ensuring they are always anonymized.
 
@@ -125,11 +125,17 @@ We introduce k-DP-MLM, a family of extensions to DP-MLM that incorporate three k
 
 \subsection{Risk-aware noise allocation}
 
-Firstly, instead of applying a global, uniform privacy budget to all tokens, we allocate noise proportionally to token-level re-identification risk. In DPMLM, a single $\epsilon$ is applied across the sentence, so all tokens are perturbed with the same budget even though their disclosure risk differs. Risk scores are estimated using explainability techniques over a text re-identification (TRI) attacker model, by default via SHAP-based attribution. Tokens that contribute more strongly to re-identification are assigned a lower effective $\epsilon$, making them more likely to be rewritten. Concretely, we use the heuristic $\epsilon_i \propto 1 / r_i$ with $\mathbb{E}_i[\epsilon_i] = \epsilon$, yielding
+Instead of applying a single privacy budget to all tokens, we allocate noise proportionally to token-level re-identification risk. In DP-MLM, a global $\epsilon$ is used across the sequence, so low-risk tokens are perturbed as aggressively as high-risk ones. We estimate token risks with an explainability method over a static TRI attacker (SHAP by default) and map the raw scores to a normalized scale because the values are numerically close to zero. Let
+\[
+s_i = \frac{r_{\max} - r_i}{r_{\max} - r_{\min}}
+\]
+be the normalized risk score for token $i$, where larger $s_i$ indicates higher disclosure risk. We assign a token-specific privacy budget $\epsilon_i$ that is co-ordered with $s_i$ and scaled to preserve the global mean, $\mathbb{E}_i[\epsilon_i] = \epsilon$. A simple choice is the softmax normalization:
 \begin{equation}
-\epsilon_i = \epsilon \frac{1 / r_i}{\sum_{j=1}^{n} (1 / r_j)} = \frac{\epsilon}{\sum_{j=1}^{n} r_i / r_j}.
+\epsilon_i = \epsilon \cdot n \cdot \frac{\exp (s_i / \tau) }{\sum_{j=1}^{n} \exp (s_j / \tau)},
 \end{equation}
-The token-specific noise parameters are scaled such that their mean equals the global privacy budget, preserving the overall DP guarantee. PETRE is typically applied after explicit de-identification to handle indirect identifiers. The DPMLM-equivalent treatment is to assign detected direct identifiers near-zero $\epsilon$ (or equivalently very large risk), while we instead treat de-identification as a prerequisite and position our anonymization as a complementary step for the remaining tokens.
+where $\tau > 0$ controls the sharpness of the allocation, with smaller values concentrating budget adjustments on the highest-risk tokens.
+
+When all tokens are rewritten under this allocation, the overall DP budget remains $\epsilon$ in expectation. As in PETRE-style pipelines, explicit de-identification is still recommended; direct identifiers can be treated as near-zero $\epsilon$ (or equivalently very large risk), while the proposed allocation focuses on residual indirect identifiers.
 
 \subsection{Risk-based processing order}
 
