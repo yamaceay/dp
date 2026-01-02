@@ -1,11 +1,24 @@
 #!/bin/bash
 
-MODELS_FILE="${1:-configs/environment/hpc.yaml}"
+
+MODELS_FILE=""
+if [[ "$1" == "local" ]]; then
+    MODELS_FILE="configs/environment/local.yaml"
+elif [[ "$1" == "hpc" ]]; then
+    MODELS_FILE="configs/environment/hpc.yaml"
+fi
+
+if [[ -z "$MODELS_FILE" ]]; then
+    echo "Usage: $0 {local|hpc}"
+    exit 1
+fi
 
 if [[ ! -f "$MODELS_FILE" ]]; then
     echo "Error: $MODELS_FILE not found"
     exit 1
 fi
+
+echo "Using models file: $MODELS_FILE"
 
 CONFIG_DIRS=("configs/model" "configs/lrec" "configs/experiments" "configs/tri_training")
 
@@ -71,9 +84,6 @@ echo "  tab universal_tri_pipeline: $TAB_UNIVERSAL_TRI_PIPELINE"
 echo "  tab pii_annotator: $TAB_PII_ANNOTATOR"
 echo "  tab result_in: $TAB_RESULT_IN"
 echo "  tab risk_in: $TAB_RISK_IN"
-echo ""
-
-echo "  $SECTION.tri_location (output_root): $TRI_LOCATION"
 echo ""
 
 for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do

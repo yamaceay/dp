@@ -8,6 +8,7 @@ explainer:
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_shap.jsonl
+  result_in: outputs/reddit/presidio/20251231_120522_reddit_presidio.jsonl
 
 tri_chunking:
   enabled: true
