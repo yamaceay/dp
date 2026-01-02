@@ -12,6 +12,7 @@ from dp.methods.constants import Buckets, EpsilonParam, BucketDict, buckets_to_d
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.utils.token_ledger import TokenLedger
+from dp.utils.risk import _scores_to_inverse_probs
 from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 from dp.utils.explainer.base import TokenExplainer, load_tri_label_mapping
 from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
@@ -27,7 +28,6 @@ class DPMlmAnonymizer(Anonymizer):
         clip_max: float = 16.304797887802124,
         k_candidates: int = 5,
         use_temperature: bool = True,
-        compensate_epsilon: bool = False,
         add_probability: float = 0.0,
         delete_probability: float = 0.0,
         risk_temperature: Optional[float] = None,
@@ -41,7 +41,6 @@ class DPMlmAnonymizer(Anonymizer):
         self.sensitivity = abs(clip_max - clip_min)
         self.k_candidates = k_candidates
         self.use_temperature = use_temperature
-        self.compensate_epsilon = compensate_epsilon
         self.add_probability = add_probability
         self.delete_probability = delete_probability
         self.risk_temperature = risk_temperature
@@ -230,8 +229,7 @@ class DPMlmAnonymizer(Anonymizer):
             mask_logits = mask_logits / temperature
             
             scores = torch.softmax(torch.from_numpy(mask_logits), dim=0)
-            scores = scores / scores.sum()
-            
+
             chosen_idx = np.random.choice(len(mask_logits), p=scores.numpy())
             return self.tokenizer.decode(chosen_idx).strip()
         else:
@@ -340,6 +338,7 @@ class DPMlmAnonymizer(Anonymizer):
         text: str,
         offsets: List[Tuple[int, int]],
         epsilon: float,
+        token_epsilons: Optional[np.ndarray],
         runtime_stats: Dict[str, int],
         masked_spans: Sequence[TextAnnotation],
     ) -> ApplyFn:
@@ -368,7 +367,10 @@ class DPMlmAnonymizer(Anonymizer):
                     runtime_stats["deleted"] += 1
                     return
 
-            private_token = self._privatize_token(text, token, (token_start, token_end), epsilon)
+            epsilon_val = epsilon
+            if token_epsilons is not None and idx < len(token_epsilons):
+                epsilon_val = float(token_epsilons[idx])
+            private_token = self._privatize_token(text, token, (token_start, token_end), epsilon_val)
 
             original_text_span = text[token_start:token_end]
             if len(private_token) == len(original_text_span):
@@ -387,7 +389,7 @@ class DPMlmAnonymizer(Anonymizer):
             if self.add_probability > 0:
                 while np.random.rand() < self.add_probability:
                     context_text = ledger.render_offsets(text)
-                    additional_token = self._generate_additional_token(context_text, epsilon)
+                    additional_token = self._generate_additional_token(context_text, epsilon_val)
                     if not additional_token:
                         break
                     ledger.add_after(idx, additional_token)
@@ -491,8 +493,10 @@ class DPMlmAnonymizer(Anonymizer):
                 if risk_scores.size and len(risk_scores) == len(offsets):
                     self._unit.set_risk_scores(risk_scores)
 
-                perturbation_ratio = 1.0
-                compensated_epsilon = float(eps_val) * perturbation_ratio
+                token_epsilons: Optional[np.ndarray] = None
+                if risk_scores.size and len(risk_scores) == len(offsets):
+                    weights = _scores_to_inverse_probs(risk_scores, temperature=self.risk_temperature)
+                    token_epsilons = eps_val * weights * len(weights)
 
                 runtime_stats: Dict[str, int] = {
                     "perturbed": 0,
@@ -506,12 +510,12 @@ class DPMlmAnonymizer(Anonymizer):
                 apply_fn = self._make_apply_fn(
                     text,
                     offsets,
-                    compensated_epsilon,
+                    eps_val,
+                    token_epsilons,
                     runtime_stats,
                     masked_spans,
                 )
 
-                last_step: Optional[AnonymizationStep] = None
                 for step in self._unit.anonymize(text, offsets, apply_fn, ledger, **context):
                     hp_with_threshold = {**hp}
                     threshold = step.threshold
@@ -533,8 +537,6 @@ class DPMlmAnonymizer(Anonymizer):
                         **step.metadata,
                     }
                     token_edits = [TokenEdit.from_mapping(e) for e in ledger.result_edits_metadata()]
-                    if self.compensate_epsilon:
-                        metadata["effective_epsilon"] = compensated_epsilon
                     if used_precomputed:
                         metadata["explainer"] = "PrecomputedRisk"
                     elif self._explainer is not None:

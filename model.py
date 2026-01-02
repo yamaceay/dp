@@ -261,11 +261,12 @@ def build_explainer(explainer_config: dict, model_config: dict, capabilities, mo
 
     return ShapExplainer(model_name=tri_pipeline, use_chunking=tri_chunking, explainer_type=explainer_type)
 
-def configure_model(model: Anonymizer, model_config: dict, explainer_config: dict, runtime_bundle, capabilities, model_name: str, records: List[DatasetRecord]):
-    selector_config = extract_selector_config(model_config)
+def configure_model(model: Anonymizer, model_config: dict, explainer_config: dict, selector_config: dict, runtime_bundle, capabilities, model_name: str, records: List[DatasetRecord]):
     if explainer_config.get("risk_temperature") is not None:
-        if isinstance(selector_config, dict) and selector_config.get("name") == "by_risk":
-            selector_config = {"risk_temperature": explainer_config["risk_temperature"], **selector_config}
+        if "risk_temperature" not in selector_config:
+            selector_config["temperature"] = explainer_config["risk_temperature"]
+        if hasattr(model, "risk_temperature"):
+            model.risk_temperature = float(explainer_config["risk_temperature"])
     
     if any([
         capabilities.must_use_pii_selector,
@@ -448,7 +449,7 @@ if __name__ == "__main__":
             raise ValueError(f"{args.model} requires dataset records for this configuration")
         model.add_dataset_records(records)
 
-    configure_model(model, model_config, explainer_config, runtime_bundle, capabilities, args.model, records)
+    configure_model(model, model_config, explainer_config, selector_config, runtime_bundle, capabilities, args.model, records)
     
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])
     batch_timestamp = args.timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -8,7 +8,6 @@ import numpy as np
 
 from dp.utils.token_ledger import TokenLedger
 
-
 @dataclass
 class AnonymizationStep:
     threshold_type: Optional[str]
@@ -39,17 +38,6 @@ class AnonymizerUnit(ABC):
 
     def set_risk_scores(self, scores: np.ndarray) -> None:
         self._risk_scores = scores
-
-    def _scores_to_probs(self, scores: np.ndarray) -> np.ndarray:
-        if scores.size == 0:
-            return scores
-        scaled = scores / self._temperature
-        scaled = scaled - np.max(scaled)
-        exps = np.exp(scaled)
-        total = np.sum(exps)
-        if total <= 0:
-            return np.ones(len(scores)) / len(scores)
-        return exps / total
 
     def _sort_by_risk(self, indices: List[int], n_offsets: int) -> List[int]:
         if not indices:
