@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 from collections import defaultdict
 import re
@@ -13,46 +12,11 @@ from dp.utils.explainer.base import TokenExplainer
 from dp.methods.anonymizer import Anonymizer, AnonymizationResult
 from dp.methods.constants import Buckets, BucketDict, KParams
 from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
-from dp.utils.splitter import TextSplitter
 from dp.utils.chunking import TokenAwareChunker
+from dp.utils.stopwords import build_terms_to_ignore
 from dp.utils.token_ledger import TokenLedger
 from dp.utils.selector.base import AnonymizerUnit, ApplyFn
 from dp.utils.selector.until_k_selector import UntilKUnit, RankEvaluator
-
-DEFAULT_STOPWORDS: Set[str] = {
-    'a', 'about', 'above', 'after', 'again', 'against', 'ain', 'all', 'am', 'an', 'and', 'any', 'are', 'aren', "aren't", 'as', 'at', 
-    'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', 
-    'can', 'couldn', "couldn't", 
-    'd', 'did', 'didn', "didn't", 'do', 'does', 'doesn', "doesn't", 'doing', 'don', "don't", 'down', 'during', 
-    'each', 
-    'few', 'for', 'from', 'further', 
-    'had', 'hadn', "hadn't", 'has', 'hasn', "hasn't", 'have', 'haven', "haven't", 'having', 'he', "he'd", "he'll", 'her', 'here', 'hers', 'herself', "he's", 'him', 'himself', 'his', 'how', 
-    'i', "i'd", 'if', "i'll", "i'm", 'in', 'into', 'is', 'isn', "isn't", 'it', "it'd", "it'll", "it's", 'its', 'itself', "i've", 
-    'just', 
-    'll', 
-    'm', 'ma', 'me', 'mightn', "mightn't", 'more', 'most', 'mustn', "mustn't", 'my', 'myself', 
-    'needn', "needn't", 'no', 'nor', 'not', 'now', 
-    'o', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 
-    're', 
-    's', 'same', 'shan', "shan't", 'she', "she'd", "she'll", "she's", 'should', 'shouldn', "shouldn't", "should've", 'so', 'some', 'such', 
-    't', 'than', 'that', "that'll", 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they', "they'd", "they'll", "they're", "they've", 'this', 'those', 'through', 'to', 'too', 
-    'under', 'until', 'up', 
-    've', 'very', 
-    'was', 'wasn', "wasn't", 'we', "we'd", "we'll", "we're", 'were', 'weren', "weren't", "we've", 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'will', 'with', 'won', "won't", 'wouldn', "wouldn't", 
-    'y', 'you', "you'd", "you'll", 'your', "you're", 'yours', 'yourself', 'yourselves', "you've"
-}
-
-@dataclass
-class RecordState:
-    uid: str
-    name: str
-    label: int
-    text: str
-    sentence_spans: List[Tuple[int, int]]
-    term_spans: List[Tuple[int, int]]
-    term_texts: List[str]
-    term_indices_by_text: Dict[str, List[int]]
-
 
 class PetreAnonymizer(Anonymizer):
     MODEL_NAME = "petre"
@@ -72,7 +36,6 @@ class PetreAnonymizer(Anonymizer):
         self.mask_all_instances = mask_all_instances
         self.batch_size = batch_size
         self.device = self._resolve_device(device)
-        self.splitter = TextSplitter()
         self._explainer = None
         self._unit: Optional[UntilKUnit] = None
         self.tri_pipeline_path: Optional[str] = None
@@ -80,16 +43,12 @@ class PetreAnonymizer(Anonymizer):
         self._special_pattern = re.compile(r"[^\nA-Za-z0-9À-ÖØ-öø-ÿЀ-ӿ/]+")
         self._terms_to_ignore = set()
         self.dataset_records: List[DatasetRecord] = []
-        self._records_by_idx: List[RecordState] = []
-        self._records_by_uid: Dict[str, RecordState] = {}
         self.label_to_name: Dict[int, str] = {}
         self.name_to_label: Dict[str, int] = {}
         self.num_labels: int = 0
         self.tri_chunker: Optional[TokenAwareChunker] = None
-        self._score_cache: Dict[str, np.ndarray] = {}
-        self._score_order_cache: Dict[str, List[int]] = {}
-        self._raw_risk_scores: Dict[str, Tuple[List[Tuple[int, int]], List[float]]] = {}
-        self._prepared_risk_scores: Dict[str, np.ndarray] = {}
+        self._risk_offsets_by_uid: Dict[str, List[Tuple[int, int]]] = {}
+        self._risk_scores_by_uid: Dict[str, np.ndarray] = {}
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
@@ -99,38 +58,20 @@ class PetreAnonymizer(Anonymizer):
             raise ValueError("dataset_records cannot be empty")
         self.dataset_records = list(dataset_records)
         self._build_label_mappings(self.dataset_records)
-        self._build_record_states(self.dataset_records)
-        self.tri_chunker = None
-        self._terms_to_ignore = self._build_terms_to_ignore({}, None)
-        self._clear_score_cache()
-        self._prepare_risk_scores_for_records()
+        self._terms_to_ignore = build_terms_to_ignore(self.mask_text)
 
     def pre_stream_anonymize(self, *args, risk_scores: Optional[Dict[str, Dict[str, object]]] = None, **kwargs) -> None:
         if risk_scores is not None:
             self.set_risk_scores(risk_scores, records=self.dataset_records or None)
-
-    def _clear_score_cache(self) -> None:
-        self._score_cache.clear()
-        self._score_order_cache.clear()
-        self._refresh_prepared_risk_cache()
-
-    def _refresh_prepared_risk_cache(self) -> None:
-        if not self._prepared_risk_scores:
-            return
-        for uid, scores in self._prepared_risk_scores.items():
-            self._score_cache[uid] = scores
-            self._score_order_cache[uid] = list(np.argsort(-scores, kind="mergesort"))
 
     def set_risk_scores(
         self,
         risk_scores: Dict[str, Dict[str, object]],
         records: Optional[Sequence[DatasetRecord]] = None,
     ) -> None:
-        """Set precomputed risk scores. Offsets must be in original-text coordinates."""
-        self._raw_risk_scores = {}
-        self._prepared_risk_scores = {}
+        self._risk_offsets_by_uid = {}
+        self._risk_scores_by_uid = {}
         if not risk_scores:
-            self._clear_score_cache()
             return
         for uid, payload in risk_scores.items():
             if not isinstance(payload, dict):
@@ -151,64 +92,11 @@ class PetreAnonymizer(Anonymizer):
                     score_list.append(float("nan"))
             if not normalized_offsets or not score_list:
                 continue
-            self._raw_risk_scores[uid] = (normalized_offsets, score_list)
-        self._clear_score_cache()
-        self._prepare_risk_scores_for_records()
-
-    def _prepare_risk_scores_for_records(self) -> None:
-        if not self._raw_risk_scores or not self._records_by_uid:
-            return
-        self._prepared_risk_scores = {}
-        for uid, state in self._records_by_uid.items():
-            raw = self._raw_risk_scores.get(uid)
-            if raw is None:
-                continue
-            term_spans = state.term_spans
-            offsets, scores = raw
-            span_map: Dict[Tuple[int, int], float] = {}
-            for span, value in zip(offsets, scores):
-                span_map[span] = float(value)
-            token_scores = np.full(len(term_spans), float("-inf"), dtype=float)
-            misses = 0
-            for idx, span in enumerate(term_spans):
-                key = (span[0], span[1])
-                if key not in span_map:
-                    misses += 1
-                    continue
-                token_scores[idx] = float(span_map[key])
-            if misses > 0 and misses == len(term_spans):
-                import sys
-                stored_keys = list(span_map.keys())[:5]
-                queried_keys = [(s[0], s[1]) for s in term_spans[:5]]
-                print(f"DEBUG: All risk score lookups failed for uid={uid}", file=sys.stderr)
-                print(f"  Stored (first 5): {stored_keys}", file=sys.stderr)
-                print(f"  Queried (first 5): {queried_keys}", file=sys.stderr)
-            self._prepared_risk_scores[uid] = token_scores
-        self._refresh_prepared_risk_cache()
-
-    def _get_stopwords(self) -> Set[str]:
-        return set(DEFAULT_STOPWORDS)
-
-    def _build_terms_to_ignore(self, annotations: Dict[str, List[TextAnnotation]], name: Optional[str]) -> Set[str]:
-        stopwords = self._get_stopwords()
-        marks = {
-            self.mask_text,
-            *stopwords,
-            "[CLS]",
-            "[SEP]",
-            "[PAD]",
-            "",
-            " ",
-            "\t",
-            "\n",
-        }
-        normalized_marks: Set[str] = set()
-        for mark in marks:
-            if mark is None:
-                continue
-            normalized_marks.add(mark)
-            normalized_marks.add(mark.lower())
-        return normalized_marks
+            order = sorted(range(len(normalized_offsets)), key=lambda i: (normalized_offsets[i][0], normalized_offsets[i][1]))
+            ordered_offsets = [normalized_offsets[i] for i in order]
+            ordered_scores = [score_list[i] for i in order]
+            self._risk_offsets_by_uid[uid] = ordered_offsets
+            self._risk_scores_by_uid[uid] = np.asarray(ordered_scores, dtype=float)
 
     def _build_label_mappings(self, dataset_records: List[DatasetRecord]) -> None:
         names: Set[str] = set()
@@ -221,45 +109,6 @@ class PetreAnonymizer(Anonymizer):
         self.label_to_name = {idx: name for idx, name in enumerate(sorted_names)}
         self.name_to_label = {name: idx for idx, name in self.label_to_name.items()}
         self.num_labels = len(self.label_to_name)
-
-    def _build_record_states(self, dataset_records: List[DatasetRecord]) -> None:
-        self._records_by_idx = []
-        self._records_by_uid = {}
-        for idx, record in enumerate(dataset_records):
-            uid = record.uid or f"record_{idx}"
-            name = record.name or uid
-            if name not in self.name_to_label:
-                raise ValueError(f"unknown identity '{name}' for record {idx}")
-            label = self.name_to_label[name]
-            text = record.text or ""
-            sentence_spans = self.splitter.split_sentences(text)
-            if not sentence_spans:
-                sentence_spans = [(0, len(text))]
-            term_spans: List[Tuple[int, int]] = []
-            term_texts: List[str] = []
-            for sentence_start, sentence_end in sentence_spans:
-                sentence_text = text[sentence_start:sentence_end]
-                tokens = self.splitter.tokenize_with_spans(sentence_text)
-                for token_start, token_end, _ in tokens:
-                    absolute_start = sentence_start + token_start
-                    absolute_end = sentence_start + token_end
-                    term_spans.append((absolute_start, absolute_end))
-                    term_texts.append(text[absolute_start:absolute_end])
-            term_indices_by_text: Dict[str, List[int]] = defaultdict(list)
-            for term_idx, term_text in enumerate(term_texts):
-                term_indices_by_text[term_text].append(term_idx)
-            state = RecordState(
-                uid=uid,
-                name=name,
-                label=label,
-                text=text,
-                sentence_spans=sentence_spans,
-                term_spans=term_spans,
-                term_texts=term_texts,
-                term_indices_by_text=term_indices_by_text,
-            )
-            self._records_by_idx.append(state)
-            self._records_by_uid[uid] = state
 
     def _resolve_device(self, device: Optional[Union[str, int, torch.device]]) -> torch.device:
         return super()._resolve_device(device)
@@ -276,33 +125,7 @@ class PetreAnonymizer(Anonymizer):
             return int(label.split("_")[-1])
         return int(label)
 
-    def _token_scores_for_state(self, state: RecordState) -> np.ndarray:
-        if self._explainer is None:
-            raise RuntimeError("Scoring strategy must be set before running PETRE")
-        cached = self._score_cache.get(state.uid)
-        if cached is not None:
-            return cached
-        precomputed = self._prepared_risk_scores.get(state.uid)
-        if precomputed is not None:
-            self._score_cache[state.uid] = precomputed
-            self._score_order_cache[state.uid] = list(np.argsort(-precomputed, kind="mergesort"))
-            return precomputed
-        raise ValueError(f"No risk scores available for record UID '{state.uid}'")
-
-    def _ordered_token_indices_for_state(self, state: RecordState) -> List[int]:
-        cached = self._score_order_cache.get(state.uid)
-        if cached is not None:
-            return cached
-        scores = self._token_scores_for_state(state)
-        if scores.size == 0:
-            ordered: List[int] = []
-        else:
-            ordered = list(np.argsort(-scores, kind="mergesort"))
-        self._score_order_cache[state.uid] = ordered
-        return ordered
-
     def set_explainer(self, explainer: TokenExplainer) -> None:
-        self._clear_score_cache()
         super().set_explainer(explainer)
         self._load_tri_pipeline()
 
@@ -324,73 +147,13 @@ class PetreAnonymizer(Anonymizer):
             truncation=False,
         )
         tokenizer = getattr(self.tri_pipeline, "tokenizer", None)
-        if tokenizer is not None:
+        if tokenizer is not None and self.use_chunking:
             max_tokens = getattr(tokenizer, "model_max_length", 512)
             if max_tokens is None or max_tokens <= 0:
                 max_tokens = 512
             self.tri_chunker = TokenAwareChunker(tokenizer, max(max_tokens - 2, 1))
         else:
             self.tri_chunker = None
-
-    def _apply_spans_to_text(
-        self,
-        text: str,
-        spans: List[Tuple[int, int]],
-    ) -> str:
-        if not spans:
-            return text
-        ledger = TokenLedger(text, tuple(sorted(set(spans))))
-        span_set = set(spans)
-        for idx, entry in enumerate(ledger.iter_entries()):
-            if (entry.start, entry.end) in span_set:
-                ledger.replace(idx, self.mask_text)
-        return ledger.render_offsets(text)
-
-    def _evaluate_state(
-        self,
-        state: RecordState,
-        spans: List[Tuple[int, int]],
-    ) -> np.ndarray:
-        unique_spans = sorted({(start, end) for start, end in spans})
-        pipeline_inputs: List[str] = []
-        for sentence_span in state.sentence_spans:
-            sent_start, sent_end = sentence_span
-            sentence_text = state.text[sent_start:sent_end]
-            relevant_spans = [(max(s[0], sent_start) - sent_start, min(s[1], sent_end) - sent_start) 
-                             for s in unique_spans 
-                             if not (s[1] <= sent_start or s[0] >= sent_end)]
-            if relevant_spans:
-                ledger = TokenLedger(sentence_text, tuple(sorted(set(s for s in state.term_spans if sent_start <= s[0] and s[1] <= sent_end))))
-                for idx, entry in enumerate(ledger.iter_entries()):
-                    if (entry.start - sent_start, entry.end - sent_start) in relevant_spans:
-                        ledger.replace(idx, self.mask_text)
-                rendered = ledger.render_offsets(sentence_text)
-            else:
-                rendered = sentence_text
-            if not rendered.strip():
-                rendered = self.mask_text
-            if self.tri_chunker is not None:
-                chunks = self.tri_chunker.chunk(rendered)
-                if not chunks:
-                    pipeline_inputs.append(rendered)
-                else:
-                    for chunk in chunks:
-                        chunk_text = chunk.text
-                        pipeline_inputs.append(chunk_text if chunk_text.strip() else self.mask_text)
-            else:
-                pipeline_inputs.append(rendered)
-        if not pipeline_inputs:
-            pipeline_inputs = [self.mask_text]
-        results = self.tri_pipeline(pipeline_inputs, batch_size=self.batch_size)
-        probs = np.zeros(self.num_labels, dtype=float)
-        for split_result in results:
-            for pred in split_result:
-                label_idx = self._parse_label(pred["label"])
-                if 0 <= label_idx < self.num_labels:
-                    probs[label_idx] += float(pred["score"])
-        num_inputs = max(len(pipeline_inputs), 1)
-        probs /= float(num_inputs)
-        return probs
 
     def _rank_from_probs(self, probs: np.ndarray, label_idx: int) -> int:
         sorted_indices = np.argsort(probs)[::-1]
@@ -399,153 +162,87 @@ class PetreAnonymizer(Anonymizer):
             return len(sorted_indices) + 1
         return int(positions[0]) + 1
 
-    def _span_overlaps_existing(
-        self,
-        span: Tuple[int, int],
-        existing: Set[Tuple[int, int]],
-    ) -> bool:
-        for other in existing:
-            if not (span[1] <= other[0] or span[0] >= other[1]):
-                return True
-        return False
-
     def _should_ignore(self, text: str) -> bool:
         clean = self._special_pattern.sub("", text).strip()
         return not clean or clean.lower() in self._terms_to_ignore
 
-    def _expand_candidate_spans(
-        self,
-        state: RecordState,
-        base_span: Tuple[int, int],
-        term_text: str,
-        span_set: Set[Tuple[int, int]],
-    ) -> List[Tuple[int, int]]:
-        if not self.mask_all_instances:
-            return [base_span]
-        raise NotImplementedError("mask_all_instances is not supported yet")
-        # expanded: List[Tuple[int, int]] = []
-        # for idx in state.term_indices_by_text.get(term_text, []):
-        #     candidate_span = state.term_spans[idx]
-        #     span_tuple = (candidate_span[0], candidate_span[1])
-        #     if span_tuple in span_set:
-        #         continue
-        #     if self._span_overlaps_existing(span_tuple, span_set):
-        #         continue
-        #     expanded.append(span_tuple)
-        # if not expanded:
-        #     expanded.append(base_span)
-        # return expanded
+    def _resolve_risk_uid(self, record_name: Optional[str], record_uid: Optional[str]) -> Optional[str]:
+        if record_uid and record_uid in self._risk_offsets_by_uid:
+            return record_uid
+        if record_name and record_name in self._risk_offsets_by_uid:
+            return record_name
+        return None
 
+    def _offsets_for_record(self, record_name: Optional[str], record_uid: Optional[str]) -> List[Tuple[int, int]]:
+        uid = self._resolve_risk_uid(record_name, record_uid)
+        if uid is None:
+            raise ValueError("No precomputed offsets available for record")
+        offsets = self._risk_offsets_by_uid.get(uid)
+        if offsets is None:
+            raise ValueError("No precomputed offsets available for record")
+        return offsets
 
-    def _ensure_annotations_for_k(self, target_k: int, state: RecordState, starting_spans: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    def _scores_for_record(self, record_name: Optional[str], record_uid: Optional[str]) -> np.ndarray:
+        uid = self._resolve_risk_uid(record_name, record_uid)
+        if uid is None:
+            raise ValueError("No precomputed scores available for record")
+        scores = self._risk_scores_by_uid.get(uid)
+        if scores is None:
+            raise ValueError("No precomputed scores available for record")
+        return scores
+
+    def _evaluate_text(self, text: str) -> np.ndarray:
         if self.tri_pipeline is None:
             raise RuntimeError("Scoring strategy must be set before running PETRE")
-        
-        spans: List[Tuple[int, int]] = list(starting_spans)
-        span_set: Set[Tuple[int, int]] = set(spans)
-        span_to_indices: Dict[Tuple[int, int], List[int]] = defaultdict(list)
-        
-        for token_idx, span in enumerate(state.term_spans):
-            span_tuple = (span[0], span[1])
-            span_to_indices[span_tuple].append(token_idx)
-        
-        used_indices: Set[int] = set()
-        for existing_span in span_set:
-            for mapped_idx in span_to_indices.get(existing_span, []):
-                used_indices.add(mapped_idx)
-        
-        scores = self._token_scores_for_state(state)
-        ordered_indices = self._ordered_token_indices_for_state(state)
-        current_probs = self._evaluate_state(state, spans)
-        
-        while True:
-            rank = self._rank_from_probs(current_probs, state.label)
-            if rank >= target_k:
-                break
-            
-            next_token_idx: Optional[int] = None
-            candidate_spans: List[Tuple[int, int]] = []
-            candidate_text: Optional[str] = None
-            
-            for token_idx in ordered_indices:
-                if token_idx in used_indices:
-                    continue
-                score = scores[token_idx] if token_idx < scores.size else float("-inf")
-                if not np.isfinite(score):
-                    used_indices.add(token_idx)
-                    continue
-                token_text = state.term_texts[token_idx]
-                if self._should_ignore(token_text):
-                    used_indices.add(token_idx)
-                    if self.mask_all_instances:
-                        for related_idx in state.term_indices_by_text.get(token_text, []):
-                            used_indices.add(related_idx)
-                    continue
-                base_span = state.term_spans[token_idx]
-                expanded = self._expand_candidate_spans(state, base_span, token_text, span_set)
-                if not expanded:
-                    used_indices.add(token_idx)
-                    continue
-                next_token_idx = token_idx
-                candidate_spans = expanded
-                candidate_text = token_text
-                break
-            
-            if next_token_idx is None or not candidate_spans:
-                break
-            
-            new_spans: List[Tuple[int, int]] = []
-            for start, end in candidate_spans:
-                span_tuple = (start, end)
-                if span_tuple in span_set:
-                    continue
-                new_spans.append(span_tuple)
-            
-            if not new_spans:
-                used_indices.add(next_token_idx)
-                continue
-            
-            spans.extend(new_spans)
-            for start, end in new_spans:
-                span_tuple = (start, end)
-                span_set.add(span_tuple)
-                for mapped_idx in span_to_indices.get(span_tuple, []):
-                    used_indices.add(mapped_idx)
-            
-            if candidate_text is not None:
-                for related_idx in state.term_indices_by_text.get(candidate_text, []):
-                    used_indices.add(related_idx)
-            
-            used_indices.add(next_token_idx)
-            current_probs = self._evaluate_state(state, spans)
-        
-        return spans
+        rendered = text if text.strip() else self.mask_text
+        if self.tri_chunker is not None:
+            chunks = self.tri_chunker.chunk(rendered)
+            if not chunks:
+                pipeline_inputs = [rendered]
+            else:
+                pipeline_inputs = [chunk.text if chunk.text.strip() else self.mask_text for chunk in chunks]
+        else:
+            pipeline_inputs = [rendered]
+        results = self.tri_pipeline(pipeline_inputs, batch_size=min(self.batch_size, len(pipeline_inputs)))
+        probs = np.zeros(self.num_labels, dtype=float)
+        for split_result in results:
+            for pred in split_result:
+                label_idx = self._parse_label(pred["label"])
+                if 0 <= label_idx < self.num_labels:
+                    probs[label_idx] += float(pred["score"])
+        num_inputs = max(len(results), 1)
+        probs /= float(num_inputs)
+        return probs
 
-    def _make_rank_evaluator(self, state: RecordState) -> RankEvaluator:
+    def _make_rank_evaluator(self) -> RankEvaluator:
         def rank_evaluator(current_text: str, target_label: int) -> int:
-            spans = self._extract_masked_spans(state, current_text)
-            probs = self._evaluate_state(state, spans)
+            probs = self._evaluate_text(current_text)
             return self._rank_from_probs(probs, target_label)
         return rank_evaluator
 
-    def _extract_masked_spans(self, state: RecordState, masked_text: str) -> List[Tuple[int, int]]:
-        spans: List[Tuple[int, int]] = []
-        for idx, span in enumerate(state.term_spans):
-            original_token = state.text[span[0]:span[1]]
-            if self.mask_text in masked_text:
-                spans.append(span)
-        return spans
+    def _token_texts_and_indices(
+        self,
+        text: str,
+        offsets: List[Tuple[int, int]],
+    ) -> Tuple[List[str], Dict[str, List[int]]]:
+        token_texts = [text[start:end] for start, end in offsets]
+        indices_by_text: Dict[str, List[int]] = defaultdict(list)
+        for idx, token_text in enumerate(token_texts):
+            indices_by_text[token_text].append(idx)
+        return token_texts, indices_by_text
 
     def _make_apply_fn(
         self,
-        state: RecordState,
+        offsets: List[Tuple[int, int]],
+        token_texts: List[str],
+        indices_by_text: Dict[str, List[int]],
         runtime_stats: Dict[str, int],
     ) -> ApplyFn:
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
-            if idx >= len(state.term_spans):
+            if idx >= len(offsets):
                 return
             
-            token_text = state.term_texts[idx]
+            token_text = token_texts[idx]
             if self._should_ignore(token_text):
                 return
             
@@ -553,7 +250,7 @@ class PetreAnonymizer(Anonymizer):
             runtime_stats["masked"] += 1
             
             if self.mask_all_instances:
-                for related_idx in state.term_indices_by_text.get(token_text, []):
+                for related_idx in indices_by_text.get(token_text, []):
                     if related_idx != idx:
                         ledger.replace(related_idx, self.mask_text)
                         runtime_stats["masked"] += 1
@@ -567,34 +264,41 @@ class PetreAnonymizer(Anonymizer):
         buckets: Buckets = [],
         **kwargs,
     ) -> List[Tuple[BucketDict, AnonymizationResult]]:
-        if idx < 0 or idx >= len(self._records_by_idx):
+        if idx < 0 or idx >= len(self.dataset_records):
             raise IndexError(f"Index {idx} is out of bounds")
         
         if len(buckets) != 1 or not isinstance(buckets[0], KParams):
             raise ValueError("PetreAnonymizer only supports KParams for grid anonymization.")
         k_params: KParams = buckets[0]
         
-        state = self._records_by_idx[idx]
         record = self.dataset_records[idx]
-        text = record.text or state.text
+        text = record.text or ""
+        record_name = record.name or record.uid or f"record_{idx}"
+        record_uid = record.uid or None
+        offsets = self._offsets_for_record(record_name, record_uid)
+        scores = self._scores_for_record(record_name, record_uid)
+        if len(offsets) != len(scores):
+            raise ValueError("Offsets and scores length mismatch for record")
         
         if self._unit is None:
             self._unit = UntilKUnit()
         
         self._unit.set_thresholds(k_params.values(), name="k")
         
-        scores = self._token_scores_for_state(state)
         self._unit.set_risk_scores(scores)
-        self._unit.set_target_label(state.label)
-        self._unit.set_rank_evaluator(self._make_rank_evaluator(state))
+        if record_name not in self.name_to_label:
+            raise ValueError(f"unknown identity '{record_name}' for record {idx}")
+        self._unit.set_target_label(self.name_to_label[record_name])
+        self._unit.set_rank_evaluator(self._make_rank_evaluator())
         
         runtime_stats: Dict[str, int] = {"masked": 0}
 
-        apply_fn = self._make_apply_fn(state, runtime_stats)
+        token_texts, indices_by_text = self._token_texts_and_indices(text, offsets)
+        apply_fn = self._make_apply_fn(offsets, token_texts, indices_by_text, runtime_stats)
 
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         
-        ledger = TokenLedger(text, state.term_spans)
+        ledger = TokenLedger(text, offsets)
         
         prior_edits = record.metadata.get("prior_token_edits", []) if record.metadata else []
         if prior_edits:
@@ -602,7 +306,7 @@ class PetreAnonymizer(Anonymizer):
 
         for step in self._unit.anonymize(
             text,
-            state.term_spans,
+            offsets,
             apply_fn,
             ledger=ledger,
             prior_edits=prior_edits,
@@ -633,7 +337,7 @@ class PetreAnonymizer(Anonymizer):
                 "k": k_value,
                 "perturbed_tokens": runtime_stats["masked"],
                 "method": "petre",
-                "uid": state.uid,
+                "uid": record_uid or record_name,
                 "rank": step.metadata.get("rank"),
                 **step.metadata,
             }

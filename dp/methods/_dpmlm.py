@@ -50,6 +50,7 @@ class DPMlmAnonymizer(Anonymizer):
         self._explainer = None
         self.splitter = TextSplitter()
         self._risk_scores_by_uid: Dict[str, Dict[Tuple[int, int], float]] = {}
+        self._risk_offsets_by_uid: Dict[str, List[Tuple[int, int]]] = {}
         self.dataset_records: List[DatasetRecord] = []
 
         self._tri_label_mapping: Optional[Dict[str, int]] = None
@@ -87,6 +88,7 @@ class DPMlmAnonymizer(Anonymizer):
         records: Optional[Sequence[DatasetRecord]] = None,
     ) -> None:
         self._risk_scores_by_uid = {}
+        self._risk_offsets_by_uid = {}
         if not risk_scores:
             return
         for uid, payload in risk_scores.items():
@@ -97,16 +99,21 @@ class DPMlmAnonymizer(Anonymizer):
             if offsets is None or scores is None:
                 continue
             span_map: Dict[Tuple[int, int], float] = {}
+            raw_spans: List[Tuple[int, int]] = []
             for span, value in zip(offsets, scores):
                 if not isinstance(span, (list, tuple)) or len(span) < 2:
                     continue
                 try:
                     span_key = (int(span[0]), int(span[1]))
                     span_map[span_key] = float(value)
+                    raw_spans.append(span_key)
                 except (TypeError, ValueError):
                     continue
             if span_map:
+                order = sorted(range(len(raw_spans)), key=lambda i: (raw_spans[i][0], raw_spans[i][1]))
+                ordered_spans = [raw_spans[i] for i in order]
                 self._risk_scores_by_uid[uid] = span_map
+                self._risk_offsets_by_uid[uid] = ordered_spans
 
     def add_dataset_records(self, dataset_records: Sequence[DatasetRecord]) -> None:
         self.dataset_records = list(dataset_records)
@@ -317,6 +324,17 @@ class DPMlmAnonymizer(Anonymizer):
             return record_name
         return None
 
+    def _resolve_precomputed_offsets(
+        self,
+        record_name: Optional[str],
+        record_uid: Optional[str],
+    ) -> Optional[List[Tuple[int, int]]]:
+        if record_uid and record_uid in self._risk_offsets_by_uid:
+            return self._risk_offsets_by_uid[record_uid]
+        if record_name and record_name in self._risk_offsets_by_uid:
+            return self._risk_offsets_by_uid[record_name]
+        return None
+
     def _make_apply_fn(
         self,
         text: str,
@@ -433,7 +451,11 @@ class DPMlmAnonymizer(Anonymizer):
                 raise ValueError("DPMlmAnonymizer requires epsilon via Buckets (EpsilonParam)")
 
             try:
-                tokens, offsets = self._tokenize(text)
+                precomputed_offsets = self._resolve_precomputed_offsets(record_name, record_uid)
+                if precomputed_offsets is None:
+                    _, offsets = self._tokenize(text)
+                else:
+                    offsets = precomputed_offsets
 
                 if self._unit is None:
                     from dp.utils.selector.all_selector import AllUnit

@@ -1,6 +1,6 @@
 dataset: trustpilot
 data_path: data/trustpilot/electronics+technology.csv
-attacker_extensions: data/trustpilot/et_bk_sum.jsonl
+attacker_extensions: data/trustpilot/et_bk_deid.jsonl
 model_name: distilbert-base-uncased
 output_root: ../../../netscratch/yay/tri_pipelines/trustpilot/_checkpoints
 max_records: null

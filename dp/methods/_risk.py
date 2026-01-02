@@ -12,6 +12,7 @@ from dp.utils.token_ledger import TokenLedger
 from dp.utils.selector.base import AnonymizerUnit, ApplyFn
 from dp.utils.selector.by_risk_selector import ByRiskUnit
 from dp.utils.explainer.base import TokenExplainer
+from dp.utils.stopwords import build_terms_to_ignore
 
 
 class RiskAnonymizer(Anonymizer):
@@ -26,9 +27,12 @@ class RiskAnonymizer(Anonymizer):
         self._splitter = TextSplitter()
         self._unit: Optional[ByRiskUnit] = ByRiskUnit(temperature=self._temperature)
         self._risk_scores_by_uid: Dict[str, Dict[Tuple[int, int], float]] = {}
+        self._risk_offsets_by_uid: Dict[str, List[Tuple[int, int]]] = {}
+        self._risk_scores_ordered_by_uid: Dict[str, np.ndarray] = {}
         self._scores_cache: Dict[str, Tuple[np.ndarray, List[Tuple[int, int]]]] = {}
         self._starting_indices_cache: Dict[str, List[int]] = {}
         self._prior_edits_cache: Dict[str, List[Dict[str, object]]] = {}
+        self._terms_to_ignore = build_terms_to_ignore(self._mask_text)
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
@@ -52,8 +56,12 @@ class RiskAnonymizer(Anonymizer):
             self.set_risk_scores(risk_scores)
         
         for idx, (name, text) in enumerate(zip(record_names, texts_or_indices)):
-            _, spans = self._tokenize(text)
-            scores = self._compute_scores(text, spans, name)
+            precomputed = self._precomputed_scores_and_spans(name)
+            if precomputed is None:
+                _, spans = self._tokenize(text)
+                scores = self._compute_scores(text, spans, name)
+            else:
+                scores, spans = precomputed
             text_hash = self.hash_text(text)
             self._scores_cache[text_hash] = (scores, spans)
             
@@ -64,6 +72,8 @@ class RiskAnonymizer(Anonymizer):
 
     def set_risk_scores(self, risk_scores: Dict[str, Dict[str, object]]) -> None:
         self._risk_scores_by_uid = {}
+        self._risk_offsets_by_uid = {}
+        self._risk_scores_ordered_by_uid = {}
         
         for uid, payload in risk_scores.items():
             offsets = payload.get("offsets")
@@ -72,13 +82,24 @@ class RiskAnonymizer(Anonymizer):
                 continue
             
             span_map: Dict[Tuple[int, int], float] = {}
+            raw_spans: List[Tuple[int, int]] = []
+            raw_scores: List[float] = []
             for span, value in zip(offsets, scores):
                 if len(span) < 2:
                     continue
-                span_map[(int(span[0]), int(span[1]))] = float(value)
+                span_tuple = (int(span[0]), int(span[1]))
+                score_value = float(value)
+                span_map[span_tuple] = score_value
+                raw_spans.append(span_tuple)
+                raw_scores.append(score_value)
             
             if span_map:
+                order = sorted(range(len(raw_spans)), key=lambda i: (raw_spans[i][0], raw_spans[i][1]))
+                ordered_spans = [raw_spans[i] for i in order]
+                ordered_scores = [raw_scores[i] for i in order]
                 self._risk_scores_by_uid[uid] = span_map
+                self._risk_offsets_by_uid[uid] = ordered_spans
+                self._risk_scores_ordered_by_uid[uid] = np.asarray(ordered_scores, dtype=float)
 
     def _starting_replacements_for_indices(
         self,
@@ -95,6 +116,9 @@ class RiskAnonymizer(Anonymizer):
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
             if idx >= len(spans):
                 return
+            token_text = ledger.entry(idx).original_text
+            if token_text.lower() in self._terms_to_ignore:
+                return
             ledger.replace(idx, self._mask_text)
             runtime_stats["masked"] += 1
 
@@ -106,8 +130,12 @@ class RiskAnonymizer(Anonymizer):
         text_hash = self.hash_text(text)
         cached = self._scores_cache.get(text_hash)
         if cached is None:
-            _, spans = self._tokenize(text)
-            scores = self._compute_scores(text, spans, record_name)
+            precomputed = self._precomputed_scores_and_spans(record_name)
+            if precomputed is None:
+                _, spans = self._tokenize(text)
+                scores = self._compute_scores(text, spans, record_name)
+            else:
+                scores, spans = precomputed
         else:
             scores, spans = cached
         
@@ -206,12 +234,24 @@ class RiskAnonymizer(Anonymizer):
             return precomputed
         raise NotImplementedError("RiskAnonymizer requires precomputed risk scores for each record.")
 
+    def _precomputed_scores_and_spans(self, record_name: Optional[str]) -> Optional[Tuple[np.ndarray, List[Tuple[int, int]]]]:
+        if not record_name:
+            return None
+        spans = self._risk_offsets_by_uid.get(record_name)
+        scores = self._risk_scores_ordered_by_uid.get(record_name)
+        if spans is None or scores is None:
+            return None
+        if len(spans) != len(scores):
+            raise ValueError(f"Risk scores length mismatch for record {record_name}")
+        return scores, spans
+
     def _lookup_precomputed_scores(self, spans: List[Tuple[int, int]], record_name: Optional[str]) -> Optional[np.ndarray]:
         if record_name and record_name in self._risk_scores_by_uid:
             mapping = self._risk_scores_by_uid[record_name]
             scores: List[float] = []
             for start, end in spans:
                 if (start, end) not in mapping:
+                    print(f"Missing score for span ({start}, {end}) in record {record_name}")
                     return None
                 scores.append(mapping[(start, end)])
             return np.asarray(scores, dtype=float)

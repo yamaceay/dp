@@ -73,27 +73,6 @@ echo "  tab result_in: $TAB_RESULT_IN"
 echo "  tab risk_in: $TAB_RISK_IN"
 echo ""
 
-# Extract tri_location for output_root
-# Select tri_location from tab or reddit section based on config file name
-if [[ "$MODELS_FILE" == *tab* ]]; then
-    TRI_LOCATION=$(awk -F': *' '
-        /^tab:/ {in_tab=1; next}
-        /^[^ \t]/ && $1!="tab:" {in_tab=0}
-        in_tab && /^[ \t]+tri_location:/ {print $2; exit}
-    ' "$MODELS_FILE")
-    SECTION=tab
-else
-    TRI_LOCATION=$(awk -F': *' '
-        /^reddit:/ {in_reddit=1; next}
-        /^[^ \t]/ && $1!="reddit:" {in_reddit=0}
-        in_reddit && /^[ \t]+tri_location:/ {print $2; exit}
-    ' "$MODELS_FILE")
-    SECTION=reddit
-fi
-if [[ -z "$TRI_LOCATION" ]]; then
-    echo "Error: failed to extract $SECTION.tri_location from $MODELS_FILE" >&2
-    exit 1
-fi
 echo "  $SECTION.tri_location (output_root): $TRI_LOCATION"
 echo ""
 
@@ -102,14 +81,6 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
         echo "Skipping missing config dir: $CONFIG_DIR"
         continue
     fi
-
-    echo "Setting output_root in configs under $CONFIG_DIR..."
-    find "$CONFIG_DIR" -name "*.yaml" -type f | while read config; do
-        if grep -q "output_root:" "$config"; then
-            sed -i.bak "s|output_root:.*|output_root: $TRI_LOCATION|g" "$config"
-            echo "  Updated: $config"
-        fi
-    done
 
     echo "Updating model_checkpoint references in $CONFIG_DIR..."
     find "$CONFIG_DIR" -name "*.yaml" -type f | while read config; do
