@@ -10,7 +10,7 @@ precomputation:
   result_in: outputs/reddit/presidio/20251231_120522_reddit_presidio.jsonl
 
 tri_chunking:
-  enabled: false
+  enabled: true
 
 token_selection:
   name: until_k

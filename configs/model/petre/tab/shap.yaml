@@ -10,7 +10,7 @@ precomputation:
   result_in: outputs/tab/presidio/20251231_120524_tab_presidio.jsonl
 
 tri_chunking:
-  enabled: false
+  enabled: true
 
 token_selection:
   name: until_k

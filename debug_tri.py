@@ -1,6 +1,5 @@
 import json
 import sys
-from tqdm import tqdm
 
 from dp.loaders import get_adapter
 from dp.loaders.results import build_dataset_from_results, load_result_records
