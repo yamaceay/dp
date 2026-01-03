@@ -151,6 +151,8 @@ def _merge_result_record(
         metadata.update(original.metadata)
     if isinstance(result.metadata, dict):
         metadata.update(result.metadata)
+    if result.annotations.token_edits:
+        metadata["prior_token_edits"] = [te.to_dict() for te in result.annotations.token_edits]
     
     if original is not None:
         metadata["original_text"] = original.text

@@ -246,3 +246,16 @@ def map_original_offset_to_result(
             if start <= orig_start:
                 delta += len(text)
     return (orig_start + delta, orig_end + delta)
+
+
+def map_offsets_to_result(
+    offsets: Sequence[Tuple[int, int]],
+    edits: Sequence[Dict[str, object]],
+) -> List[Tuple[int, int]]:
+    mapped: List[Tuple[int, int]] = []
+    for start, end in offsets:
+        mapped_span = map_original_offset_to_result(start, end, edits)
+        if mapped_span is None:
+            raise ValueError(f"Unable to map offset ({start}, {end}) to result coordinates")
+        mapped.append(mapped_span)
+    return mapped

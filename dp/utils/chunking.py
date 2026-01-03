@@ -73,6 +73,13 @@ class TokenAwareChunker:
             if offsets:
                 start_char = offsets[i][0]
                 end_char = offsets[end_idx - 1][1]
+                while end_idx > i:
+                    chunk_text = text[start_char:end_char]
+                    chunk_tokens = self.tokenizer(chunk_text, add_special_tokens=False)["input_ids"]
+                    if len(chunk_tokens) <= self.max_tokens:
+                        break
+                    end_idx -= 1
+                    end_char = offsets[end_idx - 1][1]
             else:
                 chunk_tokens = tokens[i:end_idx]
                 decoded = self.tokenizer.decode(chunk_tokens, skip_special_tokens=True)
