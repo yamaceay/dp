@@ -531,7 +531,12 @@ class DPMlmAnonymizer(Anonymizer):
 
                 token_epsilons: Optional[np.ndarray] = None
                 if risk_scores.size and len(risk_scores) == len(offsets):
-                    weights = _scores_to_inverse_probs(risk_scores, temperature=self.risk_temperature)
+                    from dp.utils.explainer.uniform import UniformExplainer
+                    if self._explainer is not None and isinstance(self._explainer, UniformExplainer):
+                        weights = np.ones_like(risk_scores, dtype=float)
+                        weights = weights / float(len(weights))
+                    else:
+                        weights = _scores_to_inverse_probs(risk_scores, temperature=self.risk_temperature)
                     token_epsilons = eps_val * weights * len(weights)
 
                 runtime_stats: Dict[str, int] = {
