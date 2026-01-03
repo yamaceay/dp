@@ -20,7 +20,7 @@ fi
 
 echo "Using models file: $MODELS_FILE"
 
-CONFIG_DIRS=("configs/model" "configs/lrec" "configs/experiments" "configs/tri_training")
+CONFIG_DIRS=("configs/model" "configs/lrec" "configs/experiments" "configs/tri_training" "configs/risk")
 
 yaml_top_value() {
     local key="$1"
@@ -119,6 +119,22 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
         fi
     done
 
+    echo "Updating explainer_in in reddit risk configs under $CONFIG_DIR..."
+    find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
+        if grep -q "explainer_in:" "$config"; then
+            sed -i.bak "s|explainer_in:.*|explainer_in: $REDDIT_TRI_PIPELINE|g" "$config"
+            echo "  Updated: $config"
+        fi
+    done
+
+    echo "Updating explainer_in in tab risk configs under $CONFIG_DIR..."
+    find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
+        if grep -q "explainer_in:" "$config"; then
+            sed -i.bak "s|explainer_in:.*|explainer_in: $TAB_TRI_PIPELINE|g" "$config"
+            echo "  Updated: $config"
+        fi
+    done
+
     echo "Updating universal_tri_pipeline in reddit configs under $CONFIG_DIR..."
     find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
         if grep -q "universal_tri_pipeline:" "$config"; then
@@ -163,6 +179,26 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
         done
     fi
 
+    echo "Updating result_in in reddit risk configs under $CONFIG_DIR..."
+    if [[ -n "$REDDIT_RESULT_IN" ]]; then
+        find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
+            if grep -q "result_in:" "$config"; then
+                sed -i.bak "s|result_in:.*|result_in: $REDDIT_RESULT_IN|g" "$config"
+                echo "  Updated: $config"
+            fi
+        done
+    fi
+
+    echo "Updating result_in in tab risk configs under $CONFIG_DIR..."
+    if [[ -n "$TAB_RESULT_IN" ]]; then
+        find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
+            if grep -q "result_in:" "$config"; then
+                sed -i.bak "s|result_in:.*|result_in: $TAB_RESULT_IN|g" "$config"
+                echo "  Updated: $config"
+            fi
+        done
+    fi
+
     echo "Updating risk_in in reddit configs under $CONFIG_DIR..."
     if [[ -n "$REDDIT_RISK_IN" ]]; then
         find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
@@ -178,6 +214,26 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
         find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
             if grep -q "risk_scores:" "$config"; then
                 sed -i.bak "s|risk_scores:.*|risk_scores: $TAB_RISK_IN|g" "$config"
+                echo "  Updated: $config"
+            fi
+        done
+    fi
+
+    echo "Updating save_to_jsonl in reddit risk configs under $CONFIG_DIR..."
+    if [[ -n "$REDDIT_RISK_IN" ]]; then
+        find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
+            if grep -q "save_to_jsonl:" "$config"; then
+                sed -i.bak "s|save_to_jsonl:.*|save_to_jsonl: $REDDIT_RISK_IN|g" "$config"
+                echo "  Updated: $config"
+            fi
+        done
+    fi
+
+    echo "Updating save_to_jsonl in tab risk configs under $CONFIG_DIR..."
+    if [[ -n "$TAB_RISK_IN" ]]; then
+        find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
+            if grep -q "save_to_jsonl:" "$config"; then
+                sed -i.bak "s|save_to_jsonl:.*|save_to_jsonl: $TAB_RISK_IN|g" "$config"
                 echo "  Updated: $config"
             fi
         done
