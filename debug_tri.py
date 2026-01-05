@@ -1,5 +1,6 @@
 import json
 import sys
+import numpy as np
 
 from dp.loaders import get_adapter
 from dp.loaders.results import build_dataset_from_results, load_result_records
@@ -20,6 +21,7 @@ if __name__ == "__main__":
     parser.add_argument('--full_record', action='store_true', help='Whether to display full record information')
     parser.add_argument('--save_to_jsonl', type=str, default=None, help='Path to save the output records as JSONL')
     parser.add_argument('--offset_mode', type=str, choices=['original', 'result'], default='result', help='Whether risk offsets are in original or result text coordinates')
+    parser.add_argument('--abs', action='store_true', help='Use absolute scores')
     args = parser.parse_args()
 
     data_kwargs = dict(
@@ -63,16 +65,25 @@ if __name__ == "__main__":
                 text_for_lookup = original_text_by_uid.get(record.uid)
                 if text_for_lookup is None:
                     raise ValueError(f"No original text found for UID={record.uid}")
-            scores.append(entry['scores'])
-            offsets.append(entry['offsets'])
-            record_tokens = []
+            scores_record = entry['scores']
+            offsets_record = entry['offsets']
+            tokens_record = []
             for s, e in entry['offsets']:
                 if s < 0 or e > len(text_for_lookup):
                     print(f"WARNING: Offset ({s}, {e}) out of bounds for text length {len(text_for_lookup)} (uid={record.uid})", file=sys.stderr)
-                    record_tokens.append("<OOB>")
+                    tokens_record.append("<OOB>")
                 else:
-                    record_tokens.append(text_for_lookup[s:e])
-            tokens.append(record_tokens)
+                    tokens_record.append(text_for_lookup[s:e])
+            
+            if args.abs:
+                scores_idx = np.argsort(np.abs(scores_record))[::-1]
+                scores_record = [scores_record[i] for i in scores_idx]
+                offsets_record = [offsets_record[i] for i in scores_idx]
+                tokens_record = [tokens_record[i] for i in scores_idx]
+
+            scores.append(scores_record)
+            offsets.append(offsets_record)
+            tokens.append(tokens_record)
 
         scores = scores[args.start:args.end:args.step][:args.max_records or len(scores)]
         offsets = offsets[args.start:args.end:args.step][:args.max_records or len(offsets)]
