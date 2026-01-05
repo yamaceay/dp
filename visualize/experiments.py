@@ -1,52 +1,51 @@
+from __future__ import annotations
+
 import json
 import re
-import pandas as pd
-import os
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
-FILES = [
-    ("logs/reddit_priv_exp.jsonl", "reddit"),
-    # ("logs/tab_priv_exp.jsonl", "tab"),
-]
+FILES: List[Tuple[str, str]] = [("logs/reddit_priv_exp.jsonl", "reddit")]
 
-def params_to_str_for_sort(params):
-    str_parts = []
+def params_to_str_for_sort(params: Mapping[str, Any]) -> str:
+    parts: List[Tuple[str, str]] = []
     for k, v in params.items():
         if k == "epsilon":
-            str_parts.append((k, f"{1000 - v:03d}"))
+            parts.append((k, f"{1000 - int(v):03d}"))
         elif k == "k":
-            str_parts.append((k, f"{v:02d}"))
+            parts.append((k, f"{int(v):02d}"))
         elif k in {"rho", "lambda"}:
-            str_parts.append((k, f"{int(100 - v * 100):03d}"))
-    return "&".join(f"{k}={v}" for k, v in str_parts)
+            parts.append((k, f"{int(100 - float(v) * 100):03d}"))
+    return "&".join(f"{k}={v}" for k, v in parts)
 
-def params_to_str(params):
+def params_to_str(params: Mapping[str, Any]) -> str:
     return "&".join(f"{k}={v}" for k, v in params.items())
 
-def read_data(files):
+def read_data(files: Sequence[Tuple[str, str]]) -> Iterable[Dict[str, Any]]:
     for file_path, dataset_name in files:
-        with open(file_path) as file:
+        fp = Path(file_path)
+        if not fp.exists():
+            continue
+        with fp.open() as file:
             for line in file:
                 data = json.loads(line)
-                if data["type"] != "evaluation":
+                if data.get("type") != "evaluation":
                     continue
-
                 key = re.sub(r"outputs/[a-z]+/[a-z]+/[0-9]{8}_[0-9]{6}_[a-z]+_(.*?).jsonl", r"\1", data["source"])
                 key = re.sub(r"_eps_[0-9]{3}(\?.*?)", r"\1", key)
                 key = re.sub(r"(?:_k|_risk|_pii)(\?.*?)", r"\1", key)
-
-                params = {}
+                params: Dict[str, Any] = {}
                 if "?" in key:
                     key, params_str = key.split("?", 1)
                     for param in params_str.split("&"):
-                        if "=" in param:
-                            name, value = param.split("=", 1)
-                            if name == "epsilon" or name == "k":
-                                value = int(value)
-                            elif name == "rho" or name == "lambda":
-                                value = float(value) / 100.0
-                            params[f"{name}"] = value
-                        else: 
+                        if "=" not in param:
                             raise ValueError(f"Unexpected hyperparameter format: {param}")
+                        name, value = param.split("=", 1)
+                        if name in {"epsilon", "k"}:
+                            value = int(value)
+                        elif name in {"rho", "lambda"}:
+                            value = float(value) / 100.0
+                        params[name] = value
                 params = dict(sorted(params.items(), key=lambda item: item[0]))
                 res = data["summary"]
                 values = {
@@ -56,37 +55,30 @@ def read_data(files):
                 }
                 yield {"method": key, "params": params, "dataset": dataset_name, **values}
 
-if __name__ == "__main__":
+def build_summaries() -> None:
     entries = list(read_data(FILES))
     entries = sorted(entries, key=lambda x: (x["method"], params_to_str_for_sort(x["params"])))
-    entries_by_dataset_by_method = {}
+    by_dataset_by_method: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
     for entry in entries:
-        entry_copy = entry.copy()
-        dataset = entry_copy.pop("dataset")
-        method = entry_copy.pop("method")
-        # entry_copy["params"] = params_to_str(entry_copy.pop("params"))
-        if dataset not in entries_by_dataset_by_method:
-            entries_by_dataset_by_method[dataset] = {}
-        if method not in entries_by_dataset_by_method[dataset]:
-            entries_by_dataset_by_method[dataset][method] = []
-        entries_by_dataset_by_method[dataset][method].append(entry_copy)
-
-    entries_by_dataset_by_params = {}
+        e = entry.copy()
+        dataset = e.pop("dataset")
+        method = e.pop("method")
+        by_dataset_by_method.setdefault(dataset, {}).setdefault(method, []).append(e)
+    by_dataset_by_params: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
     for entry in entries:
-        entry_copy = entry.copy()
-        dataset = entry_copy.pop("dataset")
-        params = params_to_str(entry_copy.pop("params"))
-        if dataset not in entries_by_dataset_by_params:
-            entries_by_dataset_by_params[dataset] = {}
-        if params not in entries_by_dataset_by_params[dataset]:
-            entries_by_dataset_by_params[dataset][params] = []
-        entries_by_dataset_by_params[dataset][params].append(entry_copy)
-
-    with open("visualize/reddit_summary.json", "w", encoding="utf-8") as f:
+        e = entry.copy()
+        dataset = e.pop("dataset")
+        params = params_to_str(e.pop("params"))
+        by_dataset_by_params.setdefault(dataset, {}).setdefault(params, []).append(e)
+    Path("visualize").mkdir(parents=True, exist_ok=True)
+    with open("visualize/summary.json", "w", encoding="utf-8") as f:
         json.dump(entries, f, indent=2)
-    
-    with open("visualize/reddit_summary_by_method.json", "w", encoding="utf-8") as f:
-        json.dump(entries_by_dataset_by_method, f, indent=2)
+    for dataset in by_dataset_by_method:
+        with open(f"visualize/summary_by_method_{dataset}.json", "w", encoding="utf-8") as f:
+            json.dump(by_dataset_by_method[dataset], f, indent=2)
+    for dataset in by_dataset_by_params:
+        with open(f"visualize/summary_by_params_{dataset}.json", "w", encoding="utf-8") as f:
+            json.dump(by_dataset_by_params[dataset], f, indent=2)
 
-    with open("visualize/reddit_summary_by_params.json", "w", encoding="utf-8") as f:
-        json.dump(entries_by_dataset_by_params, f, indent=2)
+if __name__ == "__main__":
+    build_summaries()
