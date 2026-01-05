@@ -5,6 +5,7 @@
         "epsilon": 500
       },
       "privacy_mean_rank_change": 12.857142857142858,
+      "privacy_median_rank_change": 10.0,
       "privacy_num_rank_increased": 455,
       "privacy_num_rank_decreased": 21
     },
@@ -13,6 +14,7 @@
         "epsilon": 250
       },
       "privacy_mean_rank_change": 13.464761904761906,
+      "privacy_median_rank_change": 11.0,
       "privacy_num_rank_increased": 452,
       "privacy_num_rank_decreased": 23
     },
@@ -21,6 +23,7 @@
         "epsilon": 100
       },
       "privacy_mean_rank_change": 15.043809523809523,
+      "privacy_median_rank_change": 14.0,
       "privacy_num_rank_increased": 469,
       "privacy_num_rank_decreased": 19
     },
@@ -29,6 +32,7 @@
         "epsilon": 25
       },
       "privacy_mean_rank_change": 16.64761904761905,
+      "privacy_median_rank_change": 16.0,
       "privacy_num_rank_increased": 489,
       "privacy_num_rank_decreased": 19
     },
@@ -37,6 +41,7 @@
         "epsilon": 10
       },
       "privacy_mean_rank_change": 17.241904761904763,
+      "privacy_median_rank_change": 16.0,
       "privacy_num_rank_increased": 490,
       "privacy_num_rank_decreased": 13
     }
@@ -47,6 +52,7 @@
         "epsilon": 500
       },
       "privacy_mean_rank_change": 10.472380952380952,
+      "privacy_median_rank_change": 7.0,
       "privacy_num_rank_increased": 406,
       "privacy_num_rank_decreased": 23
     },
@@ -56,6 +62,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.685714285714286,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 304,
       "privacy_num_rank_decreased": 27
     },
@@ -65,6 +72,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.506666666666667,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 340,
       "privacy_num_rank_decreased": 22
     },
@@ -74,6 +82,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.04,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 368,
       "privacy_num_rank_decreased": 23
     },
@@ -83,6 +92,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 6.958095238095238,
+      "privacy_median_rank_change": 3.0,
       "privacy_num_rank_increased": 376,
       "privacy_num_rank_decreased": 15
     },
@@ -92,6 +102,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 7.862857142857143,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 388,
       "privacy_num_rank_decreased": 16
     },
@@ -101,6 +112,7 @@
         "rho": 0.9
       },
       "privacy_mean_rank_change": 8.956190476190477,
+      "privacy_median_rank_change": 5.0,
       "privacy_num_rank_increased": 388,
       "privacy_num_rank_decreased": 18
     },
@@ -110,6 +122,7 @@
         "rho": 0.8
       },
       "privacy_mean_rank_change": 9.94095238095238,
+      "privacy_median_rank_change": 6.0,
       "privacy_num_rank_increased": 420,
       "privacy_num_rank_decreased": 16
     },
@@ -119,6 +132,7 @@
         "rho": 0.7
       },
       "privacy_mean_rank_change": 9.807619047619047,
+      "privacy_median_rank_change": 6.0,
       "privacy_num_rank_increased": 425,
       "privacy_num_rank_decreased": 19
     },
@@ -127,6 +141,7 @@
         "epsilon": 250
       },
       "privacy_mean_rank_change": 10.973333333333333,
+      "privacy_median_rank_change": 8.0,
       "privacy_num_rank_increased": 411,
       "privacy_num_rank_decreased": 21
     },
@@ -136,6 +151,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.634285714285714,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 296,
       "privacy_num_rank_decreased": 26
     },
@@ -145,6 +161,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.499047619047619,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 336,
       "privacy_num_rank_decreased": 19
     },
@@ -154,6 +171,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.158095238095238,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 364,
       "privacy_num_rank_decreased": 21
     },
@@ -163,6 +181,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 7.177142857142857,
+      "privacy_median_rank_change": 3.0,
       "privacy_num_rank_increased": 386,
       "privacy_num_rank_decreased": 19
     },
@@ -172,6 +191,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 8.464761904761906,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 401,
       "privacy_num_rank_decreased": 18
     },
@@ -181,6 +201,7 @@
         "rho": 0.9
       },
       "privacy_mean_rank_change": 9.02095238095238,
+      "privacy_median_rank_change": 5.0,
       "privacy_num_rank_increased": 413,
       "privacy_num_rank_decreased": 16
     },
@@ -190,6 +211,7 @@
         "rho": 0.8
       },
       "privacy_mean_rank_change": 9.60952380952381,
+      "privacy_median_rank_change": 6.0,
       "privacy_num_rank_increased": 432,
       "privacy_num_rank_decreased": 16
     },
@@ -199,6 +221,7 @@
         "rho": 0.7
       },
       "privacy_mean_rank_change": 10.42095238095238,
+      "privacy_median_rank_change": 7.0,
       "privacy_num_rank_increased": 425,
       "privacy_num_rank_decreased": 18
     },
@@ -207,6 +230,7 @@
         "epsilon": 100
       },
       "privacy_mean_rank_change": 12.396190476190476,
+      "privacy_median_rank_change": 9.0,
       "privacy_num_rank_increased": 440,
       "privacy_num_rank_decreased": 20
     },
@@ -216,6 +240,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.847619047619047,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 304,
       "privacy_num_rank_decreased": 24
     },
@@ -225,6 +250,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.523809523809524,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 341,
       "privacy_num_rank_decreased": 21
     },
@@ -234,6 +260,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.344761904761905,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 371,
       "privacy_num_rank_decreased": 18
     },
@@ -243,6 +270,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 7.331428571428572,
+      "privacy_median_rank_change": 3.0,
       "privacy_num_rank_increased": 393,
       "privacy_num_rank_decreased": 21
     },
@@ -252,6 +280,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 8.10095238095238,
+      "privacy_median_rank_change": 5.0,
       "privacy_num_rank_increased": 408,
       "privacy_num_rank_decreased": 17
     },
@@ -261,6 +290,7 @@
         "rho": 0.9
       },
       "privacy_mean_rank_change": 9.432380952380953,
+      "privacy_median_rank_change": 5.0,
       "privacy_num_rank_increased": 406,
       "privacy_num_rank_decreased": 20
     },
@@ -270,6 +300,7 @@
         "rho": 0.8
       },
       "privacy_mean_rank_change": 10.75047619047619,
+      "privacy_median_rank_change": 7.0,
       "privacy_num_rank_increased": 437,
       "privacy_num_rank_decreased": 14
     },
@@ -279,6 +310,7 @@
         "rho": 0.7
       },
       "privacy_mean_rank_change": 11.276190476190477,
+      "privacy_median_rank_change": 8.0,
       "privacy_num_rank_increased": 449,
       "privacy_num_rank_decreased": 14
     },
@@ -287,6 +319,7 @@
         "epsilon": 25
       },
       "privacy_mean_rank_change": 15.493333333333334,
+      "privacy_median_rank_change": 14.0,
       "privacy_num_rank_increased": 474,
       "privacy_num_rank_decreased": 12
     },
@@ -296,6 +329,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.859047619047619,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 303,
       "privacy_num_rank_decreased": 27
     },
@@ -305,6 +339,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.525714285714286,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 340,
       "privacy_num_rank_decreased": 22
     },
@@ -314,6 +349,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.784761904761905,
+      "privacy_median_rank_change": 3.0,
       "privacy_num_rank_increased": 387,
       "privacy_num_rank_decreased": 20
     },
@@ -323,6 +359,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 7.782857142857143,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 406,
       "privacy_num_rank_decreased": 20
     },
@@ -332,6 +369,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 9.060952380952381,
+      "privacy_median_rank_change": 6.0,
       "privacy_num_rank_increased": 426,
       "privacy_num_rank_decreased": 14
     },
@@ -341,6 +379,7 @@
         "rho": 0.9
       },
       "privacy_mean_rank_change": 10.139047619047618,
+      "privacy_median_rank_change": 6.0,
       "privacy_num_rank_increased": 428,
       "privacy_num_rank_decreased": 15
     },
@@ -350,6 +389,7 @@
         "rho": 0.8
       },
       "privacy_mean_rank_change": 12.434285714285714,
+      "privacy_median_rank_change": 10.0,
       "privacy_num_rank_increased": 465,
       "privacy_num_rank_decreased": 12
     },
@@ -359,6 +399,7 @@
         "rho": 0.7
       },
       "privacy_mean_rank_change": 14.08,
+      "privacy_median_rank_change": 12.0,
       "privacy_num_rank_increased": 472,
       "privacy_num_rank_decreased": 11
     },
@@ -367,6 +408,7 @@
         "epsilon": 10
       },
       "privacy_mean_rank_change": 17.542857142857144,
+      "privacy_median_rank_change": 17.0,
       "privacy_num_rank_increased": 502,
       "privacy_num_rank_decreased": 8
     },
@@ -376,6 +418,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.8342857142857145,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 302,
       "privacy_num_rank_decreased": 24
     },
@@ -385,6 +428,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.491428571428571,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 337,
       "privacy_num_rank_decreased": 19
     },
@@ -394,6 +438,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 7.08,
+      "privacy_median_rank_change": 3.0,
       "privacy_num_rank_increased": 385,
       "privacy_num_rank_decreased": 18
     },
@@ -403,6 +448,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 8.060952380952381,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 409,
       "privacy_num_rank_decreased": 20
     },
@@ -412,6 +458,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 9.072380952380952,
+      "privacy_median_rank_change": 6.0,
       "privacy_num_rank_increased": 411,
       "privacy_num_rank_decreased": 15
     },
@@ -421,6 +468,7 @@
         "rho": 0.9
       },
       "privacy_mean_rank_change": 11.300952380952381,
+      "privacy_median_rank_change": 8.0,
       "privacy_num_rank_increased": 447,
       "privacy_num_rank_decreased": 12
     },
@@ -430,6 +478,7 @@
         "rho": 0.8
       },
       "privacy_mean_rank_change": 13.289523809523809,
+      "privacy_median_rank_change": 11.0,
       "privacy_num_rank_increased": 465,
       "privacy_num_rank_decreased": 14
     },
@@ -439,6 +488,7 @@
         "rho": 0.7
       },
       "privacy_mean_rank_change": 14.276190476190477,
+      "privacy_median_rank_change": 12.0,
       "privacy_num_rank_increased": 485,
       "privacy_num_rank_decreased": 8
     }
@@ -449,6 +499,7 @@
         "epsilon": 500
       },
       "privacy_mean_rank_change": 10.963809523809523,
+      "privacy_median_rank_change": 8.0,
       "privacy_num_rank_increased": 426,
       "privacy_num_rank_decreased": 19
     },
@@ -457,6 +508,7 @@
         "epsilon": 250
       },
       "privacy_mean_rank_change": 11.146666666666667,
+      "privacy_median_rank_change": 8.0,
       "privacy_num_rank_increased": 420,
       "privacy_num_rank_decreased": 21
     },
@@ -465,6 +517,7 @@
         "epsilon": 100
       },
       "privacy_mean_rank_change": 11.984761904761905,
+      "privacy_median_rank_change": 10.0,
       "privacy_num_rank_increased": 441,
       "privacy_num_rank_decreased": 20
     },
@@ -473,6 +526,7 @@
         "epsilon": 25
       },
       "privacy_mean_rank_change": 14.933333333333334,
+      "privacy_median_rank_change": 14.0,
       "privacy_num_rank_increased": 472,
       "privacy_num_rank_decreased": 14
     },
@@ -481,6 +535,7 @@
         "epsilon": 10
       },
       "privacy_mean_rank_change": 17.773333333333333,
+      "privacy_median_rank_change": 18.0,
       "privacy_num_rank_increased": 496,
       "privacy_num_rank_decreased": 11
     }
@@ -492,6 +547,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.573333333333333,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 288,
       "privacy_num_rank_decreased": 26
     },
@@ -501,6 +557,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.478095238095238,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 347,
       "privacy_num_rank_decreased": 18
     },
@@ -510,6 +567,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.024761904761904,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 354,
       "privacy_num_rank_decreased": 21
     },
@@ -519,6 +577,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 6.9504761904761905,
+      "privacy_median_rank_change": 3.0,
       "privacy_num_rank_increased": 380,
       "privacy_num_rank_decreased": 19
     },
@@ -528,6 +587,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 7.895238095238096,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 394,
       "privacy_num_rank_decreased": 22
     },
@@ -537,6 +597,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.838095238095238,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 310,
       "privacy_num_rank_decreased": 24
     },
@@ -546,6 +607,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.514285714285714,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 350,
       "privacy_num_rank_decreased": 19
     },
@@ -555,6 +617,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.4209523809523805,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 369,
       "privacy_num_rank_decreased": 20
     },
@@ -564,6 +627,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 7.192380952380953,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 390,
       "privacy_num_rank_decreased": 19
     },
@@ -573,6 +637,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 8.15047619047619,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 402,
       "privacy_num_rank_decreased": 20
     },
@@ -582,6 +647,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.72,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 308,
       "privacy_num_rank_decreased": 24
     },
@@ -591,6 +657,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.445714285714286,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 336,
       "privacy_num_rank_decreased": 19
     },
@@ -600,6 +667,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.255238095238095,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 363,
       "privacy_num_rank_decreased": 17
     },
@@ -609,6 +677,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 7.620952380952381,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 390,
       "privacy_num_rank_decreased": 20
     },
@@ -618,6 +687,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 8.245714285714286,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 414,
       "privacy_num_rank_decreased": 17
     },
@@ -627,6 +697,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.92,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 315,
       "privacy_num_rank_decreased": 25
     },
@@ -636,6 +707,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.8723809523809525,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 346,
       "privacy_num_rank_decreased": 21
     },
@@ -645,6 +717,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.988571428571428,
+      "privacy_median_rank_change": 3.0,
       "privacy_num_rank_increased": 391,
       "privacy_num_rank_decreased": 21
     },
@@ -654,6 +727,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 7.767619047619047,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 396,
       "privacy_num_rank_decreased": 22
     },
@@ -663,6 +737,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 9.316190476190476,
+      "privacy_median_rank_change": 6.0,
       "privacy_num_rank_increased": 429,
       "privacy_num_rank_decreased": 12
     },
@@ -672,6 +747,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.967619047619047,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 315,
       "privacy_num_rank_decreased": 25
     },
@@ -681,6 +757,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.516190476190476,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 344,
       "privacy_num_rank_decreased": 18
     },
@@ -690,6 +767,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.897142857142857,
+      "privacy_median_rank_change": 3.0,
       "privacy_num_rank_increased": 387,
       "privacy_num_rank_decreased": 16
     },
@@ -699,6 +777,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 8.07047619047619,
+      "privacy_median_rank_change": 5.0,
       "privacy_num_rank_increased": 406,
       "privacy_num_rank_decreased": 14
     },
@@ -708,6 +787,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 9.281904761904762,
+      "privacy_median_rank_change": 5.0,
       "privacy_num_rank_increased": 427,
       "privacy_num_rank_decreased": 14
     }
@@ -718,6 +798,7 @@
         "epsilon": 500
       },
       "privacy_mean_rank_change": 6.659047619047619,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 321,
       "privacy_num_rank_decreased": 26
     },
@@ -726,6 +807,7 @@
         "epsilon": 250
       },
       "privacy_mean_rank_change": 6.75047619047619,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 313,
       "privacy_num_rank_decreased": 25
     },
@@ -734,6 +816,7 @@
         "epsilon": 100
       },
       "privacy_mean_rank_change": 6.259047619047619,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 313,
       "privacy_num_rank_decreased": 34
     },
@@ -742,6 +825,7 @@
         "epsilon": 25
       },
       "privacy_mean_rank_change": 11.695238095238095,
+      "privacy_median_rank_change": 9.0,
       "privacy_num_rank_increased": 433,
       "privacy_num_rank_decreased": 21
     },
@@ -750,6 +834,7 @@
         "epsilon": 10
       },
       "privacy_mean_rank_change": 16.855238095238096,
+      "privacy_median_rank_change": 16.0,
       "privacy_num_rank_increased": 500,
       "privacy_num_rank_decreased": 8
     }
@@ -760,6 +845,7 @@
         "epsilon": 500
       },
       "privacy_mean_rank_change": 14.224761904761905,
+      "privacy_median_rank_change": 12.0,
       "privacy_num_rank_increased": 461,
       "privacy_num_rank_decreased": 19
     },
@@ -768,6 +854,7 @@
         "epsilon": 250
       },
       "privacy_mean_rank_change": 13.605714285714285,
+      "privacy_median_rank_change": 11.0,
       "privacy_num_rank_increased": 463,
       "privacy_num_rank_decreased": 18
     },
@@ -776,6 +863,7 @@
         "epsilon": 100
       },
       "privacy_mean_rank_change": 13.860952380952382,
+      "privacy_median_rank_change": 11.0,
       "privacy_num_rank_increased": 461,
       "privacy_num_rank_decreased": 17
     },
@@ -784,6 +872,7 @@
         "epsilon": 25
       },
       "privacy_mean_rank_change": 13.43047619047619,
+      "privacy_median_rank_change": 12.0,
       "privacy_num_rank_increased": 456,
       "privacy_num_rank_decreased": 17
     },
@@ -792,6 +881,7 @@
         "epsilon": 10
       },
       "privacy_mean_rank_change": 14.112380952380953,
+      "privacy_median_rank_change": 12.0,
       "privacy_num_rank_increased": 465,
       "privacy_num_rank_decreased": 16
     }
@@ -802,6 +892,7 @@
         "epsilon": 500
       },
       "privacy_mean_rank_change": 2.2476190476190476,
+      "privacy_median_rank_change": 0.0,
       "privacy_num_rank_increased": 117,
       "privacy_num_rank_decreased": 28
     },
@@ -810,6 +901,7 @@
         "epsilon": 250
       },
       "privacy_mean_rank_change": 2.3523809523809525,
+      "privacy_median_rank_change": 0.0,
       "privacy_num_rank_increased": 118,
       "privacy_num_rank_decreased": 35
     },
@@ -818,6 +910,7 @@
         "epsilon": 100
       },
       "privacy_mean_rank_change": 3.4761904761904763,
+      "privacy_median_rank_change": 0.0,
       "privacy_num_rank_increased": 169,
       "privacy_num_rank_decreased": 27
     },
@@ -826,6 +919,7 @@
         "epsilon": 25
       },
       "privacy_mean_rank_change": 16.662857142857142,
+      "privacy_median_rank_change": 16.0,
       "privacy_num_rank_increased": 488,
       "privacy_num_rank_decreased": 11
     },
@@ -834,6 +928,7 @@
         "epsilon": 10
       },
       "privacy_mean_rank_change": 17.569523809523808,
+      "privacy_median_rank_change": 17.0,
       "privacy_num_rank_increased": 502,
       "privacy_num_rank_decreased": 8
     }
@@ -844,6 +939,7 @@
         "k": 2
       },
       "privacy_mean_rank_change": 4.76,
+      "privacy_median_rank_change": 1.0,
       "privacy_num_rank_increased": 308,
       "privacy_num_rank_decreased": 25
     },
@@ -852,6 +948,7 @@
         "k": 3
       },
       "privacy_mean_rank_change": 5.79047619047619,
+      "privacy_median_rank_change": 2.0,
       "privacy_num_rank_increased": 351,
       "privacy_num_rank_decreased": 23
     },
@@ -860,6 +957,7 @@
         "k": 5
       },
       "privacy_mean_rank_change": 6.8152380952380955,
+      "privacy_median_rank_change": 3.0,
       "privacy_num_rank_increased": 394,
       "privacy_num_rank_decreased": 21
     },
@@ -868,6 +966,7 @@
         "k": 7
       },
       "privacy_mean_rank_change": 8.08,
+      "privacy_median_rank_change": 4.0,
       "privacy_num_rank_increased": 407,
       "privacy_num_rank_decreased": 19
     },
@@ -876,6 +975,7 @@
         "k": 10
       },
       "privacy_mean_rank_change": 9.10095238095238,
+      "privacy_median_rank_change": 6.0,
       "privacy_num_rank_increased": 427,
       "privacy_num_rank_decreased": 20
     }
@@ -884,6 +984,7 @@
     {
       "params": {},
       "privacy_mean_rank_change": 2.28,
+      "privacy_median_rank_change": 0.0,
       "privacy_num_rank_increased": 161,
       "privacy_num_rank_decreased": 31
     }
@@ -894,6 +995,7 @@
         "rho": 0.9
       },
       "privacy_mean_rank_change": 8.529523809523809,
+      "privacy_median_rank_change": 5.0,
       "privacy_num_rank_increased": 413,
       "privacy_num_rank_decreased": 17
     },
@@ -902,6 +1004,7 @@
         "rho": 0.8
       },
       "privacy_mean_rank_change": 10.361904761904762,
+      "privacy_median_rank_change": 7.0,
       "privacy_num_rank_increased": 450,
       "privacy_num_rank_decreased": 16
     },
@@ -910,6 +1013,7 @@
         "rho": 0.7
       },
       "privacy_mean_rank_change": 11.643809523809523,
+      "privacy_median_rank_change": 9.0,
       "privacy_num_rank_increased": 470,
       "privacy_num_rank_decreased": 12
     }
@@ -918,6 +1022,7 @@
     {
       "params": {},
       "privacy_mean_rank_change": 2.9466666666666668,
+      "privacy_median_rank_change": 0.0,
       "privacy_num_rank_increased": 194,
       "privacy_num_rank_decreased": 29
     }

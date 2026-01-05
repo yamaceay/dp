@@ -5,7 +5,10 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
-FILES: List[Tuple[str, str]] = [("logs/reddit_priv_exp.jsonl", "reddit")]
+FILES: List[Tuple[str, str]] = [
+    ("logs/reddit_priv_exp.jsonl", "reddit"),
+    ("logs/tab_priv_exp.jsonl", "tab"),
+]
 
 def params_to_str_for_sort(params: Mapping[str, Any]) -> str:
     parts: List[Tuple[str, str]] = []
