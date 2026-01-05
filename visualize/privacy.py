@@ -50,6 +50,7 @@ def read_data(files: Sequence[Tuple[str, str]]) -> Iterable[Dict[str, Any]]:
                 res = data["summary"]
                 values = {
                     "privacy_mean_rank_change": res["mean"],
+                    "privacy_median_rank_change": res["median"],
                     "privacy_num_rank_increased": res["improved"],
                     "privacy_num_rank_decreased": res["degraded"],
                 }
@@ -71,13 +72,13 @@ def build_summaries() -> None:
         params = params_to_str(e.pop("params"))
         by_dataset_by_params.setdefault(dataset, {}).setdefault(params, []).append(e)
     Path("visualize").mkdir(parents=True, exist_ok=True)
-    with open("visualize/summary.json", "w", encoding="utf-8") as f:
+    with open("visualize/privacy.json", "w", encoding="utf-8") as f:
         json.dump(entries, f, indent=2)
     for dataset in by_dataset_by_method:
-        with open(f"visualize/summary_by_method_{dataset}.json", "w", encoding="utf-8") as f:
+        with open(f"visualize/privacy_by_method_{dataset}.json", "w", encoding="utf-8") as f:
             json.dump(by_dataset_by_method[dataset], f, indent=2)
     for dataset in by_dataset_by_params:
-        with open(f"visualize/summary_by_params_{dataset}.json", "w", encoding="utf-8") as f:
+        with open(f"visualize/privacy_by_params_{dataset}.json", "w", encoding="utf-8") as f:
             json.dump(by_dataset_by_params[dataset], f, indent=2)
 
 if __name__ == "__main__":

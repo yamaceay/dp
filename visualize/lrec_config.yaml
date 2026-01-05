@@ -1,0 +1,41 @@
+experiments:
+- dataset: reddit
+  method_class: dp
+  methods:
+    - method: presidio
+      print_as: "Presidio"
+    - method: petre
+      params_one_run: 
+      - k
+      print_as: "PETRE with Presidio-deid"
+    - method: dpmlm_uniform
+      params:
+      - epsilon
+      print_as: "DPMLM"
+    - method: dpmlm_shap
+      params:
+      - epsilon
+      print_as: "Risk-aware DPMLM"
+    - method: dpmlm_shap_masked
+      params:
+      - epsilon
+      print_as: "Risk-aware DPMLM with Presidio-deid"
+    - method: dpmlm_shap_unsorted
+      params:
+      - epsilon
+      params_one_run:
+      - k
+      print_as: "Risk-aware k-DPMLM with Presidio-deid"
+    - method: dpmlm_shap
+      params:
+      - epsilon
+      params_one_run:
+      - k
+      print_as: "Risk-aware k-DPMLM with Presidio-deid sorted by risk"
+  files:
+    - type: privacy
+      file: privacy_by_method_reddit.json
+    - type: privacy
+      file: privacy_by_params_reddit.json
+    - type: privacy
+      file: privacy.json
