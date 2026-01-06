@@ -41,3 +41,57 @@ experiments:
       file: utility_by_method_tab_year.json
     - type: utility
       file: utility_by_params_tab_year.json
+- dataset: reddit
+  method_class: dp
+  methods:
+    - method: presidio
+      print_as: "Presidio"
+    - method: petre
+      params_one_run: 
+      - k
+      print_as: "PETRE with Presidio-deid"
+    - method: dpmlm_uniform
+      params:
+      - epsilon
+      print_as: "DPMLM"
+    - method: dpmlm_shap
+      params:
+      - epsilon
+      print_as: "Risk-aware DPMLM"
+    - method: dpmlm_shap_masked
+      params:
+      - epsilon
+      print_as: "Risk-aware DPMLM with Presidio-deid"
+    - method: dpmlm_shap_unsorted
+      params:
+      - epsilon
+      params_one_run:
+      - k
+      print_as: "Risk-aware k-DPMLM with Presidio-deid"
+    - method: dpmlm_shap
+      params:
+      - epsilon
+      params_one_run:
+      - k
+      print_as: "Risk-aware k-DPMLM with Presidio-deid sorted by risk"
+  files:
+    - type: utility
+      file: utility_by_method_reddit_birth_city_country.json
+    - type: utility
+      file: utility_by_params_reddit_birth_city_country.json
+    - type: utility
+      file: utility_by_method_reddit_age.json
+    - type: utility
+      file: utility_by_params_reddit_age.json
+    - type: utility
+      file: utility_by_method_reddit_income_level.json
+    - type: utility
+      file: utility_by_params_reddit_income_level.json
+    - type: utility
+      file: utility_by_method_reddit_relationship_status.json
+    - type: utility
+      file: utility_by_params_reddit_relationship_status.json
+    - type: utility
+      file: utility_by_method_reddit_sex.json
+    - type: utility
+      file: utility_by_params_reddit_sex.json

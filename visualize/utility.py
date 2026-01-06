@@ -8,6 +8,11 @@ from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 FILES: List[Tuple[str, str, str]] = [
     ("logs/tab_country_exp.jsonl", "tab", "country"),
     ("logs/tab_year_exp.jsonl", "tab", "year"),
+    ("logs/reddit_age_exp.jsonl", "reddit", "age"),
+    ("logs/reddit_income_level_exp.jsonl", "reddit", "income_level"),
+    ("logs/reddit_relationship_status_exp.jsonl", "reddit", "relationship_status"),
+    ("logs/reddit_sex_exp.jsonl", "reddit", "sex"),
+    ("logs/reddit_birth_city_country_exp.jsonl", "reddit", "birth_city_country"),
 ]
 
 def params_to_str_for_sort(params: Mapping[str, Any]) -> str:
@@ -33,7 +38,7 @@ def read_data(files: Sequence[Tuple[str, str, str]]) -> Iterable[Dict[str, Any]]
             for line in file:
                 data = json.loads(line)
                 if data.get("type") == "experiment":
-                    baseline_f1 = data["score"]
+                    baseline_f1 = data["baseline_metrics"]["f1"]
                     yield {
                         "method": "baseline",
                         "params": {},

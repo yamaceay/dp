@@ -184,9 +184,9 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 	exp = _first_experiment(conf)
 	methods = _method_specs(exp)
 	within, across = _params_scope(exp)
-	dataset_cfg = str(exp.get("dataset")) if exp.get("dataset") else dataset
-	base_rows = _filter_dataset(_load_flat(flat_path), dataset_cfg, metric)
-	_ensure_dir(output_dir / f"{dataset}_{experiment}")
+	dataset_sel = dataset if dataset else (str(exp.get("dataset")) if exp.get("dataset") else "")
+	base_rows = _filter_dataset(_load_flat(flat_path), dataset_sel, metric)
+	_ensure_dir(output_dir / f"{dataset_sel}_{experiment}")
 	files = exp.get("files") or []
 	alt_rows: List[Dict[str, Any]] = []
 	for f in files:
@@ -201,18 +201,18 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 		elif isinstance(data, dict):
 			for method_name, entries in data.items():
 				for e in entries:
-					row: Dict[str, Any] = {"method": method_name, "params": e.get("params") or {}, "dataset": dataset_cfg}
+					row_dataset = str(e.get("dataset")) if e.get("dataset") else dataset_sel
+					row: Dict[str, Any] = {"method": method_name, "params": e.get("params") or {}, "dataset": row_dataset}
 					for k, v in e.items():
 						if k not in {"params"}:
 							row[k] = v
 					alt_rows.append(row)
-	rows = _dedup_rows(base_rows + _filter_dataset(alt_rows, dataset_cfg, metric))
+	rows = _dedup_rows(base_rows + _filter_dataset(alt_rows, dataset_sel, metric))
 	order = _method_order(methods)
 	print_as = _method_print_as(methods)
 	eps_name = next((p for p in across if p == "epsilon"), None)
 	k_palette = _value_palette([r.get("params", {}).get("k") for r in rows if "k" in (r.get("params") or {})], "k")
 	method_colors = _method_palette(order)
-	# Strict matching by method spec, no epsilon group
 	no_eps_rows: List[Dict[str, Any]] = []
 	for spec in methods:
 		if eps_name in (spec.get("params") or []):
@@ -252,14 +252,14 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 		axis.set_xticks([centers[m] for m in names])
 		axis.set_xticklabels([print_as[m] for m in names], rotation=30, ha="right", fontsize=11)
 		axis.set_ylabel(metric, fontsize=12)
-		axis.set_title(f"{dataset}_{experiment}: no_eps", fontsize=14)
+		axis.set_title(f"{dataset_sel}_{experiment}: no_eps", fontsize=14)
 		if ys:
 			axis.set_ylim(0, max(ys) * 1.22)
 		for xv, yv, t in zip(xs, ys, labs):
 			axis.annotate(t, xy=(xv, yv), xytext=(0, 5), textcoords="offset points", rotation=90, ha="center", va="bottom", fontsize=9, clip_on=False)
 		_ensure_dir(output_dir)
 		figure.tight_layout()
-		figure.savefig(output_dir / f"{dataset}_{experiment}" / "no_eps.png", dpi=220)
+		figure.savefig(output_dir / f"{dataset_sel}_{experiment}" / "no_eps.png", dpi=220)
 		plt.close(figure)
 	if eps_name:
 		eps_values = _unique_sorted([r.get("params", {}).get(eps_name) for r in rows if eps_name in (r.get("params") or {})])
@@ -305,7 +305,7 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 			axis.set_xticks([centers[m] for m in names])
 			axis.set_xticklabels([print_as[m] for m in names], rotation=30, ha="right", fontsize=11)
 			axis.set_ylabel(metric, fontsize=12)
-			axis.set_title(f"{dataset}_{experiment}: {eps_name}={eps}", fontsize=14)
+			axis.set_title(f"{dataset_sel}_{experiment}: {eps_name}={eps}", fontsize=14)
 			if ys:
 				axis.set_ylim(0, max(ys) * 1.22)
 			for xv, yv, t in zip(xs, ys, labs):
@@ -313,7 +313,7 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 			_ensure_dir(output_dir)
 			figure.tight_layout()
 			safe_eps = str(eps).replace(".", "_")
-			figure.savefig(output_dir / f"{dataset}_{experiment}" / f"eps_{safe_eps}.png", dpi=220)
+			figure.savefig(output_dir / f"{dataset_sel}_{experiment}" / f"eps_{safe_eps}.png", dpi=220)
 			plt.close(figure)
 
 
