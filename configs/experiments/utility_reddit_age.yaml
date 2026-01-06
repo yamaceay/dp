@@ -1,20 +1,18 @@
-dataset: tab
-data_in: data/TAB/splitted/test.json
+dataset: reddit
+data_in: data/reddit/train.jsonl
 debug: true
 annotations_in:
-  - outputs/tab
+  - outputs/reddit
 target:
-  key: year_group
-  type: nominal
+  key: feature_label
+  type: ordinal
   enum:
-    - 1990-1995
-    - 1996-1998
-    - 1999-2001
-    - 2002-2004
-    - 2005-2007
-    - 2008-2010
-    - 2011-2013
-    - 2014-2019
+    - 30-44
+    - 45-59
+    - 18-29
+    - 60+
+selection_criteria:
+  feature: age
 test_size: 0.2
 random_state: 42
 vectorizer:
@@ -23,11 +21,11 @@ head:
   type: feedforward_classifier
   params:
     mlp_params:
-      max_iter: 1000
+      max_iter: 500
       tol: 0.0001
       early_stopping: true
       n_iter_no_change: 20
     primary_metric: acc
 output:
   format: jsonl
-  file: logs/tab_year_exp.jsonl
+  file: logs/reddit_age_exp.jsonl

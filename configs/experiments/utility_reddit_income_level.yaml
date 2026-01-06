@@ -1,0 +1,30 @@
+dataset: reddit
+data_in: data/reddit/train.jsonl
+debug: true
+annotations_in:
+  - outputs/reddit
+target:
+  key: feature_label
+  type: ordinal
+  enum:
+    - low
+    - middle
+    - high
+selection_criteria:
+  feature: income_level
+test_size: 0.2
+random_state: 42
+vectorizer:
+  type: bert
+head:
+  type: feedforward_classifier
+  params:
+    mlp_params:
+      max_iter: 200
+      tol: 0.0001
+      early_stopping: true
+      n_iter_no_change: 20
+  primary_metric: acc
+output:
+  format: jsonl
+  file: logs/reddit_income_level_exp.jsonl

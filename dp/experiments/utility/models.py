@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 from dp.experiments.utility.base import UtilityTarget
-from dp.experiments.utility.getters import UTILITY_TARGETS
 from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, FEATURE_EXTRACTOR_REGISTRY
 from dp.experiments.utility.downstream import SupervisedDownstreamHead, DOWNSTREAM_HEAD_REGISTRY
 
@@ -54,20 +53,7 @@ class UtilitySpec:
         return vectorizer, head
 
 
-def _build_registry(targets: Dict[str, Dict[str, UtilityTarget]]) -> Dict[str, UtilitySpec]:
-    registry: Dict[str, UtilitySpec] = {}
-    for dataset, mapping in targets.items():
-        for key, target in mapping.items():
-            v_name, h_name = MODE_TO_MODEL[target.mode]
-            spec = UtilitySpec(
-                dataset=dataset,
-                target_key=key,
-                target=target,
-                default_vectorizer=v_name,
-                default_head=h_name,
-            )
-            registry[spec.identifier()] = spec
-    return registry
-
-
-UTILITY_EXPERIMENTS_REGISTRY: Dict[str, UtilitySpec] = _build_registry(UTILITY_TARGETS)
+__all__ = [
+    "UtilitySpec",
+    "MODE_TO_MODEL",
+]

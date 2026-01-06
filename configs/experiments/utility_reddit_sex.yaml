@@ -1,11 +1,13 @@
-dataset: tab
-data_in: data/TAB/splitted/test.json
+dataset: reddit
+data_in: data/reddit/train.jsonl
 debug: true
 annotations_in:
-  - outputs/tab
+  - outputs/reddit
 target:
-  key: country_group
-  type: nominal
+  key: feature_label
+  type: binary
+selection_criteria:
+  feature: sex
 test_size: 0.2
 random_state: 42
 vectorizer:
@@ -16,4 +18,4 @@ head:
     primary_metric: acc
 output:
   format: jsonl
-  file: logs/tab_country_exp.jsonl
+  file: logs/reddit_sex_exp.jsonl

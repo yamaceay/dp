@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+from collections import Counter
+import numpy as np
+from sklearn.metrics import confusion_matrix
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
@@ -22,8 +26,8 @@ from dp.experiments.privacy.reporting import build_privacy_report, create_privac
 from dp.experiments.utility.io import build_utility_evaluation_texts
 from dp.experiments.utility.reporting import build_utility_report, create_utility_outputter
 from dp.experiments.utility.models import (
-    UTILITY_EXPERIMENTS_REGISTRY,
     UtilitySpec,
+    MODE_TO_MODEL,
 )
 from dp.experiments.divergence.bertscore import BERTScoreDivergence
 from dp.experiments.divergence.cosine import CosineSimilarityDivergence
@@ -33,8 +37,7 @@ from dp.experiments.utility.base import TextUtilityExperiment
 from dp.experiments.utility.vectorizer import TfidfTextVectorizer, BERTVectorizer, SelfSupervisedFeatureExtractor
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
-from dp.loaders.annotations import read_batch_annotations_from_path
-from dp.loaders.results import build_dataset_from_results
+from dp.loaders.derive import DERIVE_REGISTRY
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_CONFIG_DIR = PROJECT_ROOT / "configs" / "experiments"
@@ -46,78 +49,27 @@ def load_records(dataset: str, data_in: Optional[str], max_records: Optional[int
 
 
 def resolve_config_path(value: str) -> Path:
-    raw = Path(value).expanduser()
-    seen: Set[Path] = set()
-    candidates: List[Path] = []
-
-    def register(path: Path) -> None:
-        if path in seen:
-            return
-        candidates.append(path)
-        seen.add(path)
-
-    def register_with_suffixes(path: Path) -> None:
-        if path.suffix:
-            register(path)
-        else:
-            register(path.with_suffix(".yaml"))
-            register(path.with_suffix(".yml"))
-
-    register_with_suffixes(raw)
-
-    for candidate in list(candidates):
-        if not candidate.is_absolute():
-            register((PROJECT_ROOT / candidate).expanduser())
-
-    if raw.suffix:
-        register(DEFAULT_CONFIG_DIR / raw.name)
-    else:
-        register(DEFAULT_CONFIG_DIR / f"{raw.name}.yaml")
-        register(DEFAULT_CONFIG_DIR / f"{raw.name}.yml")
-
-    for candidate in candidates:
-        if candidate.exists():
+    p = Path(value).expanduser()
+    if p.is_file():
+        return p
+    # Try relative to default config dir
+    candidate = (DEFAULT_CONFIG_DIR / value).resolve()
+    if candidate.is_file():
+        return candidate
+    # Try treating provided value as relative path
+    if not p.is_absolute():
+        candidate = (DEFAULT_CONFIG_DIR / p.name).resolve()
+        if candidate.is_file():
             return candidate
-    names = ", ".join(str(c) for c in candidates)
-    raise FileNotFoundError(f"config not found ({names})")
+    raise FileNotFoundError(f"Config file not found: {value}")
 
 
-def load_config(value: Optional[str]) -> Dict[str, Any]:
-    if value is None:
-        return {}
-    path = resolve_config_path(value)
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if data is None:
-        return {}
-    if not isinstance(data, dict):
-        raise ValueError(f"config must be a mapping ({path})")
-    return data
-
-
-def merge_params(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
-    merged = dict(config)
-    arg_map = vars(args)
-    for key in ("mode", "identifier"):
-        if key in arg_map and arg_map[key] is not None:
-            merged[key] = arg_map[key]
-    return merged
-
-
-def ensure_sequence(value: Any) -> List[str]:
-    if value is None:
+def ensure_sequence(obj: Any) -> List[Any]:
+    if obj is None:
         return []
-    if isinstance(value, (list, tuple, set)):
-        return [str(item) for item in value]
-    return [str(value)]
-
-
-def normalize_output_settings(params: Dict[str, Any]) -> None:
-    output = params.get("output")
-    if isinstance(output, dict):
-        if "format" in output and "output_format" not in params:
-            params["output_format"] = output["format"]
-        if "file" in output and "output_file" not in params:
-            params["output_file"] = output["file"]
+    if isinstance(obj, (list, tuple)):
+        return list(obj)
+    return [obj]
 
 
 def parse_component_config(payload: Any) -> Tuple[str, Dict[str, Any]]:
@@ -158,6 +110,88 @@ def build_vectorizer_from_config(payload: Any) -> SelfSupervisedFeatureExtractor
     raise ValueError(f"unsupported vectorizer '{name}'")
 
 
+def select_records(records: List[DatasetRecord], criteria: Dict[str, Any]) -> List[DatasetRecord]:
+    selected: List[DatasetRecord] = []
+    for record in records:
+        criteria_satisfied = True
+        for key, value in criteria.items():
+            got_value = None
+            if key == "uid":
+                got_value = record.uid
+            elif key == "name":
+                got_value = record.name
+            elif key == "text":
+                got_value = record.text
+            else:
+                # metadata key by default
+                got_value = record.metadata.get(key)
+            if not isinstance(value, (list, tuple, set)):
+                value = set([value])
+            if isinstance(got_value, float):
+                value = set(float(v) for v in value)
+            elif isinstance(got_value, int):
+                value = set(int(v) for v in value)
+            else:
+                value = set(str(v) for v in value)
+            if got_value not in value:
+                criteria_satisfied = False
+                break
+        
+        if criteria_satisfied:
+            selected.append(record)
+
+    return selected
+
+
+def build_utility_target(params: Dict[str, Any], dataset: str) -> UtilitySpec:
+    payload = params.get("target")
+    if isinstance(payload, str):
+        key = payload
+        ttype = "nominal"
+        enum: List[str] = []
+    elif isinstance(payload, dict):
+        key = str(payload.get("key", "")).strip()
+        if not key:
+            raise ValueError("target.key is required")
+        ttype = str(payload.get("type", "nominal")).strip().lower() or "nominal"
+        enum = ensure_sequence(payload.get("enum"))
+    else:
+        raise ValueError("target must be string or mapping with key/type/enum")
+    from dp.experiments.utility.base import UtilityTarget
+    registry = DERIVE_REGISTRY.get(str(dataset)) or {}
+    getter = registry.get(str(key))
+    if getter is None:
+        raise ValueError(f"unknown utility target key '{key}' for dataset '{dataset}'")
+    try:
+        mode = UtilityTarget.Mode(ttype)
+    except Exception:
+        raise ValueError("target.type must be one of: binary, nominal, ordinal, cardinal")
+    if mode is UtilityTarget.Mode.ORDINAL and not enum:
+        raise ValueError("ordinal target requires target.enum")
+    if enum:
+        allowed = set(enum)
+        base_getter = getter
+        def wrapped_getter(record: DatasetRecord) -> Any:
+            v = base_getter(record)
+            if v is None:
+                return None
+            s = str(v).strip()
+            if ":" in s:
+                s = s.split(":", 1)[1].strip()
+            return s if s in allowed else None
+        getter = wrapped_getter
+    built = UtilityTarget(name=str(key), source=str(dataset), mode=mode, getter=getter)
+    v_name, h_name = MODE_TO_MODEL[mode]
+    return UtilitySpec(dataset=str(dataset), target_key=str(key), target=built, default_vectorizer=v_name, default_head=h_name)
+
+
+def align_evaluation_texts(records: List[DatasetRecord], sources: Dict[str, Path]) -> Dict[str, Dict[str, str]]:
+    index_to_key = {idx: record.uid for idx, record in enumerate(records)}
+    mapping = build_utility_evaluation_texts(index_to_key, sources)
+    selected = {str(r.uid) for r in records}
+    return {name: {k: v for k, v in m.items() if str(k) in selected} for name, m in mapping.items() if m}
+
+
 def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     params = merge_params(config, args)
     normalize_output_settings(params)
@@ -165,14 +199,13 @@ def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     annotations = list(dict.fromkeys(annotation_values))
     dataset = params.get("dataset")
     data_in = params.get("data_in")
-    target = params.get("target")
     if not dataset:
         raise ValueError("dataset is required")
     if not data_in:
         raise ValueError("data_in is required")
     if not annotations:
         raise ValueError("annotations are required")
-    if not target:
+    if not params.get("target"):
         raise ValueError("target is required")
     max_records = params.get("max_records")
     test_size = params.get("test_size", 0.2)
@@ -181,16 +214,27 @@ def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     output_format = params.get("output_format", "text")
     output_file = params.get("output_file")
     records = load_records(dataset, data_in, max_records)
-    spec_key = f"{dataset}_{target}"
-    spec: Optional[UtilitySpec] = UTILITY_EXPERIMENTS_REGISTRY.get(spec_key)
-    if spec is None:
-        dataset_prefix = f"{dataset}_"
-        available = sorted(
-            key[len(dataset_prefix) :]
-            for key in UTILITY_EXPERIMENTS_REGISTRY.keys()
-            if key.startswith(dataset_prefix)
-        )
-        raise ValueError(f"unknown utility target '{target}' for dataset '{dataset}' (available: {', '.join(available)})")
+    spec = build_utility_target(params, str(dataset))
+    debug = bool(params.get("debug", False))
+    if debug:
+        print(f"Utility target: dataset={spec.dataset} key={spec.target_key} mode={spec.target.mode.value}")
+        payload = params.get("target")
+        if isinstance(payload, dict):
+            enum_vals = ensure_sequence(payload.get("enum"))
+            if enum_vals:
+                print(f"Target enum: {enum_vals}")
+
+    selection_criteria = params.get("selection_criteria", {}) or {}
+    records = select_records(records, selection_criteria)
+    if not records:
+        raise RuntimeError("no records selected by criteria")
+    if debug:
+        values = [spec.target.value(r) for r in records]
+        coverage = sum(1 for v in values if v is not None)
+        dist = Counter([str(v) for v in values if v is not None])
+        print(f"Records loaded: {len(records)}")
+        print(f"Target coverage: {coverage}")
+        print(f"Target distribution: {dict(dist)}")
     if dry_run:
         coverage = sum(1 for record in records if spec.target.value(record) is not None and record.text)
         print(f"Records loaded: {len(records)}")
@@ -199,9 +243,14 @@ def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     sources = collect_jsonl_sources(*annotations)
     if not sources:
         raise RuntimeError("no anonymized output files discovered")
-    index_to_key = {idx: record.uid for idx, record in enumerate(records)}
-    evaluation_texts = build_utility_evaluation_texts(index_to_key, sources)
-    evaluation_texts = {name: mapping for name, mapping in evaluation_texts.items() if mapping}
+    evaluation_texts = align_evaluation_texts(records, sources)
+    if debug:
+        print("Evaluation sources:")
+        for name, mapping in evaluation_texts.items():
+            count = len(mapping)
+            sample = next(iter(mapping.values()), "")
+            sig = hashlib.sha1(sample.encode("utf-8")).hexdigest()[:16] if sample else ""
+            print(f"- {name}: count={count} sample_sig={sig}")
     if not evaluation_texts:
         raise RuntimeError("no anonymized texts aligned with dataset records")
     util_cfg = params.get("utility", {}) or {}
@@ -211,6 +260,17 @@ def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
         util_cfg = {"vectorizer": legacy_vec, "head": legacy_head}
     vec_name, vec_kwargs = parse_component_config(util_cfg.get("vectorizer"))
     head_name, head_kwargs = parse_component_config(util_cfg.get("head"))
+    if debug:
+        print(f"Vectorizer: name={vec_name or 'auto'} params={vec_kwargs}")
+        print(f"Head: name={head_name or 'auto'} params={head_kwargs}")
+    if not head_name:
+        desired = MODE_TO_MODEL.get(spec.target.mode)
+        if desired:
+            head_name = desired[1]
+    if not vec_name:
+        desired = MODE_TO_MODEL.get(spec.target.mode)
+        if desired:
+            vec_name = desired[0]
     identifier = params.get("identifier") or util_cfg.get("identifier")
     vectorizer, model = spec.build_components(
         vectorizer_name=vec_name or None,
@@ -221,6 +281,53 @@ def handle_utility(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     )
     experiment = TextUtilityExperiment(test_size=float(test_size), random_state=int(random_state))
     experiment.setup(target=spec.target, records=records, vectorizer=vectorizer, model=model)
+    if debug:
+        train_sz = len(getattr(experiment, "_train_keys", []))
+        test_sz = len(getattr(experiment, "_test_keys", []))
+        x_train = getattr(experiment, "_x_train", None)
+        lbls_train = getattr(experiment, "_train_labels", [])
+        lbls_test = getattr(experiment, "_test_labels", [])
+        print(f"Train/Test sizes: train={train_sz} test={test_sz}")
+        try:
+            desc = vectorizer.describe()
+            print(f"Vectorizer describe: {desc}")
+        except Exception:
+            pass
+        if x_train is not None:
+            try:
+                arr = np.asarray(x_train)
+            except Exception:
+                arr = x_train
+            if hasattr(arr, "shape"):
+                print(f"X_train shape: {arr.shape}")
+            try:
+                vals = arr.toarray() if hasattr(arr, "toarray") else np.asarray(arr)
+                print(f"X_train stats: mean={float(np.nanmean(vals)):.6f} std={float(np.nanstd(vals)):.6f}")
+            except Exception:
+                pass
+        try:
+            enc = getattr(model, "_label_encoder", None)
+            if enc is not None and hasattr(enc, "classes_"):
+                print(f"Label classes: {list(enc.classes_)}")
+        except Exception:
+            pass
+        try:
+            x_test_dbg = getattr(experiment, "_vectorizer", None).transform(getattr(experiment, "_test_texts", []))
+            preds_dbg = getattr(experiment, "_model", None).predict(x_test_dbg)
+            dist_preds = Counter([str(p) for p in preds_dbg])
+            dist_true = Counter([str(y) for y in lbls_test])
+            print(f"Predictions distribution: {dict(dist_preds)}")
+            print(f"True distribution: {dict(dist_true)}")
+            try:
+                cm = confusion_matrix(lbls_test, preds_dbg, labels=sorted(list(set(lbls_train + lbls_test))))
+                print(f"Confusion matrix shape: {cm.shape}")
+                print(cm)
+            except Exception:
+                pass
+            eval_metrics = getattr(experiment, "_model", None).evaluate(x_test_dbg, lbls_test)
+            print(f"Evaluation metrics: {eval_metrics}")
+        except Exception:
+            pass
     result = experiment.run(evaluation_texts=evaluation_texts)
     experiment.cleanup()
     report = build_utility_report(result, sources)
@@ -281,6 +388,34 @@ def handle_divergence(args: argparse.Namespace, config: Dict[str, Any]) -> None:
     sink = build_output_sink(output_file)
     outputter = create_divergence_outputter(output_format, sink)
     outputter.output(report)
+
+
+def merge_params(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
+    out = dict(config)
+    # Only known CLI overlays
+    identifier = getattr(args, "identifier", None)
+    if identifier is not None:
+        out["identifier"] = identifier
+    return out
+
+
+def normalize_output_settings(params: Dict[str, Any]) -> None:
+    out_cfg = params.get("output")
+    if isinstance(out_cfg, dict):
+        fmt = out_cfg.get("format")
+        path = out_cfg.get("file")
+        if fmt and "output_format" not in params:
+            params["output_format"] = fmt
+        if path and "output_file" not in params:
+            params["output_file"] = path
+
+
+def load_config(path_value: Optional[str]) -> Dict[str, Any]:
+    if not path_value:
+        return {}
+    resolved = resolve_config_path(path_value)
+    with open(resolved, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
 
 
 def handle_privacy(args: argparse.Namespace, config: Dict[str, Any]) -> None:

@@ -1,20 +1,13 @@
-dataset: tab
-data_in: data/TAB/splitted/test.json
+dataset: reddit
+data_in: data/reddit/train.jsonl
 debug: true
 annotations_in:
-  - outputs/tab
-target:
-  key: year_group
+  - outputs/reddit
+target: 
+  key: feature_label
   type: nominal
-  enum:
-    - 1990-1995
-    - 1996-1998
-    - 1999-2001
-    - 2002-2004
-    - 2005-2007
-    - 2008-2010
-    - 2011-2013
-    - 2014-2019
+selection_criteria:
+  feature: relationship_status
 test_size: 0.2
 random_state: 42
 vectorizer:
@@ -23,11 +16,11 @@ head:
   type: feedforward_classifier
   params:
     mlp_params:
-      max_iter: 1000
+      max_iter: 600
       tol: 0.0001
       early_stopping: true
       n_iter_no_change: 20
     primary_metric: acc
 output:
   format: jsonl
-  file: logs/tab_year_exp.jsonl
+  file: logs/reddit_relationship_status_exp.jsonl
