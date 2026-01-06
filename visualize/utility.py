@@ -5,9 +5,9 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
-FILES: List[Tuple[str, str]] = [
-    ("logs/reddit_priv_exp.jsonl", "reddit"),
-    ("logs/tab_priv_exp.jsonl", "tab"),
+FILES: List[Tuple[str, str, str]] = [
+    ("logs/tab_country_exp.jsonl", "tab", "country"),
+    ("logs/tab_year_exp.jsonl", "tab", "year"),
 ]
 
 def params_to_str_for_sort(params: Mapping[str, Any]) -> str:
@@ -24,14 +24,24 @@ def params_to_str_for_sort(params: Mapping[str, Any]) -> str:
 def params_to_str(params: Mapping[str, Any]) -> str:
     return "&".join(f"{k}={v}" for k, v in params.items())
 
-def read_data(files: Sequence[Tuple[str, str]]) -> Iterable[Dict[str, Any]]:
-    for file_path, dataset_name in files:
+def read_data(files: Sequence[Tuple[str, str, str]]) -> Iterable[Dict[str, Any]]:
+    for file_path, dataset_name, feature in files:
         fp = Path(file_path)
         if not fp.exists():
             continue
         with fp.open() as file:
             for line in file:
                 data = json.loads(line)
+                if data.get("type") == "experiment":
+                    baseline_f1 = data["score"]
+                    yield {
+                        "method": "baseline",
+                        "params": {},
+                        "dataset": dataset_name,
+                        "feature": feature,
+                        f"utility_f1_{feature}": baseline_f1,
+                    }
+                    continue
                 if data.get("type") != "evaluation":
                     continue
                 key = re.sub(r"outputs/[a-z]+/[a-z]+/[0-9]{8}_[0-9]{6}_[a-z]+_(.*?).jsonl", r"\1", data["source"])
@@ -50,39 +60,40 @@ def read_data(files: Sequence[Tuple[str, str]]) -> Iterable[Dict[str, Any]]:
                             value = float(value) / 100.0
                         params[name] = value
                 params = dict(sorted(params.items(), key=lambda item: item[0]))
-                res = data["summary"]
+                res = data["metrics"]
                 values = {
-                    "privacy_mean_rank_change": res["mean"],
-                    "privacy_median_rank_change": res["median"],
-                    "privacy_num_rank_increased": res["improved"],
-                    "privacy_num_rank_decreased": res["degraded"],
+                    f"utility_f1_{feature}": res["f1"],
                 }
-                yield {"method": key, "params": params, "dataset": dataset_name, **values}
+                yield {"method": key, "params": params, "dataset": dataset_name, "feature": feature, **values}
 
 def build_summaries() -> None:
     entries = list(read_data(FILES))
     entries = sorted(entries, key=lambda x: (x["method"], params_to_str_for_sort(x["params"])))
-    by_dataset_by_method: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+    by_dataset_by_feature_by_method: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
     for entry in entries:
         e = entry.copy()
         dataset = e.pop("dataset")
         method = e.pop("method")
-        by_dataset_by_method.setdefault(dataset, {}).setdefault(method, []).append(e)
-    by_dataset_by_params: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+        feature = e.pop("feature")
+        by_dataset_by_feature_by_method.setdefault(dataset, {}).setdefault(feature, {}).setdefault(method, []).append(e)
+    by_dataset_by_feature_by_params: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
     for entry in entries:
         e = entry.copy()
         dataset = e.pop("dataset")
         params = params_to_str(e.pop("params"))
-        by_dataset_by_params.setdefault(dataset, {}).setdefault(params, []).append(e)
+        feature = e.pop("feature")
+        by_dataset_by_feature_by_params.setdefault(dataset, {}).setdefault(feature, {}).setdefault(params, []).append(e)
     Path("visualize/pretty").mkdir(parents=True, exist_ok=True)
-    with open("visualize/pretty/privacy.json", "w", encoding="utf-8") as f:
+    with open("visualize/pretty/utility.json", "w", encoding="utf-8") as f:
         json.dump(entries, f, indent=2)
-    for dataset in by_dataset_by_method:
-        with open(f"visualize/pretty/privacy_by_method_{dataset}.json", "w", encoding="utf-8") as f:
-            json.dump(by_dataset_by_method[dataset], f, indent=2)
-    for dataset in by_dataset_by_params:
-        with open(f"visualize/pretty/privacy_by_params_{dataset}.json", "w", encoding="utf-8") as f:
-            json.dump(by_dataset_by_params[dataset], f, indent=2)
+    for dataset in by_dataset_by_feature_by_method:
+        for feature in by_dataset_by_feature_by_method[dataset]:
+            with open(f"visualize/pretty/utility_by_method_{dataset}_{feature}.json", "w", encoding="utf-8") as f:
+                json.dump(by_dataset_by_feature_by_method[dataset][feature], f, indent=2)
+    for dataset in by_dataset_by_feature_by_params:
+        for feature in by_dataset_by_feature_by_params[dataset]:
+            with open(f"visualize/pretty/utility_by_params_{dataset}_{feature}.json", "w", encoding="utf-8") as f:
+                json.dump(by_dataset_by_feature_by_params[dataset][feature], f, indent=2)
 
 if __name__ == "__main__":
     build_summaries()

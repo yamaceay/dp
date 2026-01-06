@@ -1,0 +1,864 @@
+{
+  "baroud": [
+    {
+      "params": {
+        "lambda": 0.95
+      },
+      "utility_f1_country": 0.9391025641025642
+    },
+    {
+      "params": {
+        "lambda": 0.9
+      },
+      "utility_f1_country": 0.9391025641025642
+    },
+    {
+      "params": {
+        "lambda": 0.8
+      },
+      "utility_f1_country": 0.9123076923076923
+    },
+    {
+      "params": {
+        "lambda": 0.7
+      },
+      "utility_f1_country": 0.886904761904762
+    },
+    {
+      "params": {
+        "lambda": 0.5
+      },
+      "utility_f1_country": 0.703042328042328
+    }
+  ],
+  "baseline": [
+    {
+      "params": {},
+      "utility_f1_country": 1.0
+    }
+  ],
+  "dpbart": [
+    {
+      "params": {
+        "epsilon": 500
+      },
+      "utility_f1_country": 0.42911010558069385
+    },
+    {
+      "params": {
+        "epsilon": 250
+      },
+      "utility_f1_country": 0.3040472599296129
+    },
+    {
+      "params": {
+        "epsilon": 100
+      },
+      "utility_f1_country": 0.2834928229665072
+    },
+    {
+      "params": {
+        "epsilon": 25
+      },
+      "utility_f1_country": 0.1346153846153846
+    },
+    {
+      "params": {
+        "epsilon": 10
+      },
+      "utility_f1_country": 0.2878787878787879
+    }
+  ],
+  "dpmlm_shap": [
+    {
+      "params": {
+        "epsilon": 500
+      },
+      "utility_f1_country": 0.6422462406015037
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 2
+      },
+      "utility_f1_country": 0.7752705627705627
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 3
+      },
+      "utility_f1_country": 0.7257742257742257
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 5
+      },
+      "utility_f1_country": 0.7257742257742257
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 7
+      },
+      "utility_f1_country": 0.7711038961038961
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 10
+      },
+      "utility_f1_country": 0.6911421911421911
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "lambda": 0.95
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "lambda": 0.9
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "lambda": 0.5
+      },
+      "utility_f1_country": 0.9391025641025642
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "rho": 0.9
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "rho": 0.8
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "rho": 0.7
+      },
+      "utility_f1_country": 0.9126190476190477
+    },
+    {
+      "params": {
+        "epsilon": 250
+      },
+      "utility_f1_country": 0.6911421911421911
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 2
+      },
+      "utility_f1_country": 0.7184848484848485
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 3
+      },
+      "utility_f1_country": 0.6162337662337662
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 5
+      },
+      "utility_f1_country": 0.6309523809523809
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 7
+      },
+      "utility_f1_country": 0.6699134199134199
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 10
+      },
+      "utility_f1_country": 0.701964701964702
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "lambda": 0.95
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "lambda": 0.9
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "lambda": 0.5
+      },
+      "utility_f1_country": 0.9126190476190477
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "rho": 0.9
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "rho": 0.8
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "rho": 0.7
+      },
+      "utility_f1_country": 0.8857600732600732
+    },
+    {
+      "params": {
+        "epsilon": 100
+      },
+      "utility_f1_country": 0.4708333333333333
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 2
+      },
+      "utility_f1_country": 0.8249358974358973
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 3
+      },
+      "utility_f1_country": 0.7071428571428572
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 5
+      },
+      "utility_f1_country": 0.6857142857142857
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 7
+      },
+      "utility_f1_country": 0.6283549783549783
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 10
+      },
+      "utility_f1_country": 0.5823232323232324
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "lambda": 0.95
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "lambda": 0.9
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "lambda": 0.5
+      },
+      "utility_f1_country": 0.8143315018315018
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "rho": 0.9
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "rho": 0.8
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "rho": 0.7
+      },
+      "utility_f1_country": 0.875
+    },
+    {
+      "params": {
+        "epsilon": 25
+      },
+      "utility_f1_country": 0.12698412698412698
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 2
+      },
+      "utility_f1_country": 0.6916666666666667
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 3
+      },
+      "utility_f1_country": 0.6240510697032435
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 5
+      },
+      "utility_f1_country": 0.6104166666666667
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 7
+      },
+      "utility_f1_country": 0.6104166666666667
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 10
+      },
+      "utility_f1_country": 0.43630952380952376
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "lambda": 0.95
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "lambda": 0.9
+      },
+      "utility_f1_country": 0.8857600732600732
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "lambda": 0.5
+      },
+      "utility_f1_country": 0.7795238095238094
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "rho": 0.9
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "rho": 0.8
+      },
+      "utility_f1_country": 0.8641304347826088
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "rho": 0.7
+      },
+      "utility_f1_country": 0.8068181818181819
+    },
+    {
+      "params": {
+        "epsilon": 10
+      },
+      "utility_f1_country": 0.05172413793103448
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 2
+      },
+      "utility_f1_country": 0.9391025641025642
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 3
+      },
+      "utility_f1_country": 0.7541666666666667
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 5
+      },
+      "utility_f1_country": 0.5125
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 7
+      },
+      "utility_f1_country": 0.5660130718954248
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 10
+      },
+      "utility_f1_country": 0.4125
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "lambda": 0.95
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "lambda": 0.9
+      },
+      "utility_f1_country": 0.9391025641025642
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "lambda": 0.5
+      },
+      "utility_f1_country": 0.7285714285714286
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "rho": 0.9
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "rho": 0.8
+      },
+      "utility_f1_country": 0.8958333333333334
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "rho": 0.7
+      },
+      "utility_f1_country": 0.7035024154589371
+    }
+  ],
+  "dpmlm_shap_masked": [
+    {
+      "params": {
+        "epsilon": 500
+      },
+      "utility_f1_country": 0.6984848484848485
+    },
+    {
+      "params": {
+        "epsilon": 250
+      },
+      "utility_f1_country": 0.5891124871001032
+    },
+    {
+      "params": {
+        "epsilon": 100
+      },
+      "utility_f1_country": 0.5175438596491228
+    },
+    {
+      "params": {
+        "epsilon": 25
+      },
+      "utility_f1_country": 0.1576923076923077
+    },
+    {
+      "params": {
+        "epsilon": 10
+      },
+      "utility_f1_country": 0.05172413793103448
+    }
+  ],
+  "dpmlm_shap_unsorted": [
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 2
+      },
+      "utility_f1_country": 0.7256493506493507
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 3
+      },
+      "utility_f1_country": 0.7752705627705627
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 5
+      },
+      "utility_f1_country": 0.799209486166008
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 7
+      },
+      "utility_f1_country": 0.7257742257742257
+    },
+    {
+      "params": {
+        "epsilon": 500,
+        "k": 10
+      },
+      "utility_f1_country": 0.7256493506493507
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 2
+      },
+      "utility_f1_country": 0.7635281385281386
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 3
+      },
+      "utility_f1_country": 0.7256493506493507
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 5
+      },
+      "utility_f1_country": 0.6699134199134199
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 7
+      },
+      "utility_f1_country": 0.6699134199134199
+    },
+    {
+      "params": {
+        "epsilon": 250,
+        "k": 10
+      },
+      "utility_f1_country": 0.626445374800638
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 2
+      },
+      "utility_f1_country": 0.799209486166008
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 3
+      },
+      "utility_f1_country": 0.6461038961038961
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 5
+      },
+      "utility_f1_country": 0.5858134920634921
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 7
+      },
+      "utility_f1_country": 0.5136321195144724
+    },
+    {
+      "params": {
+        "epsilon": 100,
+        "k": 10
+      },
+      "utility_f1_country": 0.6699134199134199
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 2
+      },
+      "utility_f1_country": 0.728119706380576
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 3
+      },
+      "utility_f1_country": 0.603030303030303
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 5
+      },
+      "utility_f1_country": 0.47426900584795323
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 7
+      },
+      "utility_f1_country": 0.5125
+    },
+    {
+      "params": {
+        "epsilon": 25,
+        "k": 10
+      },
+      "utility_f1_country": 0.46944444444444444
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 2
+      },
+      "utility_f1_country": 0.8184523809523809
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 3
+      },
+      "utility_f1_country": 0.6277034559643255
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 5
+      },
+      "utility_f1_country": 0.5660130718954248
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 7
+      },
+      "utility_f1_country": 0.6484848484848484
+    },
+    {
+      "params": {
+        "epsilon": 10,
+        "k": 10
+      },
+      "utility_f1_country": 0.40476190476190477
+    }
+  ],
+  "dpmlm_uniform": [
+    {
+      "params": {
+        "epsilon": 500
+      },
+      "utility_f1_country": 0.636333231985406
+    },
+    {
+      "params": {
+        "epsilon": 250
+      },
+      "utility_f1_country": 0.5682539682539682
+    },
+    {
+      "params": {
+        "epsilon": 100
+      },
+      "utility_f1_country": 0.5962732919254659
+    },
+    {
+      "params": {
+        "epsilon": 25
+      },
+      "utility_f1_country": 0.20955882352941177
+    },
+    {
+      "params": {
+        "epsilon": 10
+      },
+      "utility_f1_country": 0.05172413793103448
+    }
+  ],
+  "dpparaphrase": [
+    {
+      "params": {
+        "epsilon": 500
+      },
+      "utility_f1_country": 0.31323529411764706
+    },
+    {
+      "params": {
+        "epsilon": 250
+      },
+      "utility_f1_country": 0.2684782608695652
+    },
+    {
+      "params": {
+        "epsilon": 100
+      },
+      "utility_f1_country": 0.21805555555555556
+    },
+    {
+      "params": {
+        "epsilon": 25
+      },
+      "utility_f1_country": 0.05172413793103448
+    },
+    {
+      "params": {
+        "epsilon": 10
+      },
+      "utility_f1_country": 0.27197802197802196
+    }
+  ],
+  "dpprompt": [
+    {
+      "params": {
+        "epsilon": 500
+      },
+      "utility_f1_country": 0.32603276353276356
+    },
+    {
+      "params": {
+        "epsilon": 250
+      },
+      "utility_f1_country": 0.3244047619047619
+    },
+    {
+      "params": {
+        "epsilon": 100
+      },
+      "utility_f1_country": 0.28757122507122507
+    },
+    {
+      "params": {
+        "epsilon": 25
+      },
+      "utility_f1_country": 0.05172413793103448
+    },
+    {
+      "params": {
+        "epsilon": 10
+      },
+      "utility_f1_country": 0.05172413793103448
+    }
+  ],
+  "manual": [
+    {
+      "params": {},
+      "utility_f1_country": 0.566137566137566
+    }
+  ],
+  "petre_shap": [
+    {
+      "params": {
+        "k": 2
+      },
+      "utility_f1_country": 0.6458333333333334
+    },
+    {
+      "params": {
+        "k": 3
+      },
+      "utility_f1_country": 0.6647727272727273
+    },
+    {
+      "params": {
+        "k": 5
+      },
+      "utility_f1_country": 0.5348178137651821
+    },
+    {
+      "params": {
+        "k": 7
+      },
+      "utility_f1_country": 0.5103174603174603
+    },
+    {
+      "params": {
+        "k": 10
+      },
+      "utility_f1_country": 0.5262254901960784
+    }
+  ],
+  "presidio": [
+    {
+      "params": {},
+      "utility_f1_country": 0.9391025641025642
+    }
+  ],
+  "risk_shap": [
+    {
+      "params": {
+        "rho": 0.9
+      },
+      "utility_f1_country": 0.9391025641025642
+    },
+    {
+      "params": {
+        "rho": 0.8
+      },
+      "utility_f1_country": 0.875
+    },
+    {
+      "params": {
+        "rho": 0.7
+      },
+      "utility_f1_country": 0.8541666666666667
+    }
+  ],
+  "spacy": [
+    {
+      "params": {},
+      "utility_f1_country": 0.6828341013824885
+    }
+  ]
+}
