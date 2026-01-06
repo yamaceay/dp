@@ -380,11 +380,11 @@ def build_demo_string(config_path: Path) -> str:
 def main() -> None:
 	parser = argparse.ArgumentParser()
 	parser.add_argument("action", choices=["demo", "demo-results", "plot-bars"])
-	parser.add_argument("--config", default="visualize/lrec_config.yaml")
-	parser.add_argument("--flat", default="visualize/privacy.json")
-	parser.add_argument("--dataset", default="reddit")
-	parser.add_argument("--metric", default="privacy_mean_rank_change")
-	parser.add_argument("--experiment")
+	parser.add_argument("--config", required=True)
+	parser.add_argument("--flat", required=True)
+	parser.add_argument("--dataset", required=True)
+	parser.add_argument("--experiment", required=True)
+	parser.add_argument("--metric", required=True)
 	parser.add_argument("--out", default="visualize/plots")
 	args = parser.parse_args()
 	if args.action == "demo":
