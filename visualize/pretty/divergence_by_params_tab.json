@@ -1,0 +1,654 @@
+{
+  "lambda=0.95": [
+    {
+      "method": "baroud",
+      "divergence_mean_bertscore": 0.06646356197792715
+    }
+  ],
+  "lambda=0.9": [
+    {
+      "method": "baroud",
+      "divergence_mean_bertscore": 0.0699171569403701
+    }
+  ],
+  "lambda=0.8": [
+    {
+      "method": "baroud",
+      "divergence_mean_bertscore": 0.07406144442520743
+    }
+  ],
+  "lambda=0.7": [
+    {
+      "method": "baroud",
+      "divergence_mean_bertscore": 0.07585285967729223
+    }
+  ],
+  "lambda=0.5": [
+    {
+      "method": "baroud",
+      "divergence_mean_bertscore": 0.07911698414584784
+    }
+  ],
+  "epsilon=500": [
+    {
+      "method": "dpbart",
+      "divergence_mean_bertscore": 0.19974258847123993
+    },
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.15936100154411137
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "divergence_mean_bertscore": 0.15949830670995035
+    },
+    {
+      "method": "dpmlm_uniform",
+      "divergence_mean_bertscore": 0.13934785033774189
+    },
+    {
+      "method": "dpparaphrase",
+      "divergence_mean_bertscore": 0.24323715422097153
+    },
+    {
+      "method": "dpprompt",
+      "divergence_mean_bertscore": 0.18087943379334578
+    }
+  ],
+  "epsilon=250": [
+    {
+      "method": "dpbart",
+      "divergence_mean_bertscore": 0.20077229203201655
+    },
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.16249818642308392
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "divergence_mean_bertscore": 0.16291894640509538
+    },
+    {
+      "method": "dpmlm_uniform",
+      "divergence_mean_bertscore": 0.1402816551876819
+    },
+    {
+      "method": "dpparaphrase",
+      "divergence_mean_bertscore": 0.24151669196256503
+    },
+    {
+      "method": "dpprompt",
+      "divergence_mean_bertscore": 0.18035883321536808
+    }
+  ],
+  "epsilon=100": [
+    {
+      "method": "dpbart",
+      "divergence_mean_bertscore": 0.21335089018964393
+    },
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.17058067105886504
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "divergence_mean_bertscore": 0.17091468516297229
+    },
+    {
+      "method": "dpmlm_uniform",
+      "divergence_mean_bertscore": 0.1445101982965244
+    },
+    {
+      "method": "dpparaphrase",
+      "divergence_mean_bertscore": 0.2554285146120026
+    },
+    {
+      "method": "dpprompt",
+      "divergence_mean_bertscore": 0.18405696182023912
+    }
+  ],
+  "epsilon=25": [
+    {
+      "method": "dpbart",
+      "divergence_mean_bertscore": 0.29657350234159335
+    },
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.21588094591155765
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "divergence_mean_bertscore": 0.21573810079904993
+    },
+    {
+      "method": "dpmlm_uniform",
+      "divergence_mean_bertscore": 0.19981890259765264
+    },
+    {
+      "method": "dpparaphrase",
+      "divergence_mean_bertscore": 0.2717835879701329
+    },
+    {
+      "method": "dpprompt",
+      "divergence_mean_bertscore": 0.28302416135007
+    }
+  ],
+  "epsilon=10": [
+    {
+      "method": "dpbart",
+      "divergence_mean_bertscore": 0.30167037530208196
+    },
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.2718503878811213
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "divergence_mean_bertscore": 0.2716559026184983
+    },
+    {
+      "method": "dpmlm_uniform",
+      "divergence_mean_bertscore": 0.27754781377597115
+    },
+    {
+      "method": "dpparaphrase",
+      "divergence_mean_bertscore": 0.2739516609297024
+    },
+    {
+      "method": "dpprompt",
+      "divergence_mean_bertscore": 0.2940666178080041
+    }
+  ],
+  "epsilon=500&k=2": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.11207961379073736
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.11375025125939077
+    }
+  ],
+  "epsilon=500&k=3": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.12248736244487012
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.12197385669693234
+    }
+  ],
+  "epsilon=500&k=5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.13404171579466093
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.13577770529769537
+    }
+  ],
+  "epsilon=500&k=7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.13905307157771793
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.13821038017122764
+    }
+  ],
+  "epsilon=500&k=10": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.1457307273008692
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.1445107877723814
+    }
+  ],
+  "epsilon=500&lambda=0.95": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.07261924105366384
+    }
+  ],
+  "epsilon=500&lambda=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.0748863192055169
+    }
+  ],
+  "epsilon=500&lambda=0.5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.07760510716851302
+    }
+  ],
+  "epsilon=500&rho=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.08135487150958204
+    }
+  ],
+  "epsilon=500&rho=0.8": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.090068200441796
+    }
+  ],
+  "epsilon=500&rho=0.7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.0964708558217747
+    }
+  ],
+  "epsilon=250&k=2": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.11481586122137355
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.1119417290049275
+    }
+  ],
+  "epsilon=250&k=3": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.12182943135734618
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.12290798726044302
+    }
+  ],
+  "epsilon=250&k=5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.13432986013532625
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.13267907476800633
+    }
+  ],
+  "epsilon=250&k=7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.14007443565083302
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.1371800087568328
+    }
+  ],
+  "epsilon=250&k=10": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.14460956580995574
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.14191177839369284
+    }
+  ],
+  "epsilon=250&lambda=0.95": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.07294418445722324
+    }
+  ],
+  "epsilon=250&lambda=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.07517976366628812
+    }
+  ],
+  "epsilon=250&lambda=0.5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.07859250081805733
+    }
+  ],
+  "epsilon=250&rho=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.08232008706866287
+    }
+  ],
+  "epsilon=250&rho=0.8": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.09235337728590477
+    }
+  ],
+  "epsilon=250&rho=0.7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.09954669250278023
+    }
+  ],
+  "epsilon=100&k=2": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.10899617540554737
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.11082249692105871
+    }
+  ],
+  "epsilon=100&k=3": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.124244287727386
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.12251884777714887
+    }
+  ],
+  "epsilon=100&k=5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.13181583383890588
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.13569877983078243
+    }
+  ],
+  "epsilon=100&k=7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.13811097370357964
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.14037132216250803
+    }
+  ],
+  "epsilon=100&k=10": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.14491829440349668
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.1436932973974333
+    }
+  ],
+  "epsilon=100&lambda=0.95": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.0739060677881316
+    }
+  ],
+  "epsilon=100&lambda=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.07631349516665842
+    }
+  ],
+  "epsilon=100&lambda=0.5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.07959468627539207
+    }
+  ],
+  "epsilon=100&rho=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.08423770506550947
+    }
+  ],
+  "epsilon=100&rho=0.8": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.09636697665912898
+    }
+  ],
+  "epsilon=100&rho=0.7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.1056796462517085
+    }
+  ],
+  "epsilon=25&k=2": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.10970073234377883
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.10919871151916624
+    }
+  ],
+  "epsilon=25&k=3": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.11995831812460592
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.12212547260945238
+    }
+  ],
+  "epsilon=25&k=5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.1364785001033873
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.13751649293373888
+    }
+  ],
+  "epsilon=25&k=7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.14305566568074263
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.14519572727323518
+    }
+  ],
+  "epsilon=25&k=10": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.15023264124637514
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.15226043162383432
+    }
+  ],
+  "epsilon=25&lambda=0.95": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.07695872905686146
+    }
+  ],
+  "epsilon=25&lambda=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.08036930166830228
+    }
+  ],
+  "epsilon=25&lambda=0.5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.08463780241688405
+    }
+  ],
+  "epsilon=25&rho=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.08672021880863219
+    }
+  ],
+  "epsilon=25&rho=0.8": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.10358398495696661
+    }
+  ],
+  "epsilon=25&rho=0.7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.11888812846086157
+    }
+  ],
+  "epsilon=10&k=2": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.10482992853705339
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.1048389462035472
+    }
+  ],
+  "epsilon=10&k=3": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.11929399713756532
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.11768513964855765
+    }
+  ],
+  "epsilon=10&k=5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.13087228808816023
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.12847627945772305
+    }
+  ],
+  "epsilon=10&k=7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.14198944183785145
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.14093172878730953
+    }
+  ],
+  "epsilon=10&k=10": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.15367182737260354
+    },
+    {
+      "method": "dpmlm_shap_unsorted",
+      "divergence_mean_bertscore": 0.15302625697428787
+    }
+  ],
+  "epsilon=10&lambda=0.95": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.0794104586436054
+    }
+  ],
+  "epsilon=10&lambda=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.08326155745138333
+    }
+  ],
+  "epsilon=10&lambda=0.5": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.08864645366593608
+    }
+  ],
+  "epsilon=10&rho=0.9": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.08687300522496381
+    }
+  ],
+  "epsilon=10&rho=0.8": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.1052632594671775
+    }
+  ],
+  "epsilon=10&rho=0.7": [
+    {
+      "method": "dpmlm_shap",
+      "divergence_mean_bertscore": 0.12284153324412549
+    }
+  ],
+  "": [
+    {
+      "method": "manual",
+      "divergence_mean_bertscore": 0.08752133104744858
+    },
+    {
+      "method": "presidio",
+      "divergence_mean_bertscore": 0.06299552344900416
+    },
+    {
+      "method": "spacy",
+      "divergence_mean_bertscore": 0.10310305056609506
+    }
+  ],
+  "k=2": [
+    {
+      "method": "petre_shap",
+      "divergence_mean_bertscore": 0.1287635888640336
+    }
+  ],
+  "k=3": [
+    {
+      "method": "petre_shap",
+      "divergence_mean_bertscore": 0.15591061584592805
+    }
+  ],
+  "k=5": [
+    {
+      "method": "petre_shap",
+      "divergence_mean_bertscore": 0.18150386378521055
+    }
+  ],
+  "k=7": [
+    {
+      "method": "petre_shap",
+      "divergence_mean_bertscore": 0.19335604324115543
+    }
+  ],
+  "k=10": [
+    {
+      "method": "petre_shap",
+      "divergence_mean_bertscore": 0.2075145817178441
+    }
+  ],
+  "rho=0.9": [
+    {
+      "method": "risk_shap",
+      "divergence_mean_bertscore": 0.09174940482837947
+    }
+  ],
+  "rho=0.8": [
+    {
+      "method": "risk_shap",
+      "divergence_mean_bertscore": 0.11508397042281984
+    }
+  ],
+  "rho=0.7": [
+    {
+      "method": "risk_shap",
+      "divergence_mean_bertscore": 0.13551262419993484
+    }
+  ]
+}
