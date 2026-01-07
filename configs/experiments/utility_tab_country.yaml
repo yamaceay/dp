@@ -6,14 +6,22 @@ annotations_in:
 target:
   key: country_group
   type: nominal
-test_size: 0.2
+split:
+  - train: 0.8
+    val: 0.2
 random_state: 42
-vectorizer:
-  type: bert
 head:
-  type: feedforward_classifier
+  type: bert_classifier
   params:
+    model_name: bert-base-uncased
+    init_checkpoint: models/tri_pipelines/tab/old_pipeline/finetuning/checkpoint-532
+    checkpoint_dir: models/tri_pipelines/tab/utility_country
+    batch_size: 8
+    epochs: 3
+    lr: 1e-5
+    device: auto
     primary_metric: acc
+    target_acc: 0.8
 output:
   format: jsonl
   file: logs/tab_country_exp.jsonl

@@ -10,6 +10,14 @@ import matplotlib
 
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
+from visualize.config_loader import (
+	load_methods_set as _ext_load_methods_set,
+	load_results_set as _ext_load_results_set,
+	validate_methods_config as _ext_validate_methods_config,
+	validate_results_config as _ext_validate_results_config,
+	list_method_sets as _ext_list_method_sets,
+	list_result_sets as _ext_list_result_sets,
+)
 
 
 def _load_config(path: Path) -> Dict[str, Any]:
@@ -22,8 +30,53 @@ def _first_experiment(conf: Dict[str, Any]) -> Dict[str, Any]:
 	return experiments[0] if experiments else {}
 
 
+def _select_experiment(conf: Dict[str, Any], name: str | None, dataset_hint: str | None) -> Dict[str, Any]:
+	experiments = conf.get("experiments") or []
+	if not experiments:
+		return {}
+	if name:
+		for exp in experiments:
+			if str(exp.get("name")) == str(name):
+				return exp
+	if dataset_hint:
+		for exp in experiments:
+			if str(exp.get("dataset")) == str(dataset_hint):
+				return exp
+	return experiments[0]
+
+
+def _get_value_by_path(conf: Dict[str, Any], path_expr: str) -> Any:
+	text = str(path_expr).strip()
+	if not text.startswith("${") or not text.endswith("}"):
+		return None
+	body = text[2:-1]
+	parts = [p for p in body.split(".") if p]
+	cur: Any = conf
+	for p in parts:
+		if not isinstance(cur, dict) or p not in cur:
+			return None
+		cur = cur[p]
+	return cur
+
+
+def _expand_methods(methods: List[Any], exp: Dict[str, Any]) -> List[Any]:
+	if not methods:
+		return []
+	conf_root = exp.get("__conf__") if isinstance(exp.get("__conf__"), dict) else None
+	out: List[Any] = []
+	for item in methods:
+		if isinstance(item, str) and conf_root is not None:
+			resolved = _get_value_by_path(conf_root, item)
+			if isinstance(resolved, list) and resolved:
+				out.extend(resolved)
+				continue
+		out.append(item)
+	return out
+
+
 def _method_specs(exp: Dict[str, Any]) -> List[Dict[str, Any]]:
 	methods = exp.get("methods") or []
+	methods = _expand_methods(methods, exp)
 	out: List[Dict[str, Any]] = []
 	for item in methods:
 		if isinstance(item, dict) and item.get("method"):
@@ -63,6 +116,12 @@ def _params_scope(exp: Dict[str, Any]) -> Tuple[List[str], List[str]]:
 			if p not in within:
 				within.append(p)
 	return within, across
+
+def _load_methods_set(path: Path, set_name: str) -> List[Any]:
+	return _ext_load_methods_set(path, set_name)
+
+def _load_results_set(path: Path, set_name: str) -> Tuple[str, str]:
+	return _ext_load_results_set(path, set_name)
 
 	def _load_rows_from_config(config_path: Path) -> List[Dict[str, Any]]:
 		conf = _load_config(config_path)
@@ -179,21 +238,74 @@ def _value_palette(values: List[float], family: str) -> Dict[float, Any]:
 	return {float(v): cmap(0.25 + 0.6 * p) for v, p in zip(uniq, positions)}
 
 
-def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, experiment: str, output_dir: Path) -> None:
+def _auto_method_specs_from_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+	by_method: Dict[str, List[Dict[str, Any]]] = {}
+	for r in rows:
+		name = _method_alias(str(r.get("method")))
+		by_method.setdefault(name, []).append(r)
+	specs: List[Dict[str, Any]] = []
+	for name, entries in by_method.items():
+		keys = set()
+		for e in entries:
+			for k in (e.get("params") or {}).keys():
+				keys.add(str(k))
+		expected_keys = sorted(keys)
+		spec_id = name + "(" + ",".join(expected_keys) + ")"
+		specs.append({
+			"method": name,
+			"params": expected_keys,
+			"params_one_run": [],
+			"expected_keys": expected_keys,
+			"id": spec_id,
+			"print_as": name,
+		})
+	return specs
+
+
+def plot_bars(config_path: Path, flat_path: Path | None, dataset: str, metric: str, experiment: str, output_dir: Path, debug: bool = False, methods_config: Path | None = None, methods_set: str | None = None, results_config: Path | None = None, results_set: str | None = None) -> None:
+	if debug:
+		print(f"[plot-bars] config={config_path} flat={flat_path} dataset={dataset} experiment={experiment} metric={metric} out={output_dir}")
 	conf = _load_config(config_path)
-	exp = _first_experiment(conf)
-	methods = _method_specs(exp)
-	within, across = _params_scope(exp)
-	dataset_sel = dataset if dataset else (str(exp.get("dataset")) if exp.get("dataset") else "")
-	base_rows = _filter_dataset(_load_flat(flat_path), dataset_sel, metric)
+	exp = _select_experiment(conf, experiment, dataset)
+	if exp:
+		exp = dict(exp)
+		exp["__conf__"] = conf
+	# Decoupled mode: override methods and results if provided
+	decoupled_methods: List[Any] = []
+	decoupled_flat: str = ""
+	decoupled_dataset = ""
+	if methods_config and methods_set:
+		decoupled_methods = _load_methods_set(methods_config, methods_set)
+	if results_config and results_set:
+		decoupled_dataset, decoupled_flat = _load_results_set(results_config, results_set)
+	if debug:
+		print(f"[plot-bars] selected_exp dataset={exp.get('dataset')} name={experiment} decoupled_dataset={decoupled_dataset} methods_set={methods_set} results_set={results_set}")
+	methods = _method_specs({"methods": decoupled_methods if decoupled_methods else (exp.get("methods") or []), "__conf__": exp.get("__conf__")})
+	within, across = _params_scope({"methods": methods})
+	if debug:
+		print(f"[plot-bars] methods={len(methods)} ids={[m['id'] for m in methods]} within={within} across={across}")
+	dataset_sel = dataset if dataset else (decoupled_dataset if decoupled_dataset else (str(exp.get("dataset")) if exp.get("dataset") else ""))
+	flat_source = flat_path if flat_path is not None else None
+	if decoupled_flat:
+		candidate = Path("visualize/pretty") / decoupled_flat if not Path(decoupled_flat).exists() else Path(decoupled_flat)
+		flat_source = candidate
+	elif flat_source is None:
+		raise ValueError("flat source not provided; supply --flat or --results-config/--results-set with a flat file")
+	if debug:
+		print(f"[plot-bars] dataset_sel={dataset_sel} flat_source={flat_source}")
+	base_rows = _filter_dataset(_load_flat(Path(flat_source)), dataset_sel, metric)
+	if debug:
+		print(f"[plot-bars] base_rows={len(base_rows)} from flat")
 	_ensure_dir(output_dir / f"{dataset_sel}_{experiment}")
-	files = exp.get("files") or []
+	files: List[Dict[str, Any]] = [] if decoupled_flat else (exp.get("files") or [])
 	alt_rows: List[Dict[str, Any]] = []
 	for f in files:
 		ftype = str(f.get("type"))
 		if ftype not in {"privacy", "utility"} or not f.get("file"):
 			continue
 		p = Path("visualize/pretty") / str(f.get("file")) if not Path(str(f.get("file"))).exists() else Path(str(f.get("file")))
+		if debug:
+			print(f"[plot-bars] loading alt file type={ftype} path={p}")
 		with p.open("r", encoding="utf-8") as fp:
 			data = json.load(fp)
 		if isinstance(data, list):
@@ -208,6 +320,22 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 							row[k] = v
 					alt_rows.append(row)
 	rows = _dedup_rows(base_rows + _filter_dataset(alt_rows, dataset_sel, metric))
+	if debug:
+		print(f"[plot-bars] alt_rows_raw={len(alt_rows)} alt_rows_filtered={len(_filter_dataset(alt_rows, dataset_sel, metric))} rows_dedup={len(rows)}")
+	# Fallback: auto-generate method specs if configured methods do not match any rows
+	has_matches = False
+	if rows and methods:
+		for spec in methods:
+			if any(_match_exact(r, spec) for r in rows):
+				has_matches = True
+				break
+	if debug:
+		print(f"[plot-bars] has_matches={has_matches} configured_methods_present={bool(methods)}")
+	if rows and (not methods or not has_matches):
+		methods = _auto_method_specs_from_rows(rows)
+		within, across = _params_scope({"methods": methods})
+		if debug:
+			print(f"[plot-bars] fallback_methods ids={[m['id'] for m in methods]} within={within} across={across}")
 	order = _method_order(methods)
 	print_as = _method_print_as(methods)
 	eps_name = next((p for p in across if p == "epsilon"), None)
@@ -221,6 +349,8 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 		for r in m_rows:
 			r["__spec_id"] = spec["id"]
 		no_eps_rows.extend(m_rows)
+	if debug:
+		print(f"[plot-bars] no_eps_rows={len(no_eps_rows)} output_dir={output_dir / f'{dataset_sel}_{experiment}'}")
 	if no_eps_rows:
 		grouped: Dict[str, List[Dict[str, Any]]] = {m["id"]: [] for m in methods}
 		for r in no_eps_rows:
@@ -259,10 +389,15 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 			axis.annotate(t, xy=(xv, yv), xytext=(0, 5), textcoords="offset points", rotation=90, ha="center", va="bottom", fontsize=9, clip_on=False)
 		_ensure_dir(output_dir)
 		figure.tight_layout()
-		figure.savefig(output_dir / f"{dataset_sel}_{experiment}" / "no_eps.png", dpi=220)
+		out_path = output_dir / f"{dataset_sel}_{experiment}" / "no_eps.png"
+		figure.savefig(out_path, dpi=220)
+		if debug:
+			print(f"[plot-bars] wrote {out_path}")
 		plt.close(figure)
 	if eps_name:
 		eps_values = _unique_sorted([r.get("params", {}).get(eps_name) for r in rows if eps_name in (r.get("params") or {})])
+		if debug:
+			print(f"[plot-bars] eps_name={eps_name} eps_values={eps_values}")
 		for eps in eps_values:
 			subset: List[Dict[str, Any]] = []
 			for spec in methods:
@@ -273,6 +408,8 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 				for r in candidates:
 					r["__spec_id"] = spec["id"]
 				subset.extend(candidates)
+			if debug:
+				print(f"[plot-bars] eps={eps} subset_rows={len(subset)}")
 			if not subset:
 				continue
 			grouped: Dict[str, List[Dict[str, Any]]] = {m["id"]: [] for m in methods}
@@ -313,13 +450,19 @@ def plot_bars(config_path: Path, flat_path: Path, dataset: str, metric: str, exp
 			_ensure_dir(output_dir)
 			figure.tight_layout()
 			safe_eps = str(eps).replace(".", "_")
-			figure.savefig(output_dir / f"{dataset_sel}_{experiment}" / f"eps_{safe_eps}.png", dpi=220)
+			out_path = output_dir / f"{dataset_sel}_{experiment}" / f"eps_{safe_eps}.png"
+			figure.savefig(out_path, dpi=220)
+			if debug:
+				print(f"[plot-bars] wrote {out_path}")
 			plt.close(figure)
 
 
 def build_results_string(config_path: Path, flat_path: Path, dataset: str, metric: str) -> str:
 	conf = _load_config(config_path)
-	exp = _first_experiment(conf)
+	exp = _select_experiment(conf, None, dataset)
+	if exp:
+		exp = dict(exp)
+		exp["__conf__"] = conf
 	methods = _method_specs(exp)
 	within, across = _params_scope(exp)
 	rows = _filter_dataset(_load_flat(flat_path), dataset, metric)
@@ -359,6 +502,9 @@ def build_results_string(config_path: Path, flat_path: Path, dataset: str, metri
 def build_demo_string(config_path: Path) -> str:
 	conf = _load_config(config_path)
 	exp = _first_experiment(conf)
+	if exp:
+		exp = dict(exp)
+		exp["__conf__"] = conf
 	dataset = str(exp.get("dataset")) if exp.get("dataset") else ""
 	method_class = str(exp.get("method_class")) if exp.get("method_class") else ""
 	methods = _method_specs(exp)
@@ -379,24 +525,73 @@ def build_demo_string(config_path: Path) -> str:
 
 def main() -> None:
 	parser = argparse.ArgumentParser()
-	parser.add_argument("action", choices=["demo", "demo-results", "plot-bars"])
-	parser.add_argument("--config", required=True)
-	parser.add_argument("--flat", required=True)
-	parser.add_argument("--dataset", required=True)
-	parser.add_argument("--experiment", required=True)
-	parser.add_argument("--metric", required=True)
+	parser.add_argument("action", nargs="?", choices=["demo", "demo-results", "plot-bars", "noop"], default="noop")
+	parser.add_argument("--config")
+	parser.add_argument("--flat")
+	parser.add_argument("--dataset")
+	parser.add_argument("--experiment")
+	parser.add_argument("--metric")
 	parser.add_argument("--out", default="visualize/plots")
+	parser.add_argument("--debug", action="store_true")
+	parser.add_argument("--methods-config")
+	parser.add_argument("--methods-set")
+	parser.add_argument("--results-config")
+	parser.add_argument("--results-set")
+	# Utility commands for config hygiene
+	parser.add_argument("--list-method-sets", action="store_true")
+	parser.add_argument("--list-result-sets", action="store_true")
+	parser.add_argument("--validate-configs", action="store_true")
 	args = parser.parse_args()
+	# Optional utility operations
+	if args.list_method_sets and args.methods_config:
+		for name in _ext_list_method_sets(Path(args.methods_config)):
+			print(name)
+		return
+	if args.list_result_sets and args.results_config:
+		for name in _ext_list_result_sets(Path(args.results_config)):
+			print(name)
+		return
+	if args.validate_configs:
+		if args.methods_config:
+			_ext_validate_methods_config(Path(args.methods_config))
+			print("methods: ok")
+		if args.results_config:
+			_ext_validate_results_config(Path(args.results_config))
+			print("results: ok")
+		return
+
 	if args.action == "demo":
+		if not args.config:
+			raise SystemExit("--config is required for demo")
 		text = build_demo_string(Path(args.config))
 		print(text)
 		return
 	if args.action == "demo-results":
+		if not (args.config and args.flat and args.dataset and args.metric):
+			raise SystemExit("--config, --flat, --dataset and --metric are required for demo-results")
 		text = build_results_string(Path(args.config), Path(args.flat), str(args.dataset), str(args.metric))
 		print(text)
 		return
 	if args.action == "plot-bars":
-		plot_bars(Path(args.config), Path(args.flat), str(args.dataset), str(args.metric), str(args.experiment), Path(args.out))
+		if not (args.config and args.dataset and args.experiment and args.metric):
+			raise SystemExit("--config, --dataset, --experiment and --metric are required for plot-bars")
+		plot_bars(
+			Path(args.config),
+			Path(args.flat) if args.flat else None,
+			str(args.dataset),
+			str(args.metric),
+			str(args.experiment),
+			Path(args.out),
+			debug=bool(args.debug),
+			methods_config=Path(args.methods_config) if args.methods_config else None,
+			methods_set=str(args.methods_set) if args.methods_set else None,
+			results_config=Path(args.results_config) if args.results_config else None,
+			results_set=str(args.results_set) if args.results_set else None,
+		)
+		return
+	if args.action == "noop":
+		if not (args.list_method_sets or args.list_result_sets or args.validate_configs):
+			raise SystemExit("no action provided; use an action or utility flags")
 
 
 if __name__ == "__main__":

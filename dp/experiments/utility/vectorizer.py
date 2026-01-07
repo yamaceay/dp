@@ -127,4 +127,27 @@ class BERTVectorizer(SelfSupervisedFeatureExtractor):
 FEATURE_EXTRACTOR_REGISTRY: Dict[str, type[SelfSupervisedFeatureExtractor]] = {
     "tfidf": TfidfTextVectorizer,
     "bert": BERTVectorizer,
+    "text": None,  # placeholder, filled below
 }
+
+
+class IdentityTextVectorizer(SelfSupervisedFeatureExtractor):
+    def describe(self) -> Dict[str, Any]:
+        return {"type": "text"}
+
+    def setup(self) -> "SelfSupervisedFeatureExtractor":
+        return self
+
+    def fit(self, texts: Sequence[str]) -> None:
+        return None
+
+    def transform(self, texts: Sequence[str]) -> Any:
+        return list(texts)
+
+    def cleanup(self) -> None:
+        return None
+
+    def clone(self) -> "SelfSupervisedFeatureExtractor":
+        return IdentityTextVectorizer()
+
+FEATURE_EXTRACTOR_REGISTRY["text"] = IdentityTextVectorizer

@@ -8,14 +8,25 @@ target:
   type: nominal
 selection_criteria:
   feature: birth_city_country
-test_size: 0.2
+split:
+  - train: 0.0
+    val: 1.0
+  - path: data/reddit/synthetic_dataset.jsonl
+    train: 1.0
+    val: 0.0
 random_state: 42
-vectorizer:
-  type: bert
 head:
-  type: feedforward_classifier
+  type: bert_classifier
   params:
+    model_name: bert-base-uncased
+    init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
+    checkpoint_dir: models/tri_pipelines/reddit/utility_birth_city_country
+    batch_size: 4
+    epochs: 3
+    lr: 2e-5
+    device: auto
     primary_metric: acc
+    target_acc: 0.8
 output:
   format: jsonl
   file: logs/reddit_birth_city_country_exp.jsonl

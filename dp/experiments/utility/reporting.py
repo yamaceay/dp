@@ -21,16 +21,22 @@ class UtilityEvaluationReport:
     test_matched: int
     test_total: int
     available: int
+    train_results: Dict[str, Any]
+    val_results: Dict[str, Any]
+    test_results: Dict[str, Any]
+    overall_results: Dict[str, Any]
 
 
 @dataclass(frozen=True)
 class UtilityExperimentReport:
-    score: float
     model_name: str
     primary_metric: str
     baseline_metrics: Dict[str, float]
     baseline_train_size: int
     baseline_test_size: int
+    baseline_train_metrics: Dict[str, float]
+    baseline_test_metrics: Dict[str, float]
+    baseline_overall_metrics: Dict[str, float]
     evaluations: List[UtilityEvaluationReport]
 
 
@@ -45,7 +51,7 @@ class UtilityReportOutputter:
 class TextUtilityReportOutputter(UtilityReportOutputter):
     def output(self, report: UtilityExperimentReport) -> None:
         lines: List[str] = [
-            f"Score ({report.primary_metric}): {report.score:.4f}",
+            f"Score ({report.primary_metric}): {report.baseline_metrics[report.primary_metric]:.4f}",
             f"Model: {report.model_name}",
             "",
             "Baseline",
@@ -90,13 +96,15 @@ class TextUtilityReportOutputter(UtilityReportOutputter):
 class JsonUtilityReportOutputter(UtilityReportOutputter):
     def output(self, report: UtilityExperimentReport) -> None:
         payload: Dict[str, Any] = {
-            "score": report.score,
             "model": report.model_name,
             "primary_metric": report.primary_metric,
             "baseline": {
                 "metrics": report.baseline_metrics,
                 "train_size": report.baseline_train_size,
                 "test_size": report.baseline_test_size,
+                "train_metrics": report.baseline_train_metrics,
+                "test_metrics": report.baseline_test_metrics,
+                "overall_metrics": report.baseline_overall_metrics,
             },
             "evaluations": [
                 {
@@ -110,6 +118,10 @@ class JsonUtilityReportOutputter(UtilityReportOutputter):
                     "test_matched": evaluation.test_matched,
                     "test_total": evaluation.test_total,
                     "available": evaluation.available,
+                    "train_results": evaluation.train_results,
+                    "val_results": evaluation.val_results,
+                    "test_results": evaluation.test_results,
+                    "overall_results": evaluation.overall_results,
                 }
                 for evaluation in report.evaluations
             ],
@@ -122,12 +134,14 @@ class JsonLinesUtilityReportOutputter(UtilityReportOutputter):
         records: List[Dict[str, Any]] = [
             {
                 "type": "experiment",
-                "score": report.score,
                 "model": report.model_name,
                 "primary_metric": report.primary_metric,
                 "baseline_metrics": report.baseline_metrics,
                 "baseline_train_size": report.baseline_train_size,
                 "baseline_test_size": report.baseline_test_size,
+                "baseline_train_metrics": report.baseline_train_metrics,
+                "baseline_test_metrics": report.baseline_test_metrics,
+                "baseline_overall_metrics": report.baseline_overall_metrics,
             }
         ]
         for evaluation in report.evaluations:
@@ -144,6 +158,10 @@ class JsonLinesUtilityReportOutputter(UtilityReportOutputter):
                     "test_matched": evaluation.test_matched,
                     "test_total": evaluation.test_total,
                     "available": evaluation.available,
+                    "train_results": evaluation.train_results,
+                    "val_results": evaluation.val_results,
+                    "test_results": evaluation.test_results,
+                    "overall_results": evaluation.overall_results,
                 }
             )
         serialized = "\n".join(json.dumps(record, ensure_ascii=False) for record in records)
@@ -159,12 +177,19 @@ def build_utility_report(result: ExperimentResult, sources: Dict[str, Path]) -> 
     baseline_metrics = {name: float(value) for name, value in baseline_metrics_raw.items()}
     baseline_train = int(baseline_payload.get("train_size", 0))
     baseline_test = int(baseline_payload.get("test_size", 0))
+    baseline_train_metrics = {key: float(value) for key, value in (baseline_payload.get("train_metrics", {}) or {}).items()}
+    baseline_test_metrics = {key: float(value) for key, value in (baseline_payload.get("test_metrics", {}) or {}).items()}
+    baseline_overall_metrics = {key: float(value) for key, value in (baseline_payload.get("overall_metrics", {}) or {}).items()}
     evaluation_metrics: Dict[str, Dict[str, Any]] = metrics.get("evaluations", {})
     evaluations: List[UtilityEvaluationReport] = []
     for name in sorted(evaluation_metrics.keys()):
         payload = evaluation_metrics.get(name) or {}
         metrics_payload = payload.get("metrics", {}) or {}
         drops_payload = payload.get("drops", {}) or {}
+        train_results = payload.get("train_results", {}) or {}
+        val_results = payload.get("val_results", {}) or {}
+        test_results = payload.get("test_results", {}) or {}
+        overall_results = payload.get("overall_results", {}) or {}
         evaluations.append(
             UtilityEvaluationReport(
                 name=name,
@@ -177,15 +202,21 @@ def build_utility_report(result: ExperimentResult, sources: Dict[str, Path]) -> 
                 test_matched=int(payload.get("test_matched", 0)),
                 test_total=int(payload.get("test_total", 0)),
                 available=int(payload.get("available", 0)),
+                train_results=train_results,
+                val_results=val_results,
+                test_results=test_results,
+                overall_results=overall_results,
             )
         )
     return UtilityExperimentReport(
-        score=float(result.score),
         model_name=model_name,
         primary_metric=primary_metric,
         baseline_metrics=baseline_metrics,
         baseline_train_size=baseline_train,
         baseline_test_size=baseline_test,
+        baseline_train_metrics=baseline_train_metrics,
+        baseline_test_metrics=baseline_test_metrics,
+        baseline_overall_metrics=baseline_overall_metrics,
         evaluations=evaluations,
     )
 

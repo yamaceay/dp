@@ -1,0 +1,35 @@
+version: 1
+results:
+  utility_reddit_birth_city_country:
+    dataset: reddit
+    flat: reddit/utility_f1_birth_city_country.json
+  utility_reddit_age:
+    dataset: reddit
+    flat: reddit/utility_f1_age.json
+  utility_reddit_income_level:
+    dataset: reddit
+    flat: reddit/utility_f1_income_level.json
+  utility_reddit_relationship_status:
+    dataset: reddit
+    flat: reddit/utility_f1_relationship_status.json
+  utility_reddit_sex:
+    dataset: reddit
+    flat: reddit/utility_f1_sex.json
+  utility_tab_country:
+    dataset: tab
+    flat: tab/utility_f1_country.json
+  utility_tab_year:
+    dataset: tab
+    flat: tab/utility_f1_year.json
+  privacy_reddit:
+    dataset: reddit
+    flat: reddit/privacy.json
+  privacy_tab:
+    dataset: tab
+    flat: tab/privacy.json
+  divergence_reddit:
+    dataset: reddit
+    flat: reddit/divergence.json
+  divergence_tab:
+    dataset: tab
+    flat: tab/divergence.json

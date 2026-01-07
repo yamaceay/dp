@@ -5,17 +5,28 @@ annotations_in:
   - outputs/reddit
 target:
   key: feature_label
-  type: binary
+  type: nominal
 selection_criteria:
   feature: sex
-test_size: 0.2
+split:
+  - train: 0.0
+    val: 1.0
+  - path: data/reddit/synthetic_dataset.jsonl
+    train: 1.0
+    val: 0.0
 random_state: 42
-vectorizer:
-  type: bert
 head:
-  type: feedforward_classifier
+  type: bert_classifier
   params:
+    model_name: bert-base-uncased
+    init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
+    checkpoint_dir: models/tri_pipelines/reddit/utility_sex
+    batch_size: 8
+    epochs: 3
+    lr: 1e-5
+    device: auto
     primary_metric: acc
+    target_acc: 0.8
 output:
   format: jsonl
-  file: logs/reddit_sex_exp.jsonl
+  file: logs/reddit_utility_sex.jsonl
