@@ -92,13 +92,11 @@ def group_education(label: str) -> str:
     l = label.lower()
     if "high school" in l:
         return "secondary"
-    if "diploma" in l or "law degree" in l:
-        return "professional"
     if "studying" in l or "currently studying" in l:
         return "studying"
-    if l.startswith("bachelors"):
+    if l.startswith("bachelors") or "diploma" in l:
         return "bachelor"
-    if l.startswith("masters"):
+    if l.startswith("masters") or "law degree" in l:
         return "master"
     if l.startswith("phd") or "doctorate" in l:
         return "doctorate"

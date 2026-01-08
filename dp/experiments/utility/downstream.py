@@ -1,13 +1,13 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 import numpy as np
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import f1_score, mean_squared_error, r2_score
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import LabelEncoder
 import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModel, Trainer, TrainingArguments, TrainerCallback, EvalPrediction
 
 class SupervisedDownstreamHead(ABC):
     def __init__(self, name: str, primary_metric: str):
@@ -205,16 +205,337 @@ def _resolve_device(preferred: Optional[str] = None) -> str:
         return "mps"
     return "cpu"
 
+class EarlyStoppingCallback(TrainerCallback):
+    def __init__(self, early_stopping_patience: int, early_stopping_threshold: Optional[float], metric_name: str, minimize: bool):
+        self.patience = early_stopping_patience
+        self.threshold = early_stopping_threshold
+        self.metric_name = metric_name
+        self.minimize = minimize
+        self.best_metric = float('inf') if minimize else -float('inf')
+        self.wait = 0
+        self.stopped_epoch = 0
+
+    def on_evaluate(self, args, state, control, metrics, **kwargs):
+        current = metrics.get(f"eval_{self.metric_name}")
+        if current is None:
+            return
+        if self.threshold is not None:
+            if (self.minimize and current <= self.threshold) or (not self.minimize and current >= self.threshold):
+                control.should_training_stop = True
+                return
+        improved = (current < self.best_metric) if self.minimize else (current > self.best_metric)
+        if improved:
+            self.best_metric = current
+            self.wait = 0
+            control.should_save = True
+        else:
+            self.wait += 1
+            if self.wait >= self.patience:
+                control.should_training_stop = True
+
+class BertOrdinalHead(SupervisedDownstreamHead):
+    def __init__(
+        self,
+        model_name: str = "distilbert-base-uncased",
+        batch_size: int = 8,
+        epochs: int = 5,
+        encoder_lr: float = 1e-5,
+        head_lr: float = 5e-5,
+        warmup_steps: int = 10,
+        gradient_clip: float = 1.0,
+        device: Optional[str] = None,
+        primary_metric: str = "macro_mae",
+        early_stop_threshold: Optional[float] = None,
+        early_stop_patience: int = 2,
+        init_checkpoint: Optional[str] = None,
+        checkpoint_dir: Optional[str] = None,
+    ):
+        super().__init__(name="bert_ordinal", primary_metric=primary_metric)
+        self.model_name = model_name
+        self.batch_size = int(batch_size)
+        self.epochs = int(epochs)
+        self.encoder_lr = float(encoder_lr)
+        self.head_lr = float(head_lr)
+        self.warmup_steps = int(warmup_steps)
+        self.gradient_clip = float(gradient_clip)
+        self.device = _resolve_device(device)
+        self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
+        self.early_stop_patience = int(early_stop_patience)
+        self.init_checkpoint = init_checkpoint
+        self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        self._tokenizer: Optional[AutoTokenizer] = None
+        self._model: Optional[torch.nn.Module] = None
+        self._trainer: Optional[Trainer] = None
+        self._label_order: Optional[List[str]] = None
+        self._label_to_index: Optional[Dict[str, int]] = None
+        self._index_to_label: Optional[Dict[int, str]] = None
+        self._num_classes: int = 0
+
+    def _create_model(self, num_classes: int):
+        base_model = AutoModel.from_pretrained(self.model_name)
+        if self.init_checkpoint:
+            try:
+                checkpoint_model = AutoModel.from_pretrained(self.init_checkpoint)
+                base_model.load_state_dict(checkpoint_model.state_dict(), strict=False)
+            except Exception:
+                pass
+        
+        num_thresholds = num_classes - 1
+        hidden_size = base_model.config.hidden_size
+        
+        class OrdinalModel(torch.nn.Module):
+            def __init__(self, base, hidden_size, num_thresholds):
+                super().__init__()
+                self.base_model = base
+                self.pre_classifier = torch.nn.Linear(hidden_size, hidden_size)
+                self.dropout = torch.nn.Dropout(0.1)
+                self.weight = torch.nn.Parameter(torch.randn(hidden_size) * 0.01)
+                self.biases = torch.nn.Parameter(torch.zeros(num_thresholds))
+            
+            def forward(self, input_ids, attention_mask, labels=None):
+                outputs = self.base_model(input_ids=input_ids, attention_mask=attention_mask)
+                hidden = outputs.last_hidden_state[:, 0, :]
+                hidden = self.pre_classifier(hidden)
+                hidden = torch.nn.functional.relu(hidden)
+                hidden = self.dropout(hidden)
+                logits = torch.matmul(hidden, self.weight.unsqueeze(1))
+                logits = logits + self.biases.unsqueeze(0)
+                
+                loss = None
+                if labels is not None:
+                    loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, labels)
+                
+                return {"loss": loss, "logits": logits}
+        
+        model = OrdinalModel(base_model, hidden_size, num_thresholds)
+        return model
+
+    def _prepare_targets(self, train_labels, val_labels, union_labels):
+        from .initializers import compute_coral_bias_init
+        from collections import Counter
+        if self._label_order is None:
+            unique_labels = sorted(set(union_labels), key=str)
+            self._label_order = [str(label) for label in unique_labels]
+        self._label_to_index = {label: idx for idx, label in enumerate(self._label_order)}
+        self._index_to_label = {idx: label for idx, label in enumerate(self._label_order)}
+        train_encoded = np.array([self._label_to_index[str(label)] for label in train_labels])
+        val_encoded = np.array([self._label_to_index[str(label)] for label in val_labels])
+        num_classes = len(self._label_order)
+        num_thresholds = num_classes - 1
+        
+        bias_init = compute_coral_bias_init(train_encoded, num_classes)
+        print(f"CORAL bias init: {bias_init}")
+        train_dist = Counter(train_labels)
+        val_dist = Counter(val_labels)
+        print(f"Training on {len(train_labels)} samples: {dict(train_dist)}")
+        print(f"Validating on {len(val_labels)} samples: {dict(val_dist)}")
+        
+        def encode_cumulative(labels_encoded):
+            cumulative = np.zeros((len(labels_encoded), num_thresholds), dtype=np.float32)
+            for i, label in enumerate(labels_encoded):
+                for t in range(num_thresholds):
+                    if label > t:
+                        cumulative[i, t] = 1.0
+            return cumulative
+        
+        train_targets = encode_cumulative(train_encoded)
+        val_targets = encode_cumulative(val_encoded)
+        
+        return train_targets, val_targets, num_classes, bias_init
+
+    def fit(self, x_train: Any, y_train: Sequence[Any], x_val: Any, y_val: Sequence[Any]) -> None:
+        train_texts = list(x_train)
+        val_texts = list(x_val)
+        train_labels = list(y_train)
+        val_labels = list(y_val)
+        union_labels = train_labels + val_labels
+        
+        train_targets, val_targets, num_classes, bias_init = self._prepare_targets(train_labels, val_labels, union_labels)
+        self._num_classes = num_classes
+        
+        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self._model = self._create_model(num_classes)
+        
+        with torch.no_grad():
+            self._model.biases.data = torch.from_numpy(bias_init).float()
+        
+        train_encodings = self._tokenizer(train_texts, padding=True, truncation=True, return_tensors="pt")
+        val_encodings = self._tokenizer(val_texts, padding=True, truncation=True, return_tensors="pt")
+        
+        class OrdinalDataset(torch.utils.data.Dataset):
+            def __init__(self, encodings, labels):
+                self.encodings = encodings
+                self.labels = labels
+            
+            def __len__(self):
+                return len(self.labels)
+            
+            def __getitem__(self, idx):
+                item = {key: val[idx] for key, val in self.encodings.items()}
+                item['labels'] = torch.tensor(self.labels[idx], dtype=torch.float)
+                return item
+        
+        train_dataset = OrdinalDataset(train_encodings, train_targets)
+        val_dataset = OrdinalDataset(val_encodings, val_targets)
+        
+        def compute_metrics(eval_pred: EvalPrediction):
+            logits = eval_pred.predictions
+            labels = eval_pred.label_ids
+            probs = 1 / (1 + np.exp(-logits))
+            class_preds = (probs > 0.5).sum(axis=1).astype(int)
+            label_classes = (labels > 0.5).sum(axis=1).astype(int)
+            
+            unique_classes = sorted(self._label_to_index.values())
+            per_class_mae = []
+            for cls in unique_classes:
+                mask = label_classes == cls
+                if mask.sum() > 0:
+                    cls_mae = np.abs(label_classes[mask] - class_preds[mask]).mean()
+                    per_class_mae.append(cls_mae)
+            
+            macro_mae = float(np.mean(per_class_mae)) if per_class_mae else float('inf')
+            overall_mae = float(np.mean(np.abs(label_classes - class_preds)))
+            
+            return {
+                "macro_mae": macro_mae,
+                "mae": overall_mae,
+            }
+        
+        training_args = TrainingArguments(
+            output_dir=self.checkpoint_dir,
+            num_train_epochs=self.epochs,
+            per_device_train_batch_size=self.batch_size,
+            per_device_eval_batch_size=self.batch_size,
+            warmup_steps=self.warmup_steps,
+            learning_rate=self.head_lr,
+            weight_decay=0.01,
+            logging_steps=10,
+            eval_strategy="epoch",
+            save_strategy="epoch",
+            load_best_model_at_end=True,
+            metric_for_best_model="macro_mae",
+            greater_is_better=False,
+            max_grad_norm=self.gradient_clip,
+            report_to="none",
+        )
+        
+        early_stopping = EarlyStoppingCallback(
+            early_stopping_patience=self.early_stop_patience,
+            early_stopping_threshold=self.early_stop_threshold,
+            metric_name="macro_mae",
+            minimize=True,
+        )
+        
+        self._trainer = Trainer(
+            model=self._model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            compute_metrics=compute_metrics,
+            callbacks=[early_stopping],
+        )
+        
+        self._trainer.train()
+        print(f"Restored best model with macro_mae: {early_stopping.best_metric:.4f}")
+
+    def predict(self, x: Any) -> Sequence[Any]:
+        if self._model is None or self._tokenizer is None:
+            raise RuntimeError("Model not fitted")
+        texts = list(x)
+        self._model.eval()
+        all_preds = []
+        with torch.no_grad():
+            for i in range(0, len(texts), self.batch_size):
+                batch_texts = texts[i:i + self.batch_size]
+                encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
+                encodings = {k: v.to(self._model.base_model.device) for k, v in encodings.items()}
+                outputs = self._model(**encodings)
+                logits = outputs["logits"]
+                probs = torch.sigmoid(logits)
+                class_preds = (probs > 0.5).sum(dim=1).cpu().numpy().astype(int)
+                if self._index_to_label is not None:
+                    preds = [self._index_to_label[idx] for idx in class_preds]
+                else:
+                    preds = class_preds
+                all_preds.extend(preds)
+        return np.array(all_preds)
+
+    def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
+        predictions = self.predict(x)
+        if self._label_to_index is not None:
+            y_encoded = np.array([self._label_to_index[str(label)] for label in y])
+            pred_encoded = np.array([self._label_to_index[str(label)] for label in predictions])
+            unique_classes = sorted(self._label_to_index.values())
+        else:
+            y_encoded = np.array(y, dtype=int)
+            pred_encoded = np.array(predictions, dtype=int)
+            unique_classes = sorted(set(y_encoded))
+        
+        per_class_mae = []
+        per_class_recall = []
+        per_class_within1 = []
+        for cls in unique_classes:
+            mask = y_encoded == cls
+            if mask.sum() > 0:
+                cls_mae = np.abs(y_encoded[mask] - pred_encoded[mask]).mean()
+                cls_recall = (y_encoded[mask] == pred_encoded[mask]).mean()
+                cls_within1 = (np.abs(y_encoded[mask] - pred_encoded[mask]) <= 1).mean()
+                per_class_mae.append(cls_mae)
+                per_class_recall.append(cls_recall)
+                per_class_within1.append(cls_within1)
+        
+        macro_mae = float(np.mean(per_class_mae)) if per_class_mae else float('inf')
+        macro_within1 = float(np.mean(per_class_within1)) if per_class_within1 else 0.0
+        worst_recall = float(np.min(per_class_recall)) if per_class_recall else 0.0
+        overall_mae = float(np.mean(np.abs(y_encoded - pred_encoded)))
+        overall_acc = float(np.mean(y_encoded == pred_encoded))
+        overall_within1 = float(np.mean(np.abs(y_encoded - pred_encoded) <= 1))
+        
+        return {
+            "macro_mae": macro_mae,
+            "macro_within1": macro_within1,
+            "worst_recall": worst_recall,
+            "mae": overall_mae,
+            "acc": overall_acc,
+            "within1": overall_within1,
+        }
+
+    def set_label_order(self, label_order: List[str]) -> None:
+        self._label_order = list(label_order)
+
+    def setup(self) -> None:
+        pass
+
+    def cleanup(self) -> None:
+        if self._model is not None:
+            del self._model
+        if self._tokenizer is not None:
+            del self._tokenizer
+        if self._trainer is not None:
+            del self._trainer
+        self._model = None
+        self._tokenizer = None
+        self._trainer = None
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
 class BertClassifierHead(SupervisedDownstreamHead):
     def __init__(
         self,
-        model_name: str = "bert-base-uncased",
+        model_name: str = "distilbert-base-uncased",
         batch_size: int = 8,
-        epochs: int = 2,
-        lr: float = 2e-5,
+        epochs: int = 5,
+        encoder_lr: float = 1e-5,
+        head_lr: float = 5e-5,
+        warmup_steps: int = 10,
+        gradient_clip: float = 1.0,
+        label_smoothing: float = 0.0,
         device: Optional[str] = None,
-        primary_metric: str = "f1",
-        target_acc: Optional[float] = None,
+        primary_metric: str = "macro_f1",
+        early_stop_threshold: Optional[float] = None,
+        early_stop_patience: int = 2,
         init_checkpoint: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
     ):
@@ -222,261 +543,431 @@ class BertClassifierHead(SupervisedDownstreamHead):
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
-        self.lr = float(lr)
+        self.encoder_lr = float(encoder_lr)
+        self.head_lr = float(head_lr)
+        self.warmup_steps = int(warmup_steps)
+        self.gradient_clip = float(gradient_clip)
+        self.label_smoothing = float(label_smoothing)
         self.device = _resolve_device(device)
-        self.target_acc: Optional[float] = float(target_acc) if target_acc is not None else None
+        self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
+        self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
-        self.checkpoint_dir = checkpoint_dir
+        self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
         self._tokenizer: Optional[AutoTokenizer] = None
-        self._model: Optional[AutoModelForSequenceClassification] = None
-        self._label_encoder: Optional[LabelEncoder] = None
+        self._model: Optional[torch.nn.Module] = None
+        self._trainer: Optional[Trainer] = None
+        self._label_list: Optional[List[str]] = None
+        self._label_to_id: Optional[Dict[str, int]] = None
+        self._id_to_label: Optional[Dict[int, str]] = None
 
-    def setup(self) -> None:
-        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self._model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=2)
-        self._model.to(self.device)
+    def _create_model(self, num_labels: int):
+        base_model = AutoModel.from_pretrained(self.model_name)
         if self.init_checkpoint:
             try:
-                src = AutoModelForSequenceClassification.from_pretrained(self.init_checkpoint)
-                src.to(self.device)
-                state = src.state_dict()
-                base_keys = [k for k in state.keys() if not k.startswith("classifier")]
-                filtered = {k: state[k] for k in base_keys}
-                if hasattr(self._model, "bert") and hasattr(src, "bert"):
-                    self._model.bert.load_state_dict(filtered, strict=False)
-                elif hasattr(self._model, "roberta") and hasattr(src, "roberta"):
-                    self._model.roberta.load_state_dict(filtered, strict=False)
-                elif hasattr(self._model, "distilbert") and hasattr(src, "distilbert"):
-                    self._model.distilbert.load_state_dict(filtered, strict=False)
+                checkpoint_model = AutoModel.from_pretrained(self.init_checkpoint)
+                base_model.load_state_dict(checkpoint_model.state_dict(), strict=False)
             except Exception:
                 pass
+        
+        hidden_size = base_model.config.hidden_size
+        
+        class ClassifierModel(torch.nn.Module):
+            def __init__(self, base, hidden_size, num_labels, label_smoothing):
+                super().__init__()
+                self.base_model = base
+                self.classifier = torch.nn.Linear(hidden_size, num_labels)
+                self.label_smoothing = label_smoothing
+            
+            def forward(self, input_ids, attention_mask, labels=None):
+                outputs = self.base_model(input_ids=input_ids, attention_mask=attention_mask)
+                hidden = outputs.last_hidden_state[:, 0, :]
+                logits = self.classifier(hidden)
+                
+                loss = None
+                if labels is not None:
+                    loss = torch.nn.functional.cross_entropy(logits, labels, label_smoothing=self.label_smoothing)
+                
+                return {"loss": loss, "logits": logits}
+        
+        model = ClassifierModel(base_model, hidden_size, num_labels, self.label_smoothing)
+        return model
 
-    def fit(self, x: Any, y: Sequence[Any]) -> None:
-        texts = list(x)
-        if not texts or not isinstance(texts[0], str):
-            raise TypeError("bert classifier expects raw texts via 'text' vectorizer")
-        self.setup()
-        self._label_encoder = LabelEncoder()
-        y_arr = list(y)
-        labels = torch.tensor(self._label_encoder.fit_transform(y_arr), dtype=torch.long)
-        num_labels = int(len(set(y_arr)))
-        try:
-            hidden = int(getattr(self._model.config, "hidden_size"))
-            new_head = torch.nn.Linear(hidden, num_labels)
-            new_head.to(self.device)
-            setattr(self._model, "classifier", new_head)
-        except Exception:
-            pass
-        enc = self._tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        enc = {k: v.to(self.device) for k, v in enc.items()}
-        optimizer = torch.optim.AdamW(self._model.parameters(), lr=self.lr)
-        self._model.train()
-        for _ in range(self.epochs):
-            optimizer.zero_grad()
-            outputs = self._model(**enc, labels=labels.to(self.device))
-            loss = outputs.loss
-            loss.backward()
-            optimizer.step()
-        if self.device == "mps":
-            torch.mps.empty_cache()
-
-    def fit_with_validation(self, x_train: Any, y_train: Sequence[Any], x_val: Any, y_val: Sequence[Any], target_acc: float | None = None) -> None:
+    def fit(self, x_train: Any, y_train: Sequence[Any], x_val: Any, y_val: Sequence[Any]) -> None:
+        from collections import Counter
+        
         train_texts = list(x_train)
         val_texts = list(x_val)
-        if not train_texts or not isinstance(train_texts[0], str):
-            raise TypeError("bert classifier expects raw texts via 'text' vectorizer")
-        self.setup()
-        union_labels = list(y_train) + list(y_val)
-        self._label_encoder = LabelEncoder()
-        self._label_encoder.fit(union_labels)
-        train_labels = torch.tensor(self._label_encoder.transform(list(y_train)), dtype=torch.long)
-        val_labels_np = np.asarray(self._label_encoder.transform(list(y_val)), dtype=int)
-        num_labels = int(len(set(union_labels)))
-        try:
-            hidden = int(getattr(self._model.config, "hidden_size"))
-            new_head = torch.nn.Linear(hidden, num_labels)
-            new_head.to(self.device)
-            setattr(self._model, "classifier", new_head)
-        except Exception:
-            pass
-        train_enc = self._tokenizer(train_texts, padding=True, truncation=True, return_tensors="pt")
-        val_enc = self._tokenizer(val_texts, padding=True, truncation=True, return_tensors="pt")
-        train_enc = {k: v.to(self.device) for k, v in train_enc.items()}
-        val_enc = {k: v.to(self.device) for k, v in val_enc.items()}
-        optimizer = torch.optim.AdamW(self._model.parameters(), lr=self.lr)
-        best_acc = -1.0
-        best_state: Optional[dict] = None
-        self._model.train()
-        train_labels_list = self._label_encoder.transform(list(y_train))
-        for epoch in range(self.epochs):
-            optimizer.zero_grad()
-            outputs = self._model(**train_enc, labels=train_labels.to(self.device))
-            loss = outputs.loss
-            loss.backward()
-            optimizer.step()
-            self._model.eval()
-            with torch.no_grad():
-                train_logits = self._model(**train_enc).logits
-                train_preds = train_logits.argmax(dim=-1).cpu().numpy()
-                train_acc = float(np.mean(train_preds == train_labels_list))
-                val_logits = self._model(**val_enc).logits
-                val_preds = val_logits.argmax(dim=-1).cpu().numpy()
-                val_acc = float(np.mean(val_preds == val_labels_np))
-            print(f"Epoch {epoch + 1}/{self.epochs} - loss: {loss.item():.4f} - train_acc: {train_acc:.4f} - val_acc: {val_acc:.4f}")
-            if val_acc > best_acc:
-                best_acc = val_acc
-                if self.checkpoint_dir:
-                    try:
-                        self._model.save_pretrained(self.checkpoint_dir)
-                        if self._tokenizer is not None:
-                            self._tokenizer.save_pretrained(self.checkpoint_dir)
-                    except Exception:
-                        pass
-                else:
-                    best_state = {k: v.detach().cpu().clone() for k, v in self._model.state_dict().items()}
-            if (target_acc or self.target_acc) is not None and val_acc >= float(target_acc or self.target_acc):
-                print(f"Early stopping: target_acc {target_acc or self.target_acc} reached")
-                break
-            self._model.train()
-        if self.device == "mps":
-            torch.mps.empty_cache()
-        if self.checkpoint_dir:
-            try:
-                self._model = AutoModelForSequenceClassification.from_pretrained(self.checkpoint_dir)
-                self._model.to(self.device)
-            except Exception:
-                pass
-        elif best_state is not None:
-            self._model.load_state_dict({k: v.to(self.device) for k, v in best_state.items()})
+        train_labels = list(y_train)
+        val_labels = list(y_val)
+        union_labels = train_labels + val_labels
+        
+        label_encoder = LabelEncoder()
+        label_encoder.fit(union_labels)
+        self._label_list = label_encoder.classes_.tolist()
+        self._label_to_id = {label: idx for idx, label in enumerate(self._label_list)}
+        self._id_to_label = {idx: label for idx, label in enumerate(self._label_list)}
+        
+        train_encoded = label_encoder.transform(train_labels)
+        val_encoded = label_encoder.transform(val_labels)
+        
+        train_dist = Counter(train_labels)
+        val_dist = Counter(val_labels)
+        print(f"Training on {len(train_labels)} samples: {dict(train_dist)}")
+        print(f"Validating on {len(val_labels)} samples: {dict(val_dist)}")
+        
+        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self._model = self._create_model(len(self._label_list))
+        
+        train_encodings = self._tokenizer(train_texts, padding=True, truncation=True, return_tensors="pt")
+        val_encodings = self._tokenizer(val_texts, padding=True, truncation=True, return_tensors="pt")
+        
+        class ClassifierDataset(torch.utils.data.Dataset):
+            def __init__(self, encodings, labels):
+                self.encodings = encodings
+                self.labels = labels
+            
+            def __len__(self):
+                return len(self.labels)
+            
+            def __getitem__(self, idx):
+                item = {key: val[idx] for key, val in self.encodings.items()}
+                item['labels'] = torch.tensor(self.labels[idx], dtype=torch.long)
+                return item
+        
+        train_dataset = ClassifierDataset(train_encodings, train_encoded)
+        val_dataset = ClassifierDataset(val_encodings, val_encoded)
+        
+        def compute_metrics(eval_pred: EvalPrediction):
+            from sklearn.metrics import precision_recall_fscore_support
+            logits = eval_pred.predictions
+            labels = eval_pred.label_ids
+            preds = np.argmax(logits, axis=1)
+            
+            per_class_precision, per_class_recall, per_class_f1, per_class_support = precision_recall_fscore_support(
+                labels, preds, average=None, zero_division=0
+            )
+            valid_mask = per_class_support > 0
+            macro_f1 = float(per_class_f1[valid_mask].mean()) if valid_mask.any() else 0.0
+            balanced_acc = float(per_class_recall[valid_mask].mean()) if valid_mask.any() else 0.0
+            overall_acc = float((preds == labels).mean())
+            
+            return {
+                "macro_f1": macro_f1,
+                "balanced_acc": balanced_acc,
+                "acc": overall_acc,
+            }
+        
+        training_args = TrainingArguments(
+            output_dir=self.checkpoint_dir,
+            num_train_epochs=self.epochs,
+            per_device_train_batch_size=self.batch_size,
+            per_device_eval_batch_size=self.batch_size,
+            warmup_steps=self.warmup_steps,
+            learning_rate=self.head_lr,
+            weight_decay=0.01,
+            logging_steps=10,
+            eval_strategy="epoch",
+            save_strategy="epoch",
+            load_best_model_at_end=True,
+            metric_for_best_model="macro_f1",
+            greater_is_better=True,
+            max_grad_norm=self.gradient_clip,
+            report_to="none",
+        )
+        
+        early_stopping = EarlyStoppingCallback(
+            early_stopping_patience=self.early_stop_patience,
+            early_stopping_threshold=self.early_stop_threshold,
+            metric_name="macro_f1",
+            minimize=False,
+        )
+        
+        self._trainer = Trainer(
+            model=self._model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            compute_metrics=compute_metrics,
+            callbacks=[early_stopping],
+        )
+        
+        self._trainer.train()
+        print(f"Restored best model with macro_f1: {early_stopping.best_metric:.4f}")
 
     def predict(self, x: Any) -> Sequence[Any]:
         if self._model is None or self._tokenizer is None:
-            raise RuntimeError("bert classifier not fitted")
+            raise RuntimeError("Model not fitted")
         texts = list(x)
-        enc = self._tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        enc = {k: v.to(self.device) for k, v in enc.items()}
         self._model.eval()
+        all_preds = []
         with torch.no_grad():
-            logits = self._model(**enc).logits
-            preds = logits.argmax(dim=-1).cpu().numpy()
-        if self._label_encoder is None:
-            return preds
-        return self._label_encoder.inverse_transform(preds)
+            for i in range(0, len(texts), self.batch_size):
+                batch_texts = texts[i:i + self.batch_size]
+                encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
+                encodings = {k: v.to(self._model.base_model.device) for k, v in encodings.items()}
+                outputs = self._model(**encodings)
+                logits = outputs["logits"]
+                preds = torch.argmax(logits, dim=1).cpu().numpy()
+                all_preds.extend([self._id_to_label[int(p)] for p in preds])
+        return np.array(all_preds)
 
     def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
+        from sklearn.metrics import precision_recall_fscore_support
         predictions = self.predict(x)
-        label_count = len(set(y))
-        def _is_numeric(vals: Sequence[Any]) -> bool:
-            try:
-                for v in set(vals):
-                    float(v)
-                return True
-            except Exception:
-                return False
-        average = "binary" if label_count == 2 and _is_numeric(y) else "macro"
-        f1 = float(f1_score(y, predictions, average=average, zero_division=0))
-        accuracy = float(np.mean(np.array(y) == np.array(predictions)))
-        return {"f1": f1, "acc": accuracy}
+        y_arr = np.array(y)
+        pred_arr = np.array(predictions)
+        unique_labels = sorted(set(y))
+        per_class_precision, per_class_recall, per_class_f1, per_class_support = precision_recall_fscore_support(
+            y, predictions, labels=unique_labels, average=None, zero_division=0
+        )
+        valid_mask = per_class_support > 0
+        macro_f1 = float(per_class_f1[valid_mask].mean()) if valid_mask.any() else 0.0
+        balanced_acc = float(per_class_recall[valid_mask].mean()) if valid_mask.any() else 0.0
+        worst_class_recall = float(per_class_recall[valid_mask].min()) if valid_mask.any() else 0.0
+        overall_acc = float(np.mean(y_arr == pred_arr))
+        return {
+            "macro_f1": macro_f1,
+            "balanced_acc": balanced_acc,
+            "worst_recall": worst_class_recall,
+            "acc": overall_acc,
+            "f1": macro_f1,
+        }
+
+    def setup(self) -> None:
+        pass
 
     def cleanup(self) -> None:
         if self._model is not None:
-            self._model.cpu()
             del self._model
         if self._tokenizer is not None:
             del self._tokenizer
-        if self._label_encoder is not None:
-            del self._label_encoder
+        if self._trainer is not None:
+            del self._trainer
         self._model = None
         self._tokenizer = None
-        self._label_encoder = None
+        self._trainer = None
         import gc
         gc.collect()
-        if self.device == "cuda":
+        if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        elif self.device == "mps":
-            torch.mps.empty_cache()
 
 class BertRegressorHead(SupervisedDownstreamHead):
     def __init__(
         self,
-        model_name: str = "bert-base-uncased",
+        model_name: str = "distilbert-base-uncased",
         batch_size: int = 8,
-        epochs: int = 2,
-        lr: float = 2e-5,
+        epochs: int = 5,
+        encoder_lr: float = 1e-5,
+        head_lr: float = 5e-5,
+        warmup_steps: int = 10,
+        gradient_clip: float = 1.0,
         device: Optional[str] = None,
         primary_metric: str = "r2",
+        early_stop_threshold: Optional[float] = None,
+        early_stop_patience: int = 2,
+        init_checkpoint: Optional[str] = None,
+        checkpoint_dir: Optional[str] = None,
+        normalize_targets: bool = True,
     ):
         super().__init__(name="bert_regressor", primary_metric=primary_metric)
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
-        self.lr = float(lr)
+        self.encoder_lr = float(encoder_lr)
+        self.head_lr = float(head_lr)
+        self.warmup_steps = int(warmup_steps)
+        self.gradient_clip = float(gradient_clip)
         self.device = _resolve_device(device)
+        self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
+        self.early_stop_patience = int(early_stop_patience)
+        self.init_checkpoint = init_checkpoint
+        self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        self.normalize_targets = normalize_targets
         self._tokenizer: Optional[AutoTokenizer] = None
-        self._model: Optional[AutoModelForSequenceClassification] = None
+        self._model: Optional[torch.nn.Module] = None
+        self._trainer: Optional[Trainer] = None
+        self._target_mean: Optional[float] = None
+        self._target_std: Optional[float] = None
 
-    def setup(self) -> None:
+    def _create_model(self):
+        base_model = AutoModel.from_pretrained(self.model_name)
+        if self.init_checkpoint:
+            try:
+                checkpoint_model = AutoModel.from_pretrained(self.init_checkpoint)
+                base_model.load_state_dict(checkpoint_model.state_dict(), strict=False)
+            except Exception:
+                pass
+        
+        hidden_size = base_model.config.hidden_size
+        
+        class RegressorModel(torch.nn.Module):
+            def __init__(self, base, hidden_size):
+                super().__init__()
+                self.base_model = base
+                self.regressor = torch.nn.Linear(hidden_size, 1)
+            
+            def forward(self, input_ids, attention_mask, labels=None):
+                outputs = self.base_model(input_ids=input_ids, attention_mask=attention_mask)
+                hidden = outputs.last_hidden_state[:, 0, :]
+                logits = self.regressor(hidden).squeeze(-1)
+                
+                loss = None
+                if labels is not None:
+                    loss = torch.nn.functional.smooth_l1_loss(logits, labels)
+                
+                return {"loss": loss, "logits": logits}
+        
+        model = RegressorModel(base_model, hidden_size)
+        return model
+
+    def fit(self, x_train: Any, y_train: Sequence[Any], x_val: Any, y_val: Sequence[Any]) -> None:
+        from collections import Counter
+        
+        train_texts = list(x_train)
+        val_texts = list(x_val)
+        train_labels = np.asarray(list(y_train), dtype=float)
+        val_labels = np.asarray(list(y_val), dtype=float)
+        
+        if self.normalize_targets:
+            self._target_mean = float(train_labels.mean())
+            self._target_std = float(train_labels.std() + 1e-7)
+            train_labels_normalized = (train_labels - self._target_mean) / self._target_std
+            val_labels_normalized = (val_labels - self._target_mean) / self._target_std
+        else:
+            train_labels_normalized = train_labels
+            val_labels_normalized = val_labels
+        
+        print(f"Training on {len(train_labels)} samples: mean={train_labels.mean():.2f}, std={train_labels.std():.2f}")
+        print(f"Validating on {len(val_labels)} samples: mean={val_labels.mean():.2f}, std={val_labels.std():.2f}")
+        
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self._model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=1)
-        self._model.config.problem_type = "regression"
-        self._model.to(self.device)
-
-    def fit(self, x: Any, y: Sequence[Any]) -> None:
-        texts = list(x)
-        if not texts or not isinstance(texts[0], str):
-            raise TypeError("bert regressor expects raw texts via 'text' vectorizer")
-        self.setup()
-        labels = torch.tensor(np.asarray(list(y), dtype=float), dtype=torch.float)
-        enc = self._tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        enc = {k: v.to(self.device) for k, v in enc.items()}
-        optimizer = torch.optim.AdamW(self._model.parameters(), lr=self.lr)
-        self._model.train()
-        for _ in range(self.epochs):
-            optimizer.zero_grad()
-            outputs = self._model(**enc, labels=labels.to(self.device))
-            loss = outputs.loss
-            loss.backward()
-            optimizer.step()
-        if self.device == "mps":
-            torch.mps.empty_cache()
+        self._model = self._create_model()
+        
+        train_encodings = self._tokenizer(train_texts, padding=True, truncation=True, return_tensors="pt")
+        val_encodings = self._tokenizer(val_texts, padding=True, truncation=True, return_tensors="pt")
+        
+        class RegressorDataset(torch.utils.data.Dataset):
+            def __init__(self, encodings, labels):
+                self.encodings = encodings
+                self.labels = labels
+            
+            def __len__(self):
+                return len(self.labels)
+            
+            def __getitem__(self, idx):
+                item = {key: val[idx] for key, val in self.encodings.items()}
+                item['labels'] = torch.tensor(self.labels[idx], dtype=torch.float)
+                return item
+        
+        train_dataset = RegressorDataset(train_encodings, train_labels_normalized)
+        val_dataset = RegressorDataset(val_encodings, val_labels_normalized)
+        
+        def compute_metrics(eval_pred: EvalPrediction):
+            preds = eval_pred.predictions
+            labels = eval_pred.label_ids
+            
+            if self.normalize_targets and self._target_mean is not None and self._target_std is not None:
+                preds = preds * self._target_std + self._target_mean
+                labels = labels * self._target_std + self._target_mean
+            
+            mse = float(np.mean((preds - labels) ** 2))
+            rmse = float(np.sqrt(mse))
+            r2 = float(1 - (np.sum((labels - preds) ** 2) / np.sum((labels - labels.mean()) ** 2)))
+            
+            return {
+                "rmse": rmse,
+                "r2": r2,
+            }
+        
+        training_args = TrainingArguments(
+            output_dir=self.checkpoint_dir,
+            num_train_epochs=self.epochs,
+            per_device_train_batch_size=self.batch_size,
+            per_device_eval_batch_size=self.batch_size,
+            warmup_steps=self.warmup_steps,
+            learning_rate=self.head_lr,
+            weight_decay=0.01,
+            logging_steps=10,
+            eval_strategy="epoch",
+            save_strategy="epoch",
+            load_best_model_at_end=True,
+            metric_for_best_model="r2",
+            greater_is_better=True,
+            max_grad_norm=self.gradient_clip,
+            report_to="none",
+        )
+        
+        early_stopping = EarlyStoppingCallback(
+            early_stopping_patience=self.early_stop_patience,
+            early_stopping_threshold=self.early_stop_threshold,
+            metric_name="r2",
+            minimize=False,
+        )
+        
+        self._trainer = Trainer(
+            model=self._model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            compute_metrics=compute_metrics,
+            callbacks=[early_stopping],
+        )
+        
+        self._trainer.train()
+        print(f"Restored best model with r2: {early_stopping.best_metric:.4f}")
 
     def predict(self, x: Any) -> Sequence[float]:
         if self._model is None or self._tokenizer is None:
-            raise RuntimeError("bert regressor not fitted")
+            raise RuntimeError("Model not fitted")
         texts = list(x)
-        enc = self._tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        enc = {k: v.to(self.device) for k, v in enc.items()}
         self._model.eval()
+        all_preds = []
         with torch.no_grad():
-            logits = self._model(**enc).logits
-            preds = logits.squeeze(-1).cpu().numpy()
-        return np.asarray(preds, dtype=float)
+            for i in range(0, len(texts), self.batch_size):
+                batch_texts = texts[i:i + self.batch_size]
+                encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
+                encodings = {k: v.to(self._model.base_model.device) for k, v in encodings.items()}
+                outputs = self._model(**encodings)
+                preds = outputs["logits"].cpu().numpy()
+                if self.normalize_targets and self._target_mean is not None and self._target_std is not None:
+                    preds = preds * self._target_std + self._target_mean
+                all_preds.extend(preds)
+        return np.array(all_preds, dtype=float)
 
     def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
-        preds = self.predict(x)
-        mse = float(mean_squared_error(y, preds))
-        r2 = float(r2_score(y, preds))
-        return {"rmse": float(np.sqrt(mse)), "r2": r2}
+        predictions = self.predict(x)
+        y_arr = np.asarray(y, dtype=float)
+        mse = float(np.mean((predictions - y_arr) ** 2))
+        rmse = float(np.sqrt(mse))
+        r2 = float(1 - (np.sum((y_arr - predictions) ** 2) / np.sum((y_arr - y_arr.mean()) ** 2)))
+        return {
+            "rmse": rmse,
+            "r2": r2,
+        }
+
+    def setup(self) -> None:
+        pass
 
     def cleanup(self) -> None:
         if self._model is not None:
-            self._model.cpu()
             del self._model
         if self._tokenizer is not None:
             del self._tokenizer
+        if self._trainer is not None:
+            del self._trainer
         self._model = None
         self._tokenizer = None
+        self._trainer = None
         import gc
         gc.collect()
-        if self.device == "cuda":
+        if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        elif self.device == "mps":
-            torch.mps.empty_cache()
 
 DOWNSTREAM_CLASSIFIER_HEAD_REGISTRY: Dict[str, type[SupervisedDownstreamHead]] = {
     "logistic_classifier": LogisticClassifier,
     "feedforward_classifier": FeedForwardClassifier,
     "bert_classifier": BertClassifierHead,
+    "bert_ordinal": BertOrdinalHead,
 }
 
 DOWNSTREAM_REGRESSOR_HEAD_REGISTRY: Dict[str, type[SupervisedDownstreamHead]] = {
@@ -489,4 +980,3 @@ DOWNSTREAM_HEAD_REGISTRY: Dict[str, type[SupervisedDownstreamHead]] = {
     **DOWNSTREAM_CLASSIFIER_HEAD_REGISTRY,
     **DOWNSTREAM_REGRESSOR_HEAD_REGISTRY,
 }
-

@@ -22,7 +22,7 @@ random_state: 42
 head:
   type: bert_classifier
   params:
-    model_name: bert-base-uncased
+    model_name: distilbert-base-uncased
     init_checkpoint: models/tri_pipelines/tab/old_pipeline/finetuning/checkpoint-532
     checkpoint_dir: models/tri_pipelines/tab/utility_year
     batch_size: 8
@@ -30,7 +30,7 @@ head:
     lr: 1e-5
     device: auto
     primary_metric: acc
-    target_acc: 0.8
+    early_stop_threshold: 0.8
 output:
   format: jsonl
   file: logs/tab_year_exp.jsonl

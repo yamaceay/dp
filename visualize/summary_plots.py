@@ -20,6 +20,404 @@ from visualize.config_loader import (
 )
 
 
+class PlotConfig:
+	def __init__(self):
+		self.dataset: str = ""
+		self.metric: str = ""
+		self.experiment: str = ""
+		self.output_dir: Path = Path("visualize/plots")
+		self.debug: bool = False
+		self.methods: List[Dict[str, Any]] = []
+		self.data_rows: List[Dict[str, Any]] = []
+		self.within_params: List[str] = []
+		self.across_params: List[str] = []
+	
+	def set_dataset(self, dataset: str) -> PlotConfig:
+		self.dataset = dataset
+		return self
+	
+	def set_metric(self, metric: str) -> PlotConfig:
+		self.metric = metric
+		return self
+	
+	def set_experiment(self, experiment: str) -> PlotConfig:
+		self.experiment = experiment
+		return self
+	
+	def set_output_dir(self, output_dir: Path) -> PlotConfig:
+		self.output_dir = output_dir
+		return self
+	
+	def set_debug(self, debug: bool) -> PlotConfig:
+		self.debug = debug
+		return self
+	
+	def load_methods(self, methods_config_path: Path, set_name: str) -> PlotConfig:
+		raw_methods = _ext_load_methods_set(methods_config_path, set_name)
+		self.methods = MethodParser().parse(raw_methods)
+		self.within_params, self.across_params = self._extract_params_scope()
+		return self
+	
+	def load_data(self, results_config_path: Path, set_name: str) -> PlotConfig:
+		dataset, flat_file = _ext_load_results_set(results_config_path, set_name)
+		if not self.dataset:
+			self.dataset = dataset
+		flat_path = Path("visualize/pretty") / flat_file if not Path(flat_file).exists() else Path(flat_file)
+		self.data_rows = DataLoader().load(flat_path, self.dataset, self.metric)
+		return self
+	
+	def validate(self) -> None:
+		available_methods = sorted(set(str(r.get("method")) for r in self.data_rows)) if self.data_rows else []
+		if not self.methods:
+			raise ValueError(f"no methods configured; available methods in data: {available_methods}")
+		if not self.data_rows:
+			return
+		validator = MethodValidator(self.methods, self.data_rows)
+		if not validator.has_matches():
+			raise ValueError(f"configured methods do not match any rows: configured={validator.configured_methods()}, available={validator.available_methods()}")
+	
+	def _extract_params_scope(self) -> Tuple[List[str], List[str]]:
+		within: List[str] = []
+		across: List[str] = []
+		for m in self.methods:
+			for p in m.get("params", []):
+				if p not in across:
+					across.append(p)
+			for p in m.get("params_one_run", []):
+				if p not in within:
+					within.append(p)
+		return within, across
+
+
+class MethodParser:
+	def parse(self, raw_methods: List[Any]) -> List[Dict[str, Any]]:
+		specs: List[Dict[str, Any]] = []
+		for item in raw_methods:
+			if isinstance(item, dict) and item.get("method"):
+				specs.append(self._parse_dict_spec(item))
+			else:
+				specs.append(self._parse_string_spec(str(item)))
+		return specs
+	
+	def _parse_dict_spec(self, item: Dict[str, Any]) -> Dict[str, Any]:
+		method = str(item.get("method"))
+		across = [str(p) for p in (item.get("params") or [])]
+		within = [str(p) for p in (item.get("params_one_run") or [])]
+		print_as = str(item.get("print_as")) if item.get("print_as") else method
+		expected_keys = sorted(set(across + within))
+		spec_id = method + "(" + ",".join(expected_keys) + ")"
+		return {
+			"method": method,
+			"params": across,
+			"params_one_run": within,
+			"expected_keys": expected_keys,
+			"id": spec_id,
+			"print_as": print_as,
+		}
+	
+	def _parse_string_spec(self, text: str) -> Dict[str, Any]:
+		name = text.split("[")[0].split("(")[0].strip()
+		across: List[str] = []
+		within: List[str] = []
+		if "[" in text and "]" in text:
+			body = text[text.index("[") + 1 : text.index("]")]
+			across.extend([p.strip() for p in body.split(",") if p.strip()])
+		if "(" in text and ")" in text:
+			body = text[text.index("(") + 1 : text.index(")")]
+			within.extend([p.strip() for p in body.split(",") if p.strip()])
+		expected_keys = sorted(set(across + within))
+		spec_id = name + "(" + ",".join(expected_keys) + ")"
+		return {
+			"method": name,
+			"params": across,
+			"params_one_run": within,
+			"expected_keys": expected_keys,
+			"id": spec_id,
+			"print_as": name,
+		}
+
+
+class DataLoader:
+	def load(self, flat_path: Path, dataset: str, metric: str) -> List[Dict[str, Any]]:
+		with flat_path.open("r", encoding="utf-8") as f:
+			all_rows = json.load(f) or []
+		filtered = [r for r in all_rows if str(r.get("dataset")) == dataset and metric in r]
+		return self._deduplicate(filtered)
+	
+	def _deduplicate(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+		seen: set[tuple] = set()
+		result: List[Dict[str, Any]] = []
+		for r in rows:
+			method = self._normalize_method_name(str(r.get("method")))
+			params = r.get("params") or {}
+			key = (method, tuple(sorted((str(k), str(v)) for k, v in params.items())))
+			if key in seen:
+				continue
+			seen.add(key)
+			normalized = dict(r)
+			normalized["method"] = method
+			result.append(normalized)
+		return result
+	
+	def _normalize_method_name(self, name: str) -> str:
+		if name == "petre":
+			return "petre_shap"
+		return name
+
+
+class MethodValidator:
+	def __init__(self, methods: List[Dict[str, Any]], data_rows: List[Dict[str, Any]]):
+		self.methods = methods
+		self.data_rows = data_rows
+	
+	def has_matches(self) -> bool:
+		for spec in self.methods:
+			if any(self._matches(r, spec) for r in self.data_rows):
+				return True
+		return False
+	
+	def configured_methods(self) -> List[str]:
+		return [m["method"] for m in self.methods]
+	
+	def available_methods(self) -> List[str]:
+		return sorted(set(str(r.get("method")) for r in self.data_rows))
+	
+	def _matches(self, row: Dict[str, Any], spec: Dict[str, Any]) -> bool:
+		if str(row.get("method")) != spec["method"]:
+			return False
+		row_keys = set((row.get("params") or {}).keys())
+		expected_keys = set(spec.get("expected_keys") or [])
+		return row_keys == expected_keys
+
+
+class BarPlotter:
+	def __init__(self, config: PlotConfig):
+		self.config = config
+		self.method_colors = self._build_color_palette([m["id"] for m in config.methods])
+		self.k_palette = self._build_k_palette()
+	
+	def plot(self) -> None:
+		self.config.validate()
+		eps_param = self._find_epsilon_param()
+		if eps_param:
+			self._plot_with_epsilon(eps_param)
+		else:
+			self._plot_no_epsilon()
+	
+	def _plot_no_epsilon(self) -> None:
+		rows = self._filter_rows_without_param("epsilon")
+		if not rows:
+			return
+		self._create_bar_chart(rows, "no_eps")
+	
+	def _plot_with_epsilon(self, eps_param: str) -> None:
+		self._plot_no_epsilon()
+		eps_values = self._extract_unique_values(eps_param)
+		for eps_value in eps_values:
+			rows = self._filter_rows_with_param(eps_param, eps_value)
+			if rows:
+				safe_eps = str(eps_value).replace(".", "_")
+				self._create_bar_chart(rows, f"eps_{safe_eps}", eps_param)
+	
+	def _create_bar_chart(self, rows: List[Dict[str, Any]], filename: str, exclude_param: str = "") -> None:
+		grouped = self._group_by_method(rows)
+		names = [m["id"] for m in self.config.methods if grouped.get(m["id"])]
+		if not names:
+			return
+		
+		figure, axis = plt.subplots(figsize=(max(12, int(0.55 * sum(max(1, len(grouped[m])) for m in names))), 7))
+		bars = self._build_bar_data(grouped, names, exclude_param)
+		
+		axis.bar(bars["x"], bars["y"], color=bars["colors"], width=bars["widths"], edgecolor="black", linewidth=0.9)
+		axis.set_xticks(bars["centers"])
+		axis.set_xticklabels(bars["labels"], rotation=30, ha="right", fontsize=11)
+		axis.set_ylabel(self.config.metric, fontsize=12)
+		axis.set_title(f"{self.config.dataset}_{self.config.metric}: {filename}", fontsize=14)
+		if bars["y"]:
+			axis.set_ylim(0, max(bars["y"]) * 1.22)
+		
+		for xv, yv, t in zip(bars["x"], bars["y"], bars["annotations"]):
+			axis.annotate(t, xy=(xv, yv), xytext=(0, 5), textcoords="offset points", rotation=90, ha="center", va="bottom", fontsize=9, clip_on=False)
+		
+		output_path = self.config.output_dir / f"{self.config.dataset}_{self.config.metric}" / f"{filename}.png"
+		output_path.parent.mkdir(parents=True, exist_ok=True)
+		figure.tight_layout()
+		figure.savefig(output_path, dpi=220)
+		plt.close(figure)
+		
+		if self.config.debug:
+			print(f"[bar-plot] wrote {output_path}")
+	
+	def _build_bar_data(self, grouped: Dict[str, List[Dict[str, Any]]], names: List[str], exclude_param: str) -> Dict[str, Any]:
+		centers = {m: float(i) for i, m in enumerate(names)}
+		print_as = {m["id"]: m["print_as"] for m in self.config.methods}
+		width_total = 0.82
+		
+		x_positions: List[float] = []
+		y_values: List[float] = []
+		colors: List[Any] = []
+		widths: List[float] = []
+		annotations: List[str] = []
+		
+		for method_id in names:
+			entries = grouped[method_id]
+			count = max(1, len(entries))
+			step = width_total / count
+			start_x = centers[method_id] - width_total / 2 + step / 2
+			
+			for idx, row in enumerate(entries):
+				params = row.get("params") or {}
+				k_value = params.get("k")
+				color = self.k_palette.get(float(k_value)) if k_value is not None else self.method_colors[method_id]
+				
+				x_positions.append(start_x + idx * step)
+				y_values.append(float(row.get(self.config.metric)))
+				colors.append(color)
+				widths.append(step * 0.85)
+				annotations.append(self._format_params(params, exclude_param))
+		
+		return {
+			"x": x_positions,
+			"y": y_values,
+			"colors": colors,
+			"widths": widths,
+			"centers": [centers[m] for m in names],
+			"labels": [print_as[m] for m in names],
+			"annotations": annotations,
+		}
+	
+	def _group_by_method(self, rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+		grouped: Dict[str, List[Dict[str, Any]]] = {m["id"]: [] for m in self.config.methods}
+		validator = MethodValidator(self.config.methods, rows)
+		for row in rows:
+			for spec in self.config.methods:
+				if validator._matches(row, spec):
+					grouped[spec["id"]].append(row)
+					break
+		return grouped
+	
+	def _filter_rows_without_param(self, param_name: str) -> List[Dict[str, Any]]:
+		return [r for r in self.config.data_rows if param_name not in (r.get("params") or {})]
+	
+	def _filter_rows_with_param(self, param_name: str, value: Any) -> List[Dict[str, Any]]:
+		return [r for r in self.config.data_rows if float((r.get("params") or {}).get(param_name, float("nan"))) == float(value)]
+	
+	def _find_epsilon_param(self) -> str:
+		for p in self.config.across_params:
+			if p == "epsilon":
+				return p
+		return ""
+	
+	def _extract_unique_values(self, param_name: str) -> List[Any]:
+		values = [r.get("params", {}).get(param_name) for r in self.config.data_rows if param_name in (r.get("params") or {})]
+		seen = set()
+		unique: List[Any] = []
+		for v in values:
+			key = str(v)
+			if key in seen:
+				continue
+			seen.add(key)
+			unique.append(v)
+		return sorted(unique, key=lambda x: (not str(x).replace(".", "", 1).isdigit(), float(x) if str(x).replace(".", "", 1).isdigit() else x))
+	
+	def _format_params(self, params: Dict[str, Any], exclude_param: str) -> str:
+		exclude_set = {exclude_param} if exclude_param else set()
+		names = [n for n in self.config.within_params if n in params and n not in exclude_set]
+		if not names:
+			return ""
+		return ",".join([f"{n}={params[n]}" for n in names])
+	
+	def _build_color_palette(self, names: List[str]) -> Dict[str, Any]:
+		cmap = matplotlib.colormaps.get_cmap("tab20")
+		size = max(1, len(names))
+		return {n: cmap(i / size) for i, n in enumerate(names)}
+	
+	def _build_k_palette(self) -> Dict[float, Any]:
+		k_values = [r.get("params", {}).get("k") for r in self.config.data_rows if "k" in (r.get("params") or {})]
+		unique = self._extract_unique_values("k") if k_values else []
+		if not unique:
+			return {}
+		cmap = matplotlib.colormaps.get_cmap("Oranges")
+		positions = [i / max(1, len(unique) - 1) for i in range(len(unique))]
+		return {float(v): cmap(0.25 + 0.6 * p) for v, p in zip(unique, positions)}
+
+
+def plot_bars(results_config: Path, results_set: str, dataset: str, metric: str, experiment: str, output_dir: Path, methods_config: Path | None = None, methods_set: str | None = None, debug: bool = False) -> None:
+	config = PlotConfig()
+	config.set_dataset(dataset).set_metric(metric).set_experiment(experiment).set_output_dir(output_dir).set_debug(debug)
+	
+	if methods_config and methods_set:
+		config.load_methods(methods_config, methods_set)
+	
+	config.load_data(results_config, results_set)
+	
+	if debug:
+		print(f"[plot-bars] dataset={config.dataset} experiment={experiment} metric={metric}")
+		print(f"[plot-bars] methods={len(config.methods)} data_rows={len(config.data_rows)}")
+		
+		available_methods = sorted(set(str(r.get("method")) for r in config.data_rows)) if config.data_rows else []
+		configured_methods = [m["method"] for m in config.methods]
+		matching_methods = [m for m in configured_methods if m in available_methods]
+		
+		print(f"[plot-bars] available_methods={available_methods}")
+		print(f"[plot-bars] configured_methods={configured_methods}")
+		print(f"[plot-bars] matching_methods={matching_methods}")
+	
+	plotter = BarPlotter(config)
+	plotter.plot()
+
+
+def main() -> None:
+	parser = argparse.ArgumentParser()
+	parser.add_argument("action", nargs="?", choices=["plot-bars", "list-method-sets", "list-result-sets", "validate"], default="plot-bars")
+	parser.add_argument("--results-config", required=True)
+	parser.add_argument("--results-set", required=True)
+	parser.add_argument("--dataset", required=True)
+	parser.add_argument("--experiment", required=True)
+	parser.add_argument("--metric", required=True)
+	parser.add_argument("--out", default="visualize/plots")
+	parser.add_argument("--methods-config")
+	parser.add_argument("--methods-set")
+	parser.add_argument("--debug", action="store_true")
+	args = parser.parse_args()
+	
+	if args.action == "list-method-sets" and args.methods_config:
+		for name in _ext_list_method_sets(Path(args.methods_config)):
+			print(name)
+		return
+	
+	if args.action == "list-result-sets":
+		for name in _ext_list_result_sets(Path(args.results_config)):
+			print(name)
+		return
+	
+	if args.action == "validate":
+		if args.methods_config:
+			_ext_validate_methods_config(Path(args.methods_config))
+			print("methods: ok")
+		_ext_validate_results_config(Path(args.results_config))
+		print("results: ok")
+		return
+	
+	if args.action == "plot-bars":
+		plot_bars(
+			Path(args.results_config),
+			args.results_set,
+			args.dataset,
+			args.metric,
+			args.experiment,
+			Path(args.out),
+			Path(args.methods_config) if args.methods_config else None,
+			args.methods_set,
+			args.debug,
+		)
+
+
+if __name__ == "__main__":
+	main()
+
+
+
 def _load_config(path: Path) -> Dict[str, Any]:
 	with path.open("r", encoding="utf-8") as f:
 		return yaml.safe_load(f) or {}
@@ -296,7 +694,7 @@ def plot_bars(config_path: Path, flat_path: Path | None, dataset: str, metric: s
 	base_rows = _filter_dataset(_load_flat(Path(flat_source)), dataset_sel, metric)
 	if debug:
 		print(f"[plot-bars] base_rows={len(base_rows)} from flat")
-	_ensure_dir(output_dir / f"{dataset_sel}_{experiment}")
+	_ensure_dir(output_dir / f"{dataset_sel}_{metric}")
 	files: List[Dict[str, Any]] = [] if decoupled_flat else (exp.get("files") or [])
 	alt_rows: List[Dict[str, Any]] = []
 	for f in files:
@@ -322,20 +720,20 @@ def plot_bars(config_path: Path, flat_path: Path | None, dataset: str, metric: s
 	rows = _dedup_rows(base_rows + _filter_dataset(alt_rows, dataset_sel, metric))
 	if debug:
 		print(f"[plot-bars] alt_rows_raw={len(alt_rows)} alt_rows_filtered={len(_filter_dataset(alt_rows, dataset_sel, metric))} rows_dedup={len(rows)}")
-	# Fallback: auto-generate method specs if configured methods do not match any rows
-	has_matches = False
-	if rows and methods:
+	if not methods:
+		raise ValueError("no methods configured")
+	if rows:
+		has_matches = False
 		for spec in methods:
 			if any(_match_exact(r, spec) for r in rows):
 				has_matches = True
 				break
-	if debug:
-		print(f"[plot-bars] has_matches={has_matches} configured_methods_present={bool(methods)}")
-	if rows and (not methods or not has_matches):
-		methods = _auto_method_specs_from_rows(rows)
-		within, across = _params_scope({"methods": methods})
+		if not has_matches:
+			available_methods = sorted(set(str(r.get("method")) for r in rows))
+			configured_methods = [m["method"] for m in methods]
+			raise ValueError(f"configured methods do not match any rows: configured={configured_methods}, available={available_methods}")
 		if debug:
-			print(f"[plot-bars] fallback_methods ids={[m['id'] for m in methods]} within={within} across={across}")
+			print(f"[plot-bars] has_matches={has_matches}")
 	order = _method_order(methods)
 	print_as = _method_print_as(methods)
 	eps_name = next((p for p in across if p == "epsilon"), None)
@@ -350,7 +748,7 @@ def plot_bars(config_path: Path, flat_path: Path | None, dataset: str, metric: s
 			r["__spec_id"] = spec["id"]
 		no_eps_rows.extend(m_rows)
 	if debug:
-		print(f"[plot-bars] no_eps_rows={len(no_eps_rows)} output_dir={output_dir / f'{dataset_sel}_{experiment}'}")
+		print(f"[plot-bars] no_eps_rows={len(no_eps_rows)} output_dir={output_dir / f'{dataset_sel}_{metric}'}")
 	if no_eps_rows:
 		grouped: Dict[str, List[Dict[str, Any]]] = {m["id"]: [] for m in methods}
 		for r in no_eps_rows:
@@ -382,14 +780,14 @@ def plot_bars(config_path: Path, flat_path: Path | None, dataset: str, metric: s
 		axis.set_xticks([centers[m] for m in names])
 		axis.set_xticklabels([print_as[m] for m in names], rotation=30, ha="right", fontsize=11)
 		axis.set_ylabel(metric, fontsize=12)
-		axis.set_title(f"{dataset_sel}_{experiment}: no_eps", fontsize=14)
+		axis.set_title(f"{dataset_sel}_{metric}: no_eps", fontsize=14)
 		if ys:
 			axis.set_ylim(0, max(ys) * 1.22)
 		for xv, yv, t in zip(xs, ys, labs):
 			axis.annotate(t, xy=(xv, yv), xytext=(0, 5), textcoords="offset points", rotation=90, ha="center", va="bottom", fontsize=9, clip_on=False)
 		_ensure_dir(output_dir)
 		figure.tight_layout()
-		out_path = output_dir / f"{dataset_sel}_{experiment}" / "no_eps.png"
+		out_path = output_dir / f"{dataset_sel}_{metric}" / "no_eps.png"
 		figure.savefig(out_path, dpi=220)
 		if debug:
 			print(f"[plot-bars] wrote {out_path}")
@@ -442,7 +840,7 @@ def plot_bars(config_path: Path, flat_path: Path | None, dataset: str, metric: s
 			axis.set_xticks([centers[m] for m in names])
 			axis.set_xticklabels([print_as[m] for m in names], rotation=30, ha="right", fontsize=11)
 			axis.set_ylabel(metric, fontsize=12)
-			axis.set_title(f"{dataset_sel}_{experiment}: {eps_name}={eps}", fontsize=14)
+			axis.set_title(f"{dataset_sel}_{metric}: {eps_name}={eps}", fontsize=14)
 			if ys:
 				axis.set_ylim(0, max(ys) * 1.22)
 			for xv, yv, t in zip(xs, ys, labs):
@@ -450,7 +848,7 @@ def plot_bars(config_path: Path, flat_path: Path | None, dataset: str, metric: s
 			_ensure_dir(output_dir)
 			figure.tight_layout()
 			safe_eps = str(eps).replace(".", "_")
-			out_path = output_dir / f"{dataset_sel}_{experiment}" / f"eps_{safe_eps}.png"
+			out_path = output_dir / f"{dataset_sel}_{metric}" / f"eps_{safe_eps}.png"
 			figure.savefig(out_path, dpi=220)
 			if debug:
 				print(f"[plot-bars] wrote {out_path}")

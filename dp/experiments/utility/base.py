@@ -19,7 +19,7 @@ class UtilityTarget:
         ORDINAL = "ordinal"
         CARDINAL = "cardinal"
 
-    def __init__(self, name: str, source: str, mode: "UtilityTarget.Mode | str", getter: Callable[[DatasetRecord], Any]):
+    def __init__(self, name: str, source: str, mode: "UtilityTarget.Mode | str", getter: Callable[[DatasetRecord], Any], label_order: Optional[List[str]] = None):
         if not name:
             raise ValueError("target name is required")
         if not source:
@@ -33,6 +33,7 @@ class UtilityTarget:
         else:
             self.mode = UtilityTarget.Mode(mode)
         self.getter = getter
+        self.label_order = label_order
 
     def value(self, record: DatasetRecord) -> Any:
         return self.getter(record)
@@ -115,6 +116,9 @@ class TextUtilityExperiment(Experiment):
         self._target = target
         self._vectorizer = vectorizer
         self._model = model
+        if hasattr(self._model, "set_label_order") and target.label_order:
+            self._model.set_label_order(target.label_order)
+        self._model.setup()
         filtered_records: List[DatasetRecord] = []
         keys: List[str] = []
         labels: List[Any] = []
@@ -184,9 +188,8 @@ class TextUtilityExperiment(Experiment):
             self._train_override_labels = list(train_labels_override)  # type: ignore[arg-type]
             self._vectorizer.fit(self._train_override_texts)
             self._x_train = self._vectorizer.transform(self._train_override_texts)
-            if self._test_texts and hasattr(self._model, "fit_with_validation"):
-                target_acc = getattr(self._model, "target_acc", None)
-                getattr(self._model, "fit_with_validation")(self._train_override_texts, self._train_override_labels, self._test_texts, self._test_labels, target_acc)
+            if self._test_texts:
+                self._model.fit(self._train_override_texts, self._train_override_labels, self._test_texts, self._test_labels)
             else:
                 self._model.fit(self._x_train, self._train_override_labels)
         else:

@@ -60,21 +60,25 @@ def read_jsonl_entries(files: Sequence[Tuple[str, ...]] , kind: str) -> Iterable
                 if kind == "utility":
                     dataset_name, feature = spec[1], spec[2]
                     if data.get("type") == "experiment":
-                        baseline_f1 = data["baseline_metrics"]["f1"]
-                        yield {
+                        baseline_metrics = data["baseline_metrics"]
+                        baseline_result = {
                             "method": "baseline",
                             "params": {},
                             "dataset": dataset_name,
                             "feature": feature,
-                            f"utility_f1_{feature}": baseline_f1,
                         }
+                        for metric_name, metric_value in baseline_metrics.items():
+                            baseline_result[f"utility_{metric_name}_{feature}"] = metric_value
+                        yield baseline_result
                         continue
                     if data.get("type") != "evaluation":
                         continue
                     key = normalize_source_key(str(data.get("source", "")))
                     method, params = parse_params_from_key(key)
                     res = data["metrics"]
-                    values = {f"utility_f1_{feature}": res["f1"]}
+                    values = {}
+                    for metric_name, metric_value in res.items():
+                        values[f"utility_{metric_name}_{feature}"] = metric_value
                     yield {"method": method, "params": params, "dataset": dataset_name, "feature": feature, **values}
                 else:
                     dataset_name = spec[1]

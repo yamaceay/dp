@@ -5,13 +5,9 @@ annotations_in:
   - outputs/reddit
 target:
   key: feature_label
-  type: ordinal
-  enum:
-    - "income_level: low"
-    - "income_level: middle"
-    - "income_level: high"
+  type: nominal
 selection_criteria:
-  feature: income_level
+  feature: city_country
 split:
   - train: 0.0
     val: 1.0
@@ -20,21 +16,22 @@ split:
     val: 0.0
 random_state: 42
 head:
-  type: bert_ordinal
+  type: bert_classifier
   params:
     model_name: distilbert-base-uncased
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
-    checkpoint_dir: models/tri_pipelines/reddit/utility_income_level
-    batch_size: 4
+    checkpoint_dir: models/tri_pipelines/reddit/utility_city_country
+    batch_size: 8
     epochs: 5
     encoder_lr: 5e-6
     head_lr: 1e-4
     warmup_steps: 10
     gradient_clip: 1.0
+    label_smoothing: 0.05
     device: auto
-    primary_metric: macro_mae
-    early_stop_threshold: 0.4
+    primary_metric: macro_f1
+    early_stop_threshold: 0.90
     early_stop_patience: 2
 output:
   format: jsonl
-  file: logs/reddit_income_level_exp.jsonl
+  file: logs/reddit_city_country_exp.jsonl

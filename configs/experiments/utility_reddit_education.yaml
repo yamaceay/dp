@@ -7,11 +7,13 @@ target:
   key: feature_label
   type: ordinal
   enum:
-    - "income_level: low"
-    - "income_level: middle"
-    - "income_level: high"
+    - "education: secondary"
+    - "education: studying"
+    - "education: bachelor"
+    - "education: master"
+    - "education: doctorate"
 selection_criteria:
-  feature: income_level
+  feature: education
 split:
   - train: 0.0
     val: 1.0
@@ -24,8 +26,8 @@ head:
   params:
     model_name: distilbert-base-uncased
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
-    checkpoint_dir: models/tri_pipelines/reddit/utility_income_level
-    batch_size: 4
+    checkpoint_dir: models/tri_pipelines/reddit/utility_education
+    batch_size: 8
     epochs: 5
     encoder_lr: 5e-6
     head_lr: 1e-4
@@ -37,4 +39,4 @@ head:
     early_stop_patience: 2
 output:
   format: jsonl
-  file: logs/reddit_income_level_exp.jsonl
+  file: logs/reddit_education_exp.jsonl

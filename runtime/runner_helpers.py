@@ -153,10 +153,9 @@ def build_utility_target(params: Dict[str, Any], dataset: str) -> UtilitySpec:
             if v is None:
                 return None
             s = str(v).strip()
-            if ":" in s:
-                s = s.split(":", 1)[1].strip()
             return s if s in allowed else None
         getter = wrapped_getter
-    built = UtilityTarget(name=str(key), source=str(dataset), mode=mode, getter=getter)
+    label_order = enum if mode is UtilityTarget.Mode.ORDINAL else None
+    built = UtilityTarget(name=str(key), source=str(dataset), mode=mode, getter=getter, label_order=label_order)
     v_name, h_name = MODE_TO_MODEL[mode]
     return UtilitySpec(dataset=str(dataset), target_key=str(key), target=built, default_vectorizer=v_name, default_head=h_name)

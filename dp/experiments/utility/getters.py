@@ -6,6 +6,7 @@ from dp.loaders.derive import get_getter
 
 UTILITY_TARGETS: Dict[str, Dict[str, UtilityTarget]] = {
     "reddit": {
+        "label": UtilityTarget(name="label", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=get_getter("reddit", "label")),
         "feature_label": UtilityTarget(name="feature_label", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=get_getter("reddit", "feature_label")),
         "feature_label_exact": UtilityTarget(name="feature_label_exact", source="reddit", mode=UtilityTarget.Mode.NOMINAL, getter=get_getter("reddit", "feature_label_exact")),
     },

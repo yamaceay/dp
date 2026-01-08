@@ -18,15 +18,20 @@ random_state: 42
 head:
   type: bert_classifier
   params:
-    model_name: bert-base-uncased
+    model_name: distilbert-base-uncased
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
     checkpoint_dir: models/tri_pipelines/reddit/utility_birth_city_country
-    batch_size: 4
-    epochs: 3
-    lr: 2e-5
+    batch_size: 8
+    epochs: 5
+    encoder_lr: 5e-6
+    head_lr: 1e-4
+    warmup_steps: 10
+    gradient_clip: 1.0
+    label_smoothing: 0.05
     device: auto
-    primary_metric: acc
-    target_acc: 0.8
+    primary_metric: macro_f1
+    early_stop_threshold: 0.90
+    early_stop_patience: 2
 output:
   format: jsonl
   file: logs/reddit_birth_city_country_exp.jsonl

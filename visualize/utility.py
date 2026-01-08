@@ -18,6 +18,9 @@ FILES: List[Tuple[str, str, str]] = [
     ("logs/reddit_relationship_status_exp.jsonl", "reddit", "relationship_status"),
     ("logs/reddit_sex_exp.jsonl", "reddit", "sex"),
     ("logs/reddit_birth_city_country_exp.jsonl", "reddit", "birth_city_country"),
+    ("logs/reddit_education_exp.jsonl", "reddit", "education"),
+    ("logs/reddit_occupation_exp.jsonl", "reddit", "occupation"),
+    ("logs/reddit_city_country_exp.jsonl", "reddit", "city_country"),
 ]
 
 def read_data(files: Sequence[Tuple[str, str, str]]) -> Iterable[Dict[str, Any]]:
@@ -26,31 +29,32 @@ def read_data(files: Sequence[Tuple[str, str, str]]) -> Iterable[Dict[str, Any]]
 def build_summaries() -> None:
     entries = list(read_data(FILES))
     entries = sorted(entries, key=lambda x: (x["method"], params_to_str_for_sort(x["params"])))
-    by_dataset_by_feature_by_method: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+    
+    by_dataset: Dict[str, List[Dict[str, Any]]] = {}
     for entry in entries:
-        e = entry.copy()
-        dataset = e.pop("dataset")
-        method = e.pop("method")
-        feature = e.pop("feature")
-        by_dataset_by_feature_by_method.setdefault(dataset, {}).setdefault(feature, {}).setdefault(method, []).append(e)
-    by_dataset_by_feature_by_params: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
-    for entry in entries:
-        e = entry.copy()
-        dataset = e.pop("dataset")
-        params = params_to_str(e.pop("params"))
-        feature = e.pop("feature")
-        by_dataset_by_feature_by_params.setdefault(dataset, {}).setdefault(feature, {}).setdefault(params, []).append(e)
-    Path("visualize/pretty").mkdir(parents=True, exist_ok=True)
-    with open("visualize/pretty/utility.json", "w", encoding="utf-8") as f:
-        json.dump(entries, f, indent=2)
-    for dataset in by_dataset_by_feature_by_method:
-        for feature in by_dataset_by_feature_by_method[dataset]:
-            with open(f"visualize/pretty/utility_by_method_{dataset}_{feature}.json", "w", encoding="utf-8") as f:
-                json.dump(by_dataset_by_feature_by_method[dataset][feature], f, indent=2)
-    for dataset in by_dataset_by_feature_by_params:
-        for feature in by_dataset_by_feature_by_params[dataset]:
-            with open(f"visualize/pretty/utility_by_params_{dataset}_{feature}.json", "w", encoding="utf-8") as f:
-                json.dump(by_dataset_by_feature_by_params[dataset][feature], f, indent=2)
+        dataset = entry.get("dataset")
+        if dataset:
+            by_dataset.setdefault(dataset, []).append(entry)
+    
+    for dataset, dataset_entries in by_dataset.items():
+        output_dir = Path("visualize/pretty") / dataset
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        with (output_dir / "utility.json").open("w", encoding="utf-8") as f:
+            json.dump(dataset_entries, f, indent=2)
+        
+        by_feature: Dict[str, List[Dict[str, Any]]] = {}
+        for entry in dataset_entries:
+            feature = entry.get("feature")
+            if feature:
+                by_feature.setdefault(feature, []).append(entry)
+        
+        feature_dir = output_dir / "utility"
+        feature_dir.mkdir(parents=True, exist_ok=True)
+
+        for feature, feature_entries in by_feature.items():
+            with (feature_dir / f"{feature}.json").open("w", encoding="utf-8") as f:
+                json.dump(feature_entries, f, indent=2)
 
 if __name__ == "__main__":
     build_summaries()

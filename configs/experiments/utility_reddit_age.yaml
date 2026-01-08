@@ -7,10 +7,10 @@ target:
   key: feature_label
   type: ordinal
   enum:
-    - 30-44
-    - 45-59
-    - 18-29
-    - 60+
+    - "age: 18-29"
+    - "age: 30-44"
+    - "age: 45-59"
+    - "age: 60+"
 selection_criteria:
   feature: age
 split:
@@ -21,17 +21,21 @@ split:
     val: 0.0
 random_state: 42
 head:
-  type: bert_classifier
+  type: bert_ordinal
   params:
-    model_name: bert-base-uncased
+    model_name: distilbert-base-uncased
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
     checkpoint_dir: models/tri_pipelines/reddit/utility_age
     batch_size: 8
-    epochs: 3
-    lr: 1e-5
+    epochs: 5
+    encoder_lr: 5e-6
+    head_lr: 1e-4
+    warmup_steps: 10
+    gradient_clip: 1.0
     device: auto
-    primary_metric: acc
-    target_acc: 0.8
+    primary_metric: macro_mae
+    early_stop_threshold: 0.4
+    early_stop_patience: 2
 output:
   format: jsonl
   file: logs/reddit_age_exp.jsonl

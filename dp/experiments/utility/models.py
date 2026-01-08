@@ -11,7 +11,7 @@ from dp.experiments.utility.downstream import SupervisedDownstreamHead, DOWNSTRE
 MODE_TO_MODEL: Dict[UtilityTarget.Mode, Tuple[str, str]] = {
     UtilityTarget.Mode.BINARY: ("text", "bert_classifier"),
     UtilityTarget.Mode.NOMINAL: ("text", "bert_classifier"),
-    UtilityTarget.Mode.ORDINAL: ("text", "bert_classifier"),
+    UtilityTarget.Mode.ORDINAL: ("text", "bert_ordinal"),
     UtilityTarget.Mode.CARDINAL: ("text", "bert_regressor"),
 }
 

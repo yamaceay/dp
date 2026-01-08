@@ -357,7 +357,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
                 print(f"Predictions distribution: {dict(dist_preds_train)}")
                 print(f"True distribution: {dict(dist_true_train)}")
                 try:
-                    all_labels_set = sorted(list(set(train_labels_override)))
+                    all_labels_set = getattr(mdl, "_label_order", None) or sorted(list(set(train_labels_override)))
                     cm_train = confusion_matrix(train_labels_override, preds_train_override, labels=all_labels_set)
                     print(f"Confusion matrix shape: {cm_train.shape}")
                     print(cm_train)
@@ -380,7 +380,8 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
                 print(f"Predictions distribution: {dict(dist_preds)}")
                 print(f"True distribution: {dict(dist_true)}")
                 try:
-                    all_labels_set = sorted(list(set(lbls_test)))
+                    mdl_val = getattr(experiment, "_model", None)
+                    all_labels_set = getattr(mdl_val, "_label_order", None) or sorted(list(set(lbls_test)))
                     cm = confusion_matrix(lbls_test, preds_dbg, labels=all_labels_set)
                     print(f"Confusion matrix shape: {cm.shape}")
                     print(cm)
@@ -404,7 +405,8 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
             print(f"Predictions distribution: {dict(dist_preds_all)}")
             print(f"True distribution: {dict(dist_true_all)}")
             try:
-                cm_all = confusion_matrix(lbls_all, preds_all, labels=sorted(list(set(lbls_all))))
+                mdl_all = getattr(experiment, "_model", None)
+                cm_all = confusion_matrix(lbls_all, preds_all, labels=getattr(mdl_all, "_label_order", None) or sorted(list(set(lbls_all))))
                 print(f"Full confusion matrix shape: {cm_all.shape}")
                 print(cm_all)
             except Exception:
