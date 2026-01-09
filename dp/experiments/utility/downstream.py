@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Set
 import numpy as np
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import f1_score, mean_squared_error, r2_score
@@ -249,6 +249,7 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         early_stop_patience: int = 2,
         init_checkpoint: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
+        mask_stopwords: bool = False,
     ):
         super().__init__(name="bert_ordinal", primary_metric=primary_metric)
         self.model_name = model_name
@@ -263,6 +264,7 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        self.mask_stopwords = bool(mask_stopwords)
         self._tokenizer: Optional[AutoTokenizer] = None
         self._model: Optional[torch.nn.Module] = None
         self._trainer: Optional[Trainer] = None
@@ -270,6 +272,18 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         self._label_to_index: Optional[Dict[str, int]] = None
         self._index_to_label: Optional[Dict[int, str]] = None
         self._num_classes: int = 0
+        self._stopwords: Set[str] = set()
+
+    def _mask_stopword_tokens(self, encodings, texts):
+        for idx, text in enumerate(texts):
+            tokens = self._tokenizer.tokenize(text)
+            attention_mask = encodings["attention_mask"][idx]
+            for token_idx, token in enumerate(tokens):
+                if token.lower().strip("#") in self._stopwords:
+                    actual_idx = token_idx + 1
+                    if actual_idx < len(attention_mask):
+                        attention_mask[actual_idx] = 0
+        return encodings
 
     def _create_model(self, num_classes: int):
         base_model = AutoModel.from_pretrained(self.model_name)
@@ -354,6 +368,12 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         self._num_classes = num_classes
         
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        
+        if self.mask_stopwords:
+            from dp.utils.stopwords import DEFAULT_STOPWORDS
+            self._stopwords = DEFAULT_STOPWORDS
+            print(f"Stopword masking enabled: {len(self._stopwords)} stopwords will be masked")
+        
         self._model = self._create_model(num_classes)
         
         with torch.no_grad():
@@ -361,6 +381,10 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         
         train_encodings = self._tokenizer(train_texts, padding=True, truncation=True, return_tensors="pt")
         val_encodings = self._tokenizer(val_texts, padding=True, truncation=True, return_tensors="pt")
+        
+        if self.mask_stopwords:
+            train_encodings = self._mask_stopword_tokens(train_encodings, train_texts)
+            val_encodings = self._mask_stopword_tokens(val_encodings, val_texts)
         
         class OrdinalDataset(torch.utils.data.Dataset):
             def __init__(self, encodings, labels):
@@ -538,6 +562,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
         early_stop_patience: int = 2,
         init_checkpoint: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
+        mask_stopwords: bool = False,
     ):
         super().__init__(name="bert_classifier", primary_metric=primary_metric)
         self.model_name = model_name
@@ -553,12 +578,25 @@ class BertClassifierHead(SupervisedDownstreamHead):
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        self.mask_stopwords = bool(mask_stopwords)
         self._tokenizer: Optional[AutoTokenizer] = None
         self._model: Optional[torch.nn.Module] = None
         self._trainer: Optional[Trainer] = None
         self._label_list: Optional[List[str]] = None
         self._label_to_id: Optional[Dict[str, int]] = None
         self._id_to_label: Optional[Dict[int, str]] = None
+        self._stopwords: Set[str] = set()
+
+    def _mask_stopword_tokens(self, encodings, texts):
+        for idx, text in enumerate(texts):
+            tokens = self._tokenizer.tokenize(text)
+            attention_mask = encodings["attention_mask"][idx]
+            for token_idx, token in enumerate(tokens):
+                if token.lower().strip("#") in self._stopwords:
+                    actual_idx = token_idx + 1
+                    if actual_idx < len(attention_mask):
+                        attention_mask[actual_idx] = 0
+        return encodings
 
     def _create_model(self, num_labels: int):
         base_model = AutoModel.from_pretrained(self.model_name)
@@ -616,10 +654,20 @@ class BertClassifierHead(SupervisedDownstreamHead):
         print(f"Validating on {len(val_labels)} samples: {dict(val_dist)}")
         
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        
+        if self.mask_stopwords:
+            from dp.utils.stopwords import DEFAULT_STOPWORDS
+            self._stopwords = DEFAULT_STOPWORDS
+            print(f"Stopword masking enabled: {len(self._stopwords)} stopwords will be masked")
+        
         self._model = self._create_model(len(self._label_list))
         
         train_encodings = self._tokenizer(train_texts, padding=True, truncation=True, return_tensors="pt")
         val_encodings = self._tokenizer(val_texts, padding=True, truncation=True, return_tensors="pt")
+        
+        if self.mask_stopwords:
+            train_encodings = self._mask_stopword_tokens(train_encodings, train_texts)
+            val_encodings = self._mask_stopword_tokens(val_encodings, val_texts)
         
         class ClassifierDataset(torch.utils.data.Dataset):
             def __init__(self, encodings, labels):
