@@ -178,6 +178,10 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
             "pretraining_epochs": int(training.get("pretraining_epochs", 3)),
             "per_step": _optional_int(training, "per_step"),
             "early_stop_threshold": _optional_float(training, "early_stop_threshold"),
+            "weight_decay": _optional_float(training, "weight_decay"),
+            "warmup_ratio": _optional_float(training, "warmup_ratio"),
+            "optimizer_type": _optional_str(training, "optimizer_type") or "adamw",
+            "scheduler_type": _optional_str(training, "scheduler_type") or "constant",
         },
     }
     return cfg
@@ -310,6 +314,10 @@ def main() -> int:
         pretraining_epochs = int(training.get("pretraining_epochs", 3))
         per_step = training.get("per_step")
         early_stop_threshold = training.get("early_stop_threshold")
+        weight_decay = training.get("weight_decay")
+        warmup_ratio = training.get("warmup_ratio")
+        optimizer_type = str(training.get("optimizer_type", "adamw"))
+        scheduler_type = str(training.get("scheduler_type", "constant"))
         init_from = cfg.get("init_from")
         label_key = cfg.get("label_key")
         feature = cfg.get("feature")
@@ -340,6 +348,10 @@ def main() -> int:
         label_key = args.label_key
         feature = args.feature
         group_labels = bool(args.group_labels or False)
+        weight_decay = None
+        warmup_ratio = None
+        optimizer_type = "adamw"
+        scheduler_type = "constant"
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
@@ -370,6 +382,10 @@ def main() -> int:
         else:
             tri.model_name = model_name
         model_path.mkdir(parents=True, exist_ok=True)
+        tri.initialize_tokenizer_and_model()
+        label_mapping_path = model_path / "label_mapping.json"
+        with open(label_mapping_path, "w") as f:
+            json.dump(tri.name_to_label, f, indent=2)
         tri.train(
             epochs=finetuning_epochs,
             batch_size=batch_size,
@@ -379,6 +395,10 @@ def main() -> int:
             pretraining_epochs=pretraining_epochs,
             early_stop_threshold=early_stop_threshold,
             per_step=per_step,
+            weight_decay=weight_decay,
+            warmup_ratio=warmup_ratio,
+            optimizer_type=optimizer_type,
+            scheduler_type=scheduler_type,
         )
         print(str(model_path))
         return 0

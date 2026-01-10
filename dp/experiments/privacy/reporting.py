@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -127,6 +128,46 @@ class JsonPrivacyReportOutputter(PrivacyReportOutputter):
 
 
 class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
+    def __init__(self, sink: OutputCallback, log_base: str = "natural"):
+        super().__init__(sink)
+        self.log_fn = math.log if log_base == "natural" else math.log2
+        self.log_base = log_base
+    
+    def _compute_privacy_metrics(
+        self, 
+        original_ranks: List[RankEntry], 
+        evaluation_ranks: List[RankEntry], 
+        N: int
+    ) -> Dict[str, float]:
+        original_map = {entry.key: entry.rank for entry in original_ranks}
+        data: List[tuple[float, float]] = []
+        
+        for eval_entry in evaluation_ranks:
+            if eval_entry.key not in original_map:
+                continue
+            r_before = float(original_map[eval_entry.key])
+            r_after = float(eval_entry.rank)
+            if r_before <= 0 or r_after <= 0 or N <= 0:
+                continue
+            data.append((r_before, r_after))
+        
+        if not data:
+            return {"nlrg": 0.0, "harm_rate": 0.0}
+        
+        log_rank_gains: List[float] = []
+        harm_count = 0
+        for r_before, r_after in data:
+            log_gain = self.log_fn(r_after) - self.log_fn(r_before)
+            normalized_gain = log_gain / self.log_fn(N)
+            log_rank_gains.append(normalized_gain)
+            if r_after < r_before:
+                harm_count += 1
+        
+        nlrg = sum(log_rank_gains) / len(log_rank_gains)
+        harm_rate = harm_count / len(data)
+        
+        return {"nlrg": nlrg, "harm_rate": harm_rate}
+    
     def output(self, report: PrivacyExperimentReport) -> None:
         records: List[Dict[str, Any]] = [
             {
@@ -138,6 +179,11 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
         for entry in report.original_ranks:
             records.append(self._rank_record("original_rank", entry))
         for evaluation in report.evaluations:
+            privacy_metrics = self._compute_privacy_metrics(
+                report.original_ranks,
+                evaluation.ranks,
+                report.original_record_count
+            )
             records.append(
                 {
                     "type": "evaluation",
@@ -145,6 +191,9 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
                     "record_count": evaluation.record_count,
                     "source": str(evaluation.source) if evaluation.source else None,
                     "summary": evaluation.summary,
+                    "nlrg": privacy_metrics["nlrg"],
+                    "harm_rate": privacy_metrics["harm_rate"],
+                    "log_base": self.log_base,
                 }
             )
             for entry in evaluation.ranks:
@@ -236,5 +285,5 @@ def create_privacy_outputter(fmt: str, sink: OutputCallback) -> PrivacyReportOut
     if fmt == "json":
         return JsonPrivacyReportOutputter(sink)
     if fmt == "jsonl":
-        return JsonLinesPrivacyReportOutputter(sink)
+        return JsonLinesPrivacyReportOutputter(sink, log_base="natural")
     raise ValueError(f"Unsupported output format '{fmt}'")

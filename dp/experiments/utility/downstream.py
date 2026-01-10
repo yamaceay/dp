@@ -250,6 +250,11 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         init_checkpoint: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
         mask_stopwords: bool = False,
+        optimizer_type: str = "adamw",
+        scheduler_type: str = "linear",
+        weight_decay: Optional[float] = None,
+        warmup_ratio: Optional[float] = None,
+        macro_loss_weight: float = 0.0,
     ):
         super().__init__(name="bert_ordinal", primary_metric=primary_metric)
         self.model_name = model_name
@@ -265,6 +270,11 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
         self.mask_stopwords = bool(mask_stopwords)
+        self.optimizer_type = str(optimizer_type)
+        self.scheduler_type = str(scheduler_type)
+        self.weight_decay = float(weight_decay) if weight_decay is not None else None
+        self.warmup_ratio = float(warmup_ratio) if warmup_ratio is not None else None
+        self.macro_loss_weight = float(macro_loss_weight)
         self._tokenizer: Optional[AutoTokenizer] = None
         self._model: Optional[torch.nn.Module] = None
         self._trainer: Optional[Trainer] = None
@@ -277,12 +287,16 @@ class BertOrdinalHead(SupervisedDownstreamHead):
     def _mask_stopword_tokens(self, encodings, texts):
         for idx, text in enumerate(texts):
             tokens = self._tokenizer.tokenize(text)
+            token_ids = encodings["input_ids"][idx]
             attention_mask = encodings["attention_mask"][idx]
-            for token_idx, token in enumerate(tokens):
-                if token.lower().strip("#") in self._stopwords:
-                    actual_idx = token_idx + 1
-                    if actual_idx < len(attention_mask):
-                        attention_mask[actual_idx] = 0
+            
+            for token_pos in range(len(token_ids)):
+                token_id = token_ids[token_pos].item() if hasattr(token_ids[token_pos], 'item') else token_ids[token_pos]
+                token_str = self._tokenizer.convert_ids_to_tokens(token_id)
+                normalized_token = token_str.lower().strip("#").replace("##", "")
+                
+                if normalized_token in self._stopwords:
+                    attention_mask[token_pos] = 0
         return encodings
 
     def _create_model(self, num_classes: int):
@@ -298,13 +312,14 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         hidden_size = base_model.config.hidden_size
         
         class OrdinalModel(torch.nn.Module):
-            def __init__(self, base, hidden_size, num_thresholds):
+            def __init__(self, base, hidden_size, num_thresholds, macro_loss_weight):
                 super().__init__()
                 self.base_model = base
                 self.pre_classifier = torch.nn.Linear(hidden_size, hidden_size)
                 self.dropout = torch.nn.Dropout(0.1)
                 self.weight = torch.nn.Parameter(torch.randn(hidden_size) * 0.01)
                 self.biases = torch.nn.Parameter(torch.zeros(num_thresholds))
+                self.macro_loss_weight = macro_loss_weight
             
             def forward(self, input_ids, attention_mask, labels=None):
                 outputs = self.base_model(input_ids=input_ids, attention_mask=attention_mask)
@@ -317,11 +332,29 @@ class BertOrdinalHead(SupervisedDownstreamHead):
                 
                 loss = None
                 if labels is not None:
-                    loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, labels)
+                    base_loss = torch.nn.functional.binary_cross_entropy_with_logits(
+                        logits,
+                        labels,
+                        reduction="none",
+                    )
+                    base_loss_mean = base_loss.mean()
+                    if self.macro_loss_weight > 0:
+                        sample_loss = base_loss.mean(dim=1)
+                        class_ids = labels.sum(dim=1).long()
+                        classes = torch.unique(class_ids)
+                        per_class = []
+                        for cls in classes:
+                            mask = class_ids == cls
+                            if mask.any():
+                                per_class.append(sample_loss[mask].mean())
+                        macro_loss = torch.stack(per_class).mean() if per_class else base_loss_mean
+                        loss = base_loss_mean + self.macro_loss_weight * macro_loss
+                    else:
+                        loss = base_loss_mean
                 
                 return {"loss": loss, "logits": logits}
         
-        model = OrdinalModel(base_model, hidden_size, num_thresholds)
+        model = OrdinalModel(base_model, hidden_size, num_thresholds, self.macro_loss_weight)
         return model
 
     def _prepare_targets(self, train_labels, val_labels, union_labels):
@@ -472,6 +505,8 @@ class BertOrdinalHead(SupervisedDownstreamHead):
             for i in range(0, len(texts), self.batch_size):
                 batch_texts = texts[i:i + self.batch_size]
                 encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
+                if self.mask_stopwords:
+                    encodings = self._mask_stopword_tokens(encodings, batch_texts)
                 encodings = {k: v.to(self._model.base_model.device) for k, v in encodings.items()}
                 outputs = self._model(**encodings)
                 logits = outputs["logits"]
@@ -563,6 +598,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
         init_checkpoint: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
         mask_stopwords: bool = False,
+        macro_loss_weight: float = 0.0,
     ):
         super().__init__(name="bert_classifier", primary_metric=primary_metric)
         self.model_name = model_name
@@ -579,6 +615,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
         self.mask_stopwords = bool(mask_stopwords)
+        self.macro_loss_weight = float(macro_loss_weight)
         self._tokenizer: Optional[AutoTokenizer] = None
         self._model: Optional[torch.nn.Module] = None
         self._trainer: Optional[Trainer] = None
@@ -590,12 +627,16 @@ class BertClassifierHead(SupervisedDownstreamHead):
     def _mask_stopword_tokens(self, encodings, texts):
         for idx, text in enumerate(texts):
             tokens = self._tokenizer.tokenize(text)
+            token_ids = encodings["input_ids"][idx]
             attention_mask = encodings["attention_mask"][idx]
-            for token_idx, token in enumerate(tokens):
-                if token.lower().strip("#") in self._stopwords:
-                    actual_idx = token_idx + 1
-                    if actual_idx < len(attention_mask):
-                        attention_mask[actual_idx] = 0
+            
+            for token_pos in range(len(token_ids)):
+                token_id = token_ids[token_pos].item() if hasattr(token_ids[token_pos], 'item') else token_ids[token_pos]
+                token_str = self._tokenizer.convert_ids_to_tokens(token_id)
+                normalized_token = token_str.lower().strip("#").replace("##", "")
+                
+                if normalized_token in self._stopwords:
+                    attention_mask[token_pos] = 0
         return encodings
 
     def _create_model(self, num_labels: int):
@@ -610,11 +651,12 @@ class BertClassifierHead(SupervisedDownstreamHead):
         hidden_size = base_model.config.hidden_size
         
         class ClassifierModel(torch.nn.Module):
-            def __init__(self, base, hidden_size, num_labels, label_smoothing):
+            def __init__(self, base, hidden_size, num_labels, label_smoothing, macro_loss_weight):
                 super().__init__()
                 self.base_model = base
                 self.classifier = torch.nn.Linear(hidden_size, num_labels)
                 self.label_smoothing = label_smoothing
+                self.macro_loss_weight = macro_loss_weight
             
             def forward(self, input_ids, attention_mask, labels=None):
                 outputs = self.base_model(input_ids=input_ids, attention_mask=attention_mask)
@@ -623,11 +665,28 @@ class BertClassifierHead(SupervisedDownstreamHead):
                 
                 loss = None
                 if labels is not None:
-                    loss = torch.nn.functional.cross_entropy(logits, labels, label_smoothing=self.label_smoothing)
+                    base_loss = torch.nn.functional.cross_entropy(
+                        logits,
+                        labels,
+                        label_smoothing=self.label_smoothing,
+                        reduction="none",
+                    )
+                    base_loss_mean = base_loss.mean()
+                    if self.macro_loss_weight > 0:
+                        classes = torch.unique(labels)
+                        per_class = []
+                        for cls in classes:
+                            mask = labels == cls
+                            if mask.any():
+                                per_class.append(base_loss[mask].mean())
+                        macro_loss = torch.stack(per_class).mean() if per_class else base_loss_mean
+                        loss = base_loss_mean + self.macro_loss_weight * macro_loss
+                    else:
+                        loss = base_loss_mean
                 
                 return {"loss": loss, "logits": logits}
         
-        model = ClassifierModel(base_model, hidden_size, num_labels, self.label_smoothing)
+        model = ClassifierModel(base_model, hidden_size, num_labels, self.label_smoothing, self.macro_loss_weight)
         return model
 
     def fit(self, x_train: Any, y_train: Sequence[Any], x_val: Any, y_val: Sequence[Any]) -> None:
@@ -752,6 +811,8 @@ class BertClassifierHead(SupervisedDownstreamHead):
             for i in range(0, len(texts), self.batch_size):
                 batch_texts = texts[i:i + self.batch_size]
                 encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
+                if self.mask_stopwords:
+                    encodings = self._mask_stopword_tokens(encodings, batch_texts)
                 encodings = {k: v.to(self._model.base_model.device) for k, v in encodings.items()}
                 outputs = self._model(**encodings)
                 logits = outputs["logits"]

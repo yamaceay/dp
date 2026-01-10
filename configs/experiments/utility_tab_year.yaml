@@ -7,7 +7,7 @@ target:
   key: year_group
   type: nominal
   enum:
-    - 1990-1995
+    - 1986-1995
     - 1996-1998
     - 1999-2001
     - 2002-2004
@@ -16,21 +16,14 @@ target:
     - 2011-2013
     - 2014-2019
 split:
-  - train: 0.8
-    val: 0.2
+  - train: 0.0
+    val: 1.0
+  - path: data/TAB/splitted/dev.json
+    train: 1.0
+    val: 0.0
 random_state: 42
 head:
-  type: bert_classifier
-  params:
-    model_name: distilbert-base-uncased
-    init_checkpoint: models/tri_pipelines/tab/old_pipeline/finetuning/checkpoint-532
-    checkpoint_dir: models/tri_pipelines/tab/utility_year
-    batch_size: 8
-    epochs: 3
-    lr: 1e-5
-    device: auto
-    primary_metric: acc
-    early_stop_threshold: 0.8
+  type: bert_ordinal
 output:
   format: jsonl
   file: logs/tab_year_exp.jsonl

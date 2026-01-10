@@ -5,9 +5,14 @@ annotations_in:
   - outputs/reddit
 target:
   key: feature_label
-  type: nominal
+  type: ordinal
+  enum:
+    - "age: 18-29"
+    - "age: 30-44"
+    - "age: 45-59"
+    - "age: 60+"
 selection_criteria:
-  feature: city_country
+  feature: age
 split:
   - train: 0.0
     val: 1.0
@@ -15,24 +20,29 @@ split:
     train: 1.0
     val: 0.0
 random_state: 42
+include_confusion_matrix: true
 head:
-  type: bert_classifier
+  type: bert_ordinal
   params:
     model_name: distilbert-base-uncased
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
-    checkpoint_dir: models/tri_pipelines/reddit/utility_city_country
+    checkpoint_dir: models/tri_pipelines/reddit/utility_age
+    mask_stopwords: true
     batch_size: 8
     epochs: 5
     encoder_lr: 5e-6
     head_lr: 1e-4
     warmup_steps: 10
     gradient_clip: 1.0
-    label_smoothing: 0.05
     device: auto
-    primary_metric: macro_f1
-    early_stop_threshold: 0.90
+    primary_metric: macro_mae
+    early_stop_threshold: 0.2
     early_stop_patience: 2
-    macro_loss_weight: 0.0
+    optimizer_type: adamw
+    scheduler_type: linear
+    weight_decay: 0.01
+    warmup_ratio: 0.1
+    macro_loss_weight: 0.5
 output:
   format: jsonl
-  file: logs/reddit_city_country_exp.jsonl
+  file: logs/reddit_age_exp.jsonl

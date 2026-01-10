@@ -37,6 +37,7 @@ head:
     primary_metric: macro_mae
     early_stop_threshold: 0.4
     early_stop_patience: 2
+    macro_loss_weight: 0.0
 output:
   format: jsonl
   file: logs/reddit_education_exp.jsonl

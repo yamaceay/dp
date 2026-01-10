@@ -74,12 +74,14 @@ class TextUtilityExperiment(Experiment):
         self,
         test_size: float = 0.0,
         random_state: int = 42,
+        include_confusion_matrix: bool = False,
     ):
         super().__init__()
         if not 0 <= test_size <= 1:
             raise ValueError("test_size must be between 0 and 1 inclusive")
         self.test_size = test_size
         self.random_state = random_state
+        self.include_confusion_matrix = include_confusion_matrix
         self._vectorizer: Optional[SelfSupervisedFeatureExtractor] = None
         self._model: Optional[SupervisedDownstreamHead] = None
         self._target: Optional[UtilityTarget] = None
@@ -109,6 +111,8 @@ class TextUtilityExperiment(Experiment):
         model: SupervisedDownstreamHead,
         train_texts_override: Optional[Sequence[str]] = None,
         train_labels_override: Optional[Sequence[Any]] = None,
+        test_texts_override: Optional[Sequence[str]] = None,
+        test_labels_override: Optional[Sequence[Any]] = None,
         **kwargs: Any,
     ) -> None:
         if not records:
@@ -138,34 +142,29 @@ class TextUtilityExperiment(Experiment):
         self._records = filtered_records
         self._keys = keys
         self._labels = labels
-        override_mode = (
+        
+        has_train_override = (
             train_texts_override is not None
             and train_labels_override is not None
             and len(train_texts_override) == len(train_labels_override)
             and len(train_texts_override) > 0
         )
-        if override_mode:
-            size = len(self._records)
-            if self.test_size <= 0:
-                test_idx = np.arange(size, dtype=int)
-            elif self.test_size >= 1:
-                test_idx = np.arange(size, dtype=int)
-            else:
-                count = max(1, int(round(size * float(self.test_size))))
-                indices = np.arange(size)
-                if target.mode is not UtilityTarget.Mode.CARDINAL and len(set(self._labels)) > 1:
-                    splitter = StratifiedShuffleSplit(n_splits=1, test_size=count, random_state=self.random_state)
-                    try:
-                        _, test_idx = next(splitter.split(indices, self._labels))
-                    except Exception:
-                        splitter2 = StratifiedShuffleSplit(n_splits=1, test_size=float(self.test_size), random_state=self.random_state)
-                        _, test_idx = next(splitter2.split(indices, self._labels))
-                else:
-                    rng = np.random.default_rng(self.random_state)
-                    rng.shuffle(indices)
-                    test_idx = indices[:count]
+        has_test_override = (
+            test_texts_override is not None
+            and test_labels_override is not None
+            and len(test_texts_override) == len(test_labels_override)
+            and len(test_texts_override) > 0
+        )
+        
+        if has_train_override and not has_test_override:
             self._train_idx = np.array([], dtype=int)
-            self._test_idx = np.asarray(test_idx, dtype=int)
+            self._test_idx = np.arange(len(self._records), dtype=int)
+        elif has_test_override and not has_train_override:
+            self._train_idx = np.arange(len(self._records), dtype=int)
+            self._test_idx = np.array([], dtype=int)
+        elif has_train_override and has_test_override:
+            self._train_idx = np.array([], dtype=int)
+            self._test_idx = np.array([], dtype=int)
         else:
             self._train_idx, self._test_idx = split_indices(
                 size=len(self._records),
@@ -183,33 +182,35 @@ class TextUtilityExperiment(Experiment):
         self._test_texts = [self._records[i].text for i in self._test_idx]
         self._train_labels = [self._labels[i] for i in self._train_idx]
         self._test_labels = [self._labels[i] for i in self._test_idx]
-        if override_mode:
-            self._train_override_texts = list(train_texts_override)  # type: ignore[arg-type]
-            self._train_override_labels = list(train_labels_override)  # type: ignore[arg-type]
-            self._vectorizer.fit(self._train_override_texts)
-            self._x_train = self._vectorizer.transform(self._train_override_texts)
-            if self._test_texts:
-                self._model.fit(self._train_override_texts, self._train_override_labels, self._test_texts, self._test_labels)
-            else:
-                self._model.fit(self._x_train, self._train_override_labels)
+        
+        actual_train_texts = list(train_texts_override) if has_train_override else self._train_texts
+        actual_train_labels = list(train_labels_override) if has_train_override else self._train_labels
+        actual_test_texts = list(test_texts_override) if has_test_override else self._test_texts
+        actual_test_labels = list(test_labels_override) if has_test_override else self._test_labels
+        
+        if has_train_override:
+            self._train_override_texts = actual_train_texts
+            self._train_override_labels = actual_train_labels
+        
+        if not actual_train_texts:
+            raise ValueError("no training data available")
+        
+        self._vectorizer.fit(actual_train_texts)
+        self._x_train = self._vectorizer.transform(actual_train_texts)
+        
+        if actual_test_texts:
+            self._model.fit(actual_train_texts, actual_train_labels, actual_test_texts, actual_test_labels)
         else:
-            self._vectorizer.fit(self._train_texts)
-            self._x_train = self._vectorizer.transform(self._train_texts)
-            self._model.fit(self._x_train, self._train_labels)
-        if self._test_texts:
-            x_test = self._vectorizer.transform(self._test_texts)
-            self._baseline_metrics = self._model.evaluate(x_test, self._test_labels)
+            self._model.fit(self._x_train, actual_train_labels)
+        
+        self._baseline_train_metrics = self._model.evaluate(self._x_train, actual_train_labels)
+        
+        if actual_test_texts:
+            x_test = self._vectorizer.transform(actual_test_texts)
+            self._baseline_metrics = self._model.evaluate(x_test, actual_test_labels)
         else:
-            if self._train_texts:
-                x_train_eval = self._vectorizer.transform(self._train_texts)
-                self._baseline_metrics = self._model.evaluate(x_train_eval, self._train_labels)
-            else:
-                self._baseline_metrics = {}
-        if self._train_texts:
-            x_train_eval = self._vectorizer.transform(self._train_texts)
-            self._baseline_train_metrics = self._model.evaluate(x_train_eval, self._train_labels)
-        else:
-            self._baseline_train_metrics = {}
+            self._baseline_metrics = {}
+        
         all_texts = [r.text for r in self._records]
         all_labels = list(self._labels)
         x_all_eval = self._vectorizer.transform(all_texts)
@@ -230,20 +231,35 @@ class TextUtilityExperiment(Experiment):
             raise RuntimeError("setup must be completed before run")
         evaluations: Dict[str, Dict[str, Any]] = {}
         for name, mapping in tqdm(evaluation_texts.items(), desc="Evaluating datasets"):
-            def _eval_subset(keys_subset: Sequence[str]) -> Tuple[Dict[str, float], int]:
+            def _eval_subset(keys_subset: Sequence[str]) -> Tuple[Dict[str, float], int, Optional[List[List[int]]]]:
                 subset_keys = [key for key in keys_subset if key in mapping]
                 if not subset_keys:
-                    return {}, 0
+                    return {}, 0, None
                 texts = [mapping[key] for key in subset_keys]
                 labels = [self._label_by_key[key] for key in subset_keys]
                 x_eval = self._vectorizer.transform(texts)
                 metrics = self._model.evaluate(x_eval, labels)
-                return metrics, len(subset_keys)
+                cm = None
+                if self.include_confusion_matrix:
+                    from sklearn.metrics import confusion_matrix
+                    preds = self._model.predict(x_eval)
+                    label_order = getattr(self._model, "_label_order", None) or sorted(list(set(labels)))
+                    cm_array = confusion_matrix(labels, preds, labels=label_order)
+                    cm = cm_array.tolist()
+                return metrics, len(subset_keys), cm
 
             if not self._test_keys:
-                overall_metrics, overall_matched = _eval_subset(list(self._all_key_set))
+                overall_metrics, overall_matched, overall_cm = _eval_subset(list(self._all_key_set))
                 metrics = dict(overall_metrics)
                 drops = self._score_difference(self._baseline_overall_metrics or {}, metrics) if metrics else {}
+                overall_res = {
+                    "metrics": overall_metrics,
+                    "drops": self._score_difference(self._baseline_overall_metrics or {}, overall_metrics) if overall_metrics else {},
+                    "matched": overall_matched,
+                    "total": len(self._keys),
+                }
+                if overall_cm is not None:
+                    overall_res["confusion_matrix"] = overall_cm
                 evaluations[name] = {
                     "metrics": metrics,
                     "drops": drops,
@@ -255,23 +271,43 @@ class TextUtilityExperiment(Experiment):
                     "valid": bool(overall_matched),
                     "train_results": {"metrics": {}, "drops": {}, "matched": 0, "total": len(self._train_keys)},
                     "test_results": {"metrics": {}, "drops": {}, "matched": 0, "total": len(self._test_keys)},
-                    "overall_results": {
-                        "metrics": overall_metrics,
-                        "drops": self._score_difference(self._baseline_overall_metrics or {}, overall_metrics) if overall_metrics else {},
-                        "matched": overall_matched,
-                        "total": len(self._keys),
-                    },
+                    "overall_results": overall_res,
                     "val_results": {"metrics": {}, "drops": {}, "matched": 0, "total": 0},
                 }
             else:
-                train_metrics, train_matched = _eval_subset(list(self._train_key_set))
-                test_metrics, test_matched = _eval_subset(list(self._test_key_set))
-                overall_metrics, overall_matched = _eval_subset(list(self._all_key_set))
+                train_metrics, train_matched, train_cm = _eval_subset(list(self._train_key_set))
+                test_metrics, test_matched, test_cm = _eval_subset(list(self._test_key_set))
+                overall_metrics, overall_matched, overall_cm = _eval_subset(list(self._all_key_set))
 
                 metrics = dict(test_metrics) if test_metrics else dict(overall_metrics)
                 drops = self._score_difference(self._baseline_metrics, metrics) if metrics else {}
                 train_drops = self._score_difference(self._baseline_train_metrics or {}, train_metrics) if train_metrics else {}
                 overall_drops = self._score_difference(self._baseline_overall_metrics or {}, overall_metrics) if overall_metrics else {}
+
+                train_res = {
+                    "metrics": train_metrics,
+                    "drops": train_drops,
+                    "matched": train_matched,
+                    "total": len(self._train_keys),
+                }
+                if train_cm is not None:
+                    train_res["confusion_matrix"] = train_cm
+                test_res = {
+                    "metrics": test_metrics,
+                    "drops": drops,
+                    "matched": test_matched,
+                    "total": len(self._test_keys),
+                }
+                if test_cm is not None:
+                    test_res["confusion_matrix"] = test_cm
+                overall_res = {
+                    "metrics": overall_metrics,
+                    "drops": overall_drops,
+                    "matched": overall_matched,
+                    "total": len(self._keys),
+                }
+                if overall_cm is not None:
+                    overall_res["confusion_matrix"] = overall_cm
 
                 evaluations[name] = {
                     "metrics": metrics,
@@ -282,24 +318,9 @@ class TextUtilityExperiment(Experiment):
                     "test_total": len(self._test_keys),
                     "available": overall_matched,
                     "valid": bool(test_matched or train_matched or overall_matched),
-                    "train_results": {
-                        "metrics": train_metrics,
-                        "drops": train_drops,
-                        "matched": train_matched,
-                        "total": len(self._train_keys),
-                    },
-                    "test_results": {
-                        "metrics": test_metrics,
-                        "drops": drops,
-                        "matched": test_matched,
-                        "total": len(self._test_keys),
-                    },
-                    "overall_results": {
-                        "metrics": overall_metrics,
-                        "drops": overall_drops,
-                        "matched": overall_matched,
-                        "total": len(self._keys),
-                    },
+                    "train_results": train_res,
+                    "test_results": test_res,
+                    "overall_results": overall_res,
                     "val_results": {
                         "metrics": {},
                         "drops": {},

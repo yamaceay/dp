@@ -185,7 +185,7 @@ def tab_year(record: DatasetRecord) -> Optional[int]:
 
 def tab_year_groups(record: DatasetRecord, year_groups: List[str] | None = None) -> str:
     groups = year_groups or [
-        "1990-1995","1996-1998","1999-2001","2002-2004","2005-2007","2008-2010","2011-2013","2014-2019"
+        "1984-1995","1996-1998","1999-2001","2002-2004","2005-2007","2008-2010","2011-2013","2014-2019"
     ]
     year = record.metadata.get("years")
     bounds = [(int(g.split("-")[0]), int(g.split("-")[1])) for g in groups]

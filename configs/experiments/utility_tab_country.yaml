@@ -7,21 +7,16 @@ target:
   key: country_group
   type: nominal
 split:
-  - train: 0.8
-    val: 0.2
+  - train: 0.0
+    val: 1.0
+  - path: data/TAB/splitted/dev.json
+    train: 1.0
+    val: 0.0
 random_state: 42
 head:
   type: bert_classifier
   params:
-    model_name: distilbert-base-uncased
-    init_checkpoint: models/tri_pipelines/tab/old_pipeline/finetuning/checkpoint-532
-    checkpoint_dir: models/tri_pipelines/tab/utility_country
-    batch_size: 8
-    epochs: 3
-    lr: 1e-5
-    device: auto
-    primary_metric: acc
-    early_stop_threshold: 0.8
+    epochs: 2
 output:
   format: jsonl
   file: logs/tab_country_exp.jsonl

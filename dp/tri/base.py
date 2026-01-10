@@ -15,9 +15,11 @@ from transformers import (
     TrainerCallback,
     DataCollatorForLanguageModeling,
     get_constant_schedule,
+    get_linear_schedule_with_warmup,
+    get_cosine_schedule_with_warmup,
     pipeline,
 )
-from torch.optim import AdamW
+from torch.optim import AdamW, Adam, SGD
 from dp.loaders.base import DatasetRecord
 from dp.utils.chunking import TokenAwareChunker, ProbabilityAggregator, process_with_chunking
 
@@ -288,6 +290,10 @@ class TRIDetector(ABC):
         best_metric_dataset: Optional[str] = None,
         early_stop_threshold: Optional[float] = None,
         per_step: Optional[int] = None,
+        weight_decay: Optional[float] = None,
+        warmup_ratio: Optional[float] = None,
+        optimizer_type: Optional[str] = "adamw",
+        scheduler_type: Optional[str] = "constant",
     ) -> None:
         if not self.train_records:
             raise ValueError("No training data set. Call set_train_dataset() first")
@@ -323,6 +329,11 @@ class TRIDetector(ABC):
                 "logging_strategy": "epoch",
                 "save_strategy": "epoch",
             })
+        training_kwargs = {}
+        if weight_decay is not None:
+            training_kwargs["weight_decay"] = weight_decay
+        if warmup_ratio is not None:
+            training_kwargs["warmup_ratio"] = warmup_ratio
         training_args = TrainingArguments(
             output_dir=f"{output_dir}/finetuning",
             num_train_epochs=epochs,
@@ -332,11 +343,35 @@ class TRIDetector(ABC):
             save_total_limit=1,
             report_to="none",
             no_cuda=True,
+            **training_kwargs,
             **save_kwargs,
             **eval_kwargs,
         )
-        optimizer = AdamW(self.model.parameters(), lr=learning_rate)
-        scheduler = get_constant_schedule(optimizer)
+        trainer_kwargs = {}
+        if optimizer_type is not None:
+            if optimizer_type == "adamw":
+                optimizer = AdamW(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay or 0.0)
+            elif optimizer_type == "adam":
+                optimizer = Adam(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay or 0.0)
+            elif optimizer_type == "sgd":
+                optimizer = SGD(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay or 0.0)
+            else:
+                raise ValueError(f"Unknown optimizer_type: {optimizer_type}")
+            
+            if scheduler_type == "constant":
+                scheduler = get_constant_schedule(optimizer)
+            elif scheduler_type == "linear":
+                num_training_steps = len(train_dataset) * epochs // batch_size
+                num_warmup_steps = int(num_training_steps * (warmup_ratio or 0.0))
+                scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps)
+            elif scheduler_type == "cosine":
+                num_training_steps = len(train_dataset) * epochs // batch_size
+                num_warmup_steps = int(num_training_steps * (warmup_ratio or 0.0))
+                scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps)
+            else:
+                raise ValueError(f"Unknown scheduler_type: {scheduler_type}")
+            
+            trainer_kwargs["optimizers"] = [optimizer, scheduler]
         callbacks = [MetricsPrintCallback()]
         if early_stop_threshold is not None:
             callbacks.append(EarlyStopCallback(min_accuracy=early_stop_threshold))
@@ -345,9 +380,9 @@ class TRIDetector(ABC):
             args=training_args,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            optimizers=[optimizer, scheduler],
             compute_metrics=compute_metrics,
             callbacks=callbacks,
+            **trainer_kwargs,
         )
         trainer.train()
         self.model.save_pretrained(output_dir)

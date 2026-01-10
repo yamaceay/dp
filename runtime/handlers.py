@@ -153,6 +153,20 @@ def _debug_print_components(vec_name: str | None, vec_kwargs: Dict[str, Any], he
     print(f"Head: name={head_name or 'auto'} params={head_kwargs}")
 
 
+def _normalize_target_value(value: Any, mode: Any) -> Optional[Any]:
+    if value is None:
+        return None
+    if str(mode.value) == "cardinal":
+        try:
+            return float(value)
+        except Exception:
+            return None
+    s = str(value).strip()
+    if not s:
+        return None
+    return s
+
+
 def _prepare_utility(params: ConfigDict) -> UtilityCtx:
     annotations = _resolve_utility_annotations(params)
     _require_fields(params, ["dataset", "data_in", "target"]) 
@@ -236,6 +250,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     ctx = _prepare_utility(params)
     if not ctx.annotations:
         raise ValueError("annotations are required")
+    include_cm = bool(params.get("include_confusion_matrix", False))
     records = load_records(ctx.dataset, ctx.data_in, params.get("max_records"))
     if ctx.debug:
         _debug_print_target(ctx.spec, params)
@@ -273,38 +288,87 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         identifier=ctx.identifier,
     )
     split_cfg = params.get("split")
-    extra_path = None
-    if isinstance(split_cfg, list):
-        extra_entry = next((s for s in split_cfg if isinstance(s, dict) and s.get("path") and float(s.get("train", 0)) > 0), None)
-        if extra_entry:
-            extra_path = str(extra_entry.get("path"))
-    
     train_texts_override: List[str] = []
     train_labels_override: List[Any] = []
-    if extra_path:
-        extra_records = load_records(ctx.dataset, extra_path, params.get("max_records"))
-        extra_records = select_records(extra_records, ctx.selection_criteria)
-        if not extra_records:
-            raise RuntimeError("no extra training records selected by criteria")
-        for rec in extra_records:
-            v = ctx.spec.target.value(rec)
-            if v is None or not rec.text:
+    test_texts_override: List[str] = []
+    test_labels_override: List[Any] = []
+    train_uids: List[str] = []
+    test_uids: List[str] = []
+    
+    if isinstance(split_cfg, list):
+        for entry in split_cfg:
+            if not isinstance(entry, dict):
                 continue
-            mode = ctx.spec.target.mode
-            if str(mode.value) == "cardinal":
-                try:
-                    nv = float(v)
-                except Exception:
+            source_path = entry.get("path") or ctx.data_in
+            train_ratio = float(entry.get("train", 0))
+            val_ratio = float(entry.get("val", 0))
+            if train_ratio + val_ratio > 1:
+                raise ValueError(f"train + val ratios must be <= 1, got {train_ratio} + {val_ratio}")
+            if train_ratio < 0 or val_ratio < 0:
+                raise ValueError(f"ratios must be >= 0")
+            
+            source_records = load_records(ctx.dataset, source_path, params.get("max_records"))
+            source_records = select_records(source_records, ctx.selection_criteria)
+            if not source_records:
+                continue
+            
+            rng = np.random.default_rng(ctx.random_state)
+            indices = np.arange(len(source_records))
+            rng.shuffle(indices)
+            
+            train_count = int(len(source_records) * train_ratio)
+            val_count = int(len(source_records) * val_ratio)
+            
+            train_indices = indices[:train_count]
+            val_indices = indices[train_count:train_count + val_count]
+            
+            for idx in train_indices:
+                rec = source_records[idx]
+                v = ctx.spec.target.value(rec)
+                if v is None or not rec.text:
                     continue
+                nv = _normalize_target_value(v, ctx.spec.target.mode)
+                if nv is None:
+                    continue
+                train_texts_override.append(rec.text)
+                train_labels_override.append(nv)
+                train_uids.append(rec.uid or f"record_{idx}")
+            
+            for idx in val_indices:
+                rec = source_records[idx]
+                v = ctx.spec.target.value(rec)
+                if v is None or not rec.text:
+                    continue
+                nv = _normalize_target_value(v, ctx.spec.target.mode)
+                if nv is None:
+                    continue
+                test_texts_override.append(rec.text)
+                test_labels_override.append(nv)
+                test_uids.append(rec.uid or f"record_{idx}")
+    
+    if ctx.debug:
+        original_uids = [rec.uid or f"record_{i+1}" for i, rec in enumerate(records)]
+        print(f"\n=== Dataset Loading Summary ===")
+        print(f"Original dataset (data_in={ctx.data_in}): {len(records)} records")
+        print(f"Original UIDs (first 10): {original_uids[:10]}")
+        if train_texts_override:
+            print(f"\nTraining set: {len(train_texts_override)} records")
+            print(f"Training UIDs (first 10): {train_uids[:10]}")
+        if test_texts_override:
+            print(f"\nValidation set: {len(test_texts_override)} records")
+            print(f"Validation UIDs (first 10): {test_uids[:10]}")
+        if train_uids and test_uids:
+            overlap = set(train_uids) & set(test_uids)
+            if overlap:
+                print(f"\nWARNING: Overlap between train and val: {len(overlap)} records")
             else:
-                s = str(v).strip()
-                if not s:
-                    continue
-                nv = s
-            train_texts_override.append(rec.text)
-            train_labels_override.append(nv)
-        ctx = UtilityCtx(ctx.dataset, ctx.data_in, ctx.annotations, ctx.spec, ctx.selection_criteria, ctx.debug, ctx.test_size, ctx.random_state, ctx.dry_run, ctx.output_format, ctx.output_file, ctx.identifier)
-    experiment = TextUtilityExperiment(test_size=ctx.test_size, random_state=ctx.random_state)
+                print(f"\nNo overlap between train and val: disjoint sets")
+    
+    experiment = TextUtilityExperiment(
+        test_size=ctx.test_size,
+        random_state=ctx.random_state,
+        include_confusion_matrix=include_cm,
+    )
     experiment.setup(
         target=ctx.spec.target,
         records=records,
@@ -312,6 +376,8 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         model=model,
         train_texts_override=train_texts_override or None,
         train_labels_override=train_labels_override or None,
+        test_texts_override=test_texts_override or None,
+        test_labels_override=test_labels_override or None,
     )
     if ctx.debug:
         train_sz = len(getattr(experiment, "_train_keys", []))

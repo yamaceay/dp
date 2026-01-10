@@ -20,6 +20,7 @@ split:
     train: 1.0
     val: 0.0
 random_state: 42
+include_confusion_matrix: true
 head:
   type: bert_ordinal
   params:
@@ -27,16 +28,6 @@ head:
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
     checkpoint_dir: models/tri_pipelines/reddit/utility_age
     mask_stopwords: true
-    batch_size: 8
-    epochs: 5
-    encoder_lr: 5e-6
-    head_lr: 1e-4
-    warmup_steps: 10
-    gradient_clip: 1.0
-    device: auto
-    primary_metric: macro_mae
-    early_stop_threshold: 0.2
-    early_stop_patience: 2
 output:
   format: jsonl
   file: logs/reddit_age_exp.jsonl

@@ -32,6 +32,7 @@ head:
     primary_metric: macro_f1
     early_stop_threshold: 0.90
     early_stop_patience: 2
+    macro_loss_weight: 0.0
 output:
   format: jsonl
   file: logs/reddit_occupation_exp.jsonl
