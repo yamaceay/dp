@@ -9,9 +9,12 @@ target:
 split:
   - train: 0.0
     val: 1.0
-  - path: data/TAB/splitted/dev.json
+  - path: data/TAB/splitted/train.json
     train: 1.0
     val: 0.0
+  - path: data/TAB/splitted/dev.json
+    train: 0.0
+    val: 1.0
 random_state: 42
 head:
   type: bert_classifier

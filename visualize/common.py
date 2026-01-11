@@ -82,6 +82,15 @@ def read_jsonl_entries(files: Sequence[Tuple[str, ...]] , kind: str) -> Iterable
                     yield {"method": method, "params": params, "dataset": dataset_name, "feature": feature, **values}
                 else:
                     dataset_name = spec[1]
+                    if data.get("type") == "experiment":
+                        mrr = data["score"]
+                        yield {
+                            "method": "baseline",
+                            "params": {},
+                            "dataset": dataset_name,
+                            "privacy_mrr": mrr,
+                        }
+                        continue
                     if data.get("type") != "evaluation":
                         continue
                     key = normalize_source_key(str(data.get("source", "")))
@@ -92,8 +101,6 @@ def read_jsonl_entries(files: Sequence[Tuple[str, ...]] , kind: str) -> Iterable
                         "privacy_median_rank_change": res["median"],
                         "privacy_num_rank_increased": res["improved"],
                         "privacy_num_rank_decreased": res["degraded"],
-                        "privacy_nlrg": res["nlrg"],
-                        "privacy_harm_rate": res["harm_rate"],
-                        "privacy_nlrg_log_base": res["log_base"],
+                        "privacy_mrr": res["mrr"],
                     }
                     yield {"method": method, "params": params, "dataset": dataset_name, **values}

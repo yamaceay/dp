@@ -7,7 +7,7 @@ target:
   key: year_group
   type: nominal
   enum:
-    - 1986-1995
+    - 1975-1995
     - 1996-1998
     - 1999-2001
     - 2002-2004
@@ -18,12 +18,17 @@ target:
 split:
   - train: 0.0
     val: 1.0
-  - path: data/TAB/splitted/dev.json
+  - path: data/TAB/splitted/train.json
     train: 1.0
     val: 0.0
+  - path: data/TAB/splitted/dev.json
+    train: 0.0
+    val: 1.0
 random_state: 42
 head:
   type: bert_ordinal
+  params:
+    epochs: 2
 output:
   format: jsonl
   file: logs/tab_year_exp.jsonl

@@ -133,67 +133,30 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
         self.log_fn = math.log if log_base == "natural" else math.log2
         self.log_base = log_base
     
-    def _compute_privacy_metrics(
-        self, 
-        original_ranks: List[RankEntry], 
-        evaluation_ranks: List[RankEntry], 
-        N: int
-    ) -> Dict[str, float]:
-        original_map = {entry.key: entry.rank for entry in original_ranks}
-        data: List[tuple[float, float]] = []
-        
-        for eval_entry in evaluation_ranks:
-            if eval_entry.key not in original_map:
-                continue
-            r_before = float(original_map[eval_entry.key])
-            r_after = float(eval_entry.rank)
-            if r_before <= 0 or r_after <= 0 or N <= 0:
-                continue
-            data.append((r_before, r_after))
-        
-        if not data:
-            return {"nlrg": 0.0, "harm_rate": 0.0}
-        
-        log_rank_gains: List[float] = []
-        harm_count = 0
-        for r_before, r_after in data:
-            log_gain = self.log_fn(r_after) - self.log_fn(r_before)
-            normalized_gain = log_gain / self.log_fn(N)
-            log_rank_gains.append(normalized_gain)
-            if r_after < r_before:
-                harm_count += 1
-        
-        nlrg = sum(log_rank_gains) / len(log_rank_gains)
-        harm_rate = harm_count / len(data)
-        
-        return {"nlrg": nlrg, "harm_rate": harm_rate}
-    
     def output(self, report: PrivacyExperimentReport) -> None:
         records: List[Dict[str, Any]] = [
             {
                 "type": "experiment",
-                "score": report.score,
+                "score": sum(1 / r.rank for r in report.original_ranks) / len(report.original_ranks),
                 "original_record_count": report.original_record_count,
             }
         ]
         for entry in report.original_ranks:
             records.append(self._rank_record("original_rank", entry))
         for evaluation in report.evaluations:
-            privacy_metrics = self._compute_privacy_metrics(
-                report.original_ranks,
-                evaluation.ranks,
-                report.original_record_count
-            )
+            privacy_metrics = {
+                "mrr": sum(1 / r.rank for r in evaluation.ranks) / len(evaluation.ranks),
+            }
             records.append(
                 {
                     "type": "evaluation",
                     "name": evaluation.name,
                     "record_count": evaluation.record_count,
                     "source": str(evaluation.source) if evaluation.source else None,
-                    "summary": evaluation.summary,
-                    "nlrg": privacy_metrics["nlrg"],
-                    "harm_rate": privacy_metrics["harm_rate"],
-                    "log_base": self.log_base,
+                    "summary": {
+                        **evaluation.summary,
+                        **privacy_metrics,
+                    }
                 }
             )
             for entry in evaluation.ranks:
