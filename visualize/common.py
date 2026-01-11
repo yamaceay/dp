@@ -83,12 +83,11 @@ def read_jsonl_entries(files: Sequence[Tuple[str, ...]] , kind: str) -> Iterable
                 else:
                     dataset_name = spec[1]
                     if data.get("type") == "experiment":
-                        mrr = data["score"]
                         yield {
                             "method": "baseline",
                             "params": {},
                             "dataset": dataset_name,
-                            "privacy_mrr": mrr,
+                            **{f"privacy_{metric}": value for metric, value in data["score"].items()},
                         }
                         continue
                     if data.get("type") != "evaluation":
@@ -101,6 +100,6 @@ def read_jsonl_entries(files: Sequence[Tuple[str, ...]] , kind: str) -> Iterable
                         "privacy_median_rank_change": res["median"],
                         "privacy_num_rank_increased": res["improved"],
                         "privacy_num_rank_decreased": res["degraded"],
-                        "privacy_mrr": res["mrr"],
+                        **{f"privacy_{metric}": value for metric, value in res.items()},
                     }
                     yield {"method": method, "params": params, "dataset": dataset_name, **values}

@@ -30,7 +30,7 @@ class EvaluationReport:
 
 @dataclass(frozen=True)
 class PrivacyExperimentReport:
-    score: float
+    score: Dict[str, float]
     original_record_count: int
     original_ranks: List[RankEntry]
     evaluations: List[EvaluationReport]
@@ -47,7 +47,7 @@ class PrivacyReportOutputter:
 class TextPrivacyReportOutputter(PrivacyReportOutputter):
     def output(self, report: PrivacyExperimentReport) -> None:
         lines: List[str] = [
-            f"Score: {report.score:.4f}",
+            f"Score: {', '.join(f'{k}: {v:.4f}' for k, v in report.score.items())}",
             "",
             "Original dataset",
             f"  records: {report.original_record_count}",
@@ -137,7 +137,10 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
         records: List[Dict[str, Any]] = [
             {
                 "type": "experiment",
-                "score": sum(1 / r.rank for r in report.original_ranks) / len(report.original_ranks),
+                "score": {
+                    "mean": 0.0, 
+                    "mean_reciprocal_rank": sum(1 / r.rank for r in report.original_ranks) / len(report.original_ranks),
+                },
                 "original_record_count": report.original_record_count,
             }
         ]
@@ -145,7 +148,7 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
             records.append(self._rank_record("original_rank", entry))
         for evaluation in report.evaluations:
             privacy_metrics = {
-                "mrr": sum(1 / r.rank for r in evaluation.ranks) / len(evaluation.ranks),
+                "mean_reciprocal_rank": sum(1 / r.rank for r in evaluation.ranks) / len(evaluation.ranks),
             }
             records.append(
                 {
@@ -154,7 +157,7 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
                     "record_count": evaluation.record_count,
                     "source": str(evaluation.source) if evaluation.source else None,
                     "summary": {
-                        **evaluation.summary,
+                        **(evaluation.summary or {}),
                         **privacy_metrics,
                     }
                 }
@@ -225,17 +228,26 @@ def build_privacy_report(
                     delta=deltas.get(key),
                 )
             )
+        summary = payload.get("rank_delta_summary") or {}
+        if ranks:
+            summary = {
+                **summary,
+                "mean_reciprocal_rank": sum(1 / r.rank for r in ranks) / len(ranks),
+            }
         evaluation_reports.append(
             EvaluationReport(
                 name=name,
                 source=annotation_sources.get(name),
                 record_count=evaluation_record_counts.get(name, 0),
                 ranks=ranks,
-                summary=payload.get("rank_delta_summary"),
+                summary=summary,
             )
         )
     return PrivacyExperimentReport(
-        score=result.score,
+        score={
+            "mean": 0.0,
+            "mean_reciprocal_rank": sum(1 / r.rank for r in original_ranks) / len(original_ranks),
+        },
         original_record_count=original_record_count,
         original_ranks=original_ranks,
         evaluations=evaluation_reports,
