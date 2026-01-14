@@ -44,14 +44,33 @@ def load_result_records(path: str) -> List[ResultRecord]:
 def build_dataset_from_results(
     result_path: str,
     original_records: Optional[Sequence[DatasetRecord]] = None,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
+    step: Optional[int] = None,
+    max_records: Optional[int] = None,
 ) -> Tuple[List[DatasetRecord], List[int]]:
     result_records = load_result_records(result_path)
+    
+    valid_indices = None
+    if original_records is not None and (start is not None or end is not None or step is not None or max_records is not None):
+        total_original = len(original_records)
+        slice_start = start if start is not None else 0
+        slice_end = end if end is not None else total_original
+        slice_step = step if step is not None else 1
+        valid_indices = set(range(slice_start, slice_end, slice_step))
+        if max_records is not None:
+            valid_indices = set(list(valid_indices)[:max_records])
+    
     dataset_records: List[DatasetRecord] = []
     source_indices: List[int] = []
     for pos, result in enumerate(result_records):
         idx = result.idx if result.idx is not None else pos
         if idx < 0:
             raise ValueError("Result record idx must be non-negative")
+        
+        if valid_indices is not None and idx not in valid_indices:
+            continue
+        
         original = None
         if original_records is not None:
             if idx >= len(original_records):

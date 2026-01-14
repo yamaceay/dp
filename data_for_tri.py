@@ -45,7 +45,14 @@ def main() -> None:
 
     original_records = list(adapter.adapter.iter_records())
     if args.result_in:
-        records, _ = build_dataset_from_results(args.result_in, original_records)
+        records, _ = build_dataset_from_results(
+            args.result_in, 
+            original_records,
+            start=args.start,
+            end=args.end,
+            step=args.step,
+            max_records=args.max_records
+        )
     else:
         records = original_records
     adapter.adapter = InMemoryDatasetAdapter(records)

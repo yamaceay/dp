@@ -18,10 +18,11 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         step: Optional[int] = None,
         max_records: Optional[int] = None,
         rewriter_model_name: str = "facebook/bart-large-cnn",
-        rewriter_device: int = -1,
+        rewriter_device: str | int = "mps",
         rewriter_max_length: int = 256, # originally 150
         rewriter_min_length: int = 80,  # originally 40
         max_background_tokens: int = 512,
+        rewrite_background: bool = True,
     ):
         adapter = TabDatasetAdapter(
             data=data,
@@ -44,6 +45,7 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
             max_input_tokens=max_background_tokens,
         )
         self.set_rewriter(rewriter)
+        self.rewrite_background = rewrite_background
 
     def _get_background_chunker(self) -> TokenAwareChunker:
         if self._background_chunker is None:
@@ -54,7 +56,7 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         return self._background_chunker
 
     def _extract_section(self, text: str, section_name: str) -> str:
-        main_sections = {"PROCEDURE", "THE FACTS", "THE LAW", "AS TO THE FACTS", "COMPLAINTS", "FOR THESE REASONS THE COURT"}
+        main_sections = {"PROCEDURE", "THE FACTS", "THE LAW", "AS TO THE FACTS", "COMPLAINTS"}
         
         lines = text.split('\n')
         in_section = False
@@ -92,5 +94,12 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
             else:
                 for chunk in chunks:
                     background.append((key, chunk.text))
-        
+
+        if self.rewrite_background:
+            rewritten_background = []
+            for background_key, background_text in background:
+                rewritten_text = self.rewriter.rewrite(background_text)
+                rewritten_background.append((background_key, rewritten_text))
+            background = rewritten_background
+
         return background

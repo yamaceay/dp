@@ -173,7 +173,7 @@ def tab_country(record: DatasetRecord) -> Optional[str]:
 
 
 def tab_year(record: DatasetRecord) -> Optional[int]:
-    value = record.metadata.get("years")
+    value = record.metadata.get("year")
     if isinstance(value, (list, tuple, set)):
         for item in value:
             number = int_value(item)
@@ -182,12 +182,21 @@ def tab_year(record: DatasetRecord) -> Optional[int]:
         return None
     return int_value(value)
 
+def tab_legal_branch(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("legal_branch"))
+
+def tab_articles(record: DatasetRecord) -> Optional[List[str]]:
+    value = record.metadata.get("articles")
+    if isinstance(value, (list, tuple, set)):
+        articles = sorted(list(set([text_value(item) for item in value])), key=lambda x: int_value(x) if x and x.isdigit() else float('inf'))
+        return ",".join([a for a in articles if a is not None])
+    raise ValueError("Articles metadata is not a list.")
 
 def tab_year_groups(record: DatasetRecord, year_groups: List[str] | None = None) -> str:
     groups = year_groups or [
         "1975-1995","1996-1998","1999-2001","2002-2004","2005-2007","2008-2010","2011-2013","2014-2019"
     ]
-    year = record.metadata.get("years")
+    year = record.metadata.get("year")
     bounds = [(int(g.split("-")[0]), int(g.split("-")[1])) for g in groups]
     mapping = {c: g for g, (start, end) in zip(groups, bounds) for c in range(start, end + 1)}
     if year not in mapping:
@@ -222,10 +231,12 @@ DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
         "feature_label_exact": lambda r: reddit_feature_label(r, group=False),
     },
     "tab": {
-        "country": tab_country,
         "year": tab_year,
+        "country": tab_country,
         "year_group": tab_year_groups,
         "country_group": tab_country_groups,
+        "legal_branch": tab_legal_branch,
+        "articles": tab_articles,
     },
     "db_bio": {
         "label": db_bio_label,

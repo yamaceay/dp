@@ -40,15 +40,12 @@ class TabDatasetAdapter(DatasetAdapter):
             spans = self._read_annotations(annotations_raw)
 
             meta = row.get("meta") or {}
-            name = meta.get("applicant", "")
-            years = meta.get("year")
+            name = meta.pop("applicant", "")
             metadata = {
-                "country": meta.get("countries"),
-                "years": years,
-                "quality_checked": row.get("quality_checked"),
-                "task": row.get("task"),
-                "dataset_type": row.get("dataset_type"),
-                "meta": meta,
+                "country": meta.pop("countries"),
+                "year": meta.pop("year"),
+                "legal_branch": meta.pop("legal_branch"),
+                "articles": meta.pop("articles"),
             }
 
             yield DatasetRecord(

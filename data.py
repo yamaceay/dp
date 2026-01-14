@@ -1,6 +1,6 @@
 from typing import Dict, List
 from dp.loaders import ADAPTER_REGISTRY
-from dp.experiments.utility.getters import UTILITY_TARGETS
+from dp.loaders.derive import DERIVE_REGISTRY
 import argparse
 
 available_datasets = list(ADAPTER_REGISTRY.keys())
@@ -46,9 +46,9 @@ if __name__ == "__main__":
         'key': lambda r: list(r.metadata.keys()),
     }
 
-    special_value_getters = UTILITY_TARGETS.get(args.data, {})
+    special_value_getters = DERIVE_REGISTRY.get(args.data, {})
     for key, target in special_value_getters.items():
-        value_getters[key] = target.getter
+        value_getters[key] = target
 
     print(value_getters)
 

@@ -521,30 +521,6 @@ def _load_methods_set(path: Path, set_name: str) -> List[Any]:
 def _load_results_set(path: Path, set_name: str) -> Tuple[str, str]:
 	return _ext_load_results_set(path, set_name)
 
-	def _load_rows_from_config(config_path: Path) -> List[Dict[str, Any]]:
-		conf = _load_config(config_path)
-		exp = _first_experiment(conf)
-		files = exp.get("files") or []
-		rows: List[Dict[str, Any]] = []
-		for f in files:
-			ftype = str(f.get("type"))
-			if ftype not in {"privacy", "utility"} or not f.get("file"):
-				continue
-			p = Path("visualize") / str(f.get("file")) if not Path(str(f.get("file"))).exists() else Path(str(f.get("file")))
-			with p.open("r", encoding="utf-8") as fp:
-				data = json.load(fp)
-			if isinstance(data, list):
-				rows.extend(data)
-			elif isinstance(data, dict):
-				for method_name, entries in data.items():
-					for e in entries:
-						row: Dict[str, Any] = {"method": method_name, "params": e.get("params") or {}, "dataset": exp.get("dataset")}
-						for k, v in e.items():
-							if k not in {"params"}:
-								row[k] = v
-						rows.append(row)
-		return rows
-
 def _method_alias(name: str) -> str:
 	if name == "petre":
 		return "petre_shap"
@@ -699,7 +675,7 @@ def plot_bars(config_path: Path, flat_path: Path | None, dataset: str, metric: s
 	alt_rows: List[Dict[str, Any]] = []
 	for f in files:
 		ftype = str(f.get("type"))
-		if ftype not in {"privacy", "utility"} or not f.get("file"):
+		if ftype not in {"privacy", "utility", "divergence", "runtime"} or not f.get("file"):
 			continue
 		p = Path("visualize/pretty") / str(f.get("file")) if not Path(str(f.get("file"))).exists() else Path(str(f.get("file")))
 		if debug:
