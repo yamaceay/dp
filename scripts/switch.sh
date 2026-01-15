@@ -106,7 +106,7 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
     echo "Updating tri_pipeline in reddit configs under $CONFIG_DIR..."
     find "$CONFIG_DIR" -path "*reddit*" -name "*.yaml" -type f | while read config; do
         if grep -q "tri_pipeline:" "$config"; then
-            sed -i.bak "s|tri_pipeline:.*|tri_pipeline: $REDDIT_TRI_PIPELINE|g" "$config"
+            sed -i.bak "s|tri_pipeline:.*|tri_pipeline: $REDDIT_UNIVERSAL_TRI_PIPELINE|g" "$config"
             echo "  Updated: $config"
         fi
     done
@@ -114,7 +114,7 @@ for CONFIG_DIR in "${CONFIG_DIRS[@]}"; do
     echo "Updating tri_pipeline in tab configs under $CONFIG_DIR..."
     find "$CONFIG_DIR" -path "*tab*" -name "*.yaml" -type f | while read config; do
         if grep -q "tri_pipeline:" "$config"; then
-            sed -i.bak "s|tri_pipeline:.*|tri_pipeline: $TAB_TRI_PIPELINE|g" "$config"
+            sed -i.bak "s|tri_pipeline:.*|tri_pipeline: $TAB_UNIVERSAL_TRI_PIPELINE|g" "$config"
             echo "  Updated: $config"
         fi
     done

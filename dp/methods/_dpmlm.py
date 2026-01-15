@@ -32,7 +32,7 @@ class DPMlmAnonymizer(Anonymizer):
         add_probability: float = 0.0,
         delete_probability: float = 0.0,
         risk_temperature: Optional[float] = None,
-        max_retry_rounds: int = 3,
+        max_retry_rounds: int = 5,
         **kwargs
     ):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
@@ -243,7 +243,8 @@ class DPMlmAnonymizer(Anonymizer):
         sentence: str,
         token: str,
         offset: Tuple[int, int],
-        epsilon: float
+        epsilon: float,
+        exclude_original: bool = False,
     ) -> str:
         masked_sentence = self._replace_token(sentence, self.tokenizer.mask_token, offset)
         if masked_sentence == sentence:
@@ -263,6 +264,12 @@ class DPMlmAnonymizer(Anonymizer):
         
         logits = output[0].squeeze().detach().cpu().numpy()
         mask_logits = logits[mask_pos]
+        
+        if exclude_original:
+            original_ids = self.tokenizer.encode(token, add_special_tokens=False)
+            for oid in original_ids:
+                if 0 <= oid < len(mask_logits):
+                    mask_logits[oid] = float("-inf")
         
         if self.use_temperature:
             temperature = 2 * self.sensitivity / epsilon
@@ -394,11 +401,13 @@ class DPMlmAnonymizer(Anonymizer):
             if self._is_token_masked(token_start, token_end, masked_spans):
                 ledger.replace(idx, token)
                 runtime_stats["total"] += 1
+                runtime_stats["skipped_masked"] += 1
                 return
 
             if token in string.punctuation:
                 ledger.replace(idx, token)
                 runtime_stats["total"] += 1
+                runtime_stats["skipped_punctuation"] += 1
                 return
 
             is_last_token = idx == len(offsets) - 1
@@ -425,6 +434,8 @@ class DPMlmAnonymizer(Anonymizer):
             ledger.replace(idx, private_token)
             if private_token != token:
                 runtime_stats["perturbed"] += 1
+            else:
+                runtime_stats["same_token"] += 1
             runtime_stats["total"] += 1
 
             if self.add_probability > 0:
@@ -571,6 +582,9 @@ class DPMlmAnonymizer(Anonymizer):
                     "total": 0,
                     "added": 0,
                     "deleted": 0,
+                    "skipped_punctuation": 0,
+                    "skipped_masked": 0,
+                    "same_token": 0,
                 }
                 
                 ledger = TokenLedger(text, offsets)

@@ -17,7 +17,7 @@ class BartRewriter(Rewriter):
             max_tokens=self.max_input_tokens,
         )
 
-    def rewrite(self, text: str, max_length: int = 150, min_length: int = 40, do_sample: bool = False) -> str:
+    def rewrite(self, text: str, max_length: int = 150, min_length: int = 40, **kwargs) -> str:
         chunks = self.chunker.chunk(text)
         
         summaries = []
@@ -26,7 +26,7 @@ class BartRewriter(Rewriter):
                 chunk.text,
                 max_length=max_length,
                 min_length=min_length,
-                do_sample=do_sample,
+                **kwargs
             )
             summaries.append(summary[0]['summary_text'])
         
