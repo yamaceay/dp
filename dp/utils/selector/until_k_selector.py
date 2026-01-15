@@ -69,16 +69,20 @@ class UntilKUnit(AnonymizerUnit):
         for idx in range(len(offsets)):
             if ledger.is_modified(idx):
                 processed.add(idx)
+        
+        unprocessed = set(range(len(offsets))) - processed
+        perturbed_count = 0
         k_values = self.order_thresholds(self._thresholds)
 
         current_text = ledger.render_offsets(text)
-
         current_rank = self._rank_evaluator(current_text, self._target_label)
+        
         for target_k in k_values:
             if current_rank >= target_k:
                 metadata = {
                     "selector": self.SELECTOR_NAME,
                     "processed_count": len(processed),
+                    "perturbed_count": perturbed_count,
                     "rank": current_rank,
                 }
                 yield AnonymizationStep(
@@ -91,24 +95,29 @@ class UntilKUnit(AnonymizerUnit):
                 )
                 continue
 
-            candidates = self._sort_by_risk(
-                [i for i in range(len(offsets)) if i not in processed],
-                len(offsets),
-            )
+            candidates = self._sort_by_risk(list(unprocessed), len(offsets))
             new_indices = []
 
             for idx in candidates:
                 if current_rank >= target_k:
                     break
+                if idx not in unprocessed:
+                    continue
+                
                 apply_fn(idx, ledger)
                 processed.add(idx)
-                new_indices.append(idx)
-                current_text = ledger.render_offsets(text)
-                current_rank = self._rank_evaluator(current_text, self._target_label)
+                unprocessed.discard(idx)
+                
+                if ledger.is_modified(idx):
+                    perturbed_count += 1
+                    new_indices.append(idx)
+                    current_text = ledger.render_offsets(text)
+                    current_rank = self._rank_evaluator(current_text, self._target_label)
 
             metadata = {
                 "selector": self.SELECTOR_NAME,
                 "processed_count": len(processed),
+                "perturbed_count": perturbed_count,
                 "rank": current_rank,
             }
 

@@ -29,6 +29,9 @@ ENV/
 .ipynb_checkpoints/
 *.ipynb
 
+# Temporary files
+temp/
+
 # Output files (large)
 outputs/
 

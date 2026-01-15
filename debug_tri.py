@@ -99,6 +99,7 @@ if __name__ == "__main__":
     detector.load(args.pipeline_in)
     predictions = detector.predict(records)
 
+    mrr = 0.0
     ranks = []
     for record in records:
         prediction = predictions.get(record.uid, {})
@@ -109,11 +110,14 @@ if __name__ == "__main__":
                 rank = position
                 break
         ranks.append(rank)
+        mrr += 1.0 / (rank * len(records))
 
     j = 0
     f = None
     if args.save_to_jsonl:
         f = open(args.save_to_jsonl, 'w', encoding='utf-8')
+    if not args.save_to_jsonl:
+        print(f"Mean Reciprocal Rank (MRR): {mrr:.6f}")
     for i in range(args.start, args.end, args.step):
         if args.max_records and j >= args.max_records:
             break

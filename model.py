@@ -518,6 +518,8 @@ if __name__ == "__main__":
         pre_kwargs["record_names"] = record_names_for_precompute
     if prior_edits_for_precompute is not None:
         pre_kwargs["prior_edits_list"] = prior_edits_for_precompute
+    if precompute_config.get("absolute_risk"):
+        pre_kwargs["absolute_risk"] = True
     model.pre_stream_anonymize(texts_or_indices=anonymization_inputs, risk_scores=pre_risk_scores, **pre_kwargs)
     pre_elapsed = time.time() - pre_start
     print(f"✓ Pre-computation before anonymization completed in {pre_elapsed:.2f}s")

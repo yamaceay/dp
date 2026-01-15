@@ -370,14 +370,14 @@ def plot_bars(results_config: Path, results_set: str, dataset: str, metric: str,
 def main() -> None:
 	parser = argparse.ArgumentParser()
 	parser.add_argument("action", nargs="?", choices=["plot-bars", "list-method-sets", "list-result-sets", "validate"], default="plot-bars")
-	parser.add_argument("--results-config", required=True)
+	parser.add_argument("--methods-config", default="visualize/configs/methods.yaml")
+	parser.add_argument("--methods-set", required=True)
+	parser.add_argument("--results-config", default="visualize/configs/results.yaml")
 	parser.add_argument("--results-set", required=True)
 	parser.add_argument("--dataset", required=True)
 	parser.add_argument("--experiment", required=True)
 	parser.add_argument("--metric", required=True)
 	parser.add_argument("--out", default="visualize/plots")
-	parser.add_argument("--methods-config")
-	parser.add_argument("--methods-set")
 	parser.add_argument("--debug", action="store_true")
 	args = parser.parse_args()
 	

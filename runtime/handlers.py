@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, NamedTuple
 
 import numpy as np
 from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import StratifiedShuffleSplit
 
 from dp.experiments.divergence.io import (
     build_divergence_evaluation_inputs,
@@ -312,36 +313,57 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
             if not source_records:
                 continue
             
-            rng = np.random.default_rng(ctx.random_state)
-            indices = np.arange(len(source_records))
-            rng.shuffle(indices)
-            
-            train_count = int(len(source_records) * train_ratio)
-            val_count = int(len(source_records) * val_ratio)
-            
-            train_indices = indices[:train_count]
-            val_indices = indices[train_count:train_count + val_count]
-            
-            for idx in train_indices:
-                rec = source_records[idx]
+            labels_for_split = []
+            valid_indices = []
+            for idx, rec in enumerate(source_records):
                 v = ctx.spec.target.value(rec)
                 if v is None or not rec.text:
                     continue
                 nv = _normalize_target_value(v, ctx.spec.target.mode)
                 if nv is None:
                     continue
+                labels_for_split.append(nv)
+                valid_indices.append(idx)
+            
+            if not labels_for_split:
+                continue
+            
+            labels_array = np.array(labels_for_split)
+            valid_indices_array = np.array(valid_indices)
+            
+            if train_ratio > 0 and val_ratio > 0:
+                splitter = StratifiedShuffleSplit(
+                    n_splits=1,
+                    test_size=val_ratio / (train_ratio + val_ratio),
+                    random_state=ctx.random_state
+                )
+                train_mask, val_mask = next(splitter.split(valid_indices_array, labels_array))
+                train_indices = valid_indices_array[train_mask]
+                val_indices = valid_indices_array[val_mask]
+            elif train_ratio > 0:
+                train_count = int(len(valid_indices_array) * train_ratio)
+                train_indices = valid_indices_array[:train_count]
+                val_indices = np.array([], dtype=int)
+            elif val_ratio > 0:
+                val_count = int(len(valid_indices_array) * val_ratio)
+                val_indices = valid_indices_array[:val_count]
+                train_indices = np.array([], dtype=int)
+            else:
+                train_indices = np.array([], dtype=int)
+                val_indices = np.array([], dtype=int)
+            
+            for idx in train_indices:
+                rec = source_records[int(idx)]
+                v = ctx.spec.target.value(rec)
+                nv = _normalize_target_value(v, ctx.spec.target.mode)
                 train_texts_override.append(rec.text)
                 train_labels_override.append(nv)
                 train_uids.append(rec.uid or f"record_{idx}")
             
             for idx in val_indices:
-                rec = source_records[idx]
+                rec = source_records[int(idx)]
                 v = ctx.spec.target.value(rec)
-                if v is None or not rec.text:
-                    continue
                 nv = _normalize_target_value(v, ctx.spec.target.mode)
-                if nv is None:
-                    continue
                 test_texts_override.append(rec.text)
                 test_labels_override.append(nv)
                 test_uids.append(rec.uid or f"record_{idx}")

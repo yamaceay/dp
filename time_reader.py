@@ -82,14 +82,13 @@ for dataset, pdir, file in files:
                         if re.match(re.compile(runtime_base.replace("*", ".*")), f):
                             all_paths.append(f.replace(".yaml", "").removeprefix(param + "_"))
                     
+                    max_path = None
                     if param == "k":
-                        all_paths = [int(v) for v in all_paths]
-                        all_paths.sort()
+                        max_path = max(map(int, all_paths))
                     elif param in {"rho", "lambda"}:
-                        all_paths = [float(v) / 100.0 for v in all_paths]
-                        all_paths.sort()
+                        max_path = min(map(lambda v: float(v) / 100.0, all_paths))
 
-                    runtimes_grouped.setdefault(param, []).extend(all_paths)
+                    runtimes_grouped[param] = max_path
 
         matches = re.search(time_pattern, content, re.MULTILINE)
         if not matches:

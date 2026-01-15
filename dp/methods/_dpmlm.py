@@ -32,6 +32,7 @@ class DPMlmAnonymizer(Anonymizer):
         add_probability: float = 0.0,
         delete_probability: float = 0.0,
         risk_temperature: Optional[float] = None,
+        max_retry_rounds: int = 3,
         **kwargs
     ):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
@@ -45,6 +46,7 @@ class DPMlmAnonymizer(Anonymizer):
         self.add_probability = add_probability
         self.delete_probability = delete_probability
         self.risk_temperature = risk_temperature
+        self.max_retry_rounds = max_retry_rounds
 
         self._unit: Optional[AnonymizerUnit] = None
         self._explainer = None
@@ -86,6 +88,7 @@ class DPMlmAnonymizer(Anonymizer):
         self,
         risk_scores: Dict[str, Dict[str, object]],
         records: Optional[Sequence[DatasetRecord]] = None,
+        absolute_risk: bool = False,
     ) -> None:
         self._risk_scores_by_uid = {}
         self._risk_offsets_by_uid = {}
@@ -119,7 +122,8 @@ class DPMlmAnonymizer(Anonymizer):
                     continue
                 try:
                     span_key = (int(span[0]), int(span[1]))
-                    span_map[span_key] = float(value)
+                    score_val = float(value)
+                    span_map[span_key] = abs(score_val) if absolute_risk else score_val
                     raw_spans.append(span_key)
                 except (TypeError, ValueError):
                     continue
@@ -157,6 +161,7 @@ class DPMlmAnonymizer(Anonymizer):
         self,
         *args,
         risk_scores: Optional[Dict[str, Dict[str, object]]] = None,
+        absolute_risk: bool = False,
         **kwargs,
     ) -> None:
         if risk_scores is not None:
@@ -165,7 +170,7 @@ class DPMlmAnonymizer(Anonymizer):
                     "DPMlmAnonymizer received precomputed risk_scores but has no dataset records; "
                     "run in dataset mode (use --indices) so risk scores can be matched to records"
                 )
-            self.set_risk_scores(risk_scores, records=self.dataset_records or None)
+            self.set_risk_scores(risk_scores, records=self.dataset_records or None, absolute_risk=absolute_risk)
 
     def anonymize_from_dataset(
         self,
@@ -433,6 +438,24 @@ class DPMlmAnonymizer(Anonymizer):
 
         return apply_fn
 
+    def _wrap_apply_fn_with_retry(
+        self,
+        base_apply_fn: ApplyFn,
+        ledger: TokenLedger,
+        offsets: List[Tuple[int, int]],
+        max_rounds: int,
+    ) -> ApplyFn:
+        retry_counts: Dict[int, int] = {}
+
+        def apply_fn_with_retry(idx: int, led: TokenLedger) -> None:
+            for _ in range(max_rounds):
+                base_apply_fn(idx, led)
+                if led.is_modified(idx):
+                    return
+                retry_counts[idx] = retry_counts.get(idx, 0) + 1
+
+        return apply_fn_with_retry
+
     def _collect_risk_scores(
         self,
         text: str,
@@ -483,11 +506,18 @@ class DPMlmAnonymizer(Anonymizer):
         combos = buckets_to_dicts(buckets)
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
 
+        from dp.utils.selector.by_risk_selector import ByRiskUnit
+        from dp.utils.selector.pii_only_selector import PIIOnlyUnit
+        from dp.utils.selector.until_k_selector import UntilKUnit
+
+        combos_by_epsilon: Dict[float, List[BucketDict]] = {}
         for hp in combos:
             eps_val = hp.get("epsilon")
             if eps_val is None:
                 raise ValueError("DPMlmAnonymizer requires epsilon via Buckets (EpsilonParam)")
+            combos_by_epsilon.setdefault(float(eps_val), []).append(hp)
 
+        for eps_val, eps_combos in combos_by_epsilon.items():
             try:
                 precomputed_offsets = self._resolve_precomputed_offsets(record_name, record_uid)
                 if precomputed_offsets is None:
@@ -499,24 +529,21 @@ class DPMlmAnonymizer(Anonymizer):
                     from dp.utils.selector.all_selector import AllUnit
                     self._unit = AllUnit()
 
-                from dp.utils.selector.by_risk_selector import ByRiskUnit
-                from dp.utils.selector.pii_only_selector import PIIOnlyUnit
-                from dp.utils.selector.until_k_selector import UntilKUnit
                 if isinstance(self._unit, UntilKUnit):
-                    k_val = hp.get("k")
-                    if k_val is None:
+                    k_vals = [int(hp.get("k")) for hp in eps_combos if hp.get("k") is not None]
+                    if not k_vals:
                         raise ValueError("DPMlmAnonymizer using until_k selector requires KParams buckets")
-                    self._unit.set_thresholds([int(k_val)], name="k")
+                    self._unit.set_thresholds(k_vals, name="k")
                 elif isinstance(self._unit, ByRiskUnit):
-                    rho_val = hp.get("rho")
-                    if rho_val is None:
+                    rho_vals = [float(hp.get("rho")) for hp in eps_combos if hp.get("rho") is not None]
+                    if not rho_vals:
                         raise ValueError("DPMlmAnonymizer using by_risk selector requires RhoParams buckets")
-                    self._unit.set_thresholds([float(rho_val)], name="rho")
+                    self._unit.set_thresholds(rho_vals, name="rho")
                 elif isinstance(self._unit, PIIOnlyUnit):
-                    lambda_val = hp.get("lambda")
-                    if lambda_val is None:
+                    lambda_vals = [float(hp.get("lambda")) for hp in eps_combos if hp.get("lambda") is not None]
+                    if not lambda_vals:
                         raise ValueError("DPMlmAnonymizer using pii_only selector requires LambdaParams buckets")
-                    self._unit.set_thresholds([float(lambda_val)], name="lambda")
+                    self._unit.set_thresholds(lambda_vals, name="lambda")
 
                 if isinstance(self._unit, UntilKUnit):
                     target_label_id = self._target_label_id_for_record(record_name)
@@ -557,11 +584,34 @@ class DPMlmAnonymizer(Anonymizer):
                     masked_spans,
                 )
 
-                for step in self._unit.anonymize(text, offsets, apply_fn, ledger, **context):
-                    hp_with_threshold = {**hp}
+                if isinstance(self._unit, UntilKUnit) and self.max_retry_rounds > 0:
+                    wrapped_apply_fn = self._wrap_apply_fn_with_retry(
+                        apply_fn, ledger, offsets, self.max_retry_rounds
+                    )
+                else:
+                    wrapped_apply_fn = apply_fn
+
+                for step in self._unit.anonymize(text, offsets, wrapped_apply_fn, ledger, **context):
                     threshold = step.threshold
+                    threshold_type = step.threshold_type
+                    
+                    matching_hp = None
+                    for hp in eps_combos:
+                        if threshold_type == "k" and hp.get("k") == threshold:
+                            matching_hp = hp
+                            break
+                        elif threshold_type == "rho" and hp.get("rho") == threshold:
+                            matching_hp = hp
+                            break
+                        elif threshold_type == "lambda" and hp.get("lambda") == threshold:
+                            matching_hp = hp
+                            break
+                    
+                    if matching_hp is None:
+                        matching_hp = eps_combos[0] if eps_combos else {"epsilon": eps_val}
+                    
+                    hp_with_threshold = {**matching_hp}
                     if threshold is not None:
-                        threshold_type = step.threshold_type
                         if threshold_type not in {"lambda", "rho", "k"}:
                             raise ValueError(f"Unknown threshold name: {threshold_type!r}")
                         hp_with_threshold[threshold_type] = threshold
@@ -594,7 +644,6 @@ class DPMlmAnonymizer(Anonymizer):
                             metadata=metadata,
                         ),
                     ))
-                    last_step = step
 
             finally:
                 clear_memory()

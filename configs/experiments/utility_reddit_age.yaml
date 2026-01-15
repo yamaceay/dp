@@ -14,11 +14,9 @@ target:
 selection_criteria:
   feature: age
 split:
-  - train: 0.0
-    val: 1.0
   - path: data/reddit/synthetic_dataset.jsonl
-    train: 1.0
-    val: 0.0
+    train: 0.75
+    val: 0.25
 random_state: 42
 include_confusion_matrix: true
 head:
@@ -28,6 +26,11 @@ head:
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
     checkpoint_dir: models/tri_pipelines/reddit/utility_age
     mask_stopwords: true
+    primary_metric: macro_mae
+    encoder_lr: 5e-6
+    head_lr: 1e-4
+    batch_size: 4
+    epochs: 3
 output:
   format: jsonl
   file: logs/reddit_age_exp.jsonl

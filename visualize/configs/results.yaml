@@ -36,6 +36,12 @@ results:
   privacy_tab:
     dataset: tab
     flat: tab/privacy.json
+  runtime_reddit:
+    dataset: reddit
+    flat: reddit/runtime.json
+  runtime_tab:
+    dataset: tab
+    flat: tab/runtime.json
   divergence_reddit:
     dataset: reddit
     flat: reddit/divergence.json
