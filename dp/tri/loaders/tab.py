@@ -23,6 +23,7 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         rewriter_min_length: int = 80,  # originally 40
         max_background_tokens: int = 512,
         rewrite_background: bool = True,
+        n_samples: int = 3,
     ):
         adapter = TabDatasetAdapter(
             data=data,
@@ -46,6 +47,7 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         )
         self.set_rewriter(rewriter)
         self.rewrite_background = rewrite_background
+        self.n_samples = n_samples
 
     def _get_background_chunker(self) -> TokenAwareChunker:
         if self._background_chunker is None:
@@ -98,8 +100,10 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         if self.rewrite_background:
             rewritten_background = []
             for background_key, background_text in background:
-                rewritten_text = self.rewriter.rewrite(background_text)
-                rewritten_background.append((background_key, rewritten_text))
+                kwargs = {"max_length": 256, "min_length": 128, "do_sample": True, "top_k": 50, "top_p": 0.95, "temperature": 1.2}
+                for _ in range(self.n_samples):
+                    rewritten_text = self.rewriter.rewrite(background_text, **kwargs)
+                    rewritten_background.append((background_key, rewritten_text))
             background = rewritten_background
 
         return background

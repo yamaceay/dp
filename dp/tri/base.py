@@ -24,7 +24,15 @@ from dp.loaders.base import DatasetRecord
 from dp.utils.chunking import TokenAwareChunker, ProbabilityAggregator, process_with_chunking
 
 class TRIDataset(Dataset):
-    def __init__(self, records: List[DatasetRecord], tokenizer, name_to_label: Dict[str, int], max_length: int, use_labels: bool = True, stride_fraction: float = 0.25):
+    def __init__(
+        self,
+        records: List[DatasetRecord],
+        tokenizer,
+        name_to_label: Dict[str, int],
+        max_length: int,
+        use_labels: bool = True,
+        stride_fraction: float = 0.25,
+    ):
         if not records:
             raise ValueError("records cannot be empty")
         if max_length <= 0:
