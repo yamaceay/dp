@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH --array=0-5%3
-#SBATCH --job-name=tri_tab_grid
+#SBATCH --array=0-1%2
+#SBATCH --job-name=data_for_tab
 #SBATCH --output=logs/%x/%a_%j.out
 #SBATCH --error=logs/%x/%a_%j.err
-#SBATCH --partition=batch
+#SBATCH --partition=V100-32GB
 #SBATCH --nodes=1
 #SBATCH --mem-per-cpu=6G
 #SBATCH --ntasks=1
@@ -18,12 +18,8 @@ JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
 job_names=(
-  "tri_tab_grid/tri_tab_s1_lr5e-5_0"
-  "tri_tab_grid/tri_tab_s1_deid_lr5e-5_1"
-  "tri_tab_grid/tri_tab_s2_lr5e-5_2"
-  "tri_tab_grid/tri_tab_s2_deid_lr5e-5_3"
-  "tri_tab_grid/tri_tab_s3_lr5e-5_4"
-  "tri_tab_grid/tri_tab_s3_deid_lr5e-5_5"
+  "data_for_tab/tab_deid_0"
+  "data_for_tab/tab_sum_1"
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"

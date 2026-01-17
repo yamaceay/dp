@@ -1,0 +1,16 @@
+dataset: tab
+data_path: data/TAB/splitted/test.json
+attacker_extensions: data/TAB/test_bk_deid.jsonl
+model_name: bert-base-uncased
+output_root: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/s2
+max_records: null
+max_length: 512
+device: cpu
+
+training:
+  finetuning_epochs: 15
+  batch_size: 8
+  use_pretraining: true
+  pretraining_epochs: 1
+  per_step: null
+  early_stop_threshold: null

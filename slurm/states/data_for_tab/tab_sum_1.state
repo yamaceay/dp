@@ -1,0 +1,3 @@
+1
+1
+uv run python data_for_tri.py --data tab --data_in data/TAB/splitted/test.json --save_to_jsonl data/TAB/test_bk_sum.jsonl

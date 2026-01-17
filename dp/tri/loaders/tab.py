@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from dp.loaders.base import DatasetRecord
 from dp.loaders.tab import TabDatasetAdapter
 from dp.tri.loaders.base import AttackerDatasetAdapter
 from dp.utils.chunking import TokenAwareChunker
 from dp.utils.rewriter import BartRewriter
+
+def resolve_device() -> Union[str, int]:
+    import torch
+    if torch.cuda.is_available():
+        return 'cuda'
+    elif torch.backends.mps.is_available():
+        return 'mps'
+    else:
+        return 'cpu'
 
 class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
@@ -18,7 +27,7 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         step: Optional[int] = None,
         max_records: Optional[int] = None,
         rewriter_model_name: str = "facebook/bart-large-cnn",
-        rewriter_device: str | int = "mps",
+        rewriter_device: Optional[Union[str, int]] = None,
         rewriter_max_length: int = 256, # originally 150
         rewriter_min_length: int = 80,  # originally 40
         max_background_tokens: int = 512,
@@ -40,6 +49,8 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
             rewriter_min_length=rewriter_min_length,
         )
         self._background_chunker: Optional[TokenAwareChunker] = None
+        if rewriter_device is None:
+            rewriter_device = resolve_device()
         rewriter = BartRewriter(
             model_name=rewriter_model_name,
             device=rewriter_device,
