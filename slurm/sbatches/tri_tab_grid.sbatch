@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --array=0-5%3
+#SBATCH --array=0-5%6
 #SBATCH --job-name=tri_tab_grid
 #SBATCH --output=logs/%x/%a_%j.out
 #SBATCH --error=logs/%x/%a_%j.err

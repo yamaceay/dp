@@ -8,7 +8,7 @@ max_length: 512
 device: cpu
 
 training:
-  finetuning_epochs: 15
+  finetuning_epochs: 10
   batch_size: 8
   use_pretraining: true
   pretraining_epochs: 1
