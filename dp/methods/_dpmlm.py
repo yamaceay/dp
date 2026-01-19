@@ -597,15 +597,12 @@ class DPMlmAnonymizer(Anonymizer):
                     runtime_stats,
                     masked_spans,
                 )
-
-                if isinstance(self._unit, UntilKUnit) and self.max_retry_rounds > 0:
-                    wrapped_apply_fn = self._wrap_apply_fn_with_retry(
+                if self.max_retry_rounds > 0:
+                    apply_fn = self._wrap_apply_fn_with_retry(
                         apply_fn, ledger, offsets, self.max_retry_rounds
                     )
-                else:
-                    wrapped_apply_fn = apply_fn
 
-                for step in self._unit.anonymize(text, offsets, wrapped_apply_fn, ledger, **context):
+                for step in self._unit.anonymize(text, offsets, apply_fn, ledger, **context):
                     threshold = step.threshold
                     threshold_type = step.threshold_type
                     
