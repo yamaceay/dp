@@ -163,13 +163,15 @@ For PETRE comparisons, we use a one-shot risk ordering computed once before anon
 
 \subsection{Datasets}
 
-We use two datasets: TAB and PersonalReddit. TAB \cite{pilan_text_2022} provides a controlled setting for text re-identification with approximately 1.5k record samples that include text, metadata, and entity annotations, which enables PII detection training and evaluation. For privacy and utility assessment, we use the test split with 127 records from 127 distinct individuals. We define a lightweight downstream task for TAB, such as predicting macro-region or year of the court case, to quantify utility without adding new annotation work.
+We use two datasets: TAB and PersonalReddit. TAB \cite{pilan_text_2022} provides a controlled setting for text re-identification with approximately 1.5k record samples that include text, metadata, and entity annotations, which enables PII detection training and evaluation. For privacy and utility assessment, we use the test split with 127 records from 126 distinct individuals. We define a lightweight downstream task for TAB, such as predicting macro-region or year of the court case, to quantify utility without adding new annotation work.
 
 PersonalReddit \cite{staab_beyond_2024} consists of persona-grounded dialogues with demographic attributes that support both privacy and utility evaluation. The train and test files contain 525 answers from 40 distinct individuals in total, which provides enough identity repetition for re-identification experiments. We use the demographic attributes as downstream labels for utility evaluation.
 
 \subsection{Data Preparation}
 
-We construct proxy background knowledge for training TRI models to avoid overfitting to the target records. This background knowledge is ideally de-identified and theoretically unbounded, but can also be derived from the original records when external data is unavailable. Models are trained on this auxiliary information and validated and tested on the de-identified target records. This setup reflects an adversary who acquires contextual knowledge prior to targeting specific instances and introduces lexical variation that reduces memorization.
+Standard machine learning practice requires disjoint training and evaluation sets to prevent information leakage. Training the TRI attacker directly on the target records would cause severe overfitting, yielding high accuracy without learning generalizable re-identification patterns. To address this, we construct proxy background knowledge for training: a separate corpus that represents prior writings or contextual information an adversary might realistically obtain before targeting specific individuals.
+
+This proxy knowledge is ideally de-identified and lexically distinct from the target records, though it can be derived from original records when external data is unavailable. The key requirement is separation: TRI models are trained on background knowledge and evaluated on de-identified target records. This setup aligns with the static adversary assumption introduced in Section~\ref{sec:preliminaries}, where the attacker acquires contextual information prior to observing anonymized outputs. The lexical variation between training and evaluation data reduces memorization and ensures that measured re-identification risk reflects genuine linguistic patterns rather than surface-level overlap.
 
 \section{Experimental Setup}
 
@@ -179,7 +181,7 @@ To select suitable text re-identification (TRI) models for each dataset, we perf
 
 We use two TRI pipelines per dataset. The baseline pipeline trains on original background knowledge and evaluates on original records to produce baseline accuracy and a reference rank distribution. The de-identified pipeline trains on Presidio-de-identified background knowledge and evaluates on de-identified records for rank evaluation and token-risk estimation. Presidio \footnote{\url{https://microsoft.github.io/presidio/}} is an open-source NER-based PII detection and masking tool.
 
-For TAB, the optimal setting used 20 training epochs with pretrained initialization, a batch size of 16, and a learning rate of $5 \times 10^{-5}$. 
+For TAB, the optimal setting used 10 training epochs with pretrained initialization, a batch size of 8, and a learning rate of $5 \times 10^{-5}$. 
 
 For PersonalReddit, the best configuration used 15 epochs, pretraining on the corpus, a batch size of 32, and a learning rate of $5 \times 10^{-5}$.
 
@@ -212,32 +214,31 @@ We map each target to a head based on the label type. Nominal labels use a softm
 
 \subsection{Text Similarity}
 
-As a complementary signal, we compute the distance between original and anonymized texts to characterize the privacy--utility trade-off. We report BLEU and cosine similarity as lightweight baselines, and include BERTScore and MoverScore to capture contextual similarity.
+As a complementary signal, we compute the distance between original and anonymized texts to characterize the privacy-utility trade-off. We report cosine similarity as a lightweight baseline, and include BERTScore to capture contextual similarity.
 
-% \section{Results}
+\section{Results}
 
-% We report privacy, utility, and runtime results for all variants and datasets.
+We report privacy, utility, and runtime results for all variants and datasets.
 
-% \begin{table}[!htp]
-% \centering
-% \small
-% \setlength{\tabcolsep}{4pt}
-% \begin{tabularx}{\columnwidth}{|l|X|X|X|}
-% \hline
-% \textbf{Method} & \textbf{Privacy} & \textbf{Utility} & \textbf{Runtime} \\
-% \hline
-%  &  &  &  \\
-% \hline
-% \end{tabularx}
-% \caption{Placeholder results table to be filled with privacy, utility, and runtime metrics.}
-% \label{tab:results-overview}
-% \end{table}
-
+\begin{table}[!htp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\columnwidth}{|l|X|X|X|X|}
+\hline
+\textbf{Method} & \textbf{Privacy (Rank)} & \textbf{Utility (Drop)} & \textbf{BERTScore} & \textbf{Runtime} \\
+\hline
+ &  &  &  &  \\
+\hline
+\end{tabularx}
+\caption{Placeholder results table to be filled with privacy, utility, text similarity, and runtime metrics.}
+\label{tab:results-overview}
+\end{table}
 
 % To select the best text re-identification models for each dataset, we conducted hyperparameter grid search with learning rates $2 \times 10^{-5}, 5 \times 10^{-5}, 10^{-4}, 2 \times 10^{-4}$. The optimal hyperparameters for the training:
 
 % \begin{itemize}
-%     \item TAB dataset: Epochs = 20, Pretraining, Batch size = 16, Learning rate = $5 \times 10^{-5}$. Reached $78.57\%$ accuracy.
+%     \item TAB dataset: Epochs = 10, Pretraining, Batch size = 8, Learning rate = $5 \times 10^{-5}$. Reached $78.57\%$ accuracy.
 %     \item Reddit dataset: Epochs = 15, Pretraining, Batch size = 32, Learning rate = $5 \times 10^{-5}$. Reached $95\%$ accuracy.
 % \end{itemize}
 

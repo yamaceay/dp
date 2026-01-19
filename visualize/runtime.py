@@ -106,9 +106,9 @@ for dataset, pdir, file in files:
             "dataset": dataset_name,
             "method": unique_name,
             "params": runtimes_grouped,
-            "total_seconds": total_time,
-            "mean_seconds_per_text": avg_time_per_text,
-            "mean_texts_per_second": throughput,
+            "runtime_total_seconds": total_time,
+            "runtime_mean_seconds_per_text": avg_time_per_text,
+            "runtime_mean_texts_per_second": throughput,
         })
 
 time_stats_by_dataset = {}

@@ -208,6 +208,7 @@ class BarPlotter:
 		rows = self._filter_rows_without_param("epsilon")
 		if not rows:
 			return
+		print(rows)
 		self._create_bar_chart(rows, "no_eps")
 	
 	def _plot_with_epsilon(self, eps_param: str) -> None:
@@ -215,9 +216,12 @@ class BarPlotter:
 		eps_values = self._extract_unique_values(eps_param)
 		for eps_value in eps_values:
 			rows = self._filter_rows_with_param(eps_param, eps_value)
-			if rows:
-				safe_eps = str(eps_value).replace(".", "_")
-				self._create_bar_chart(rows, f"eps_{safe_eps}", eps_param)
+			if not rows:
+				continue
+			safe_eps = str(eps_value).replace(".", "_")
+			if self.config.debug:
+				print(rows)
+			self._create_bar_chart(rows, f"eps_{safe_eps}", eps_param)
 	
 	def _create_bar_chart(self, rows: List[Dict[str, Any]], filename: str, exclude_param: str = "") -> None:
 		grouped = self._group_by_method(rows)

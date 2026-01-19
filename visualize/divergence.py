@@ -59,27 +59,15 @@ def read_data(files: Sequence[Tuple[str, str]]) -> Iterable[Dict[str, Any]]:
 def build_summaries() -> None:
     entries = list(read_data(FILES))
     entries = sorted(entries, key=lambda x: (x["method"], params_to_str_for_sort(x["params"])))
-    by_dataset_by_method: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+    by_dataset: Dict[str, List[Dict[str, Any]]] = {}
     for entry in entries:
-        e = entry.copy()
-        dataset = e.pop("dataset")
-        method = e.pop("method")
-        by_dataset_by_method.setdefault(dataset, {}).setdefault(method, []).append(e)
-    by_dataset_by_params: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
-    for entry in entries:
-        e = entry.copy()
-        dataset = e.pop("dataset")
-        params = params_to_str(e.pop("params"))
-        by_dataset_by_params.setdefault(dataset, {}).setdefault(params, []).append(e)
+        dataset = entry["dataset"]
+        by_dataset.setdefault(dataset, []).append(entry)
     Path("visualize/pretty").mkdir(parents=True, exist_ok=True)
-    with open("visualize/pretty/divergence.json", "w", encoding="utf-8") as f:
-        json.dump(entries, f, indent=2)
-    for dataset in by_dataset_by_method:
-        with open(f"visualize/pretty/divergence_by_method_{dataset}.json", "w", encoding="utf-8") as f:
-            json.dump(by_dataset_by_method[dataset], f, indent=2)
-    for dataset in by_dataset_by_params:
-        with open(f"visualize/pretty/divergence_by_params_{dataset}.json", "w", encoding="utf-8") as f:
-            json.dump(by_dataset_by_params[dataset], f, indent=2)
+    for dataset, dataset_entries in by_dataset.items():
+        Path(f"visualize/pretty/{dataset}").mkdir(parents=True, exist_ok=True)
+        with open(f"visualize/pretty/{dataset}/divergence.json", "w", encoding="utf-8") as f:
+            json.dump(dataset_entries, f, indent=2)
 
 if __name__ == "__main__":
     build_summaries()

@@ -35,16 +35,18 @@ if [ "$DATASET" != "reddit" ] && [ "$DATASET" != "tab" ]; then
 fi
 
 cmds=()
-if [ "$TYPE" = "utility" ] || [ "$TYPE" = "divergence" ]; then
+if [ "$TYPE" = "utility" ]; then
     if [ "$SKIP_RUN" = false ]; then
         cmds+=("python3 run.py ${TYPE} --config configs/experiments/${TYPE}_${DATASET}_${LABEL}.yaml")
     fi
-    cmds+=("python3 visualize/${TYPE}.py")
 elif [ "$TYPE" = "privacy" ]; then 
     if [ "$SKIP_RUN" = false ]; then
         cmds+=("python3 run.py ${TYPE} --config configs/experiments/${TYPE}_${DATASET}_tri.yaml")
     fi
-    cmds+=("python3 visualize/${TYPE}.py")
+elif [ "$TYPE" = "divergence" ]; then
+    if [ "$SKIP_RUN" = false ]; then
+        cmds+=("python3 run.py ${TYPE} --config configs/experiments/${TYPE}_${DATASET}_${METRIC}.yaml")
+    fi
 fi
 
 result_set="${TYPE}_${DATASET}"
@@ -53,6 +55,8 @@ if [ -n "$LABEL" ]; then
     result_set+="_${LABEL}"
     metric+="_${LABEL}"
 fi
+
+cmds+=("python3 visualize/${TYPE}.py")
 cmds+=("python3 visualize/summary_plots.py --results-set ${result_set} --methods-set lrec_paper --dataset ${DATASET} --experiment ${TYPE} --metric ${metric} --debug")
 
 for cmd in "${cmds[@]}"; do
