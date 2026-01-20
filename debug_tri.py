@@ -93,41 +93,45 @@ if __name__ == "__main__":
 
     records = records[args.start:args.end:args.step][:args.max_records or len(records)]
 
-    if not args.pipeline_in:
-        raise ValueError("pipeline_in is required")
-    detector = TRIDetectorWithBK(dataset_name=args.data)
-    detector.load(args.pipeline_in)
-    predictions = detector.predict(records)
+    mrr = None
+    ranks = None
 
-    mrr = 0.0
-    ranks = []
-    for record in records:
-        prediction = predictions.get(record.uid, {})
-        ordered = sorted(prediction.items(), key=lambda item: item[1], reverse=True)
-        rank = None
-        for position, (candidate, _) in enumerate(ordered, start=1):
-            if candidate == record.name:
-                rank = position
-                break
-        ranks.append(rank)
-        mrr += 1.0 / (rank * len(records))
+    if args.pipeline_in:
+        detector = TRIDetectorWithBK(dataset_name=args.data)
+        detector.load(args.pipeline_in)
+        predictions = detector.predict(records)
+
+        mrr = 0.0
+        ranks = []
+        for record in records:
+            prediction = predictions.get(record.uid, {})
+            ordered = sorted(prediction.items(), key=lambda item: item[1], reverse=True)
+            rank = None
+            for position, (candidate, _) in enumerate(ordered, start=1):
+                if candidate == record.name:
+                    rank = position
+                    break
+            ranks.append(rank)
+            mrr += 1.0 / (rank * len(records))
 
     j = 0
     f = None
     if args.save_to_jsonl:
         f = open(args.save_to_jsonl, 'w', encoding='utf-8')
-    if not args.save_to_jsonl:
+    if not args.save_to_jsonl and args.pipeline_in:
         print(f"Mean Reciprocal Rank (MRR): {mrr:.6f}")
     for i in range(args.start, args.end, args.step):
         if args.max_records and j >= args.max_records:
             break
         if not args.save_to_jsonl:
-            print(f"Record UID: {records[j].uid} | Evaluated Rank: {ranks[j]}")
+            if args.pipeline_in:
+                print(f"Record UID: {records[j].uid} | Evaluated Rank: {ranks[j]}")
             if args.full_record and args.risk_in and args.result_in:
                 for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
                     print(f"Token: '{token}' | Offset: {offset} | Score: {score}")
         else:
-            f.write(json.dumps({"uid": records[j].uid, "rank": ranks[j]}) + '\n')
+            if args.pipeline_in:
+                f.write(json.dumps({"uid": records[j].uid, "rank": ranks[j]}) + '\n')
             if args.risk_in and args.result_in:
                 for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
                     f.write(json.dumps({"uid": records[j].uid, "token": token, "offset": offset, "score": score}) + '\n')
