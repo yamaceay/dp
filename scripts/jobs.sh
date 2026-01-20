@@ -76,6 +76,14 @@ function all_datasets() {
   # printf 'db_bio,data/db_bio/train/data-00000-of-00001.arrow\n'
 }
 
+function retry_by_dataset() {
+  if [[ "$1" == "tab" ]]; then
+    echo "5"
+  else
+    echo ""
+  fi
+}
+
 function runtime_args_for_method() {
   case "$1" in
     baroud)
@@ -97,6 +105,19 @@ function runtime_args_for_method() {
       echo ""
       ;;
   esac
+}
+
+function extra_args_for_method_dataset() {
+  local method="$1"
+  local dataset="$2"
+  if [[ "$method" == "dpmlm" || "$method" == "dpmlm_longformer" ]]; then
+    local retry=$(retry_by_dataset "$dataset")
+    if [[ -n "$retry" ]]; then
+      echo "--set max_retry_rounds=$retry"
+      return
+    fi
+  fi
+  echo ""
 }
 
 function runtime_specs_from_model_config() {
@@ -282,11 +303,13 @@ function all_methods_runtimes() {
                 runtime_args="$runtime_args ${arg_patterns[*]}"
               fi
 
+              extra_args=$(extra_args_for_method_dataset "$method_base" "$dataset_name")
               cmd=$(printf "$cmd_tpl" \
                   "$dataset_name" "$dataset_path" \
                   "$method_base" "$method_path" \
                   "$runtime_args" \
-                  "$job_name")
+                  "$job_name" \
+                  "$extra_args")
 
               printf '%s|%s\n' "$job_name" "$cmd"
             done
@@ -304,11 +327,13 @@ function all_methods_runtimes() {
             job_name="${dataset_name}_${method_base}_${method_unique_config}"
           fi
 
+          extra_args=$(extra_args_for_method_dataset "$method_base" "$dataset_name")
           cmd=$(printf "$cmd_tpl" \
               "$dataset_name" "$dataset_path" \
               "$method_base" "$method_path" \
               "$runtime_args" \
-              "$job_name")
+              "$job_name" \
+              "$extra_args")
 
           printf '%s|%s\n' "$job_name" "$cmd"
           continue
@@ -357,11 +382,13 @@ function all_methods_runtimes() {
               job_name="${dataset_name}_${method_base}_${method_unique_config}_${eps_name_padded}"
             fi
 
+            extra_args=$(extra_args_for_method_dataset "$method_base" "$dataset_name")
             cmd=$(printf "$cmd_tpl" \
                 "$dataset_name" "$dataset_path" \
                 "$method_base" "$method_path" \
                 "--runtime_in $eps_path" \
-                "$job_name")
+                "$job_name" \
+                "$extra_args")
 
             printf '%s|%s\n' "$job_name" "$cmd"
           done
@@ -373,11 +400,13 @@ function all_methods_runtimes() {
         else
           job_name="${dataset_name}_${method_base}_${method_unique_config}"
         fi
+        extra_args=$(extra_args_for_method_dataset "$method_base" "$dataset_name")
         cmd=$(printf "$cmd_tpl" \
             "$dataset_name" "$dataset_path" \
             "$method_base" "$method_path" \
             "$runtime_args" \
-            "$job_name")
+            "$job_name" \
+            "$extra_args")
         
         printf '%s|%s\n' "$job_name" "$cmd"
       done

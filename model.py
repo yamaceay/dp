@@ -56,6 +56,57 @@ def load_config(path: Optional[str]) -> dict:
         return yaml.safe_load(f) or {}
 
 
+def _parse_scalar(raw: str) -> Any:
+    value = raw.strip()
+    lowered = value.lower()
+    if lowered in {"null", "none"}:
+        return None
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    try:
+        if value.startswith("0") and len(value) > 1 and value[1].isdigit() and not value.startswith("0."):
+            raise ValueError
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+
+def _apply_set_overrides(cfg: Dict[str, Any], overrides: Optional[List[str]]) -> None:
+    if not overrides:
+        return
+    for spec in overrides:
+        if not isinstance(spec, str) or "=" not in spec:
+            raise ValueError(f"Invalid --set override (expected key=value): {spec!r}")
+        key_raw, value_raw = spec.split("=", 1)
+        key_raw = key_raw.strip()
+        if not key_raw:
+            raise ValueError(f"Invalid --set override (empty key): {spec!r}")
+        value = _parse_scalar(value_raw)
+        parts = [p.strip() for p in key_raw.split(".") if p.strip()]
+        if not parts:
+            raise ValueError(f"Invalid --set override (empty key path): {spec!r}")
+        cur: Any = cfg
+        for part in parts[:-1]:
+            if not isinstance(cur, dict):
+                raise ValueError(f"Invalid --set path (not a mapping at '{part}'): {key_raw}")
+            nxt = cur.get(part)
+            if nxt is None:
+                nxt = {}
+                cur[part] = nxt
+            if not isinstance(nxt, dict):
+                raise ValueError(f"Invalid --set path (existing non-mapping at '{part}'): {key_raw}")
+            cur = nxt
+        if not isinstance(cur, dict):
+            raise ValueError(f"Invalid --set path (not a mapping): {key_raw}")
+        cur[parts[-1]] = value
+
+
 def _normalize_param_patterns(value: object) -> List[str]:
     if value is None:
         return []
@@ -410,6 +461,12 @@ if __name__ == "__main__":
     data_keys = add_data_args(parser)
     model_keys = add_model_args(parser)
     runtime_keys = add_runtime_args(parser)
+    parser.add_argument(
+        "--set",
+        dest="set_overrides",
+        action="append",
+        default=None,
+    )
     
     args = parser.parse_args()
     data_kwargs = {k: getattr(args, k) for k in data_keys}
@@ -418,6 +475,7 @@ if __name__ == "__main__":
     runtime_bundle = load_runtime_bundle(runtime_kwargs.pop("runtime_in", None))
     
     model_config = load_config(args.model_in)
+    _apply_set_overrides(model_config, args.set_overrides)
     precompute_config = extract_precompute_config(model_config)
     if data_kwargs.get("result_in") is None and precompute_config.get("result_in") is not None:
         data_kwargs["result_in"] = precompute_config.get("result_in")

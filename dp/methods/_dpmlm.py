@@ -32,7 +32,7 @@ class DPMlmAnonymizer(Anonymizer):
         add_probability: float = 0.0,
         delete_probability: float = 0.0,
         risk_temperature: Optional[float] = None,
-        max_retry_rounds: int = 5,
+        max_retry_rounds: int = 1,
         **kwargs
     ):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
