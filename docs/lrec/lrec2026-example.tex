@@ -189,18 +189,20 @@ For PersonalReddit, the best configuration used 15 epochs, pretraining on the co
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\begin{tabularx}{\columnwidth}{|l|X|X|l|}
+\begin{tabularx}{\columnwidth}{|l|X|X|l|l|l|l|}
 \hline
-\textbf{Dataset} & \textbf{Background Knowledge (Train)} & \textbf{Records (Eval)} & \textbf{Accuracy} \\
+\textbf{Dataset} & \textbf{Background Knowledge (Train)} &  \textbf{Records (Eval)} & \textbf{MRR on Original Records} & \textbf{MRR on De-identified Records} & \textbf{Acc. on Original Records} & \textbf{Acc. on De-identified Records} \\
 \hline
-TAB & Original & Original & 0.8492 \\
-TAB & De-identified using Presidio & De-identified using Presidio & 0.7778 \\
-Reddit & Original & Original & 1.0000 \\
-Reddit & De-identified using Presidio & De-identified using Presidio & 1.0000 \\
+TAB & Original & Original & 0.965879 & 0.823675 & 0.937008 & 0.740157 \\
+TAB & De-identified & De-identified & 0.945363 & 0.964173 & 0.905512 & 0.937008 \\
+Reddit & Original & Original & 0.860740 & 0.681755 & 0.796190 & 0.573333 \\
+Reddit & De-identified & De-identified & 0.874499 & 0.669367 & 0.826667 & 0.579048 \\
 \hline
 \end{tabularx}
 \caption{TRI pipeline accuracy for original and de-identified settings on TAB and PersonalReddit.}
 \end{table}
+
+For DP-MLM, we use max\_retry\_rounds = 1 on PersonalReddit and max\_retry\_rounds = 5 on TAB. The TAB retry mechanism draws up to five samples from the same masked distribution and keeps the original token only if all samples match it.
 
 \subsection{Privacy Evaluation}
 

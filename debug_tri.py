@@ -94,6 +94,7 @@ if __name__ == "__main__":
     records = records[args.start:args.end:args.step][:args.max_records or len(records)]
 
     mrr = None
+    acc = None
     ranks = None
 
     if args.pipeline_in:
@@ -102,6 +103,7 @@ if __name__ == "__main__":
         predictions = detector.predict(records)
 
         mrr = 0.0
+        acc = 0.0
         ranks = []
         for record in records:
             prediction = predictions.get(record.uid, {})
@@ -113,6 +115,7 @@ if __name__ == "__main__":
                     break
             ranks.append(rank)
             mrr += 1.0 / (rank * len(records))
+            acc += 1.0 / len(records) if rank == 1 else 0.0
 
     j = 0
     f = None
@@ -120,6 +123,7 @@ if __name__ == "__main__":
         f = open(args.save_to_jsonl, 'w', encoding='utf-8')
     if not args.save_to_jsonl and args.pipeline_in:
         print(f"Mean Reciprocal Rank (MRR): {mrr:.6f}")
+        print(f"Accuracy (ACC): {acc:.6f}")
     for i in range(args.start, args.end, args.step):
         if args.max_records and j >= args.max_records:
             break
