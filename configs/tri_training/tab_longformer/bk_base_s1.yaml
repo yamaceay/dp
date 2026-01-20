@@ -1,0 +1,16 @@
+dataset: tab_longformer
+data_path: data/TAB/splitted/test.json
+attacker_extensions: data/TAB/test_bk_sum.jsonl
+model_name: allenai/longformer-base-4096
+output_root: models/tri_pipelines/tab/_checkpoints/s1_long
+max_records: null
+max_length: 512
+device: cpu
+
+training:
+  finetuning_epochs: 10
+  batch_size: 8
+  use_pretraining: true
+  pretraining_epochs: 1
+  per_step: null
+  early_stop_threshold: null

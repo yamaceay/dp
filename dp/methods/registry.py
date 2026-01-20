@@ -13,6 +13,7 @@ from dp.methods._dpbart import DPBartAnonymizer
 from dp.methods._dpparaphrase import DPParaphraseAnonymizer
 from dp.methods._dpprompt import DPPromptAnonymizer
 from dp.methods._dpmlm import DPMlmAnonymizer
+from dp.methods._dpmlm_longformer import DPMlmLongformerAnonymizer
 
 MODEL_REGISTRY: Dict[str, Type[Anonymizer]] = {
     "spacy": SpacyAnonymizer,
@@ -25,6 +26,7 @@ MODEL_REGISTRY: Dict[str, Type[Anonymizer]] = {
     "dpparaphrase": DPParaphraseAnonymizer,
     "dpprompt": DPPromptAnonymizer,
     "dpmlm": DPMlmAnonymizer,
+    "dpmlm_longformer": DPMlmLongformerAnonymizer,
 }
 
 MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
@@ -49,6 +51,13 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
     "dpparaphrase": ModelCapabilities(can_work_token_level=False),
     "dpprompt": ModelCapabilities(can_work_token_level=False),
     "dpmlm": ModelCapabilities(
+        can_use_dataset=True, 
+        can_use_pii_selector=True,
+        can_use_risk_selector=True,
+        can_use_k_selector=True,
+        can_use_scoring=True,
+    ),
+    "dpmlm_longformer": ModelCapabilities(
         can_use_dataset=True, 
         can_use_pii_selector=True,
         can_use_risk_selector=True,

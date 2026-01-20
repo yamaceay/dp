@@ -58,11 +58,29 @@ class TRIDetectorWithBK(TRIDetector):
         eval_dataset: Union[TRIDataset, Dict[str, TRIDataset]]
         if self.original_eval_records is not None:
             eval_dataset = {
-                "deidentified": TRIDataset(self.eval_records, self.tokenizer, self.name_to_label, self.max_length),
-                "original": TRIDataset(self.original_eval_records, self.tokenizer, self.name_to_label, self.max_length),
+                "deidentified": TRIDataset(
+                    self.eval_records,
+                    self.tokenizer,
+                    self.name_to_label,
+                    self.max_length,
+                    use_overflow=self.use_overflow,
+                ),
+                "original": TRIDataset(
+                    self.original_eval_records,
+                    self.tokenizer,
+                    self.name_to_label,
+                    self.max_length,
+                    use_overflow=self.use_overflow,
+                ),
             }
         else:
-            eval_dataset = TRIDataset(self.eval_records, self.tokenizer, self.name_to_label, self.max_length)
+            eval_dataset = TRIDataset(
+                self.eval_records,
+                self.tokenizer,
+                self.name_to_label,
+                self.max_length,
+                use_overflow=self.use_overflow,
+            )
             
         eval_kwargs = {
             "load_best_model_at_end": True,

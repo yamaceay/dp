@@ -17,6 +17,7 @@ from dp.methods._dpbart import DPBartAnonymizer
 from dp.methods._dpparaphrase import DPParaphraseAnonymizer
 from dp.methods._dpprompt import DPPromptAnonymizer
 from dp.methods._dpmlm import DPMlmAnonymizer
+from dp.methods._dpmlm_longformer import DPMlmLongformerAnonymizer
 
 __all__ = [
     "Anonymizer",
@@ -31,5 +32,6 @@ __all__ = [
     "DPParaphraseAnonymizer",
     "DPPromptAnonymizer",
     "DPMlmAnonymizer",
+    "DPMlmLongformerAnonymizer",
     "registry",
 ]

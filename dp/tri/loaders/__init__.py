@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dp.tri.loaders.tab import TabAttackerDatasetAdapter
+from dp.tri.loaders.tab_longformer import TabLongformerAttackerDatasetAdapter
 from dp.tri.loaders.reddit import RedditAttackerDatasetAdapter
 from dp.tri.loaders.trustpilot import TrustpilotAttackerDatasetAdapter
 from dp.tri.loaders.base import (
@@ -12,6 +13,7 @@ from dp.tri.loaders.base import (
 
 ATTACKER_ADAPTER_REGISTRY: dict[str, type[AttackerDatasetAdapter]] = {
     "tab": TabAttackerDatasetAdapter,
+    "tab_longformer": TabLongformerAttackerDatasetAdapter,
     "reddit": RedditAttackerDatasetAdapter,
     "trustpilot": TrustpilotAttackerDatasetAdapter,
 }
@@ -30,6 +32,10 @@ def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:
 __all__ = [
     "RewriterProtocol",
     "AttackerDatasetAdapter",
+    "TabAttackerDatasetAdapter",
+    "TabLongformerAttackerDatasetAdapter",
+    "RedditAttackerDatasetAdapter",
+    "TrustpilotAttackerDatasetAdapter",
     "save_attacker_extensions_jsonl",
     "load_attacker_extensions_jsonl",
 ]

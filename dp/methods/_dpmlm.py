@@ -25,6 +25,7 @@ class DPMlmAnonymizer(Anonymizer):
         self,
         *args,
         model_checkpoint: str = "roberta-base",
+        max_length: int = 512,
         clip_min: float = -3.2093127,
         clip_max: float = 16.304797887802124,
         k_candidates: int = 5,
@@ -38,6 +39,7 @@ class DPMlmAnonymizer(Anonymizer):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
 
         self.model_checkpoint = model_checkpoint
+        self.max_length = max_length
         self.clip_min = clip_min
         self.clip_max = clip_max
         self.sensitivity = abs(clip_max - clip_min)
@@ -250,7 +252,12 @@ class DPMlmAnonymizer(Anonymizer):
         if masked_sentence == sentence:
             raise ValueError(f"Token {token} not found in sentence during masking: {sentence}")
 
-        input_ids = self.tokenizer.encode(masked_sentence, add_special_tokens=True, truncation=True, max_length=512)
+        input_ids = self.tokenizer.encode(
+            masked_sentence,
+            add_special_tokens=True,
+            truncation=True,
+            max_length=self.max_length,
+        )
         
         try:
             mask_pos = input_ids.index(self.tokenizer.mask_token_id)
@@ -291,7 +298,12 @@ class DPMlmAnonymizer(Anonymizer):
     ) -> str:
         masked_text = text + " " + self.tokenizer.mask_token
         
-        input_ids = self.tokenizer.encode(masked_text, add_special_tokens=True, truncation=True, max_length=512)
+        input_ids = self.tokenizer.encode(
+            masked_text,
+            add_special_tokens=True,
+            truncation=True,
+            max_length=self.max_length,
+        )
         
         try:
             mask_pos = input_ids.index(self.tokenizer.mask_token_id)

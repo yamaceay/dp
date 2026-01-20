@@ -331,7 +331,7 @@ def initialize_builder_params(anonymizer: Anonymizer, runtime_bundle):
     from dp.utils.selector import ByRiskUnit, PIIOnlyUnit, UntilKUnit
     model_name = getattr(anonymizer, "MODEL_NAME", None)
 
-    if model_name == "dpmlm":
+    if model_name in {"dpmlm", "dpmlm_longformer"}:
         if getattr(runtime_bundle, "epsilon_value", None) is None:
             return []
         buckets = [EpsilonParam(epsilon=runtime_bundle.epsilon_value)]

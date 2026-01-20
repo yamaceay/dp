@@ -2,9 +2,11 @@ from typing import Dict
 
 from dp.tri.base import TRIDetector
 from dp.tri.with_bk import TRIDetectorWithBK
+from dp.tri.with_bk_longformer import TRIDetectorWithBKLongformer
 
 TRI_DETECTOR_REGISTRY: Dict[str, type[TRIDetector]] = {
     "bk": TRIDetectorWithBK,
+    "bk_longformer": TRIDetectorWithBKLongformer,
 }
 
 def get_tri_detector(name: str, *args, **kwargs) -> TRIDetector:
@@ -15,6 +17,7 @@ def get_tri_detector(name: str, *args, **kwargs) -> TRIDetector:
 
 __all__ = [
     "TRIDetectorWithBK",
+    "TRIDetectorWithBKLongformer",
     "get_tri_detector",
     "TRI_DETECTOR_REGISTRY",
 ]

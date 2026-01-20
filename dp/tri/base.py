@@ -32,6 +32,7 @@ class TRIDataset(Dataset):
         max_length: int,
         use_labels: bool = True,
         stride_fraction: float = 0.25,
+        use_overflow: bool = True,
     ):
         if not records:
             raise ValueError("records cannot be empty")
@@ -44,14 +45,22 @@ class TRIDataset(Dataset):
         self.labels: List[torch.Tensor] = []
         stride_tokens = max(1, min(max_length - 1, int(max_length * stride_fraction)))
         for record in records:
-            encodings = tokenizer(
-                record.text,
-                truncation=True,
-                padding="max_length",
-                max_length=max_length,
-                return_overflowing_tokens=True,
-                stride=stride_tokens,
-            )
+            if use_overflow:
+                encodings = tokenizer(
+                    record.text,
+                    truncation=True,
+                    padding="max_length",
+                    max_length=max_length,
+                    return_overflowing_tokens=True,
+                    stride=stride_tokens,
+                )
+            else:
+                encodings = tokenizer(
+                    record.text,
+                    truncation=True,
+                    padding="max_length",
+                    max_length=max_length,
+                )
             input_set = encodings["input_ids"]
             if isinstance(input_set[0], int):
                 input_set = [input_set]
@@ -132,6 +141,7 @@ class TRIDetector(ABC):
         max_length: int = 512,
         device: str = "auto",
         use_chunking: bool = True,
+        use_overflow: bool = True,
     ):
         if max_length <= 0:
             raise ValueError(f"max_length must be positive, got {max_length}")
@@ -140,6 +150,7 @@ class TRIDetector(ABC):
         self.max_length = max_length
         self.device = self.resolve_device(device)
         self.use_chunking = use_chunking
+        self.use_overflow = use_overflow
         self.chunker = None
         self.tokenizer = None
         self.model = None
@@ -177,10 +188,19 @@ class TRIDetector(ABC):
             mlm_model.bert = self.model.bert
         elif hasattr(self.model, 'roberta'):
             mlm_model.roberta = self.model.roberta
+        elif hasattr(self.model, 'longformer'):
+            mlm_model.longformer = self.model.longformer
         else:
             raise ValueError(f"Unsupported model architecture: {self.model_name}")
         mlm_model.to(self.device)
-        train_dataset = TRIDataset(self.train_records, self.tokenizer, self.name_to_label, self.max_length, use_labels=False)
+        train_dataset = TRIDataset(
+            self.train_records,
+            self.tokenizer,
+            self.name_to_label,
+            self.max_length,
+            use_labels=False,
+            use_overflow=self.use_overflow,
+        )
         data_collator = DataCollatorForLanguageModeling(self.tokenizer, mlm_probability=0.15)
         training_args = TrainingArguments(
             output_dir=f"{output_dir}/pretraining",
@@ -192,6 +212,8 @@ class TRIDetector(ABC):
             save_steps=epochs,
             save_total_limit=1,
             report_to="none",
+            no_cuda=(self.device.type == "cpu"),
+            use_mps_device=(self.device.type == "mps"),
         )
         trainer = Trainer(
             model=mlm_model,
@@ -208,6 +230,8 @@ class TRIDetector(ABC):
             self.model.roberta.load_state_dict(base_dict, strict=False)
         elif hasattr(mlm_model, 'bert'):
             self.model.bert.load_state_dict(mlm_model.bert.state_dict())
+        elif hasattr(mlm_model, 'longformer'):
+            self.model.longformer.load_state_dict(mlm_model.longformer.state_dict())
         else:
             raise ValueError(f"Unable to transfer weights for {self.model_name}")
         del mlm_model
@@ -323,7 +347,13 @@ class TRIDetector(ABC):
         self.initialize_tokenizer_and_model()
         if use_pretraining:
             self.pretrain(pretraining_epochs, batch_size, learning_rate, output_dir)
-        train_dataset = TRIDataset(self.train_records, self.tokenizer, self.name_to_label, self.max_length)
+        train_dataset = TRIDataset(
+            self.train_records,
+            self.tokenizer,
+            self.name_to_label,
+            self.max_length,
+            use_overflow=self.use_overflow,
+        )
         eval_dataset, eval_kwargs = self.get_eval_dataset(best_metric_dataset=best_metric_dataset, per_step=per_step)
         save_kwargs = {}
         if per_step:
