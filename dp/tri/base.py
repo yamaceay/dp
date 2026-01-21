@@ -143,6 +143,7 @@ class TRIDetector(ABC):
         self.chunker = None
         self.tokenizer = None
         self.model = None
+        self.pipe = None
         self.label_to_name = {}
         self.name_to_label = {}
         self.num_labels = 0
@@ -218,27 +219,28 @@ class TRIDetector(ABC):
             return {}
         if self.model is None or self.tokenizer is None:
             raise ValueError("Model not initialized. Train or load a model first.")
-        pipe = pipeline(
-            "text-classification",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            device=self.device if self.device.type != "cpu" else -1,
-            top_k=None,
-            truncation=True,
-            max_length=self.max_length,
-        )
+        if self.pipe is None:
+            self.pipe = pipeline(
+                "text-classification",
+                model=self.model,
+                tokenizer=self.tokenizer,
+                device=self.device if self.device.type != "cpu" else -1,
+                top_k=None,
+                truncation=True,
+                max_length=self.max_length,
+            )
         results: Dict[str, Dict[str, float]] = {}
         if self.use_chunking and self.chunker is not None:
             aggregator = ProbabilityAggregator()
             def classify(text: str) -> Dict[str, float]:
-                entries = pipe(text)[0]
+                entries = self.pipe(text)[0]
                 return self.map_prediction_entries(entries)
             for record in records:
                 scores = process_with_chunking(record.text, self.chunker, classify, aggregator)
                 results[record.uid] = scores
         else:
             for record in records:
-                entries = pipe(record.text)[0]
+                entries = self.pipe(record.text)[0]
                 results[record.uid] = self.map_prediction_entries(entries)
         return results
 
