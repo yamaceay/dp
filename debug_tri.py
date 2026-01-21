@@ -1,14 +1,17 @@
 import json
 import sys
+from typing import Dict
 import numpy as np
+import argparse
 
 from dp.loaders import get_adapter
 from dp.loaders.results import build_dataset_from_results, load_result_records
 from dp.tri.with_bk import TRIDetectorWithBK
+from runtime.config_loader import _read_yaml
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Test RiskAnonymizer")
+def normalize_config(config: Dict) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default=None, help='Path to config file')
     parser.add_argument('--data', type=str, default=None, help='Dataset name')
     parser.add_argument('--data_in', type=str, default=None, help='Path to input data file')
     parser.add_argument('--result_in', type=str, default=None, help='Path to anonymization results JSONL file')
@@ -22,15 +25,27 @@ if __name__ == "__main__":
     parser.add_argument('--save_to_jsonl', type=str, default=None, help='Path to save the output records as JSONL')
     parser.add_argument('--offset_mode', type=str, choices=['original', 'result'], default='result', help='Whether risk offsets are in original or result text coordinates')
     parser.add_argument('--abs', action='store_true', help='Use absolute scores')
-    args = parser.parse_args()
 
-    data_kwargs = dict(
-        data=args.data, data_in=args.data_in
-    )
+    args = parser.parse_args([])
+    for key, value in config.items():
+        if hasattr(args, key):
+            setattr(args, key, value)
+    return args
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Test RiskAnonymizer")
+    parser.add_argument('--config', type=str, required=True, help='Path to config file')
+    args = parser.parse_args()
+    args = normalize_config(_read_yaml(args.config))
 
     if not args.data or not args.data_in:
         raise ValueError("data and data_in are required")
-    original_records = list(get_adapter(args.data, **data_kwargs).iter_records())
+    original_records = list(get_adapter(args.data, 
+                                        data_in=args.data_in,
+                                        max_records=args.max_records,
+                                        start=args.start,
+                                        end=args.end,
+                                        step=args.step).iter_records())
     original_text_by_uid = {r.uid: r.text for r in original_records}
     args.end = args.end or len(original_records)
 

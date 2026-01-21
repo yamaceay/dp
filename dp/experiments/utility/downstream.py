@@ -6,8 +6,9 @@ from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import f1_score, mean_squared_error, r2_score
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import LabelEncoder
-import torch
 from transformers import AutoTokenizer, AutoModel, Trainer, TrainingArguments, TrainerCallback, EvalPrediction
+
+from dp.utils.device import resolve_device
 
 class SupervisedDownstreamHead(ABC):
     def __init__(self, name: str, primary_metric: str):
@@ -196,15 +197,6 @@ class FeedForwardRegressor(SupervisedDownstreamHead):
     def cleanup(self) -> None:
         self._estimator = None
 
-def _resolve_device(preferred: Optional[str] = None) -> str:
-    if preferred and preferred in {"cpu", "cuda", "mps"}:
-        return preferred
-    if torch.cuda.is_available():
-        return "cuda"
-    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
-
 class EarlyStoppingCallback(TrainerCallback):
     def __init__(self, early_stopping_patience: int, early_stopping_threshold: Optional[float], metric_name: str, minimize: bool):
         self.patience = early_stopping_patience
@@ -264,7 +256,7 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         self.head_lr = float(head_lr)
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
-        self.device = _resolve_device(device)
+        self.device = resolve_device(device)
         self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
@@ -609,7 +601,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
         self.label_smoothing = float(label_smoothing)
-        self.device = _resolve_device(device)
+        self.device = resolve_device(device)
         self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
@@ -886,7 +878,7 @@ class BertRegressorHead(SupervisedDownstreamHead):
         self.head_lr = float(head_lr)
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
-        self.device = _resolve_device(device)
+        self.device = resolve_device(device)
         self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint

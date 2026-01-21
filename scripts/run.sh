@@ -4,7 +4,7 @@ MAILTO=""
 TABLE_FILE=""
 MAX_CONCURRENT=1
 MAX_TASKS=1
-PARTITION="batch"
+PARTITION="RTXA6000"
 YES=0
 
 while [[ $# -gt 0 ]]; do
@@ -79,7 +79,7 @@ if [[ $NUM_JOBS -eq 0 ]]; then
     exit 1
 fi
 
-# Total array size is NUM_JOBS * MAX_TASKS
+# Total array size is NUM_JOBS
 TOTAL_TASKS=$((NUM_JOBS * MAX_TASKS))
 MAX_IDX=$((TOTAL_TASKS - 1))
 echo "Found $NUM_JOBS jobs with ${MAX_TASKS} parallel tasks each, creating array job 0-${MAX_IDX}%${MAX_CONCURRENT}" >&2
@@ -93,8 +93,6 @@ fi
 TASK_LINES=""
 if [[ -n "$MAX_TASKS" ]]; then
     TASK_LINES="#SBATCH --ntasks=${MAX_TASKS}
-#SBATCH --cpus-per-task=10
-#SBATCH --gpus-per-task=1
 "
 fi
 
@@ -115,8 +113,9 @@ cat > "$TARGET_FILE" <<EOF
 #SBATCH --output=logs/%x/%a_%j.out
 #SBATCH --error=logs/%x/%a_%j.err
 #SBATCH --partition=${PARTITION}
-#SBATCH --nodes=1
-#SBATCH --mem-per-cpu=6G
+#SBATCH --gpus=1
+#SBATCH --mem=40GB
+#SBATCH --time=10
 ${EXTRA_LINES}
 
 # Map array task ID to job index and parallel task
@@ -146,14 +145,14 @@ export TASK_WITHIN_JOB JOB_NAME STATE_FILE SLURM_ARRAY_TASK_ID
 
 # Execute the task using task.sh --incr (it will run the command directly)
 srun -K \
-  --container-image=/enroot/python+3.10.4-buster.sqsh \
-  --container-mounts=/netscratch/$USER:/netscratch/$USER,/home/$USER:/home/$USER \
-  --container-workdir=`pwd` \
-  scripts/install.sh scripts/task.sh --incr --state "$STATE_FILE"
+    --container-mounts="`pwd`:`pwd`,/netscratch/$USER:/netscratch/$USER" \
+    --container-workdir="`pwd`" \
+    --container-image=/netscratch/enroot/nvcr.io_nvidia_pytorch_24.01-py3.sqsh \
+    --task-prolog="`pwd`/scripts/install.sh" scripts/task.sh --incr --state "$STATE_FILE"
 EOF
 
 if [[ $YES -eq 0 ]]; then
-    echo "Wrote $TARGET_FILE with $NUM_JOBS jobs × ${MAX_TASKS} parallel tasks = ${TOTAL_TASKS} total tasks"
+    echo "Wrote $TARGET_FILE with $NUM_JOBS jobs"
     echo "Submit with: sbatch $TARGET_FILE"
     echo ""
     read -p "Do you want to submit the job now? (Press Enter to continue, Ctrl+C to cancel): "

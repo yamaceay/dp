@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --array=0-3%4
-#SBATCH --job-name=tri_reddit_grid
+#SBATCH --job-name=debug_tri_reddit
 #SBATCH --output=logs/%x/%a_%j.out
 #SBATCH --error=logs/%x/%a_%j.err
 #SBATCH --partition=RTXA6000
@@ -17,10 +17,10 @@ JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
 job_names=(
-  "tri_reddit_grid/tri_reddit_lr5e-5_0"
-  "tri_reddit_grid/tri_reddit_deid_lr5e-5_1"
-  "tri_reddit_grid/tri_reddit_es_lr5e-5_2"
-  "tri_reddit_grid/tri_reddit_deid_es_lr5e-5_3"
+  "debug_tri_reddit/orig_orig_0"
+  "debug_tri_reddit/orig_deid_1"
+  "debug_tri_reddit/deid_orig_2"
+  "debug_tri_reddit/deid_deid_3"
 )
 
 JOB_NAME="${job_names[$JOB_IDX]}"

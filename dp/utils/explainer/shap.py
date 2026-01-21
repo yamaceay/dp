@@ -1,7 +1,8 @@
-from typing import Optional, Sequence, Tuple, Dict, List, Any
+from typing import Optional, Sequence, Tuple, Dict, List, Any, Union
 from enum import Enum
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
+from dp.utils.device import resolve_device
 from dp.tri.with_bk import TRIDetectorWithBK
 
 class _SpanTokenizer:
@@ -69,28 +70,18 @@ class ShapType(Enum):
     PERMUTATION = "shap_permutation"
 
 class ShapExplainer(TokenExplainer):
-    def __init__(self, model_name: str = None, device: str = "auto", use_chunking: bool = False, explainer_type: Optional[ShapType] = None, **kwargs):
+    def __init__(self, model_name: str = None, device: Optional[Union[str, int]] = None, use_chunking: bool = False, explainer_type: Optional[ShapType] = None, **kwargs):
         super().__init__(**kwargs)
         if model_name is None:
             raise ValueError("ShapExplainer requires model_name")
         self.model_name = model_name
-        self.device = self._resolve_device(device)
+        self.device = resolve_device(device)
         self.pipeline = None
-        self.tri_detector = TRIDetectorWithBK(model_name=model_name, device=device, use_chunking=use_chunking)
+        self.tri_detector = TRIDetectorWithBK(model_name=model_name, device=self.device, use_chunking=use_chunking)
         self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}
         self.explainer_type: ShapType = explainer_type or ShapType.DEFAULT
-
-    def _resolve_device(self, device: str) -> str:
-        if device == "auto":
-            import torch
-            if torch.cuda.is_available():
-                return "cuda"
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                return "mps"
-            return "cpu"
-        return device
     
     def _load_pipeline(self):
         if self.pipeline is None:

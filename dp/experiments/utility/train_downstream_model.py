@@ -164,7 +164,7 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
         "model_name": model_name,
         "max_records": _optional_int(payload, "max_records"),
         "max_length": int(payload.get("max_length", 512)),
-        "device": str(payload.get("device", "cpu")),
+        "device": payload.get("device"),
         "output_root": output_root,
         "run_name": _optional_str(payload, "run_name"),
         "init_from": _optional_str(payload, "init_from"),
@@ -303,7 +303,7 @@ def main() -> int:
         model_name = str(cfg["model_name"])
         max_records = cfg.get("max_records")
         attacker_extensions = cfg.get("attacker_extensions")
-        device = str(cfg.get("device", "cpu"))
+        device = cfg.get("device")
         max_length = int(cfg.get("max_length", 512))
         training = cfg.get("training")
         if not isinstance(training, dict):

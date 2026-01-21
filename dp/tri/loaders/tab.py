@@ -7,15 +7,7 @@ from dp.loaders.tab import TabDatasetAdapter
 from dp.tri.loaders.base import AttackerDatasetAdapter
 from dp.utils.chunking import TokenAwareChunker
 from dp.utils.rewriter import BartRewriter
-
-def resolve_device() -> Union[str, int]:
-    import torch
-    if torch.cuda.is_available():
-        return 'cuda'
-    elif torch.backends.mps.is_available():
-        return 'mps'
-    else:
-        return 'cpu'
+from dp.utils.device import resolve_device
 
 class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(

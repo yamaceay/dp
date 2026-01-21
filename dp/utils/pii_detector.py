@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import os
 import torch
 import numpy as np
@@ -21,6 +21,7 @@ except ImportError:
 
 from dp.loaders.base import DatasetRecord, TextAnnotation
 from dp.utils.chunking import SpanMergeAggregator, process_with_chunking, TokenAwareChunker
+from dp.utils.device import resolve_device
 
 class PIIDetector:
     def __init__(
@@ -29,14 +30,14 @@ class PIIDetector:
         use_chunking: bool = True,
         labels: Optional[List[str]] = None,
         max_length: int = 512,
-        device: str = "auto",
+        device: Optional[Union[str, int]] = None,
     ):
         self.model_name = model_name
         self.max_length = max_length
         self.use_chunking = use_chunking
         self.chunker = None
         
-        self.device = self.resolve_device(device)
+        self.device = resolve_device(device)
         
         self.labels = []
         self.label_to_id = {}
@@ -87,18 +88,6 @@ class PIIDetector:
         b_labels = [f"B-{label}" for label in labels]
         i_labels = [f"I-{label}" for label in labels]
         return ["O"] + b_labels + i_labels
-
-    def resolve_device(self, device: str) -> torch.device:
-        if device == "auto":
-            if torch.backends.mps.is_available():
-                device = torch.device("mps")
-            elif torch.cuda.is_available():
-                device = torch.device("cuda")
-            else:
-                device = torch.device("cpu")
-        else:
-            device = torch.device(device)
-        return device
 
     def _load_pretrained_model(self) -> None:
         import os

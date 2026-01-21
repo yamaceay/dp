@@ -110,7 +110,7 @@ class ShapAnalyzer:
         print(f"[init] creating explainer for model={config.model_path}")
         self.explainer = ShapExplainer(
             model_name=config.model_path,
-            device="auto",
+            device=config.tri_device,
             explainer_type=config.explainer_type
         )
         print(f"[init] explainer type={config.explainer_type.value}")

@@ -8,10 +8,10 @@ from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.selector.base import AnonymizerUnit
 from dp.utils.splitter import TextSplitter
+from dp.utils.device import resolve_device
 
 if TYPE_CHECKING:
     from dp.utils.output import OutputHandler
-    import torch
 
 @dataclass
 class AnonymizationResult:
@@ -36,7 +36,7 @@ class Anonymizer(ABC):
         self._explainer: Optional[TokenExplainer] = None
         self._selector: Optional[AnonymizerUnit] = None
         self._splitter: Optional[TextSplitter] = None
-        self.device = self._resolve_device(kwargs.get("device"))
+        self.device = resolve_device(kwargs.get("device"))
 
         print(f"Initialized {self.__class__.__name__} with args: {args}, kwargs: {kwargs}")
 
@@ -109,24 +109,6 @@ class Anonymizer(ABC):
                 )
             )
         return out
-
-    def _resolve_device(self, device: Optional[Union[str, int, 'torch.device']]) -> 'torch.device':
-        import torch
-        if isinstance(device, torch.device):
-            return device
-        if device is None or device == "auto":
-            if torch.cuda.is_available():
-                return torch.device("cuda")
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                return torch.device("mps")
-            return torch.device("cpu")
-        if isinstance(device, str):
-            return torch.device(device)
-        if isinstance(device, int):
-            if device >= 0 and torch.cuda.is_available():
-                return torch.device(f"cuda:{device}")
-            return torch.device("cpu")
-        return torch.device("cpu")
 
 class AnonymizationBuilder:
     def __init__(self, anonymizer: 'Anonymizer', model_name: str):

@@ -222,7 +222,7 @@ def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
     max_records = params.get("max_records")
     mask_token = str(params.get("mask_token", "[MASK]"))
     tri_max_length = int(params.get("tri_max_length", 512))
-    tri_device = str(params.get("tri_device", "auto"))
+    tri_device = params.get("tri_device")
     if params.get("no_progress"):
         progress = False
     elif "progress" in params:

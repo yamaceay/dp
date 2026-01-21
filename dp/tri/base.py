@@ -22,6 +22,7 @@ from transformers import (
 from torch.optim import AdamW, Adam, SGD
 from dp.loaders.base import DatasetRecord
 from dp.utils.chunking import TokenAwareChunker, ProbabilityAggregator, process_with_chunking
+from dp.utils.device import resolve_device
 
 class TRIDataset(Dataset):
     def __init__(
@@ -130,7 +131,7 @@ class TRIDetector(ABC):
         dataset_name: Optional[str] = None,
         model_name: str = "distilbert-base-uncased",
         max_length: int = 512,
-        device: str = "auto",
+        device: Optional[Union[str, int]] = None,
         use_chunking: bool = True,
     ):
         if max_length <= 0:
@@ -138,7 +139,7 @@ class TRIDetector(ABC):
         self.dataset_name = dataset_name
         self.model_name = model_name
         self.max_length = max_length
-        self.device = self.resolve_device(device)
+        self.device = torch.device(resolve_device(device))
         self.use_chunking = use_chunking
         self.chunker = None
         self.tokenizer = None
@@ -156,15 +157,6 @@ class TRIDetector(ABC):
     @abstractmethod
     def get_eval_dataset(self, best_metric_dataset: Optional[str] = None, per_step: Optional[int] = None) -> Tuple[Union[TRIDataset, Dict[str, TRIDataset]], Dict[str, Any]]:
         raise NotImplementedError
- 
-    def resolve_device(self, device: str) -> torch.device:
-        if device == "auto":
-            if torch.cuda.is_available():
-                return torch.device("cuda")
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                return torch.device("mps")
-            return torch.device("cpu")
-        return torch.device(device)
     
     def pretrain(self, epochs: int, batch_size: int, learning_rate: float, output_dir: str) -> None:
         if not self.model:
@@ -315,8 +307,8 @@ class TRIDetector(ABC):
             raise ValueError(f"learning_rate must be positive, got {learning_rate}")
         if use_pretraining and pretraining_epochs <= 0:
             raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
-        if early_stop_threshold is not None and (early_stop_threshold <= 0 or early_stop_threshold > 100):
-            raise ValueError(f"early_stop_threshold must be in (0, 100], got {early_stop_threshold}")
+        if early_stop_threshold is not None and (early_stop_threshold <= 0.0 or early_stop_threshold > 1.0):
+            raise ValueError(f"early_stop_threshold must be in (0, 1], got {early_stop_threshold}")
         if output_dir is None:
             if not self.dataset_name:
                 raise ValueError("dataset_name must be set when output_dir is not provided")
@@ -344,6 +336,12 @@ class TRIDetector(ABC):
             training_kwargs["weight_decay"] = weight_decay
         if warmup_ratio is not None:
             training_kwargs["warmup_ratio"] = warmup_ratio
+        use_cpu = str(self.device).startswith("cpu")
+        ddp_backend = "gloo" if use_cpu else None
+        local_rank = -1 if use_cpu else None
+        if use_cpu:
+            for key in ("WORLD_SIZE", "RANK", "LOCAL_RANK", "MASTER_ADDR", "MASTER_PORT", "SLURM_PROCID", "SLURM_LOCALID", "SLURM_NTASKS"):
+                os.environ.pop(key, None)
         training_args = TrainingArguments(
             output_dir=f"{output_dir}/finetuning",
             num_train_epochs=epochs,
@@ -352,7 +350,9 @@ class TRIDetector(ABC):
             learning_rate=learning_rate,
             save_total_limit=1,
             report_to="none",
-            no_cuda=True,
+            no_cuda=use_cpu,
+            ddp_backend=ddp_backend,
+            local_rank=local_rank,
             **training_kwargs,
             **save_kwargs,
             **eval_kwargs,

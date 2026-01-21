@@ -1,27 +1,27 @@
 from __future__ import annotations
 
 from statistics import mean, median
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from tqdm import tqdm
 
 from dp.experiments import Experiment, ExperimentResult
 from dp.loaders.base import DatasetRecord
 from dp.tri.with_bk import TRIDetectorWithBK
-
+from dp.utils.device import resolve_device
 
 class TextPrivacyExperiment(Experiment):
     def __init__(
         self,
         tri_pipeline: str,
         tri_max_length: int = 512,
-        tri_device: str = "auto",
+        tri_device: Optional[Union[str, int]] = None,
     ):
         super().__init__()
         if not tri_pipeline:
             raise ValueError("tri_pipeline is required")
         self.tri_pipeline = tri_pipeline
         self.tri_max_length = tri_max_length
-        self.tri_device = tri_device
+        self.tri_device = resolve_device(tri_device)
         self.dataset_name: Optional[str] = None
         self.original_dataset: List[DatasetRecord] = []
         self.evaluation_datasets: Dict[str, List[DatasetRecord]] = {}
