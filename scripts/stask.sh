@@ -62,7 +62,6 @@ while IFS= read -r line || [[ -n "$line" ]]; do
 
     if [[ ${#parts[@]} -gt 1 ]]; then
         CMD="$(echo "${parts[1]}" | xargs)"
-        CMD="uv run ${CMD}"
         if [[ -n "$CMD" ]]; then
             STATE_FILE_NAME="${FILE_NAME}/${NAME}_${idx}"
             job_names[$idx]="$STATE_FILE_NAME"

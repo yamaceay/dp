@@ -1,6 +1,6 @@
 #!/bin/bash
 DONEFILE="/tmp/install_done_${SLURM_JOBID}"
-VENV_DIR=".venv"
+VENV_DIR="/netscratch/${USER}/dp/.venv"
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -8,12 +8,10 @@ log() {
 
 if [[ $SLURM_LOCALID == 0 ]]; then
   log "Starting install on rank 0."
-  apt update
-  apt install -y [...]
-  apt clean
 
   log "Ensuring venv exists at ${VENV_DIR}."
   if [[ ! -d "${VENV_DIR}" ]]; then
+    mkdir -p "$(dirname "${VENV_DIR}")"
     python -m venv "${VENV_DIR}"
   fi
 
@@ -21,19 +19,21 @@ if [[ $SLURM_LOCALID == 0 ]]; then
   # shellcheck disable=SC1090
   source "${VENV_DIR}/bin/activate"
 
-  log "Repairing pip if needed and ensuring uv is installed."
+  log "Ensuring pip and uv are installed."
   python -m ensurepip --upgrade >/dev/null 2>&1 || true
-  if ! python -m pip --version >/dev/null 2>&1; then
-    log "pip missing in venv; forcing reinstall."
-  fi
   python -m pip install --upgrade --force-reinstall pip setuptools wheel
   if ! command -v uv >/dev/null 2>&1; then
     python -m pip install uv
   fi
 
   if [ -f requirements.txt ]; then
-    log "Installing requirements.txt via uv."
-    uv pip install --active -r requirements.txt
+    if command -v uv >/dev/null 2>&1; then
+      log "Installing requirements.txt via uv."
+      uv pip install -r requirements.txt
+    else
+      log "Installing requirements.txt via pip."
+      python -m pip install -r requirements.txt
+    fi
   else
     log "requirements.txt not found, skipping pip install."
     exit 1
