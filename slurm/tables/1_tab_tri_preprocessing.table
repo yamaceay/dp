@@ -1,0 +1,2 @@
+tab_deid|python data_for_tri.py --config configs/tri_preprocessing/tab_deid.yaml
+tab_sum|python data_for_tri.py --config configs/tri_preprocessing/tab_sum.yaml

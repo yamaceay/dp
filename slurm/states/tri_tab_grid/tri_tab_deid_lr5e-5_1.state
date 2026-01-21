@@ -1,3 +1,0 @@
-1
-1
-uv run python tri_by_bk.py --mode train --training-in configs/tri_training/tab/bk_deid.yaml --run-name tab__deid__lr5e-5 --set training.learning_rate=5e-5

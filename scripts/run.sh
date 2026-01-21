@@ -110,12 +110,12 @@ cat > "$TARGET_FILE" <<EOF
 
 #SBATCH --array=0-${MAX_IDX}%${MAX_CONCURRENT}
 #SBATCH --job-name=${FILE_NAME}
-#SBATCH --output=logs/%x/%a_%j.out
-#SBATCH --error=logs/%x/%a_%j.err
+#SBATCH --output=logs/%x/%j_%a.out
+#SBATCH --error=logs/%x/%j_%a.err
 #SBATCH --partition=${PARTITION}
 #SBATCH --gpus=1
 #SBATCH --mem=40GB
-#SBATCH --time=10
+#SBATCH --time=900
 ${EXTRA_LINES}
 
 # Map array task ID to job index and parallel task

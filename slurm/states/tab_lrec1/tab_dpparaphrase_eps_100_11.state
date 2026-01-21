@@ -1,3 +1,0 @@
-1
-1
-uv run python model.py --data tab --data_in data/TAB/splitted/test.json --model dpparaphrase --model_in configs/model/dpparaphrase.yaml --runtime_in configs/runtime/dp/eps_100.yaml --output jsonl --unique_name tab_dpparaphrase_eps_100

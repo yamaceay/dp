@@ -1,14 +1,12 @@
 gpt2-paraphraser: ../../../netscratch/yay/gpt2-paraphraser
 reddit:
-  tri_location: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
-  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5__eval
-  result_in: outputs/reddit/presidio/20251231_120522_reddit_presidio.jsonl
-  risk_in: data/reddit/reddit_risk_shap.jsonl
+  result_in: outputs/reddit/presidio/20260121_163119_reddit_presidio.jsonl
+  tri_location: 
+  tri_pipeline: 
+  universal_tri_pipeline: 
 tab:
-  tri_location: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5
-  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5__eval
-  result_in: outputs/tab/presidio/20251231_120524_tab_presidio.jsonl
-  risk_in: data/TAB/test_risk_shap.jsonl
+  result_in: outputs/tab/presidio/20260121_161949_tab_presidio.jsonl
+  tri_location:
+  tri_pipeline:
+  universal_tri_pipeline: 
   pii_annotator: ../../../netscratch/yay/pii_detectors/tab/tab__lr3e-5__bs8__m_partial_recall

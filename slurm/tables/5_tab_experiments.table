@@ -1,0 +1,4 @@
+privacy_tab|python run.py privacy --config configs/experiments/privacy_tab_tri.yaml
+divergence_tab_bertscore|python run.py divergence --config configs/experiments/divergence_tab_bertscore.yaml
+utility_tab_country|python run.py utility --config configs/experiments/utility_tab_country.yaml
+utility_tab_year|python run.py utility --config configs/experiments/utility_tab_year.yaml

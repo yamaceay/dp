@@ -1,0 +1,4 @@
+orig_orig_tab|python debug_tri.py --config configs/debug_tri/tab/orig_orig.yaml
+orig_deid_tab|python debug_tri.py --config configs/debug_tri/tab/orig_deid.yaml
+deid_orig_tab|python debug_tri.py --config configs/debug_tri/tab/deid_orig.yaml
+deid_deid_tab|python debug_tri.py --config configs/debug_tri/tab/deid_deid.yaml

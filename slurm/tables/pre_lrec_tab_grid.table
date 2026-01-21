@@ -1,1 +1,0 @@
-tab_shap|python risk.py --data tab --data_in data/TAB/splitted/test.json --explainer shap --explainer_in ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5 --result_in outputs/tab/presidio/20251231_120524_tab_presidio.jsonl --save_to_jsonl data/TAB/test_risk_shap.jsonl --sort_by scores

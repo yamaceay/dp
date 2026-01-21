@@ -66,9 +66,12 @@ class DPParaphraseAnonymizer(Anonymizer):
             pad_token_id=self.tokenizer.eos_token_id
         )
 
-    def _get_pipeline_device(self, device: torch.device) -> int:
-        if device.type == "cuda":
-            return device.index or 0
+    def _get_pipeline_device(self, device: str) -> int:
+        if device.startswith("cuda"):
+            splt = device.split(":")
+            if len(splt) == 2 and splt[1] and splt[1].isdigit():
+                return int(splt[1])
+            return 0
         return -1
 
     def _create_clip_processor(self, min_val: float, max_val: float):
