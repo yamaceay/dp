@@ -1,0 +1,5 @@
+data: tab
+data_in: data/TAB/splitted/test.json
+max_records: 1
+full_record: true
+result_in: outputs/tab/presidio/20251231_120524_tab_presidio.jsonl
