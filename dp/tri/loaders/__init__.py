@@ -15,7 +15,7 @@ ATTACKER_ADAPTER_REGISTRY: dict[str, type[AttackerDatasetAdapter]] = {
     "tab": TabAttackerDatasetAdapter,
     "reddit": RedditAttackerDatasetAdapter,
     "trustpilot": TrustpilotAttackerDatasetAdapter,
-    "dbbio": DBBioAttackerDatasetAdapter,
+    "db_bio": DBBioAttackerDatasetAdapter,
 }
 
 def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:

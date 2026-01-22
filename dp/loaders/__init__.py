@@ -31,7 +31,7 @@ ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "tab": TabDatasetAdapter,
     "reddit": RedditDatasetAdapter,
     "trustpilot": TrustpilotDatasetAdapter,
-    "dbbio": DBBioDatasetAdapter,
+    "db_bio": DBBioDatasetAdapter,
 }
 
 def get_adapter(name: str, **kwargs) -> DatasetAdapter:
