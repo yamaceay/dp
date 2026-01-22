@@ -6,13 +6,9 @@ identifier, raw text, optional annotations, and optional utility metadata.
 """
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
+
 from dp.loaders.tab import TabDatasetAdapter
-
-try:
-    from dp.loaders.db_bio import DBBioDatasetAdapter
-except ImportError:
-    DBBioDatasetAdapter = None
-
+from dp.loaders.dbbio import DBBioDatasetAdapter
 from dp.loaders.reddit import RedditDatasetAdapter
 from dp.loaders.trustpilot import TrustpilotDatasetAdapter
 
@@ -35,10 +31,8 @@ ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "tab": TabDatasetAdapter,
     "reddit": RedditDatasetAdapter,
     "trustpilot": TrustpilotDatasetAdapter,
+    "dbbio": DBBioDatasetAdapter,
 }
-
-if DBBioDatasetAdapter is not None:
-    ADAPTER_REGISTRY["db_bio"] = DBBioDatasetAdapter
 
 def get_adapter(name: str, **kwargs) -> DatasetAdapter:
     """Instantiate a dataset adapter by name."""
@@ -72,9 +66,3 @@ __all__ = [
     "build_dataset_from_results",
     "ADAPTER_REGISTRY",
 ]
-
-if DBBioDatasetAdapter is not None:
-    __all__.append("DBBioDatasetAdapter")
-
-if TrustpilotDatasetAdapter is not None:
-    __all__.append("TrustpilotDatasetAdapter")
