@@ -1,11 +1,11 @@
 gpt2-paraphraser: ../../../netscratch/yay/gpt2-paraphraser
 reddit:
-  result_in: outputs/reddit/presidio/20260121_163119_reddit_presidio.jsonl
+  result_in: outputs/reddit/presidio/20260121_170408_reddit_presidio.jsonl
   tri_location: 
   tri_pipeline: 
   universal_tri_pipeline: 
 tab:
-  result_in: outputs/tab/presidio/20260121_161949_tab_presidio.jsonl
+  result_in: outputs/tab/presidio/20260121_170356_tab_presidio.jsonl
   tri_location:
   tri_pipeline:
   universal_tri_pipeline: 

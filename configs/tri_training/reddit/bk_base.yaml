@@ -12,4 +12,3 @@ training:
   use_pretraining: true
   pretraining_epochs: 1
   per_step: null
-  early_stop_threshold: 0.90
