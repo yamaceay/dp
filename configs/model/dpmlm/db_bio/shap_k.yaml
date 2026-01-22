@@ -9,7 +9,7 @@ explainer:
 
 precomputation:
   risk_scores: data/db_bio/db_bio_risk_shap.jsonl
-  result_in:
+  result_in: outputs/db_bio/presidio/20260122_125715_db_bio_presidio.jsonl
 
 tri_chunking:
   enabled: true

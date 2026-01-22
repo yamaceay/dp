@@ -1,0 +1,14 @@
+params:
+  rhos: ["*"]
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/db_bio__lr5e-5__eval
+  risk_temperature: 0.1
+
+precomputation:
+  risk_scores: data/db_bio/db_bio_risk_shap.jsonl
+  result_in: outputs/db_bio/presidio/20260122_125715_db_bio_presidio.jsonl
+
+token_selection:
+  name: by_risk
