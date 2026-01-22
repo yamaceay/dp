@@ -1,0 +1,4 @@
+orig_orig_db_bio|python debug_tri.py --config configs/debug_tri/db_bio/orig_orig.yaml
+orig_deid_db_bio|python debug_tri.py --config configs/debug_tri/db_bio/orig_deid.yaml
+deid_orig_db_bio|python debug_tri.py --config configs/debug_tri/db_bio/deid_orig.yaml
+deid_deid_db_bio|python debug_tri.py --config configs/debug_tri/db_bio/deid_deid.yaml

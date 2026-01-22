@@ -1,6 +1,6 @@
 #!/bin/bash
 
-declare -A DATASET_LENGTHS=( ["reddit"]=525 ["tab"]=127 )
+declare -A DATASET_LENGTHS=( ["reddit"]=525 ["tab"]=127 ["db_bio"]=239 )
 
 show_menu() {
     echo "Select an action:"

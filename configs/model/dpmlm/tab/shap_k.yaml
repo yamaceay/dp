@@ -9,7 +9,7 @@ explainer:
 
 precomputation:
   risk_scores: data/TAB/test_risk_shap.jsonl
-  result_in: outputs/tab/presidio/20251231_120524_tab_presidio.jsonl
+  result_in: outputs/tab/presidio/20260121_170356_tab_presidio.jsonl
   # absolute_risk: true
 
 tri_chunking:

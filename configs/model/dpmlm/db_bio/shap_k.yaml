@@ -1,0 +1,18 @@
+params:
+  epsilon: "*"
+  ks: ["*"]
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/db_bio__lr5e-5__eval
+  risk_temperature: 0.1
+
+precomputation:
+  risk_scores: data/db_bio/db_bio_risk_shap.jsonl
+  result_in:
+
+tri_chunking:
+  enabled: true
+
+token_selection:
+  name: until_k

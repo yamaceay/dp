@@ -16,7 +16,7 @@ MAX_TASKS=1
 JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
-REQFILE="requirements_spacy.txt"
+INSTALL_FILE="scripts/install_w_spacy.sh"
 
 job_names=(
   "a1_spacy_anonymization/tab_spacy_0"
@@ -39,4 +39,4 @@ srun -K \
     --container-mounts="`pwd`:`pwd`,/netscratch/$USER:/netscratch/$USER" \
     --container-workdir="`pwd`" \
     --container-image=/netscratch/enroot/nvcr.io_nvidia_pytorch_24.01-py3.sqsh \
-    --task-prolog="`pwd`/scripts/install.sh ${REQFILE}" scripts/task.sh --incr --state "$STATE_FILE"
+    --task-prolog="`pwd`/${INSTALL_FILE}" scripts/task.sh --incr --state "$STATE_FILE"

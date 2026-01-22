@@ -10,7 +10,7 @@ def resolve_device(preferred: Optional[Union[str, int]] = None) -> str:
         device_selected = devices[0]
     if isinstance(preferred, str):
         preferred = preferred.lower()
-        if preferred not in {"cpu", "cuda", "mps"}:
+        if preferred not in {"cpu", "mps"} and not preferred.startswith("cuda"):
             raise ValueError(f"Invalid device string: {preferred}")
     elif isinstance(preferred, int):
         if preferred < 0:

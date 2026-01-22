@@ -1,0 +1,3 @@
+1
+0
+python debug_tri.py --config configs/debug_tri/reddit/deid_deid.yaml

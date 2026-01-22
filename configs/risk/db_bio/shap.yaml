@@ -1,0 +1,8 @@
+dataset: db_bio
+data_in: data/db_bio/test/data-00000-of-00001.arrow
+explainer: shap
+explainer_in: /netscratch/yay/tri_pipelines/db_bio/db_bio__lr5e-5
+result_in: outputs/db_bio/presidio/20260122_125715_db_bio_presidio.jsonl
+save_to_jsonl: data/db_bio/db_bio_risk_shap.jsonl
+sort_by: scores
+offset_mode: original

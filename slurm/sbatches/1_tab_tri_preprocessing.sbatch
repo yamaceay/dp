@@ -16,6 +16,8 @@ MAX_TASKS=1
 JOB_IDX=$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
+INSTALL_FILE="scripts/install.sh"
+
 job_names=(
   "1_tab_tri_preprocessing/tab_deid_0"
   "1_tab_tri_preprocessing/tab_sum_1"
@@ -36,4 +38,4 @@ srun -K \
     --container-mounts="`pwd`:`pwd`,/netscratch/$USER:/netscratch/$USER" \
     --container-workdir="`pwd`" \
     --container-image=/netscratch/enroot/nvcr.io_nvidia_pytorch_24.01-py3.sqsh \
-    --task-prolog="`pwd`/scripts/install.sh" scripts/task.sh --incr --state "$STATE_FILE"
+    --task-prolog="`pwd`/${INSTALL_FILE}" scripts/task.sh --incr --state "$STATE_FILE"
