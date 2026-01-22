@@ -1,4 +1,5 @@
 #!/bin/bash
+reqfile=${1:-requirements.txt}
 
 # make sure only first task per node installs stuff, others wait
 DONEFILE="/tmp/install_done_${SLURM_JOBID}"
@@ -7,8 +8,8 @@ if [[ $SLURM_LOCALID == 0 ]]; then
   # put your install commands here (remove lines you don't need):
   apt update; apt install -y [...] ; apt clean
   python -m pip install --upgrade pip
-  pip install -r requirements.txt
-  
+  pip install -r ${reqfile}
+
   # Tell other tasks we are done installing
   touch "${DONEFILE}"
 else

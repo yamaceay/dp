@@ -4,6 +4,7 @@ MAILTO=""
 TABLE_FILE=""
 MAX_CONCURRENT=1
 MAX_TASKS=1
+REQFILE="requirements.txt"
 PARTITION="RTXA6000"
 YES=0
 
@@ -13,6 +14,7 @@ while [[ $# -gt 0 ]]; do
         --max-concurrent=*) MAX_CONCURRENT="${1#*=}"; shift ;;
         --max-tasks=*) MAX_TASKS="${1#*=}"; shift ;;
         --partition=*) PARTITION="${1#*=}"; shift ;;
+        --reqfile=*) REQFILE="${1#*=}"; shift ;;
         -y) YES=1; shift ;;
         -h)
             echo "Usage: $0 [--mail-to=email] [--max-concurrent=3] [--max-tasks=1] table_file"
@@ -123,6 +125,8 @@ MAX_TASKS=${MAX_TASKS}
 JOB_IDX=\$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=\$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
 
+REQFILE="${REQFILE}"
+
 job_names=(
 EOF
 
@@ -148,7 +152,7 @@ srun -K \
     --container-mounts="`pwd`:`pwd`,/netscratch/$USER:/netscratch/$USER" \
     --container-workdir="`pwd`" \
     --container-image=/netscratch/enroot/nvcr.io_nvidia_pytorch_24.01-py3.sqsh \
-    --task-prolog="`pwd`/scripts/install.sh" scripts/task.sh --incr --state "$STATE_FILE"
+    --task-prolog="`pwd`/scripts/install.sh ${REQFILE}" scripts/task.sh --incr --state "$STATE_FILE"
 EOF
 
 if [[ $YES -eq 0 ]]; then

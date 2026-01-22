@@ -1,0 +1,3 @@
+1
+0
+python model.py --data db_bio --data_in data/db_bio/test/data-00000-of-00001.arrow --model dpmlm --model_in configs/model/dpmlm/uniform.yaml --runtime_in configs/runtime/dp/eps_100.yaml --output jsonl --unique_name db_bio_dpmlm_uniform_eps_100

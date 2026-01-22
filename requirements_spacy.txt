@@ -1,0 +1,24 @@
+# Core dependencies
+datasets
+pyyaml
+
+# ML/DL frameworks
+torch
+transformers
+accelerate>=0.26.0
+
+# NLP utilities
+nltk
+nervaluate
+scikit-learn
+bert-score
+shap
+
+# Optional dependencies for specific anonymizers
+en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.0/en_core_web_lg-3.7.0-py3-none-any.whl
+# SpaCy NER
+spacy
+
+# Presidio PII detection
+presidio-analyzer
+presidio-anonymizer

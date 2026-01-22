@@ -10,3 +10,5 @@ tab:
   tri_pipeline:
   universal_tri_pipeline: 
   pii_annotator: ../../../netscratch/yay/pii_detectors/tab/tab__lr3e-5__bs8__m_partial_recall
+db_bio:
+  result_in: outputs/db_bio/presidio/20260122_125715_db_bio_presidio.jsonl
