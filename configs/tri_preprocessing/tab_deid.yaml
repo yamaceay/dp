@@ -1,0 +1,4 @@
+data: tab
+data_in: data/TAB/splitted/test.json
+result_in: outputs/tab/presidio/20260121_170356_tab_presidio.jsonl
+save_to_jsonl: data/TAB/test_bk_deid.jsonl
