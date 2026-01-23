@@ -1,3 +1,0 @@
-data: reddit
-data_in: data/reddit/reddit.jsonl
-pipeline_in: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5

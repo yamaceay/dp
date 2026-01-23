@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --array=0-3%4
+#SBATCH --array=0-3%2
 #SBATCH --job-name=a2_reddit_debug_tri
 #SBATCH --output=logs/%x/%j_%a.out
 #SBATCH --error=logs/%x/%j_%a.err

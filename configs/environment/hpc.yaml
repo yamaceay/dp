@@ -3,7 +3,6 @@ reddit:
   data_in: data/reddit/reddit.jsonl
   result_in: outputs/reddit/presidio/20260121_170408_reddit_presidio.jsonl
   tri_location: /netscratch/yay/tri_pipelines/reddit/_checkpoints
-  tri_pipeline: /netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5
   universal_tri_pipeline: /netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5__eval
 tab:
   data_in: data/TAB/splitted/test.json
