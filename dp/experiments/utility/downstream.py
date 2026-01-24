@@ -308,6 +308,7 @@ class BertOrdinalHead(SupervisedDownstreamHead):
             def __init__(self, base, hidden_size, num_thresholds, macro_loss_weight):
                 super().__init__()
                 self.base_model = base
+                self._keys_to_ignore_on_save = []
                 self.pre_classifier = torch.nn.Linear(hidden_size, hidden_size)
                 self.dropout = torch.nn.Dropout(0.1)
                 self.weight = torch.nn.Parameter(torch.randn(hidden_size) * 0.01)

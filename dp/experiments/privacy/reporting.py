@@ -140,6 +140,7 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
                 "score": {
                     "mean": 0.0, 
                     "mean_reciprocal_rank": sum(1 / r.rank for r in report.original_ranks) / len(report.original_ranks),
+                    "accuracy": sum(r.rank == 1 for r in report.original_ranks) / len(report.original_ranks),
                 },
                 "original_record_count": report.original_record_count,
             }
@@ -149,6 +150,7 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
         for evaluation in report.evaluations:
             privacy_metrics = {
                 "mean_reciprocal_rank": sum(1 / r.rank for r in evaluation.ranks) / len(evaluation.ranks),
+                "accuracy": sum(r.rank == 1 for r in evaluation.ranks) / len(evaluation.ranks),
             }
             records.append(
                 {
@@ -233,6 +235,7 @@ def build_privacy_report(
             summary = {
                 **summary,
                 "mean_reciprocal_rank": sum(1 / r.rank for r in ranks) / len(ranks),
+                "accuracy": sum(r.rank == 1 for r in ranks) / len(ranks),
             }
         evaluation_reports.append(
             EvaluationReport(
@@ -247,6 +250,7 @@ def build_privacy_report(
         score={
             "mean": 0.0,
             "mean_reciprocal_rank": sum(1 / r.rank for r in original_ranks) / len(original_ranks),
+            "accuracy": sum(r.rank == 1 for r in original_ranks) / len(original_ranks),
         },
         original_record_count=original_record_count,
         original_ranks=original_ranks,

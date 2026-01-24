@@ -1,6 +1,6 @@
 import json
 
-with open("logs/tab_priv_exp.jsonl", "r") as f_in, open("logs/tab_priv_exp_patched.jsonl", "w") as f_out:
+with open("logs/db_bio_priv_exp.jsonl", "r") as f_in, open("logs/db_bio_priv_exp_patched.jsonl", "w") as f_out:
     all_lines = f_in.readlines()
     ranks_per_method = {}
     ranks_original = []
