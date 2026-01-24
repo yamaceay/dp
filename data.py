@@ -34,6 +34,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark Anonymization Tools")
     data_keys = add_data_args(parser)
     parser.add_argument('--full_record', action='store_true', help='Print full record details')
+    parser.add_argument('--unique_counts', action='store_true', help='Print unique value counts for each field')
+    parser.add_argument('--functional', action='store_true', help='Perform functional analysis on dataset')
 
     args = parser.parse_args()
     data_kwargs = {k: getattr(args, k) for k in data_keys}
@@ -50,9 +52,7 @@ if __name__ == "__main__":
     for key, target in special_value_getters.items():
         value_getters[key] = target
 
-    print(value_getters)
-
-    unique_values = {}
+    unique_values: Dict[str, Dict[object, int]] = {}
     sum_text_length = 0
     max_text_length = 0
     all_text_lengths = []
@@ -61,8 +61,6 @@ if __name__ == "__main__":
         if args.full_record:
             print(record)
         all_text_lengths.append(len(record.text))
-        sum_text_length += len(record.text)
-        max_text_length = max(max_text_length, len(record.text))
 
         for key, getter in value_getters.items():
             value = getter(record)
@@ -87,8 +85,18 @@ if __name__ == "__main__":
             unique_values = list(values.keys())
         unique_value_list.append(unique_values)
         unique_count_list.append(len(unique_values))
-    table_str = format_table(unique_key_list, unique_count_list, unique_value_list)
-    print(table_str)
-    print(f"Average text length: {sum_text_length / len(all_text_lengths)}" if dataset else "No records found.")
-    print(f"Maximum text length: {max_text_length}" if dataset else "No records found.")
-    print(f"All text lengths: {all_text_lengths}" if dataset else "No records found.")
+    
+    if args.unique_counts:
+        table_str = format_table(unique_key_list, unique_count_list, unique_value_list)
+        print(table_str)
+    print(f"Text length: avg={sum(all_text_lengths)/len(all_text_lengths):.2f}, max={max(all_text_lengths)}, min={min(all_text_lengths)}")
+    print(f"Total records: {len(all_text_lengths)}")
+
+    if args.functional:
+        from dp.loaders.func import FunctionalAnalysis
+        func_analysis = FunctionalAnalysis(list(dataset.iter_records()), value_getters, exclude_keys=["key"])
+        func_analysis.analyze()
+        functionals = func_analysis.dag()
+        print("Functional mappings found:")
+        for functional in functionals:
+            print(functional.show(head_n=3, tail_n=3))

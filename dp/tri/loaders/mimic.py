@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from typing import List, Optional, Tuple, Union
+import re
 
 from dp.loaders.base import DatasetRecord
-from dp.loaders.tab import TabDatasetAdapter
+from dp.loaders.mimic import MIMICDatasetAdapter
 from dp.tri.loaders.base import AttackerDatasetAdapter
 from dp.utils.chunking import TokenAwareChunker
 from dp.utils.rewriter import BartRewriter
 from dp.utils.device import resolve_device
 
-class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
+class MIMICAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
         self,
         data: Optional[str] = None,
@@ -21,12 +22,12 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         rewriter_model_name: str = "facebook/bart-large-cnn",
         rewriter_device: Optional[Union[str, int]] = None,
         rewriter_max_length: int = 256, # originally 150
-        rewriter_min_length: int = 80,  # originally 40
+        rewriter_min_length: int = 128,  # originally 40
         max_background_tokens: int = 512,
         rewrite_background: bool = True,
         n_samples: int = 3,
     ):
-        adapter = TabDatasetAdapter(
+        adapter = MIMICDatasetAdapter(
             data=data,
             data_in=data_in,
             start=start,
@@ -51,7 +52,7 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         self.set_rewriter(rewriter)
         self.rewrite_background = rewrite_background
         self.n_samples = n_samples
-        self.section_headers = ["PROCEDURE", "THE FACTS", "THE LAW", "AS TO THE FACTS", "COMPLAINTS"]
+        self.section_headers = ["HISTORY OF PRESENT ILLNESS", "PAST MEDICAL HISTORY", "SOCIAL HISTORY", "HOSPITAL COURSE"]
 
     def _get_background_chunker(self) -> TokenAwareChunker:
         if self._background_chunker is None:
@@ -62,24 +63,12 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         return self._background_chunker
 
     def _extract_section(self, text: str, section_name: str) -> str:
-        lines = text.split('\n')
-        in_section = False
-        section_content = []
+        section_pattern = rf"{re.escape(section_name)}:\s*(.*?)(?=\n\s*(?:[A-Z]+(?:\s+[A-Z]+)*):|$)"
         
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            
-            if stripped == section_name:
-                in_section = True
-                continue
-            
-            if in_section and stripped in self.section_headers and stripped != section_name:
-                break
-            
-            if in_section:
-                section_content.append(line)
-        
-        return '\n'.join(section_content).strip()
+        match = re.search(section_pattern, text, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return ""
 
     def extract_background_knowledge(self, record: DatasetRecord) -> List[Tuple[str, str]]:
         background = []

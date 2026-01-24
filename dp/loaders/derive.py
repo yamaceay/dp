@@ -223,6 +223,21 @@ def trustpilot_stars(record: DatasetRecord) -> Optional[int]:
     return int_value(record.metadata.get("stars"))
 
 
+def mimic_category(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("category"))
+
+def mimic_description(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("description"))
+
+def mimic_chartdate(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("chartdate"))
+
+def mimic_charttime(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("charttime"))
+
+def mimic_storetime(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("storetime"))
+
 DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
     "reddit": {
         "feature": reddit_feature,
@@ -245,6 +260,13 @@ DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
         "category": trustpilot_category,
         "stars": trustpilot_stars,
     },
+    "mimic": {
+        "category": mimic_category, 
+        "description": mimic_description,
+        "chartdate": mimic_chartdate,
+        "charttime": mimic_charttime,
+        "storetime": mimic_storetime,
+    }
 }
 
 

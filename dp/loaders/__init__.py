@@ -11,6 +11,7 @@ from dp.loaders.tab import TabDatasetAdapter
 from dp.loaders.dbbio import DBBioDatasetAdapter
 from dp.loaders.reddit import RedditDatasetAdapter
 from dp.loaders.trustpilot import TrustpilotDatasetAdapter
+from dp.loaders.mimic import MIMICDatasetAdapter
 
 from dp.loaders.annotations import (
     read_annotations,
@@ -32,6 +33,7 @@ ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "reddit": RedditDatasetAdapter,
     "trustpilot": TrustpilotDatasetAdapter,
     "db_bio": DBBioDatasetAdapter,
+    "mimic": MIMICDatasetAdapter,
 }
 
 def get_adapter(name: str, **kwargs) -> DatasetAdapter:
