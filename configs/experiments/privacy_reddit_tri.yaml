@@ -5,7 +5,6 @@ annotations_in:
 tri:
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5__eval
   max_length: 512
-  device: auto
 mask_token: "[MASK]"
 output:
   format: jsonl

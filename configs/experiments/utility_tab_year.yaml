@@ -29,6 +29,7 @@ head:
   type: bert_ordinal
   params:
     epochs: 2
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/tab/_checkpoints
 output:
   format: jsonl
   file: logs/tab_year_exp.jsonl

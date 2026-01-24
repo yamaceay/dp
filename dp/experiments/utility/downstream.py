@@ -7,6 +7,7 @@ from sklearn.metrics import f1_score, mean_squared_error, r2_score
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import LabelEncoder
 from transformers import AutoTokenizer, AutoModel, Trainer, TrainingArguments, TrainerCallback, EvalPrediction
+import torch
 
 from dp.utils.device import resolve_device
 
