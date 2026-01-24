@@ -1,0 +1,14 @@
+params:
+  epsilon: "*"
+
+explainer:
+  name: shap
+  tri_pipeline:
+  risk_temperature: 0.1
+
+precomputation:
+  risk_scores:
+  result_in:
+
+tri_chunking:
+  enabled: true

@@ -1,9 +1,8 @@
-dataset: tab
-data_path: data/TAB/splitted
-data_ext: json
+dataset: mimic
+data_path: data/mimic/splitted
+data_ext: csv
 model_name: roberta-base
-output_root: ../../../netscratch/yay/pii_detectors/tab
-
+output_root: ../../../netscratch/yay/pii_detectors/mimic
 evaluation:
   use_nervaluate: true
   modes: [strict, exact, partial, type]

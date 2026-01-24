@@ -1,0 +1,25 @@
+dataset: db_bio
+data_in: data/db_bio/test/data-00000-of-00001.arrow
+debug: true
+annotations_in:
+  - outputs/db_bio
+target:
+  key: label
+  type: nominal
+split:
+  - train: 0.0
+    val: 1.0
+  - path: data/db_bio/train/data-00000-of-00001.arrow
+    train: 1.0
+    val: 0.0
+  - path: data/db_bio/validation/data-00000-of-00001.arrow
+    train: 0.0
+    val: 1.0
+random_state: 42
+head:
+  type: bert_classifier
+  params:
+    epochs: 2
+output:
+  format: jsonl
+  file: logs/db_bio_label_exp.jsonl

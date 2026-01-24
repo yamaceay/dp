@@ -155,9 +155,9 @@ def _resolve_path(project_root: Path, raw: str) -> Path:
     return p
 
 
-def load_splits(dataset: str, data_path: Path, max_records: Optional[int]) -> Tuple[list, list, list]:
+def load_splits(dataset: str, data_path: Path, max_records: Optional[int], data_ext: str) -> Tuple[list, list, list]:
     def load_one(name: str) -> list:
-        path = data_path / f"{name}.json"
+        path = data_path / f"{name}.{data_ext}"
         if not path.exists():
             return []
         adapter = get_adapter(dataset, data_in=str(path), max_records=max_records)
@@ -360,8 +360,9 @@ def main() -> int:
         output_dir = (output_root / run_name).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
+
         train_records, dev_records, test_records = load_splits(
-            str(cfg["dataset"]), Path(cfg["data_path"]), cfg.get("max_records")
+            str(cfg["dataset"]), Path(cfg["data_path"]), cfg.get("max_records"), cfg.get("data_ext")
         )
         if not train_records:
             raise SystemExit("Missing train split")
@@ -409,7 +410,7 @@ def main() -> int:
 
     cfg = _load_training_config(PROJECT_ROOT, Path(args.training_in), env_path)
     _apply_set_overrides(cfg, args.set_overrides)
-    _, _, test_records = load_splits(str(cfg["dataset"]), Path(cfg["data_path"]), cfg.get("max_records"))
+    _, _, test_records = load_splits(str(cfg["dataset"]), Path(cfg["data_path"]), cfg.get("max_records"), cfg.get("data_ext"))
     if not test_records:
         raise SystemExit("Missing test split")
 

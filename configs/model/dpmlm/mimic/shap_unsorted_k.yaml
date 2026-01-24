@@ -1,0 +1,19 @@
+params:
+  epsilon: "*"
+  ks: ["*"]
+
+explainer:
+  name: shap
+  tri_pipeline:
+  risk_temperature: 0.1
+
+precomputation:
+  risk_scores:
+  result_in:
+
+tri_chunking:
+  enabled: true
+
+token_selection:
+  name: until_k
+  sort_by_risk: false

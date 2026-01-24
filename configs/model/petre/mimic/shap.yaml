@@ -1,0 +1,16 @@
+params:
+  ks: ["*"]
+
+explainer:
+  name: shap
+  tri_pipeline:
+
+precomputation:
+  risk_scores: 
+  result_in: 
+
+tri_chunking:
+  enabled: true
+
+token_selection:
+  name: until_k

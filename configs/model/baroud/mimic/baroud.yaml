@@ -1,0 +1,6 @@
+params:
+  lambdas: ["*"]
+
+token_selection:
+  name: pii_only
+  pii_annotator:
