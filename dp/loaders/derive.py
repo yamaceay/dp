@@ -226,17 +226,22 @@ def trustpilot_stars(record: DatasetRecord) -> Optional[int]:
 def mimic_category(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("category"))
 
-def mimic_description(record: DatasetRecord) -> Optional[str]:
-    return text_value(record.metadata.get("description"))
+def mimic_category_group(record: DatasetRecord) -> Optional[str]:
+    if mimic_category(record) in ['Nursing/other', 'Nursing']:
+        return 'Nursing'
+    return record.metadata.get("category")
 
-def mimic_chartdate(record: DatasetRecord) -> Optional[str]:
-    return text_value(record.metadata.get("chartdate"))
+# def mimic_description(record: DatasetRecord) -> Optional[str]:
+#     return text_value(record.metadata.get("description"))
 
-def mimic_charttime(record: DatasetRecord) -> Optional[str]:
-    return text_value(record.metadata.get("charttime"))
+# def mimic_chartdate(record: DatasetRecord) -> Optional[str]:
+#     return text_value(record.metadata.get("chartdate"))
 
-def mimic_storetime(record: DatasetRecord) -> Optional[str]:
-    return text_value(record.metadata.get("storetime"))
+# def mimic_charttime(record: DatasetRecord) -> Optional[str]:
+#     return text_value(record.metadata.get("charttime"))
+
+# def mimic_storetime(record: DatasetRecord) -> Optional[str]:
+#     return text_value(record.metadata.get("storetime"))
 
 DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
     "reddit": {
@@ -261,11 +266,8 @@ DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
         "stars": trustpilot_stars,
     },
     "mimic": {
-        "category": mimic_category, 
-        "description": mimic_description,
-        "chartdate": mimic_chartdate,
-        "charttime": mimic_charttime,
-        "storetime": mimic_storetime,
+        "category": mimic_category,
+        "category_group": mimic_category_group,
     }
 }
 
