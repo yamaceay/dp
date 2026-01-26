@@ -6,7 +6,12 @@ import yaml
 
 from dp.experiments.utility.io import build_utility_evaluation_texts
 from dp.experiments.utility.models import UtilitySpec, MODE_TO_MODEL
-from dp.experiments.utility.vectorizer import TfidfTextVectorizer, BERTVectorizer, SelfSupervisedFeatureExtractor
+from dp.experiments.utility.vectorizer import (
+    BERTVectorizer,
+    SentenceEmbeddingVectorizer,
+    SelfSupervisedFeatureExtractor,
+    TfidfTextVectorizer,
+)
 from dp.loaders import DatasetRecord
 from dp.loaders.derive import DERIVE_REGISTRY
 
@@ -61,12 +66,12 @@ def parse_component_config(payload: Any) -> Tuple[str, Dict[str, Any]]:
 
 def parse_metric_config(payload: Any) -> Tuple[str, Dict[str, Any]]:
     if payload is None:
-        return "bertscore", {}
+        return "", {}
     if isinstance(payload, str):
         return payload, {}
     if isinstance(payload, dict):
         config = dict(payload)
-        metric_type = str(config.pop("type", "bertscore"))
+        metric_type = str(config.pop("type", config.pop("name", "")))
         return metric_type, config
     raise ValueError("metric config must be a string or mapping")
 
@@ -80,6 +85,8 @@ def build_vectorizer_from_config(payload: Any) -> SelfSupervisedFeatureExtractor
         return TfidfTextVectorizer(**params)
     if name == "bert":
         return BERTVectorizer(**params)
+    if name in {"sentence", "sbert"}:
+        return SentenceEmbeddingVectorizer(**params)
     raise ValueError(f"unsupported vectorizer '{name}'")
 
 

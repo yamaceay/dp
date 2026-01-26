@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 from visualize.common import (
     params_to_str_for_sort,
-    params_to_str,
     read_jsonl_entries,
 )
 
@@ -21,6 +20,7 @@ FILES: List[Tuple[str, str, str]] = [
     ("logs/reddit_education_exp.jsonl", "reddit", "education"),
     ("logs/reddit_occupation_exp.jsonl", "reddit", "occupation"),
     ("logs/reddit_city_country_exp.jsonl", "reddit", "city_country"),
+    ("logs/db_bio_label_exp.jsonl", "db_bio", "label"),
 ]
 
 def read_data(files: Sequence[Tuple[str, str, str]]) -> Iterable[Dict[str, Any]]:

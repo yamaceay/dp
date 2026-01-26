@@ -6,10 +6,10 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import numpy as np
 from bert_score import score
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from dp.experiments import Experiment, ExperimentResult
+from dp.experiments.utility.vectorizer import SentenceEmbeddingVectorizer, SelfSupervisedFeatureExtractor
 
 
 class DivergenceMetric(ABC):
@@ -207,16 +207,18 @@ class BERTScoreMetric(DivergenceMetric):
 
 
 class CosineSimilarityMetric(DivergenceMetric):
-    def __init__(self, vectorizer: TfidfVectorizer):
+    def __init__(self, vectorizer: Optional[SelfSupervisedFeatureExtractor] = None):
         super().__init__("cosine")
-        self._vectorizer_params = vectorizer.get_params(deep=False)
-        self._vectorizer: Optional[TfidfVectorizer] = None
+        if vectorizer is None:
+            vectorizer = SentenceEmbeddingVectorizer(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        self._template = vectorizer.clone()
+        self._vectorizer: Optional[SelfSupervisedFeatureExtractor] = None
 
     def clone(self) -> "CosineSimilarityMetric":
-        return CosineSimilarityMetric(TfidfVectorizer(**self._vectorizer_params))
+        return CosineSimilarityMetric(self._template.clone())
 
     def prepare(self, references: Dict[str, str]) -> None:
-        vectorizer = TfidfVectorizer(**self._vectorizer_params)
+        vectorizer = self._template.clone()
         vectorizer.fit(list(references.values()))
         self._vectorizer = vectorizer
 
@@ -230,14 +232,11 @@ class CosineSimilarityMetric(DivergenceMetric):
         return [float(value) for value in diagonal.tolist()]
 
     def metadata(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "vectorizer": {
-                "ngram_range": self._vectorizer_params.get("ngram_range"),
-                "max_features": self._vectorizer_params.get("max_features"),
-                "min_df": self._vectorizer_params.get("min_df"),
-            },
-        }
+        description = self._template.describe()
+        payload: Dict[str, Any] = {"name": self.name}
+        if description:
+            payload["vectorizer"] = description
+        return payload
 
     def cleanup(self) -> None:
         self._vectorizer = None
@@ -263,6 +262,6 @@ class BERTScoreDivergence(TextDivergenceExperiment):
 
 
 class CosineSimilarityDivergence(TextDivergenceExperiment):
-    def __init__(self, vectorizer: Optional[TfidfVectorizer] = None):
+    def __init__(self, vectorizer: Optional[SelfSupervisedFeatureExtractor] = None):
         metric = CosineSimilarityMetric(vectorizer)
         super().__init__(metric)

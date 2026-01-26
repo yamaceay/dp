@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from datasets import Dataset, DatasetDict
-
 import csv
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation

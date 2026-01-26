@@ -1,0 +1,12 @@
+dataset: tab
+data_in: data/TAB/splitted/test.json
+annotations_in:
+  - outputs/tab
+metric:
+  type: cosine
+  vectorizer:
+    type: sentence
+    model_name: sentence-transformers/all-MiniLM-L6-v2
+output:
+  format: jsonl
+  file: logs/tab_div_cosine_exp.jsonl

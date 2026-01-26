@@ -5,9 +5,15 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
+from visualize.common import normalize_source_key
+
 FILES: List[Tuple[str, str]] = [
-    ("logs/reddit_div_exp.jsonl", "reddit"),
-    ("logs/tab_div_exp.jsonl", "tab"),
+    ("logs/reddit_div_cosine_exp.jsonl", "reddit"),
+    ("logs/tab_div_cosine_exp.jsonl", "tab"),
+    ("logs/db_bio_div_cosine_exp.jsonl", "db_bio"),
+    ("logs/reddit_div_bertscore_exp.jsonl", "reddit"),
+    ("logs/tab_div_bertscore_exp.jsonl", "tab"),
+    ("logs/db_bio_div_bertscore_exp.jsonl", "db_bio"),
 ]
 
 def params_to_str_for_sort(params: Mapping[str, Any]) -> str:
@@ -29,14 +35,16 @@ def read_data(files: Sequence[Tuple[str, str]]) -> Iterable[Dict[str, Any]]:
         fp = Path(file_path)
         if not fp.exists():
             continue
+        metric_name = ""
         with fp.open() as file:
             for line in file:
                 data = json.loads(line)
+                if data.get("type") == "experiment":
+                    metric_name = str(data.get("metric_name", "")) or metric_name
+                    continue
                 if data.get("type") != "evaluation":
                     continue
-                key = re.sub(r"outputs/[a-z]+/[a-z]+/[0-9]{8}_[0-9]{6}_[a-z]+_(.*?).jsonl", r"\1", data["source"])
-                key = re.sub(r"_eps_[0-9]{3}(\?.*?)", r"\1", key)
-                key = re.sub(r"(?:_k|_risk|_pii)(\?.*?)", r"\1", key)
+                key = normalize_source_key(str(data.get("source", "")))
                 params: Dict[str, Any] = {}
                 if "?" in key:
                     key, params_str = key.split("?", 1)
@@ -52,22 +60,24 @@ def read_data(files: Sequence[Tuple[str, str]]) -> Iterable[Dict[str, Any]]:
                 params = dict(sorted(params.items(), key=lambda item: item[0]))
                 res = data["summary"]
                 values = {
-                    "divergence_mean_bertscore": res["divergence_mean"],
+                    "divergence_mean": res["divergence_mean"],
                 }
-                yield {"method": key, "params": params, "dataset": dataset_name, **values}
+                yield {"method": key, "params": params, "dataset": dataset_name, "metric": metric_name, **values}
 
 def build_summaries() -> None:
     entries = list(read_data(FILES))
     entries = sorted(entries, key=lambda x: (x["method"], params_to_str_for_sort(x["params"])))
-    by_dataset: Dict[str, List[Dict[str, Any]]] = {}
+    by_dataset_by_metric: Dict[str, List[Dict[str, Any]]] = {}
     for entry in entries:
         dataset = entry["dataset"]
-        by_dataset.setdefault(dataset, []).append(entry)
+        metric = entry["metric"]
+        by_dataset_by_metric.setdefault(dataset, {}).setdefault(metric, []).append(entry)
     Path("visualize/pretty").mkdir(parents=True, exist_ok=True)
-    for dataset, dataset_entries in by_dataset.items():
+    for dataset, dataset_entries in by_dataset_by_metric.items():
         Path(f"visualize/pretty/{dataset}").mkdir(parents=True, exist_ok=True)
-        with open(f"visualize/pretty/{dataset}/divergence.json", "w", encoding="utf-8") as f:
-            json.dump(dataset_entries, f, indent=2)
+        for metric_name, dataset_metric_entries in dataset_entries.items():
+            with open(f"visualize/pretty/{dataset}/divergence/{metric_name}.json", "w", encoding="utf-8") as f:
+                json.dump(dataset_metric_entries, f, indent=2)
 
 if __name__ == "__main__":
     build_summaries()

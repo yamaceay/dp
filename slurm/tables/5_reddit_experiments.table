@@ -1,2 +1,3 @@
 privacy_reddit|python run.py privacy --config configs/experiments/privacy_reddit_tri.yaml
 divergence_reddit_bertscore|python run.py divergence --config configs/experiments/divergence_reddit_bertscore.yaml
+divergence_reddit_cosine|python run.py divergence --config configs/experiments/divergence_reddit_cosine.yaml

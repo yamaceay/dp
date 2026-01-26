@@ -34,11 +34,16 @@ if [ "$DATASET" != "reddit" ] && [ "$DATASET" != "tab" ]; then
     exit 1
 fi
 
+result_set="${TYPE}_${DATASET}"
+metric="${TYPE}_${METRIC}"
+
 cmds=()
 if [ "$TYPE" = "utility" ]; then
     if [ "$SKIP_RUN" = false ]; then
         cmds+=("python3 run.py ${TYPE} --config configs/experiments/${TYPE}_${DATASET}_${LABEL}.yaml")
     fi
+    result_set+="_${LABEL}"
+    metric+="_${LABEL}"
 elif [ "$TYPE" = "privacy" ]; then 
     if [ "$SKIP_RUN" = false ]; then
         cmds+=("python3 run.py ${TYPE} --config configs/experiments/${TYPE}_${DATASET}_tri.yaml")
@@ -47,13 +52,8 @@ elif [ "$TYPE" = "divergence" ]; then
     if [ "$SKIP_RUN" = false ]; then
         cmds+=("python3 run.py ${TYPE} --config configs/experiments/${TYPE}_${DATASET}_${METRIC}.yaml")
     fi
-fi
-
-result_set="${TYPE}_${DATASET}"
-metric="${TYPE}_${METRIC}"
-if [ -n "$LABEL" ]; then
-    result_set+="_${LABEL}"
-    metric+="_${LABEL}"
+    result_set+="_${METRIC}"
+    metric+="_${METRIC}"
 fi
 
 cmds+=("python3 visualize/${TYPE}.py")

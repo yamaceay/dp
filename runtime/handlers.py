@@ -235,12 +235,15 @@ def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
 
 
 def build_divergence_experiment(metric_type: str, metric_params: Dict[str, Any]) -> TextDivergenceExperiment:
+    if not metric_type:
+        raise ValueError("divergence metric type is required")
     if metric_type == "bertscore":
         allowed = {"model_type", "language", "batch_size", "device", "rescale_with_baseline"}
         kwargs = {key: metric_params[key] for key in allowed if key in metric_params}
         return BERTScoreDivergence(**kwargs)
     if metric_type == "cosine":
-        vectorizer = build_vectorizer_from_config(metric_params.get("vectorizer"))
+        vectorizer_config = metric_params["vectorizer"] if "vectorizer" in metric_params else None
+        vectorizer = build_vectorizer_from_config(vectorizer_config) if vectorizer_config is not None else None
         return CosineSimilarityDivergence(vectorizer=vectorizer)
     raise ValueError(f"unsupported divergence metric '{metric_type}'")
 

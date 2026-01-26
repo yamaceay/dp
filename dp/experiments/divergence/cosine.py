@@ -6,12 +6,14 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from dp.experiments.divergence.base import DivergenceMetric, TextDivergenceExperiment
-from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, TfidfTextVectorizer
+from dp.experiments.utility.vectorizer import SentenceEmbeddingVectorizer, SelfSupervisedFeatureExtractor
 
 
 class CosineSimilarityMetric(DivergenceMetric):
-    def __init__(self, vectorizer: SelfSupervisedFeatureExtractor):
+    def __init__(self, vectorizer: Optional[SelfSupervisedFeatureExtractor] = None):
         super().__init__("cosine")
+        if vectorizer is None:
+            vectorizer = SentenceEmbeddingVectorizer(model_name="sentence-transformers/all-MiniLM-L6-v2")
         self._template = vectorizer.clone()
         self._vectorizer: Optional[SelfSupervisedFeatureExtractor] = None
 
@@ -44,6 +46,6 @@ class CosineSimilarityMetric(DivergenceMetric):
 
 
 class CosineSimilarityDivergence(TextDivergenceExperiment):
-    def __init__(self, vectorizer: SelfSupervisedFeatureExtractor):
+    def __init__(self, vectorizer: Optional[SelfSupervisedFeatureExtractor] = None):
         metric = CosineSimilarityMetric(vectorizer)
         super().__init__(metric)

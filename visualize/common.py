@@ -5,6 +5,9 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
+from dp.loaders import ADAPTER_REGISTRY
+
+available_datasets_str = "|".join(ADAPTER_REGISTRY.keys())
 
 def params_to_str_for_sort(params: Mapping[str, Any]) -> str:
     parts: List[Tuple[str, str]] = []
@@ -41,7 +44,7 @@ def parse_params_from_key(key: str) -> Tuple[str, Dict[str, Any]]:
 
 
 def normalize_source_key(source_path: str) -> str:
-    key = re.sub(r"outputs/[a-z]+/[a-z]+/[0-9]{8}_[0-9]{6}_[a-z]+_(.*?).jsonl", r"\1", source_path)
+    key = re.sub(rf"outputs/[a-z_]+/[a-z_]+/[0-9]{{8}}_[0-9]{{6}}_(?:{available_datasets_str})_(.*?)\.jsonl", r"\1", source_path)
     key = re.sub(r"_eps_[0-9]{3}(\?.*?)", r"\1", key)
     key = re.sub(r"(?:_k|_risk|_pii)(\?.*?)", r"\1", key)
     return key

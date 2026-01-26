@@ -12,6 +12,7 @@ from visualize.common import (
 FILES: List[Tuple[str, str]] = [
     ("logs/reddit_priv_exp.jsonl", "reddit"),
     ("logs/tab_priv_exp.jsonl", "tab"),
+    ("logs/db_bio_priv_exp.jsonl", "db_bio"),
 ]
 
 def read_data(files: Sequence[Tuple[str, str]]) -> Iterable[Dict[str, Any]]:

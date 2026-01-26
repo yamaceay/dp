@@ -7,6 +7,10 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from transformers import AutoModel, AutoTokenizer
 import torch
+try:
+    from sentence_transformers import SentenceTransformer
+except Exception:
+    SentenceTransformer = None
 
 class SelfSupervisedFeatureExtractor(ABC):
     @abstractmethod
@@ -124,9 +128,91 @@ class BERTVectorizer(SelfSupervisedFeatureExtractor):
     def clone(self) -> "SelfSupervisedFeatureExtractor":
         return BERTVectorizer(**self.describe())
 
+class SentenceEmbeddingVectorizer(SelfSupervisedFeatureExtractor):
+    def __init__(
+        self,
+        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        batch_size: int = 32,
+        device: str = "cpu",
+        backend: Optional[str] = None,
+    ):
+        self.model_name = model_name
+        self.batch_size = batch_size
+        self.device = device
+        self.backend = backend
+        self._sentence_model: Optional[Any] = None
+        self._hf_vectorizer: Optional[BERTVectorizer] = None
+        self._backend: Optional[str] = None
+
+    def describe(self) -> Dict[str, Any]:
+        payload = {
+            "model_name": self.model_name,
+            "batch_size": self.batch_size,
+            "device": self.device,
+        }
+        if self.backend:
+            payload["backend"] = self.backend
+        return payload
+
+    def setup(self) -> "SelfSupervisedFeatureExtractor":
+        backend = (self.backend or "auto").lower()
+        if backend in {"sentence_transformers", "sentence-transformers", "sbert", "st"}:
+            if SentenceTransformer is None:
+                raise RuntimeError("sentence-transformers is not available")
+            self._sentence_model = SentenceTransformer(self.model_name, device=self.device)
+            self._backend = "sentence_transformers"
+            return self
+        if backend in {"transformers", "hf", "bert"}:
+            self._hf_vectorizer = BERTVectorizer(self.model_name, self.batch_size, self.device)
+            self._hf_vectorizer.setup()
+            self._backend = "transformers"
+            return self
+        if SentenceTransformer is not None and self.model_name.startswith("sentence-transformers/"):
+            self._sentence_model = SentenceTransformer(self.model_name, device=self.device)
+            self._backend = "sentence_transformers"
+            return self
+        self._hf_vectorizer = BERTVectorizer(self.model_name, self.batch_size, self.device)
+        self._hf_vectorizer.setup()
+        self._backend = "transformers"
+        return self
+
+    def fit(self, texts: Sequence[str]) -> None:
+        if self._backend is None:
+            self.setup()
+        if self._backend == "transformers" and self._hf_vectorizer is not None:
+            self._hf_vectorizer.fit(texts)
+
+    def transform(self, texts: Sequence[str]) -> Any:
+        if self._backend is None:
+            self.setup()
+        if self._backend == "sentence_transformers":
+            if self._sentence_model is None:
+                self.setup()
+            return self._sentence_model.encode(
+                list(texts),
+                batch_size=self.batch_size,
+                convert_to_numpy=True,
+                show_progress_bar=False,
+            )
+        if self._hf_vectorizer is None:
+            self.setup()
+        return self._hf_vectorizer.transform(texts)
+
+    def cleanup(self) -> None:
+        if self._hf_vectorizer is not None:
+            self._hf_vectorizer.cleanup()
+        self._sentence_model = None
+        self._hf_vectorizer = None
+        self._backend = None
+
+    def clone(self) -> "SelfSupervisedFeatureExtractor":
+        return SentenceEmbeddingVectorizer(**self.describe())
+
 FEATURE_EXTRACTOR_REGISTRY: Dict[str, type[SelfSupervisedFeatureExtractor]] = {
     "tfidf": TfidfTextVectorizer,
     "bert": BERTVectorizer,
+    "sentence": SentenceEmbeddingVectorizer,
+    "sbert": SentenceEmbeddingVectorizer,
     "text": None,  # placeholder, filled below
 }
 
