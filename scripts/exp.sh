@@ -29,8 +29,8 @@ if [ "$TYPE" != "utility" ] && [ "$TYPE" != "privacy" ] && [ "$TYPE" != "diverge
     echo "Invalid TYPE: $TYPE. Must be one of utility, privacy, divergence, runtime."
     exit 1
 fi
-if [ "$DATASET" != "reddit" ] && [ "$DATASET" != "tab" ]; then
-    echo "Invalid DATASET: $DATASET. Must be one of reddit, tab."
+if [ "$DATASET" != "reddit" ] && [ "$DATASET" != "tab" ] && [ "$DATASET" != "db_bio" ]; then
+    echo "Invalid DATASET: $DATASET. Must be one of reddit, tab, db_bio."
     exit 1
 fi
 
@@ -53,7 +53,6 @@ elif [ "$TYPE" = "divergence" ]; then
         cmds+=("python3 run.py ${TYPE} --config configs/experiments/${TYPE}_${DATASET}_${METRIC}.yaml")
     fi
     result_set+="_${METRIC}"
-    metric+="_${METRIC}"
 fi
 
 cmds+=("python3 visualize/${TYPE}.py")

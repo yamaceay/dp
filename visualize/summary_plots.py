@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import yaml
 import json
@@ -58,12 +58,13 @@ class PlotConfig:
 		self.within_params, self.across_params = self._extract_params_scope()
 		return self
 	
-	def load_data(self, results_config_path: Path, set_name: str) -> PlotConfig:
+	def load_data(self, results_config_path: Path, set_name: str, metric_name: str) -> PlotConfig:
+		self.metric_name = metric_name
 		dataset, flat_file = _ext_load_results_set(results_config_path, set_name)
 		if not self.dataset:
 			self.dataset = dataset
 		flat_path = Path("visualize/pretty") / flat_file if not Path(flat_file).exists() else Path(flat_file)
-		self.data_rows = DataLoader().load(flat_path, self.dataset, self.metric)
+		self.data_rows = DataLoader().load(flat_path, self.dataset, self.metric_name)
 		return self
 	
 	def validate(self) -> None:
@@ -275,7 +276,7 @@ class BarPlotter:
 				color = self.k_palette.get(float(k_value)) if k_value is not None else self.method_colors[method_id]
 				
 				x_positions.append(start_x + idx * step)
-				y_values.append(float(row.get(self.config.metric)))
+				y_values.append(float(row.get(self.config.metric_name)))
 				colors.append(color)
 				widths.append(step * 0.85)
 				annotations.append(self._format_params(params, exclude_param))
@@ -353,7 +354,8 @@ def plot_bars(results_config: Path, results_set: str, dataset: str, metric: str,
 	if methods_config and methods_set:
 		config.load_methods(methods_config, methods_set)
 	
-	config.load_data(results_config, results_set)
+	metric_name = "divergence_mean" if experiment == "divergence" else metric
+	config.load_data(results_config, results_set, metric_name)
 	
 	if debug:
 		print(f"[plot-bars] dataset={config.dataset} experiment={experiment} metric={metric}")
