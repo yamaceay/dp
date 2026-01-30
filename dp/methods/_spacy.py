@@ -4,7 +4,7 @@ from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, buckets_to_dicts, BucketDict
 from dp.loaders.base import TextAnnotation, TextAnnotations
 
-spacy_models = ["en_core_web_sm", "en_core_web_lg"]
+spacy_models = ["en_core_web_lg", "en_core_web_sm"]
 
 class SpacyAnonymizer(Anonymizer):
     MODEL_NAME = "spacy"
@@ -27,7 +27,21 @@ class SpacyAnonymizer(Anonymizer):
                     continue
 
             if not model_loaded:
-                raise ImportError("Could not load any spaCy model. Please install one of: " + ", ".join(spacy_models))
+                print("Could not load any spaCy model. Attempting to download one...")
+                import spacy.cli
+                import spacy.util
+                model_downloaded = False
+                for model in spacy_models:
+                    if not spacy.util.is_package(model):
+                        try:
+                            spacy.cli.download(model)
+                            model_downloaded = True
+                            break
+                        except Exception:
+                            continue
+
+                if not model_downloaded:
+                    raise ImportError("Could not download spaCy models. Please install one of: " + ", ".join(spacy_models))
 
     def anonymize_any_text(self, text: str, labels: List[str] = None, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
         entities = self._extract_entities(text, labels)

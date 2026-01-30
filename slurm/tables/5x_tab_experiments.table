@@ -1,0 +1,1 @@
+privacy_tab|python run.py privacy --config configs/experiments/privacy_tab_tri.yaml

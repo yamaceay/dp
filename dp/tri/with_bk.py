@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Any, Tuple, Union
 from dp.loaders.base import DatasetRecord
 from dp.tri.base import TRIDetector, TRIDataset
 from dp.tri.loaders.base import AttackerDatasetRecord
+from dp.utils.stopwords import strip_stopwords
 
 
 class TRIDetectorWithBK(TRIDetector):
@@ -10,42 +11,45 @@ class TRIDetectorWithBK(TRIDetector):
         self.eval_records: Optional[List[DatasetRecord]] = None
         self.original_eval_records: Optional[List[DatasetRecord]] = None
     
-    def setup(self, records: List[AttackerDatasetRecord], include_original_eval: bool = False) -> None:
-        self._set_dataset(records, include_original_eval=include_original_eval)
+    def setup(self, records: List[AttackerDatasetRecord], include_original_eval: bool = False, exclude_stopwords: bool = False) -> None:
+        self._set_dataset(records, include_original_eval=include_original_eval, exclude_stopwords=exclude_stopwords)
         self.build_label_mappings()
 
-    def _set_dataset(self, records: List[AttackerDatasetRecord], include_original_eval: bool) -> None:
+    def _set_dataset(self, records: List[AttackerDatasetRecord], include_original_eval: bool, exclude_stopwords: bool) -> None:
         if not records:
             raise ValueError("Training records cannot be empty")
         self.train_records, self.eval_records = [], []
         self.original_eval_records = [] if include_original_eval else None
         for record in records:
+            eval_text = strip_stopwords(record.rewrited_text) if exclude_stopwords else record.rewrited_text
             eval_record = DatasetRecord(
                 uid=record.uid,
-                text=record.rewrited_text,
+                text=eval_text,
                 name=record.name,
                 spans=record.spans,
                 metadata=record.metadata,
             )
             self.eval_records.append(eval_record)
             if self.original_eval_records is not None:
+                original_text = strip_stopwords(record.text) if exclude_stopwords else record.text
                 self.original_eval_records.append(
                     DatasetRecord(
                         uid=record.uid,
-                        text=record.text,
+                        text=original_text,
                         name=record.name,
                         spans=record.spans,
                         metadata=record.metadata,
                     )
                 )
             for bk_key, bk_value in record.background_knowledge:
+                training_text = strip_stopwords(bk_value) if exclude_stopwords else bk_value
                 new_metadata = {
                     **record.metadata,
                     "background_knowledge": bk_key
                 }
                 train_record = DatasetRecord(
                     uid=record.uid,
-                    text=bk_value,
+                    text=training_text,
                     name=record.name,
                     spans=record.spans,
                     metadata=new_metadata,
@@ -71,12 +75,12 @@ class TRIDetectorWithBK(TRIDetector):
         }
         if per_step:
             eval_kwargs.update({
-                "eval_strategy": "steps",
+                "evaluation_strategy": "steps",
                 "eval_steps": per_step,
             })
         else:
             eval_kwargs.update({
-                "eval_strategy": "epoch",
+                "evaluation_strategy": "epoch",
             })
 
         return eval_dataset, eval_kwargs

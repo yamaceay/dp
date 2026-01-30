@@ -170,6 +170,11 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
             "pretraining_epochs": int(training.get("pretraining_epochs", 3)),
             "per_step": _optional_int(training, "per_step"),
             "early_stop_threshold": _optional_float(training, "early_stop_threshold"),
+            "loss_type": str(training.get("loss_type", "cross_entropy")),
+            "focal_gamma": float(training.get("focal_gamma", 2.0)),
+            "focal_alpha": _optional_float(training, "focal_alpha"),
+            "focal_ignore_pt": _optional_float(training, "focal_ignore_pt"),
+            "exclude_stopwords": bool(training.get("exclude_stopwords", False)),
         },
     }
     return cfg
@@ -204,6 +209,11 @@ def main() -> int:
     parser.add_argument("--attacker_extensions", type=str, default=None)
     parser.add_argument("--early_stop_threshold", type=float, default=None)
     parser.add_argument("--eval_on_original", action="store_true", help="Also evaluate on original record text (in addition to deidentified/rewritten)")
+    parser.add_argument("--loss_type", type=str, default="cross_entropy", choices=["cross_entropy", "focal"])
+    parser.add_argument("--focal_gamma", type=float, default=2.0)
+    parser.add_argument("--focal_alpha", type=float, default=None)
+    parser.add_argument("--focal_ignore_pt", type=float, default=None)
+    parser.add_argument("--exclude_stopwords", action="store_true")
 
     args = parser.parse_args()
 
@@ -227,6 +237,11 @@ def main() -> int:
         pretraining_epochs = int(training.get("pretraining_epochs", 3))
         per_step = training.get("per_step")
         early_stop_threshold = training.get("early_stop_threshold")
+        loss_type = str(training.get("loss_type", "cross_entropy"))
+        focal_gamma = float(training.get("focal_gamma", 2.0))
+        focal_alpha = training.get("focal_alpha")
+        focal_ignore_pt = training.get("focal_ignore_pt")
+        exclude_stopwords = bool(training.get("exclude_stopwords", False))
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = args.run_name or cfg.get("run_name") or timestamp
@@ -249,6 +264,11 @@ def main() -> int:
         pretraining_epochs = args.pretraining_epochs
         per_step = args.per_step
         early_stop_threshold = args.early_stop_threshold
+        loss_type = args.loss_type
+        focal_gamma = args.focal_gamma
+        focal_alpha = args.focal_alpha
+        focal_ignore_pt = args.focal_ignore_pt
+        exclude_stopwords = bool(args.exclude_stopwords)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
@@ -270,7 +290,7 @@ def main() -> int:
             if not base_path.exists():
                 raise ValueError(f"Model path not found: {base_path}")
             tri.load(str(base_path))
-        tri.setup(records=records, include_original_eval=bool(args.eval_on_original))
+        tri.setup(records=records, include_original_eval=bool(args.eval_on_original), exclude_stopwords=exclude_stopwords)
         model_path.mkdir(parents=True, exist_ok=True)
         tri.train(
             epochs=finetuning_epochs,
@@ -281,6 +301,10 @@ def main() -> int:
             pretraining_epochs=pretraining_epochs,
             early_stop_threshold=early_stop_threshold,
             per_step=per_step,
+            loss_type=loss_type,
+            focal_gamma=focal_gamma,
+            focal_alpha=focal_alpha,
+            focal_ignore_pt=focal_ignore_pt,
         )
         print(str(model_path))
         return 0
@@ -288,7 +312,7 @@ def main() -> int:
     if args.model_path is None:
         raise SystemExit("--model_path is required")
     tri.load(str(Path(args.model_path).expanduser().resolve()))
-    tri.setup(records=records, include_original_eval=bool(args.eval_on_original))
+    tri.setup(records=records, include_original_eval=bool(args.eval_on_original), exclude_stopwords=exclude_stopwords)
 
     if args.mode == "evaluate":
         results = tri.evaluate(tri.eval_records)

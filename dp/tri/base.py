@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import os
+import warnings
 import json
 from typing import Optional, List, Dict, Any, Union, Tuple
 import torch
@@ -124,6 +125,60 @@ class EarlyStopCallback(TrainerCallback):
             print(f"Minimum accuracy {min_acc:.2f} reached threshold {self.min_accuracy:.2f} for one metric, stopping training")
             control.should_training_stop = True
         return control
+
+class TRILossTrainer(Trainer):
+    def __init__(
+        self,
+        *args: Any,
+        loss_type: str = "cross_entropy",
+        focal_gamma: float = 2.0,
+        focal_alpha: Optional[float] = None,
+        focal_ignore_pt: Optional[float] = None,
+        **kwargs: Any,
+    ):
+        super().__init__(*args, **kwargs)
+        self.loss_type = loss_type
+        self.focal_gamma = focal_gamma
+        self.focal_alpha = focal_alpha
+        self.focal_ignore_pt = focal_ignore_pt
+
+    def compute_loss(
+        self,
+        model: torch.nn.Module,
+        inputs: Dict[str, torch.Tensor],
+        return_outputs: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, Any]]:
+        labels = inputs.get("labels")
+        if labels is None:
+            raise ValueError("Missing labels for loss computation")
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        if logits is None:
+            raise ValueError("Missing logits for loss computation")
+        if self.loss_type == "cross_entropy":
+            loss = F.cross_entropy(logits, labels)
+        elif self.loss_type == "focal":
+            log_probs = F.log_softmax(logits, dim=-1)
+            targets = labels.view(-1, 1)
+            log_pt = log_probs.gather(1, targets).squeeze(1)
+            pt = log_pt.exp()
+            if self.focal_alpha is None:
+                loss = -((1.0 - pt) ** self.focal_gamma) * log_pt
+            else:
+                alpha = float(self.focal_alpha)
+                loss = -alpha * ((1.0 - pt) ** self.focal_gamma) * log_pt
+            if self.focal_ignore_pt is not None:
+                mask = (pt <= float(self.focal_ignore_pt)).to(loss.dtype)
+                denom = mask.sum()
+                if denom > 0:
+                    loss = (loss * mask).sum() / denom
+                else:
+                    loss = loss.mean() * 0.0
+            else:
+                loss = loss.mean()
+        else:
+            raise ValueError(f"Unknown loss_type: {self.loss_type}")
+        return (loss, outputs) if return_outputs else loss
 
 class TRIDetector(ABC):
     def __init__(
@@ -296,6 +351,10 @@ class TRIDetector(ABC):
         warmup_ratio: Optional[float] = None,
         optimizer_type: Optional[str] = "adamw",
         scheduler_type: Optional[str] = "constant",
+        loss_type: str = "cross_entropy",
+        focal_gamma: float = 2.0,
+        focal_alpha: Optional[float] = None,
+        focal_ignore_pt: Optional[float] = None,
     ) -> None:
         if not self.train_records:
             raise ValueError("No training data set. Call set_train_dataset() first")
@@ -309,6 +368,12 @@ class TRIDetector(ABC):
             raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
         if early_stop_threshold is not None and (early_stop_threshold <= 0.0 or early_stop_threshold > 1.0):
             raise ValueError(f"early_stop_threshold must be in (0, 1], got {early_stop_threshold}")
+        if loss_type not in {"cross_entropy", "focal"}:
+            raise ValueError(f"Unknown loss_type: {loss_type}")
+        if focal_gamma < 0:
+            raise ValueError(f"focal_gamma must be >= 0, got {focal_gamma}")
+        if focal_ignore_pt is not None and (focal_ignore_pt <= 0.0 or focal_ignore_pt >= 1.0):
+            raise ValueError(f"focal_ignore_pt must be in (0, 1), got {focal_ignore_pt}")
         if output_dir is None:
             if not self.dataset_name:
                 raise ValueError("dataset_name must be set when output_dir is not provided")
@@ -342,6 +407,11 @@ class TRIDetector(ABC):
         if use_cpu:
             for key in ("WORLD_SIZE", "RANK", "LOCAL_RANK", "MASTER_ADDR", "MASTER_PORT", "SLURM_PROCID", "SLURM_LOCALID", "SLURM_NTASKS"):
                 os.environ.pop(key, None)
+        warnings.filterwarnings(
+            "ignore",
+            message="Passing the following arguments to `Accelerator` is deprecated.*",
+            category=FutureWarning,
+        )
         training_args = TrainingArguments(
             output_dir=f"{output_dir}/finetuning",
             num_train_epochs=epochs,
@@ -385,13 +455,17 @@ class TRIDetector(ABC):
         callbacks = [MetricsPrintCallback()]
         if early_stop_threshold is not None:
             callbacks.append(EarlyStopCallback(min_accuracy=early_stop_threshold))
-        trainer = Trainer(
+        trainer = TRILossTrainer(
             model=self.model,
             args=training_args,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             compute_metrics=compute_metrics,
             callbacks=callbacks,
+            loss_type=loss_type,
+            focal_gamma=focal_gamma,
+            focal_alpha=focal_alpha,
+            focal_ignore_pt=focal_ignore_pt,
             **trainer_kwargs,
         )
         trainer.train()

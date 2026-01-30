@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Iterable, Optional, Set
 
 
@@ -48,3 +49,23 @@ def build_terms_to_ignore(mask_text: str, extra: Optional[Iterable[str]] = None)
         normalized.add(term)
         normalized.add(term.lower())
     return normalized
+
+
+_PUNCT_STRIP_RE = re.compile(r"(^[^\w]+|[^\w]+$)")
+
+
+def strip_stopwords(text: str, stopwords: Optional[Set[str]] = None) -> str:
+    if stopwords is None:
+        stopwords = DEFAULT_STOPWORDS
+    if not text:
+        return ""
+    tokens = text.split()
+    kept = []
+    for token in tokens:
+        normalized = _PUNCT_STRIP_RE.sub("", token).lower()
+        if normalized and normalized in stopwords:
+            continue
+        if not normalized and token.strip() in stopwords:
+            continue
+        kept.append(token)
+    return " ".join(kept)
