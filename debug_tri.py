@@ -6,7 +6,7 @@ import argparse
 
 from dp.loaders import get_adapter
 from dp.loaders.results import build_dataset_from_results, load_result_records
-from dp.tri.with_bk import TRIDetectorWithBK
+from dp.tri import TRIDetector
 from runtime.config_loader import _read_yaml
 
 def normalize_config(config: Dict) -> argparse.Namespace:
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     ranks = None
 
     if args.pipeline_in:
-        detector = TRIDetectorWithBK(dataset_name=args.data)
+        detector = TRIDetector(dataset_name=args.data)
         detector.load(args.pipeline_in)
         predictions = detector.predict(records)
 

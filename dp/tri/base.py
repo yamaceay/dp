@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 import os
 import warnings
@@ -20,10 +22,19 @@ from transformers import (
     get_cosine_schedule_with_warmup,
     pipeline,
 )
+
 from torch.optim import AdamW, Adam, SGD
 from dp.loaders.base import DatasetRecord
 from dp.utils.chunking import TokenAwareChunker, ProbabilityAggregator, process_with_chunking
 from dp.utils.device import resolve_device
+from dp.bert.losses import compute_focal_loss
+
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+from dp.loaders.base import DatasetRecord, TextAnnotation
+from dp.tri.loaders.base import AttackerDatasetRecord
+from dp.utils.stopwords import strip_stopwords
 
 class TRIDataset(Dataset):
     def __init__(
@@ -158,24 +169,14 @@ class TRILossTrainer(Trainer):
         if self.loss_type == "cross_entropy":
             loss = F.cross_entropy(logits, labels)
         elif self.loss_type == "focal":
-            log_probs = F.log_softmax(logits, dim=-1)
-            targets = labels.view(-1, 1)
-            log_pt = log_probs.gather(1, targets).squeeze(1)
-            pt = log_pt.exp()
-            if self.focal_alpha is None:
-                loss = -((1.0 - pt) ** self.focal_gamma) * log_pt
-            else:
-                alpha = float(self.focal_alpha)
-                loss = -alpha * ((1.0 - pt) ** self.focal_gamma) * log_pt
-            if self.focal_ignore_pt is not None:
-                mask = (pt <= float(self.focal_ignore_pt)).to(loss.dtype)
-                denom = mask.sum()
-                if denom > 0:
-                    loss = (loss * mask).sum() / denom
-                else:
-                    loss = loss.mean() * 0.0
-            else:
-                loss = loss.mean()
+            loss = compute_focal_loss(
+                logits,
+                labels,
+                gamma=self.focal_gamma,
+                alpha=self.focal_alpha,
+                ignore_pt=self.focal_ignore_pt,
+                reduction="mean",
+            )
         else:
             raise ValueError(f"Unknown loss_type: {self.loss_type}")
         return (loss, outputs) if return_outputs else loss
@@ -204,14 +205,31 @@ class TRIDetector(ABC):
         self.name_to_label = {}
         self.num_labels = 0
         self.train_records: Optional[List[DatasetRecord]] = None
+        self.eval_records: Optional[List[DatasetRecord]] = None
 
-    @abstractmethod
-    def setup(self, *args, **kwargs):
-        raise NotImplementedError
+    def setup(self, records: List[AttackerDatasetRecord], exclude_stopwords: bool = False) -> None:
+        self._set_dataset(records, exclude_stopwords=exclude_stopwords)
+        self.build_label_mappings()
     
-    @abstractmethod
-    def get_eval_dataset(self, best_metric_dataset: Optional[str] = None, per_step: Optional[int] = None) -> Tuple[Union[TRIDataset, Dict[str, TRIDataset]], Dict[str, Any]]:
-        raise NotImplementedError
+    def get_eval_dataset(self, best_metric_dataset: Optional[str] = None, per_step: Optional[int] = None) -> Tuple[TRIDataset, Dict[str, Any]]:
+        if self.eval_records is None:
+            raise ValueError("eval_records is not set; call setup() first")
+        eval_dataset = TRIDataset(self.eval_records, self.tokenizer, self.name_to_label, self.max_length)
+        eval_kwargs = {
+            "load_best_model_at_end": True,
+            "metric_for_best_model": "eval_Accuracy",
+            "greater_is_better": True,
+        }
+        if per_step:
+            eval_kwargs.update({
+                "evaluation_strategy": "steps",
+                "eval_steps": per_step,
+            })
+        else:
+            eval_kwargs.update({
+                "evaluation_strategy": "epoch",
+            })
+        return eval_dataset, eval_kwargs
     
     def pretrain(self, epochs: int, batch_size: int, learning_rate: float, output_dir: str) -> None:
         if not self.model:
@@ -261,7 +279,7 @@ class TRIDetector(ABC):
         del mlm_model
         torch.cuda.empty_cache()
     
-    def predict(self, records: List[DatasetRecord]) -> Dict[str, Dict[str, float]]:
+    def predict(self, records: List[DatasetRecord]) -> List[Dict[str, float]]:
         if not records:
             return {}
         if self.model is None or self.tokenizer is None:
@@ -276,7 +294,7 @@ class TRIDetector(ABC):
                 truncation=True,
                 max_length=self.max_length,
             )
-        results: Dict[str, Dict[str, float]] = {}
+        results: List[Dict[str, float]] = []
         if self.use_chunking and self.chunker is not None:
             aggregator = ProbabilityAggregator()
             def classify(text: str) -> Dict[str, float]:
@@ -284,11 +302,11 @@ class TRIDetector(ABC):
                 return self.map_prediction_entries(entries)
             for record in records:
                 scores = process_with_chunking(record.text, self.chunker, classify, aggregator)
-                results[record.uid] = scores
+                results.append(scores)
         else:
             for record in records:
                 entries = self.pipe(record.text)[0]
-                results[record.uid] = self.map_prediction_entries(entries)
+                results.append(self.map_prediction_entries(entries))
         return results
 
     def evaluate(self, records: List[DatasetRecord]) -> Dict[str, Any]:
@@ -431,10 +449,6 @@ class TRIDetector(ABC):
         if optimizer_type is not None:
             if optimizer_type == "adamw":
                 optimizer = AdamW(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay or 0.0)
-            elif optimizer_type == "adam":
-                optimizer = Adam(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay or 0.0)
-            elif optimizer_type == "sgd":
-                optimizer = SGD(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay or 0.0)
             else:
                 raise ValueError(f"Unknown optimizer_type: {optimizer_type}")
             
@@ -535,3 +549,25 @@ class TRIDetector(ABC):
         self.label_to_name = {idx: name for idx, name in enumerate(names)}
         self.name_to_label = {name: idx for idx, name in self.label_to_name.items()}
         self.num_labels = len(names)
+
+    def _set_dataset(self, records: List[AttackerDatasetRecord], exclude_stopwords: bool) -> None:
+        if not records:
+            raise ValueError("Training records cannot be empty")
+        self.train_records, self.eval_records = [], []
+        for record in records:
+            train_texts, eval_texts = record.train_texts, record.eval_texts
+            if exclude_stopwords:
+                train_texts = [strip_stopwords(text) for text in train_texts]
+                eval_texts = [strip_stopwords(text) for text in eval_texts]
+            self.eval_records.extend(DatasetRecord(
+                text=eval_text,
+                name=record.name,
+            ) for eval_text in eval_texts)
+            self.train_records.extend(DatasetRecord(
+                text=train_text,
+                name=record.name,
+            ) for train_text in train_texts)
+        if not self.train_records:
+            raise ValueError("No training records built from attacker records")
+        if not self.eval_records:
+            raise ValueError("No evaluation records built from attacker records")

@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 import json
 from pathlib import Path
 
@@ -120,14 +120,26 @@ def write_annotations(annotations: Dict[str, List[TextAnnotation]], path: str):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def apply_annotations(text: str, annotations: List[TextAnnotation], replacement: str = "[MASK]") -> str:
-    sorted_annots = sorted(annotations, key=lambda x: x.start, reverse=True)
-    masked_text = text
-    for ann in sorted_annots:
-        if 0 <= ann.start < ann.end <= len(masked_text):
-            repl = ann.replacement if ann.replacement else replacement
-            masked_text = masked_text[:ann.start] + repl + masked_text[ann.end:]
-    return masked_text
+def apply_annotations(text: str, annotations: List[TextAnnotation], mask_text: Optional[str] = None) -> str:
+    if not annotations:
+        return text
+    masked = text
+    for ann in sorted(annotations, key=lambda a: a.start, reverse=True):
+        if not isinstance(ann.start, int) or not isinstance(ann.end, int):
+            raise ValueError("Starting anonymization annotation start and end must be integers")
+        if ann.start < 0 or ann.end < 0 or ann.start >= ann.end:
+            raise ValueError("Starting anonymization annotation has invalid start/end span")
+        if ann.end > len(masked):
+            raise ValueError("Starting anonymization annotation end exceeds text length")
+        repl: Optional[str] = mask_text
+        if isinstance(ann.replacement, str) and ann.replacement:
+            repl = ann.replacement
+        elif isinstance(ann.label, str) and ann.label:
+            repl = f"[{ann.label}]"
+        if repl is None:
+            raise ValueError("Starting anonymization span has no replacement and no label; cannot mask")
+        masked = masked[: ann.start] + repl + masked[ann.end :]
+    return masked
 
 
 def annotations_to_spans(annotations: List[TextAnnotation]) -> List[List[int]]:

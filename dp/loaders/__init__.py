@@ -7,11 +7,11 @@ identifier, raw text, optional annotations, and optional utility metadata.
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
 
-from dp.loaders.tab import TabDatasetAdapter
-from dp.loaders.dbbio import DBBioDatasetAdapter
-from dp.loaders.reddit import RedditDatasetAdapter
-from dp.loaders.trustpilot import TrustpilotDatasetAdapter
-from dp.loaders.mimic import MIMICDatasetAdapter
+from dp.loaders._tab import TabDatasetAdapter
+from dp.loaders._dbbio import DBBioDatasetAdapter
+from dp.loaders._reddit import RedditDatasetAdapter
+from dp.loaders._trustpilot import TrustpilotDatasetAdapter
+from dp.loaders._mimic import MIMICDatasetAdapter
 
 from dp.loaders.annotations import (
     read_annotations,

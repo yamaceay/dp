@@ -3,7 +3,7 @@ from enum import Enum
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.device import resolve_device
-from dp.tri.with_bk import TRIDetectorWithBK
+from dp.tri import TRIDetector
 
 class _SpanTokenizer:
     def __init__(self, text: str, spans: Sequence[Tuple[int, int]]):
@@ -77,7 +77,7 @@ class ShapExplainer(TokenExplainer):
         self.model_name = model_name
         self.device = resolve_device(device)
         self.pipeline = None
-        self.tri_detector = TRIDetectorWithBK(model_name=model_name, device=self.device, use_chunking=use_chunking)
+        self.tri_detector = TRIDetector(model_name=model_name, device=self.device, use_chunking=use_chunking)
         self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}

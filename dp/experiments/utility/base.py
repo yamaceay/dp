@@ -10,7 +10,7 @@ from tqdm import tqdm
 from dp.loaders.base import DatasetRecord
 from dp.experiments import Experiment, ExperimentResult
 from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor
-from dp.experiments.utility.downstream import SupervisedDownstreamHead
+from dp.bert import SupervisedDownstreamHead
 
 class UtilityTarget:
     class Mode(Enum):

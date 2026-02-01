@@ -7,8 +7,8 @@ from tqdm import tqdm
 from typing import Dict, List, Tuple, cast, Optional, Any
 
 from dp.loaders.base import DatasetRecord
-from dp.loaders.reddit import RedditDatasetAdapter
-from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord
+from dp.loaders._reddit import RedditDatasetAdapter
+from dp.tri.loaders.base import AttackerDatasetRecord, AttackerDatasetAdapter, merge_records
 from dp.loaders.base import TextAnnotation
 
 SECTION_PATTERN = re.compile(r"(Type|Inference|Guess):\s*(.*?)(?=(?:Type|Inference|Guess):|\Z)", re.S)
@@ -194,39 +194,15 @@ def format_inference(metadata: Dict[str, str], persona: Dict[str, str], pronouns
         ]
     )
 
-
 class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
         self,
-        *args,
-        data: str | None = None,
-        data_in: str | None = None,
-        start: int | None = None,
-        end: int | None = None,
-        step: int | None = None,
-        max_records: int | None = None,
         seed: int = 42,
-        **kwargs,
+        **data_kwargs,
     ) -> None:
-        adapter = RedditDatasetAdapter(
-            data=data,
-            data_in=data_in,
-            start=start,
-            end=end,
-            step=step,
-            max_records=max_records,
-        )
-        super().__init__(adapter=adapter, *args, **kwargs)
+        adapter = RedditDatasetAdapter(**data_kwargs)
+        super().__init__(adapter=adapter)
         self._seed = seed
-        self._persona_records: List[AttackerDatasetRecord] = self._build_persona_records()
-
-    def set_starting_anonymizations(
-        self,
-        annotations_by_idx: Optional[List[List[TextAnnotation]]],
-        replacement: Optional[str] = None,
-    ) -> None:
-        super().set_starting_anonymizations(annotations_by_idx, replacement=replacement)
-        self._persona_records = self._build_persona_records()
 
     def _persona_seed(self, persona: Dict[str, str]) -> int:
         entries = "|".join(f"{key}={normalize_space(persona.get(key, ''))}" for key in sorted(persona.keys()))
@@ -265,70 +241,39 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
         )
         return ensure_period(f"{interaction} {inference_text}")
 
-    def _build_persona_records(self) -> List[AttackerDatasetRecord]:
-        grouped: Dict[str, Dict[str, object]] = {}
+    def prepare_train_texts(self, record: DatasetRecord) -> List[Tuple[str, str]]:
+        raise NotImplementedError("RedditAttackerDatasetAdapter aggregates records by persona; use iter_records()")
+
+    def prepare_eval_texts(self, record: DatasetRecord) -> str:
+        raise NotImplementedError("RedditAttackerDatasetAdapter provides persona summaries directly; use iter_records()")
+
+    def iter_records(self, progress: bool = False) -> Iterable[AttackerDatasetRecord]:
+        grouped_train_texts: Dict[str, List[str]] = {}
+        grouped_eval_texts: Dict[str, List[str]] = {}
         for idx, record in enumerate(self.adapter.iter_records()):
             metadata = dict(record.metadata or {})
             persona = {key[len("persona_"):]: value for key, value in metadata.items() if key.startswith("persona_")}
             if not persona:
                 raise ValueError("Persona metadata is required for Reddit attacker adapter")
-            persona_text = self._persona_text(persona)
             pronouns = resolve_pronouns(persona.get("sex"))
 
-            record_for_processing = record
+            modified_record = record
             if self._starting_anonymizations_by_idx is not None and idx < len(self._starting_anonymizations_by_idx):
                 anns = self._starting_anonymizations_by_idx[idx]
                 if anns:
-                    record_for_processing = DatasetRecord(
-                        text=self._apply_starting_anonymizations(record.text, anns),
-                        uid=record.uid,
-                        name=record.name,
-                        spans=record.spans,
-                        metadata=record.metadata,
-                    )
+                    modified_record.text = self._apply_starting_anonymizations(record.text, anns)
 
-            background_entry = self._build_background_entry(record_for_processing, persona, pronouns)
+            background_entry = self._build_background_entry(modified_record, persona, pronouns)
+            
+            persona_text = self._persona_text(persona)
 
-            bucket = grouped.setdefault(
-                record.name,
-                {
-                    "persona_text": persona_text,
-                    "metadata": persona,
-                    "background": {},
-                },
-            )
-            bucket["background"][record.uid] = background_entry
+            grouped_train_texts.setdefault(record.name, []).append(background_entry)
+            grouped_eval_texts.setdefault(record.name, []).append(persona_text)
 
-        persona_records: List[AttackerDatasetRecord] = []
-        for persona_hash, payload in grouped.items():
-            persona_text = payload["persona_text"]
-            background_dict = cast(Dict[str, str], payload["background"])
-            background_items = [(uid, background_dict[uid]) for uid in sorted(background_dict.keys())]
-            persona_records.append(
-                AttackerDatasetRecord(
-                    text=persona_text,
-                    uid=persona_hash,
-                    name=persona_hash,
-                    metadata={"persona": payload["metadata"]},
-                    background_knowledge=background_items,
-                    rewrited_text=persona_text,
-                )
-            )
-        return persona_records
-
-    def extract_background_knowledge(self, record: DatasetRecord) -> List[Tuple[str, str]]:
-        raise NotImplementedError("RedditAttackerDatasetAdapter aggregates records by persona; use iter_records()")
-
-    def rewrite_original_text(self, record: DatasetRecord) -> str:
-        raise NotImplementedError("RedditAttackerDatasetAdapter provides persona summaries directly; use iter_records()")
-
-    def iter_records(self, progress: bool = False):
-        records = self._persona_records
-        iterator = records
+        iterator = merge_records(grouped_train_texts, grouped_eval_texts)
         if progress:
-            iterator = tqdm(records, desc="Processing attacker records", total=len(records))
+            iterator = tqdm(iterator, desc="Processing attacker records", total=len(iterator))
         for record in iterator:
             yield record
-
 
 __all__ = ["RedditAttackerDatasetAdapter"]

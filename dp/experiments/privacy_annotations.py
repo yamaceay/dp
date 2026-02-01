@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from dp.experiments import Experiment, ExperimentResult
 from dp.loaders.base import DatasetRecord
-from dp.tri.with_bk import TRIDetectorWithBK
+from dp.tri import TRIDetector
 from dp.utils.device import resolve_device
 
 class TextPrivacyExperiment(Experiment):
@@ -25,7 +25,7 @@ class TextPrivacyExperiment(Experiment):
         self.dataset_name: Optional[str] = None
         self.original_dataset: List[DatasetRecord] = []
         self.evaluation_datasets: Dict[str, List[DatasetRecord]] = {}
-        self.detector: Optional[TRIDetectorWithBK] = None
+        self.detector: Optional[TRIDetector] = None
         self.original_ranks: Dict[str, int] = {}
         self.record_keys: List[str] = []
         self.record_info: Dict[str, Dict[str, Any]] = {}
@@ -51,7 +51,7 @@ class TextPrivacyExperiment(Experiment):
         self.dataset_name = dataset_name
         self.original_dataset = list(original_dataset)
         self.evaluation_datasets = filtered_evaluations
-        self.detector = TRIDetectorWithBK(
+        self.detector = TRIDetector(
             dataset_name=self.dataset_name,
             max_length=self.tri_max_length,
             device=self.tri_device,

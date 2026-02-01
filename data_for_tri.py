@@ -95,8 +95,6 @@ def main() -> None:
     else:
         records = original_records
     adapter.adapter = InMemoryDatasetAdapter(records)
-    if hasattr(adapter, "_build_persona_records"):
-        adapter._persona_records = adapter._build_persona_records()
 
     if resolved['load_from_jsonl'] and os.path.exists(resolved['load_from_jsonl']):
         print(f"Loading record extensions from {resolved['load_from_jsonl']}...")
@@ -108,7 +106,6 @@ def main() -> None:
         with open(resolved['save_to_jsonl'], 'w', encoding='utf-8') as f:
             pass
 
-    unique_uids = set()
     unique_names = set()
 
     for record in adapter.iter_records(progress=True):
@@ -117,16 +114,15 @@ def main() -> None:
         if resolved['save_to_jsonl']:
             with open(resolved['save_to_jsonl'], 'a', encoding='utf-8') as f:
                 json_record = {
-                    'uid': record.uid,
-                    'background_knowledge': record.background_knowledge,
-                    'rewrited_text': record.rewrited_text,
+                    'name': record.name,
+                    'train_texts': list(record.train_texts or []),
+                    'eval_texts': list(record.eval_texts or []),
                 }
                 f.write(json.dumps(json_record) + '\n')
         unique_names.add(record.name)
-        unique_uids.add(record.uid)
 
     print(f"Total individuals loaded: {len(unique_names)}")
-    print(f"Total records loaded: {len(unique_uids)}")
+    print(f"Total records loaded: {len(unique_names)}")
 
 
 if __name__ == "__main__":

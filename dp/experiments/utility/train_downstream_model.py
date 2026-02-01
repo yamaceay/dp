@@ -10,7 +10,7 @@ import yaml
 
 from dp.loaders.base import DatasetRecord
 from dp.loaders.derive import get_getter
-from dp.tri import get_tri_detector
+from dp.tri import TRIDetector
 from dp.tri.loaders import ATTACKER_ADAPTER_REGISTRY, AttackerDatasetRecord, get_attacker_adapter
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
@@ -252,8 +252,8 @@ def _inject_labels_as_names(
                 name=str(label),
                 spans=r.spans,
                 metadata=meta,
-                background_knowledge=list(r.background_knowledge or []),
-                rewrited_text=r.rewrited_text,
+                train_texts=list(r.train_texts or []),
+                eval_texts=list(r.eval_texts or []),
             )
         )
     return out
@@ -369,10 +369,10 @@ def main() -> int:
     if not records:
         raise SystemExit("No records loaded")
 
-    tri = get_tri_detector("bk", dataset_name=dataset, model_name=model_name, max_length=max_length, device=device)
+    tri = TRIDetector(dataset_name=dataset, model_name=model_name, max_length=max_length, device=device)
 
     if args.mode == "train":
-        tri.setup(records=records, include_original_eval=bool(args.eval_on_original))
+        tri.setup(records=records)
         if not init_from and args.model_path:
             init_from = args.model_path
         if init_from:
@@ -407,7 +407,7 @@ def main() -> int:
     if args.model_path is None:
         raise SystemExit("--model_path is required")
     tri.load(str(Path(args.model_path).expanduser().resolve()))
-    tri.setup(records=records, include_original_eval=bool(args.eval_on_original))
+    tri.setup(records=records)
 
     if args.mode == "evaluate":
         results = tri.evaluate(tri.eval_records)

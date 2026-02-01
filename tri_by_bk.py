@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Optional
 import yaml
 
-from dp.tri import get_tri_detector
+from dp.tri import TRIDetector
 from dp.tri.loaders import get_attacker_adapter, ATTACKER_ADAPTER_REGISTRY
 
 
@@ -282,7 +282,7 @@ def main() -> int:
     if not records:
         raise SystemExit("No records loaded")
 
-    tri = get_tri_detector("bk", dataset_name=dataset, model_name=model_name, max_length=max_length, device=device)
+    tri = TRIDetector(dataset_name=dataset, model_name=model_name, max_length=max_length, device=device)
 
     if args.mode == "train":
         if args.model_path:
@@ -290,7 +290,7 @@ def main() -> int:
             if not base_path.exists():
                 raise ValueError(f"Model path not found: {base_path}")
             tri.load(str(base_path))
-        tri.setup(records=records, include_original_eval=bool(args.eval_on_original), exclude_stopwords=exclude_stopwords)
+        tri.setup(records=records, exclude_stopwords=exclude_stopwords)
         model_path.mkdir(parents=True, exist_ok=True)
         tri.train(
             epochs=finetuning_epochs,
@@ -312,7 +312,7 @@ def main() -> int:
     if args.model_path is None:
         raise SystemExit("--model_path is required")
     tri.load(str(Path(args.model_path).expanduser().resolve()))
-    tri.setup(records=records, include_original_eval=bool(args.eval_on_original), exclude_stopwords=exclude_stopwords)
+    tri.setup(records=records, exclude_stopwords=exclude_stopwords)
 
     if args.mode == "evaluate":
         results = tri.evaluate(tri.eval_records)

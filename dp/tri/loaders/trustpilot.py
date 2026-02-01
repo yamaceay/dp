@@ -4,8 +4,8 @@ import hashlib
 import random
 from typing import List, Optional, Tuple, Dict, Iterable
 
-from dp.loaders.base import DatasetRecord
-from dp.loaders.trustpilot import TrustpilotDatasetAdapter
+from dp.loaders import DatasetRecord, get_adapter
+from dp.loaders._trustpilot import TrustpilotDatasetAdapter
 from dp.tri.loaders.base import AttackerDatasetAdapter
 
 class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
@@ -28,10 +28,7 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
             step=step,
             max_records=max_records,
         )
-        super().__init__(
-            adapter=adapter,
-            use_records_list=True,
-        )
+        super().__init__(adapter=adapter)
         self._seed = seed
         self._deidentify = deidentify
 
@@ -117,7 +114,7 @@ class TrustpilotAttackerDatasetAdapter(AttackerDatasetAdapter):
         ]
         return rng.choice(templates)
 
-    def extract_background_knowledge(self, record: DatasetRecord) -> List[Tuple[str, str]]:
+    def prepare_train_texts(self, record: DatasetRecord) -> List[Tuple[str, str]]:
         background_knowledge: List[Tuple[str, str]] = []
 
         for entry in record.metadata.get("records", []):

@@ -43,7 +43,6 @@ if __name__ == "__main__":
     dataset = load_data(data_kwargs)
 
     value_getters = {
-        'uid': lambda r: r.uid,
         'name': lambda r: r.name,
         'key': lambda r: list(r.metadata.keys()),
     }

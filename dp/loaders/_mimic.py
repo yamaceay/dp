@@ -64,14 +64,15 @@ class MIMICDatasetAdapter(DatasetAdapter):
                     replacement=replacement,
                 ))
             metadata = {
-                "category": record.get("CATEGORY", ""),
-                "description": record.get("DESCRIPTION", ""),
-                "cgid": record.get("CGID", ""),
                 "hadm_id": record.get("HADM_ID", ""),
                 "chartdate": record.get("CHARTDATE", ""),
-                "charttime": record.get("CHARTTIME", ""),
-                "storetime": record.get("STORETIME", ""),
-                "is_error": record.get("ISERROR", ""),
+                "split": record.get("SPLIT", ""),
+                # "category": record.get("CATEGORY", ""),
+                # "description": record.get("DESCRIPTION", ""),
+                # "cgid": record.get("CGID", ""),
+                # "charttime": record.get("CHARTTIME", ""),
+                # "storetime": record.get("STORETIME", ""),
+                # "is_error": record.get("ISERROR", ""),
             }
             yield DatasetRecord(
                 uid=uid, 

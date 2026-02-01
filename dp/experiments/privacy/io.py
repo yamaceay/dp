@@ -17,7 +17,7 @@ def build_privacy_evaluation_dataset(
     total = len(annotations_batch)
     for index, record in enumerate(records):
         annotations = annotations_batch[index] if index < total else []
-        text = apply_annotations(record.text, annotations, replacement=mask_token)
+        text = apply_annotations(record.text, annotations, mask_text=mask_token)
         dataset.append(
             DatasetRecord(
                 text=text,

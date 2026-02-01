@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from dp.loaders.reddit import RedditDatasetAdapter
+from dp.loaders import get_adapter
 from dp.utils.explainer import ShapExplainer, ShapType
 from dp.loaders.derive import get_getter
 
@@ -87,7 +87,7 @@ class TokenSpanExtractor:
 
 class DatasetSampler:
     def __init__(self, data: str, data_path: str, feature: str):
-        self.adapter = RedditDatasetAdapter(data_in=data_path)
+        self.adapter = get_adapter(data, data_in=data_path)
         self.feature = feature
         self.getter = get_getter(data, "feature_label")
     

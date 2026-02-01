@@ -6,9 +6,10 @@ from dp.tri.loaders.trustpilot import TrustpilotAttackerDatasetAdapter
 from dp.tri.loaders.dbbio import DBBioAttackerDatasetAdapter
 from dp.tri.loaders.mimic import MIMICAttackerDatasetAdapter
 from dp.tri.loaders.base import (
-    AttackerDatasetAdapter, 
-    RewriterProtocol, 
-    save_attacker_extensions_jsonl, 
+    AttackerDatasetRecord,
+    AttackerDatasetAdapter,
+    RewriterProtocol,
+    save_attacker_extensions_jsonl,
     load_attacker_extensions_jsonl,
 )
 
@@ -32,6 +33,7 @@ def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:
     return adapter_cls(**kwargs)
 
 __all__ = [
+    "AttackerDatasetRecord",
     "RewriterProtocol",
     "AttackerDatasetAdapter",
     "save_attacker_extensions_jsonl",

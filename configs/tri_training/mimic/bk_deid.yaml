@@ -1,0 +1,19 @@
+dataset: mimic
+data_path: data/mimic/mimic.json
+attacker_extensions: data/mimic/mimic_sum_deid.jsonl
+model_name: distilbert-base-uncased
+output_root: ../../../netscratch/yay/tri_pipelines/mimic/_checkpoints
+max_records: null
+max_length: 512
+
+training:
+  finetuning_epochs: 10
+  batch_size: 8
+  use_pretraining: true
+  pretraining_epochs: 1
+  per_step: null
+  early_stop_threshold: null
+  loss_type: focal
+  focal_gamma: 5.0
+  focal_ignore_pt: 0.95
+  exclude_stopwords: true

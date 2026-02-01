@@ -143,7 +143,7 @@ class ProbabilityAggregator(ChunkAggregator[dict]):
                     label_probs[label] = []
                 label_probs[label].append(prob)
         
-        return {label: max(probs) for label, probs in label_probs.items()}
+        return {label: sum(probs) / len(probs) for label, probs in label_probs.items()}
 
 
 def process_with_chunking(
