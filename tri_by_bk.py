@@ -110,15 +110,6 @@ def _optional_float(payload: dict[str, Any], key: str) -> Optional[float]:
     return float(value)
 
 
-def _optional_bool(payload: dict[str, Any], key: str) -> Optional[bool]:
-    value = payload.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, bool):
-        raise ValueError(f"Invalid '{key}'")
-    return bool(value)
-
-
 def _get_mapping(payload: dict[str, Any], key: str) -> dict[str, Any]:
     value = payload.get(key)
     if value is None:
@@ -168,7 +159,6 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
             "learning_rate": float(training.get("learning_rate", 5e-5)),
             "use_pretraining": bool(training.get("use_pretraining", False)),
             "pretraining_epochs": int(training.get("pretraining_epochs", 3)),
-            "per_step": _optional_int(training, "per_step"),
             "early_stop_threshold": _optional_float(training, "early_stop_threshold"),
             "loss_type": str(training.get("loss_type", "cross_entropy")),
             "focal_gamma": float(training.get("focal_gamma", 2.0)),
@@ -200,9 +190,7 @@ def main() -> int:
     parser.add_argument("--finetuning_epochs", type=int, default=15)
     parser.add_argument("--pretraining_epochs", type=int, default=3)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--pretraining_batch_size", type=int, default=8)
     parser.add_argument("--use_pretraining", action="store_true")
-    parser.add_argument("--per_step", type=int, default=None)
     parser.add_argument("--learning_rate", type=float, default=5e-5)
     parser.add_argument("--model_path", type=str, default=None)
     parser.add_argument("--device", type=str, default="cpu")
@@ -235,7 +223,6 @@ def main() -> int:
         learning_rate = float(training.get("learning_rate", 5e-5))
         use_pretraining = bool(training.get("use_pretraining", False))
         pretraining_epochs = int(training.get("pretraining_epochs", 3))
-        per_step = training.get("per_step")
         early_stop_threshold = training.get("early_stop_threshold")
         loss_type = str(training.get("loss_type", "cross_entropy"))
         focal_gamma = float(training.get("focal_gamma", 2.0))
@@ -262,7 +249,6 @@ def main() -> int:
         learning_rate = args.learning_rate
         use_pretraining = bool(args.use_pretraining)
         pretraining_epochs = args.pretraining_epochs
-        per_step = args.per_step
         early_stop_threshold = args.early_stop_threshold
         loss_type = args.loss_type
         focal_gamma = args.focal_gamma
@@ -300,7 +286,6 @@ def main() -> int:
             use_pretraining=use_pretraining,
             pretraining_epochs=pretraining_epochs,
             early_stop_threshold=early_stop_threshold,
-            per_step=per_step,
             loss_type=loss_type,
             focal_gamma=focal_gamma,
             focal_alpha=focal_alpha,

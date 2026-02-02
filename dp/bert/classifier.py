@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set
 
 import numpy as np
@@ -8,7 +10,12 @@ from sklearn.preprocessing import LabelEncoder
 from transformers import AutoModel, AutoTokenizer, EvalPrediction, Trainer, TrainingArguments
 
 from dp.bert.base import SupervisedDownstreamHead
-from dp.bert.common import EarlyStoppingCallback, mask_stopword_tokens
+from dp.bert.common import (
+    EarlyStoppingCallback,
+    build_optimizer_and_scheduler,
+    mask_stopword_tokens,
+    pretrain_backbone_with_mlm,
+)
 from dp.bert.losses import compute_focal_loss
 from dp.utils.device import resolve_device
 
@@ -36,6 +43,15 @@ class BertClassifierHead(SupervisedDownstreamHead):
         focal_gamma: float = 2.0,
         focal_alpha: Optional[float] = None,
         focal_ignore_pt: Optional[float] = None,
+        use_pretraining: bool = False,
+        pretraining_epochs: int = 1,
+        pretraining_batch_size: Optional[int] = None,
+        pretraining_learning_rate: float = 5e-5,
+        pretraining_mlm_probability: float = 0.15,
+        optimizer_type: str = "adamw",
+        scheduler_type: str = "linear",
+        weight_decay: float = 0.01,
+        warmup_ratio: Optional[float] = None,
     ):
         super().__init__(name="bert_classifier", primary_metric=primary_metric)
         if loss_type not in {"cross_entropy", "focal"}:
@@ -44,6 +60,18 @@ class BertClassifierHead(SupervisedDownstreamHead):
             raise ValueError(f"focal_gamma must be >= 0, got {focal_gamma}")
         if focal_ignore_pt is not None and (focal_ignore_pt <= 0.0 or focal_ignore_pt >= 1.0):
             raise ValueError(f"focal_ignore_pt must be in (0, 1), got {focal_ignore_pt}")
+        if pretraining_epochs <= 0:
+            raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
+        if pretraining_batch_size is not None and pretraining_batch_size <= 0:
+            raise ValueError(f"pretraining_batch_size must be positive, got {pretraining_batch_size}")
+        if pretraining_learning_rate <= 0:
+            raise ValueError(f"pretraining_learning_rate must be positive, got {pretraining_learning_rate}")
+        if pretraining_mlm_probability <= 0.0 or pretraining_mlm_probability >= 1.0:
+            raise ValueError(f"pretraining_mlm_probability must be in (0, 1), got {pretraining_mlm_probability}")
+        if weight_decay < 0:
+            raise ValueError(f"weight_decay must be >= 0, got {weight_decay}")
+        if warmup_ratio is not None and (warmup_ratio < 0.0 or warmup_ratio >= 1.0):
+            raise ValueError(f"warmup_ratio must be in [0, 1), got {warmup_ratio}")
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
@@ -63,6 +91,15 @@ class BertClassifierHead(SupervisedDownstreamHead):
         self.focal_gamma = float(focal_gamma)
         self.focal_alpha = float(focal_alpha) if focal_alpha is not None else None
         self.focal_ignore_pt = float(focal_ignore_pt) if focal_ignore_pt is not None else None
+        self.use_pretraining = bool(use_pretraining)
+        self.pretraining_epochs = int(pretraining_epochs)
+        self.pretraining_batch_size = int(pretraining_batch_size) if pretraining_batch_size is not None else self.batch_size
+        self.pretraining_learning_rate = float(pretraining_learning_rate)
+        self.pretraining_mlm_probability = float(pretraining_mlm_probability)
+        self.optimizer_type = str(optimizer_type)
+        self.scheduler_type = str(scheduler_type)
+        self.weight_decay = float(weight_decay)
+        self.warmup_ratio = float(warmup_ratio) if warmup_ratio is not None else None
         self._tokenizer: Optional[AutoTokenizer] = None
         self._model: Optional[torch.nn.Module] = None
         self._trainer: Optional[Trainer] = None
@@ -70,12 +107,14 @@ class BertClassifierHead(SupervisedDownstreamHead):
         self._label_to_id: Optional[Dict[str, int]] = None
         self._id_to_label: Optional[Dict[int, str]] = None
         self._stopwords: Set[str] = set()
+        self._active_checkpoint: Optional[str] = None
 
     def _create_model(self, num_labels: int):
         base_model = AutoModel.from_pretrained(self.model_name)
-        if self.init_checkpoint:
+        checkpoint_source = self._active_checkpoint or self.init_checkpoint
+        if checkpoint_source:
             try:
-                checkpoint_model = AutoModel.from_pretrained(self.init_checkpoint)
+                checkpoint_model = AutoModel.from_pretrained(checkpoint_source)
                 base_model.load_state_dict(checkpoint_model.state_dict(), strict=False)
             except Exception:
                 pass
@@ -170,6 +209,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
         train_labels = list(y_train)
         val_labels = list(y_val)
         union_labels = train_labels + val_labels
+        self._active_checkpoint = None
 
         label_encoder = LabelEncoder()
         label_encoder.fit(union_labels)
@@ -185,7 +225,22 @@ class BertClassifierHead(SupervisedDownstreamHead):
         print(f"Training on {len(train_labels)} samples: {dict(train_dist)}")
         print(f"Validating on {len(val_labels)} samples: {dict(val_dist)}")
 
-        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        if self.use_pretraining:
+            self._active_checkpoint = pretrain_backbone_with_mlm(
+                model_name=self.model_name,
+                texts=train_texts,
+                output_dir=self.checkpoint_dir,
+                init_checkpoint=self.init_checkpoint,
+                epochs=self.pretraining_epochs,
+                batch_size=self.pretraining_batch_size,
+                learning_rate=self.pretraining_learning_rate,
+                mlm_probability=self.pretraining_mlm_probability,
+            )
+        tokenizer_source = self._active_checkpoint or self.init_checkpoint or self.model_name
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
+        except Exception:
+            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
         if self.mask_stopwords:
             from dp.utils.stopwords import DEFAULT_STOPWORDS
@@ -244,7 +299,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
             per_device_eval_batch_size=self.batch_size,
             warmup_steps=self.warmup_steps,
             learning_rate=self.head_lr,
-            weight_decay=0.01,
+            weight_decay=self.weight_decay,
             logging_steps=10,
             eval_strategy="epoch",
             save_strategy="epoch",
@@ -253,6 +308,19 @@ class BertClassifierHead(SupervisedDownstreamHead):
             greater_is_better=True,
             max_grad_norm=self.gradient_clip,
             report_to="none",
+        )
+        steps_per_epoch = max(1, int(np.ceil(len(train_dataset) / self.batch_size)))
+        num_training_steps = steps_per_epoch * self.epochs
+        optimizer, scheduler = build_optimizer_and_scheduler(
+            self._model,
+            optimizer_type=self.optimizer_type,
+            scheduler_type=self.scheduler_type,
+            encoder_lr=self.encoder_lr,
+            head_lr=self.head_lr,
+            weight_decay=self.weight_decay,
+            warmup_steps=self.warmup_steps,
+            warmup_ratio=self.warmup_ratio,
+            num_training_steps=num_training_steps,
         )
 
         early_stopping = EarlyStoppingCallback(
@@ -269,6 +337,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
             eval_dataset=val_dataset,
             compute_metrics=compute_metrics,
             callbacks=[early_stopping],
+            optimizers=(optimizer, scheduler),
         )
 
         self._trainer.train()
@@ -286,12 +355,36 @@ class BertClassifierHead(SupervisedDownstreamHead):
                 encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
                 if self.mask_stopwords:
                     encodings = mask_stopword_tokens(self._tokenizer, self._stopwords, encodings, batch_texts)
-                encodings = {k: v.to(self._model.base_model.device) for k, v in encodings.items()}
+                encodings = {k: v.to(self._model_device()) for k, v in encodings.items()}
                 outputs = self._model(**encodings)
                 logits = outputs["logits"]
                 preds = torch.argmax(logits, dim=1).cpu().numpy()
                 all_preds.extend([self._id_to_label[int(p)] for p in preds])
         return np.array(all_preds)
+
+    def predict_proba(self, x: Any) -> List[Dict[str, float]]:
+        if self._model is None or self._tokenizer is None:
+            raise RuntimeError("Model not fitted")
+        if self._id_to_label is None:
+            raise RuntimeError("Label mapping is not initialized")
+        texts = list(x)
+        self._model.eval()
+        all_scores: List[Dict[str, float]] = []
+        with torch.no_grad():
+            for i in range(0, len(texts), self.batch_size):
+                batch_texts = texts[i:i + self.batch_size]
+                encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
+                if self.mask_stopwords:
+                    encodings = mask_stopword_tokens(self._tokenizer, self._stopwords, encodings, batch_texts)
+                encodings = {k: v.to(self._model_device()) for k, v in encodings.items()}
+                outputs = self._model(**encodings)
+                probs = torch.nn.functional.softmax(outputs["logits"], dim=1).cpu().numpy()
+                for row in probs:
+                    row_map: Dict[str, float] = {}
+                    for idx, value in enumerate(row.tolist()):
+                        row_map[self._id_to_label[idx]] = float(value)
+                    all_scores.append(row_map)
+        return all_scores
 
     def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
         from sklearn.metrics import precision_recall_fscore_support
@@ -317,6 +410,57 @@ class BertClassifierHead(SupervisedDownstreamHead):
 
     def setup(self) -> None:
         pass
+
+    def save(self, model_dir: str) -> None:
+        if self._model is None or self._tokenizer is None:
+            raise RuntimeError("Model not fitted")
+        if self._label_list is None:
+            raise RuntimeError("Label mapping is not initialized")
+        output_dir = Path(model_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_path = output_dir / "bert_classifier.pt"
+        payload = {
+            "model_state_dict": self._model.state_dict(),
+            "label_list": self._label_list,
+            "model_name": self.model_name,
+            "loss_type": self.loss_type,
+            "focal_gamma": self.focal_gamma,
+            "focal_alpha": self.focal_alpha,
+            "focal_ignore_pt": self.focal_ignore_pt,
+            "mask_stopwords": self.mask_stopwords,
+        }
+        torch.save(payload, checkpoint_path)
+        self._tokenizer.save_pretrained(str(output_dir))
+        with (output_dir / "label_mapping.json").open("w", encoding="utf-8") as f:
+            json.dump({label: idx for idx, label in enumerate(self._label_list)}, f, indent=2)
+
+    def load(self, model_dir: str) -> None:
+        checkpoint_path = Path(model_dir) / "bert_classifier.pt"
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"Bert classifier checkpoint not found: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        checkpoint_model_name = checkpoint.get("model_name")
+        if isinstance(checkpoint_model_name, str) and checkpoint_model_name:
+            self.model_name = checkpoint_model_name
+        label_list = checkpoint.get("label_list")
+        if not isinstance(label_list, list) or not label_list:
+            raise ValueError("Invalid label_list in bert classifier checkpoint")
+        self._label_list = [str(label) for label in label_list]
+        self._label_to_id = {label: idx for idx, label in enumerate(self._label_list)}
+        self._id_to_label = {idx: label for idx, label in enumerate(self._label_list)}
+        self._tokenizer = AutoTokenizer.from_pretrained(model_dir)
+        self._model = self._create_model(len(self._label_list))
+        state_dict = checkpoint.get("model_state_dict")
+        if not isinstance(state_dict, dict):
+            raise ValueError("Invalid model_state_dict in bert classifier checkpoint")
+        self._model.load_state_dict(state_dict)
+        self._model.to(self.device)
+        self._model.eval()
+
+    def _model_device(self) -> torch.device:
+        if self._model is None:
+            raise RuntimeError("Model not fitted")
+        return next(self._model.parameters()).device
 
     def cleanup(self) -> None:
         if self._model is not None:

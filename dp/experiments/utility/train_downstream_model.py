@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -12,8 +11,6 @@ from dp.loaders.base import DatasetRecord
 from dp.loaders.derive import get_getter
 from dp.tri import TRIDetector
 from dp.tri.loaders import ATTACKER_ADAPTER_REGISTRY, AttackerDatasetRecord, get_attacker_adapter
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 
@@ -115,15 +112,6 @@ def _optional_float(payload: dict[str, Any], key: str) -> Optional[float]:
     return float(value)
 
 
-def _optional_bool(payload: dict[str, Any], key: str) -> Optional[bool]:
-    value = payload.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, bool):
-        raise ValueError(f"Invalid '{key}'")
-    return bool(value)
-
-
 def _get_mapping(payload: dict[str, Any], key: str) -> dict[str, Any]:
     value = payload.get(key)
     if value is None:
@@ -177,35 +165,10 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
             "learning_rate": float(training.get("learning_rate", 5e-5)),
             "use_pretraining": bool(training.get("use_pretraining", False)),
             "pretraining_epochs": int(training.get("pretraining_epochs", 3)),
-            "per_step": _optional_int(training, "per_step"),
             "early_stop_threshold": _optional_float(training, "early_stop_threshold"),
-            "weight_decay": _optional_float(training, "weight_decay"),
-            "warmup_ratio": _optional_float(training, "warmup_ratio"),
-            "optimizer_type": _optional_str(training, "optimizer_type") or "adamw",
-            "scheduler_type": _optional_str(training, "scheduler_type") or "constant",
         },
     }
     return cfg
-
-def _freeze_encoder_only_classifier_train(model: AutoModelForSequenceClassification) -> None:
-    for name, param in model.named_parameters():
-        param.requires_grad = ("classifier" in name)
-
-def _init_model_from_base(
-    tri,
-    base_path: str,
-) -> None:
-    tokenizer = AutoTokenizer.from_pretrained(base_path)
-    model = AutoModelForSequenceClassification.from_pretrained(
-        base_path,
-        num_labels=tri.num_labels,
-        problem_type="single_label_classification",
-    )
-    _freeze_encoder_only_classifier_train(model)
-    device = tri.device if hasattr(tri, "device") else torch.device("cpu")
-    model.to(device)
-    tri.tokenizer = tokenizer
-    tri.model = model
 
 def _flatten_reddit_metadata(meta: Dict[str, Any], feature: Optional[str]) -> Dict[str, Any]:
     flat = dict(meta or {})
@@ -279,9 +242,7 @@ def main() -> int:
     parser.add_argument("--finetuning_epochs", type=int, default=15)
     parser.add_argument("--pretraining_epochs", type=int, default=3)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--pretraining_batch_size", type=int, default=8)
     parser.add_argument("--use_pretraining", action="store_true")
-    parser.add_argument("--per_step", type=int, default=None)
     parser.add_argument("--learning_rate", type=float, default=5e-5)
     parser.add_argument("--model_path", type=str, default=None)
     parser.add_argument("--device", type=str, default="cpu")
@@ -313,12 +274,7 @@ def main() -> int:
         learning_rate = float(training.get("learning_rate", 5e-5))
         use_pretraining = bool(training.get("use_pretraining", False))
         pretraining_epochs = int(training.get("pretraining_epochs", 3))
-        per_step = training.get("per_step")
         early_stop_threshold = training.get("early_stop_threshold")
-        weight_decay = training.get("weight_decay")
-        warmup_ratio = training.get("warmup_ratio")
-        optimizer_type = str(training.get("optimizer_type", "adamw"))
-        scheduler_type = str(training.get("scheduler_type", "constant"))
         init_from = cfg.get("init_from")
         label_key = cfg.get("label_key")
         feature = cfg.get("feature")
@@ -343,16 +299,11 @@ def main() -> int:
         learning_rate = args.learning_rate
         use_pretraining = bool(args.use_pretraining)
         pretraining_epochs = args.pretraining_epochs
-        per_step = args.per_step
         early_stop_threshold = args.early_stop_threshold
         init_from = args.init_from
         label_key = args.label_key
         feature = args.feature
         group_labels = bool(args.group_labels or False)
-        weight_decay = None
-        warmup_ratio = None
-        optimizer_type = "adamw"
-        scheduler_type = "constant"
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
@@ -379,14 +330,8 @@ def main() -> int:
             base_path = Path(init_from).expanduser().resolve()
             if not base_path.exists():
                 raise ValueError(f"Base checkpoint not found: {base_path}")
-            _init_model_from_base(tri, str(base_path))
-        else:
-            tri.model_name = model_name
+            init_from = str(base_path)
         model_path.mkdir(parents=True, exist_ok=True)
-        tri.initialize_tokenizer_and_model()
-        label_mapping_path = model_path / "label_mapping.json"
-        with open(label_mapping_path, "w") as f:
-            json.dump(tri.name_to_label, f, indent=2)
         tri.train(
             epochs=finetuning_epochs,
             batch_size=batch_size,
@@ -395,11 +340,7 @@ def main() -> int:
             use_pretraining=use_pretraining,
             pretraining_epochs=pretraining_epochs,
             early_stop_threshold=early_stop_threshold,
-            per_step=per_step,
-            weight_decay=weight_decay,
-            warmup_ratio=warmup_ratio,
-            optimizer_type=optimizer_type,
-            scheduler_type=scheduler_type,
+            init_checkpoint=init_from,
         )
         print(str(model_path))
         return 0

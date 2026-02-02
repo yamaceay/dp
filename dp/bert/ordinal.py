@@ -7,7 +7,12 @@ import torch
 from transformers import AutoModel, AutoTokenizer, EvalPrediction, Trainer, TrainingArguments
 
 from dp.bert.base import SupervisedDownstreamHead
-from dp.bert.common import EarlyStoppingCallback, mask_stopword_tokens
+from dp.bert.common import (
+    EarlyStoppingCallback,
+    build_optimizer_and_scheduler,
+    mask_stopword_tokens,
+    pretrain_backbone_with_mlm,
+)
 from dp.utils.device import resolve_device
 
 
@@ -33,8 +38,25 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         weight_decay: Optional[float] = None,
         warmup_ratio: Optional[float] = None,
         macro_loss_weight: float = 0.0,
+        use_pretraining: bool = False,
+        pretraining_epochs: int = 1,
+        pretraining_batch_size: Optional[int] = None,
+        pretraining_learning_rate: float = 5e-5,
+        pretraining_mlm_probability: float = 0.15,
     ):
         super().__init__(name="bert_ordinal", primary_metric=primary_metric)
+        if pretraining_epochs <= 0:
+            raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
+        if pretraining_batch_size is not None and pretraining_batch_size <= 0:
+            raise ValueError(f"pretraining_batch_size must be positive, got {pretraining_batch_size}")
+        if pretraining_learning_rate <= 0:
+            raise ValueError(f"pretraining_learning_rate must be positive, got {pretraining_learning_rate}")
+        if pretraining_mlm_probability <= 0.0 or pretraining_mlm_probability >= 1.0:
+            raise ValueError(f"pretraining_mlm_probability must be in (0, 1), got {pretraining_mlm_probability}")
+        if weight_decay is not None and weight_decay < 0:
+            raise ValueError(f"weight_decay must be >= 0, got {weight_decay}")
+        if warmup_ratio is not None and (warmup_ratio < 0.0 or warmup_ratio >= 1.0):
+            raise ValueError(f"warmup_ratio must be in [0, 1), got {warmup_ratio}")
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
@@ -53,6 +75,11 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         self.weight_decay = float(weight_decay) if weight_decay is not None else None
         self.warmup_ratio = float(warmup_ratio) if warmup_ratio is not None else None
         self.macro_loss_weight = float(macro_loss_weight)
+        self.use_pretraining = bool(use_pretraining)
+        self.pretraining_epochs = int(pretraining_epochs)
+        self.pretraining_batch_size = int(pretraining_batch_size) if pretraining_batch_size is not None else self.batch_size
+        self.pretraining_learning_rate = float(pretraining_learning_rate)
+        self.pretraining_mlm_probability = float(pretraining_mlm_probability)
         self._tokenizer: Optional[AutoTokenizer] = None
         self._model: Optional[torch.nn.Module] = None
         self._trainer: Optional[Trainer] = None
@@ -61,12 +88,14 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         self._index_to_label: Optional[Dict[int, str]] = None
         self._num_classes: int = 0
         self._stopwords: Set[str] = set()
+        self._active_checkpoint: Optional[str] = None
 
     def _create_model(self, num_classes: int):
         base_model = AutoModel.from_pretrained(self.model_name)
-        if self.init_checkpoint:
+        checkpoint_source = self._active_checkpoint or self.init_checkpoint
+        if checkpoint_source:
             try:
-                checkpoint_model = AutoModel.from_pretrained(self.init_checkpoint)
+                checkpoint_model = AutoModel.from_pretrained(checkpoint_source)
                 base_model.load_state_dict(checkpoint_model.state_dict(), strict=False)
             except Exception:
                 pass
@@ -160,11 +189,27 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         train_labels = list(y_train)
         val_labels = list(y_val)
         union_labels = train_labels + val_labels
+        self._active_checkpoint = None
 
         train_targets, val_targets, num_classes, bias_init = self._prepare_targets(train_labels, val_labels, union_labels)
         self._num_classes = num_classes
 
-        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        if self.use_pretraining:
+            self._active_checkpoint = pretrain_backbone_with_mlm(
+                model_name=self.model_name,
+                texts=train_texts,
+                output_dir=self.checkpoint_dir,
+                init_checkpoint=self.init_checkpoint,
+                epochs=self.pretraining_epochs,
+                batch_size=self.pretraining_batch_size,
+                learning_rate=self.pretraining_learning_rate,
+                mlm_probability=self.pretraining_mlm_probability,
+            )
+        tokenizer_source = self._active_checkpoint or self.init_checkpoint or self.model_name
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
+        except Exception:
+            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
         if self.mask_stopwords:
             from dp.utils.stopwords import DEFAULT_STOPWORDS
@@ -229,7 +274,7 @@ class BertOrdinalHead(SupervisedDownstreamHead):
             per_device_eval_batch_size=self.batch_size,
             warmup_steps=self.warmup_steps,
             learning_rate=self.head_lr,
-            weight_decay=0.01,
+            weight_decay=self.weight_decay if self.weight_decay is not None else 0.01,
             logging_steps=10,
             eval_strategy="epoch",
             save_strategy="epoch",
@@ -238,6 +283,19 @@ class BertOrdinalHead(SupervisedDownstreamHead):
             greater_is_better=False,
             max_grad_norm=self.gradient_clip,
             report_to="none",
+        )
+        steps_per_epoch = max(1, int(np.ceil(len(train_dataset) / self.batch_size)))
+        num_training_steps = steps_per_epoch * self.epochs
+        optimizer, scheduler = build_optimizer_and_scheduler(
+            self._model,
+            optimizer_type=self.optimizer_type,
+            scheduler_type=self.scheduler_type,
+            encoder_lr=self.encoder_lr,
+            head_lr=self.head_lr,
+            weight_decay=self.weight_decay if self.weight_decay is not None else 0.01,
+            warmup_steps=self.warmup_steps,
+            warmup_ratio=self.warmup_ratio,
+            num_training_steps=num_training_steps,
         )
 
         early_stopping = EarlyStoppingCallback(
@@ -254,6 +312,7 @@ class BertOrdinalHead(SupervisedDownstreamHead):
             eval_dataset=val_dataset,
             compute_metrics=compute_metrics,
             callbacks=[early_stopping],
+            optimizers=(optimizer, scheduler),
         )
 
         self._trainer.train()
@@ -271,7 +330,7 @@ class BertOrdinalHead(SupervisedDownstreamHead):
                 encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
                 if self.mask_stopwords:
                     encodings = mask_stopword_tokens(self._tokenizer, self._stopwords, encodings, batch_texts)
-                encodings = {k: v.to(self._model.base_model.device) for k, v in encodings.items()}
+                encodings = {k: v.to(self._model_device()) for k, v in encodings.items()}
                 outputs = self._model(**encodings)
                 logits = outputs["logits"]
                 probs = torch.sigmoid(logits)
@@ -328,6 +387,11 @@ class BertOrdinalHead(SupervisedDownstreamHead):
 
     def setup(self) -> None:
         pass
+
+    def _model_device(self) -> torch.device:
+        if self._model is None:
+            raise RuntimeError("Model not fitted")
+        return next(self._model.parameters()).device
 
     def cleanup(self) -> None:
         if self._model is not None:
