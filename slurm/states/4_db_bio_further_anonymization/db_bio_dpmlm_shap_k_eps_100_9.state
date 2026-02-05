@@ -1,3 +1,0 @@
-1
-1
-python model.py --data db_bio --data_in data/db_bio/test/data-00000-of-00001.arrow --model dpmlm --model_in configs/model/dpmlm/db_bio/shap_k.yaml --runtime_in configs/runtime/dp/eps_100.yaml configs/runtime/k_anon/k_*.yaml --output jsonl --unique_name db_bio_dpmlm_shap_k_eps_100

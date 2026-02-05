@@ -1,3 +1,0 @@
-1
-1
-python tri_by_bk.py --mode train --training-in configs/tri_training/db_bio/bk_base.yaml --run-name db_bio__lr5e-5 --set training.learning_rate=5e-5

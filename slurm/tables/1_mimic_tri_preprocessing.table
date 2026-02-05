@@ -1,2 +1,0 @@
-mimic_deid|python data_for_tri.py --config configs/tri_preprocessing/mimic_deid.yaml
-mimic_sum|python data_for_tri.py --config configs/tri_preprocessing/mimic_sum.yaml

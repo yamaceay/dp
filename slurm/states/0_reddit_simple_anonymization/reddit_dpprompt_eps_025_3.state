@@ -1,3 +1,0 @@
-1
-1
-python model.py --data reddit --data_in data/reddit/reddit.jsonl --model dpprompt --model_in configs/model/dpprompt.yaml --runtime_in configs/runtime/dp/eps_025.yaml --output jsonl --unique_name reddit_dpprompt_eps_025

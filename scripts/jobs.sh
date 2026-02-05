@@ -77,7 +77,7 @@ function all_datasets() {
 
 function retry_by_dataset() {
   if [[ "$1" == "tab" ]]; then
-    echo "5"
+    echo "3"
   else
     echo ""
   fi

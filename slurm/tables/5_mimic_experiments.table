@@ -1,4 +1,0 @@
-privacy_mimic|python run.py privacy --config configs/experiments/privacy_mimic_tri.yaml
-divergence_mimic_bertscore|python run.py divergence --config configs/experiments/divergence_mimic_bertscore.yaml
-divergence_mimic_cosine|python run.py divergence --config configs/experiments/divergence_mimic_cosine.yaml
-utility_mimic_category|python run.py utility --config configs/experiments/utility_mimic_category.yaml
