@@ -1,3 +1,0 @@
-data: mimic
-data_in: data/mimic/mimic.csv
-save_to_jsonl: data/mimic/mimic_sum_deid.jsonl

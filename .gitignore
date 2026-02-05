@@ -45,9 +45,6 @@ models/
 *.safetensors
 
 # Data files (private/large)
-data/trustpilot/trustpilot_reviews_2005.csv
-# data/trustpilot/**/*.csv
-# data/trustpilot/**/*.json
 # data/db_bio/**/*.arrow
 # data/Wiki/*.json
 # data/TAB/*.json

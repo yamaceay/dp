@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from dp.tri.loaders.tab import TabAttackerDatasetAdapter
 from dp.tri.loaders.reddit import RedditAttackerDatasetAdapter
-from dp.tri.loaders.trustpilot import TrustpilotAttackerDatasetAdapter
 from dp.tri.loaders.dbbio import DBBioAttackerDatasetAdapter
-from dp.tri.loaders.mimic import MIMICAttackerDatasetAdapter
 from dp.tri.loaders.base import (
     AttackerDatasetRecord,
     AttackerDatasetAdapter,
@@ -16,9 +14,7 @@ from dp.tri.loaders.base import (
 ATTACKER_ADAPTER_REGISTRY: dict[str, type[AttackerDatasetAdapter]] = {
     "tab": TabAttackerDatasetAdapter,
     "reddit": RedditAttackerDatasetAdapter,
-    "trustpilot": TrustpilotAttackerDatasetAdapter,
     "db_bio": DBBioAttackerDatasetAdapter,
-    "mimic": MIMICAttackerDatasetAdapter,
 }
 
 def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:

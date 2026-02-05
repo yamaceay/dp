@@ -10,8 +10,6 @@ from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, TextA
 from dp.loaders._tab import TabDatasetAdapter
 from dp.loaders._dbbio import DBBioDatasetAdapter
 from dp.loaders._reddit import RedditDatasetAdapter
-from dp.loaders._trustpilot import TrustpilotDatasetAdapter
-from dp.loaders._mimic import MIMICDatasetAdapter
 
 from dp.loaders.annotations import (
     read_annotations,
@@ -31,9 +29,7 @@ from dp.loaders.results import build_dataset_from_results
 ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "tab": TabDatasetAdapter,
     "reddit": RedditDatasetAdapter,
-    "trustpilot": TrustpilotDatasetAdapter,
     "db_bio": DBBioDatasetAdapter,
-    "mimic": MIMICDatasetAdapter,
 }
 
 def get_adapter(name: str, **kwargs) -> DatasetAdapter:

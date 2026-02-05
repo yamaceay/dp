@@ -19,8 +19,4 @@ UTILITY_TARGETS: Dict[str, Dict[str, UtilityTarget]] = {
     "db_bio": {
         "label": UtilityTarget(name="label", source="db_bio", mode=UtilityTarget.Mode.NOMINAL, getter=get_getter("db_bio", "label")),
     },
-    "trustpilot": {
-        "category": UtilityTarget(name="category", source="trustpilot", mode=UtilityTarget.Mode.NOMINAL, getter=get_getter("trustpilot", "category")),
-        "stars": UtilityTarget(name="stars", source="trustpilot", mode=UtilityTarget.Mode.CARDINAL, getter=get_getter("trustpilot", "stars")),
-    },
 }

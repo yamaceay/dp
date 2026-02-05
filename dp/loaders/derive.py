@@ -214,35 +214,6 @@ def tab_country_groups(record: DatasetRecord, region_groups: List[str] | None = 
 def db_bio_label(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("label"))
 
-
-def trustpilot_category(record: DatasetRecord) -> Optional[str]:
-    return text_value(record.metadata.get("category"))
-
-
-def trustpilot_stars(record: DatasetRecord) -> Optional[int]:
-    return int_value(record.metadata.get("stars"))
-
-
-def mimic_category(record: DatasetRecord) -> Optional[str]:
-    return text_value(record.metadata.get("category"))
-
-def mimic_category_group(record: DatasetRecord) -> Optional[str]:
-    if mimic_category(record) in ['Nursing/other', 'Nursing']:
-        return 'Nursing'
-    return record.metadata.get("category")
-
-# def mimic_description(record: DatasetRecord) -> Optional[str]:
-#     return text_value(record.metadata.get("description"))
-
-# def mimic_chartdate(record: DatasetRecord) -> Optional[str]:
-#     return text_value(record.metadata.get("chartdate"))
-
-# def mimic_charttime(record: DatasetRecord) -> Optional[str]:
-#     return text_value(record.metadata.get("charttime"))
-
-# def mimic_storetime(record: DatasetRecord) -> Optional[str]:
-#     return text_value(record.metadata.get("storetime"))
-
 DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
     "reddit": {
         "feature": reddit_feature,
@@ -261,14 +232,6 @@ DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
     "db_bio": {
         "label": db_bio_label,
     },
-    "trustpilot": {
-        "category": trustpilot_category,
-        "stars": trustpilot_stars,
-    },
-    "mimic": {
-        "category": mimic_category,
-        "category_group": mimic_category_group,
-    }
 }
 
 

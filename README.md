@@ -36,7 +36,6 @@ Raw corpora are **not** shipped with the repository. Each dataset adapter expect
 | Adapter | Path hint | Expected fields |
 | --- | --- | --- |
 | `tab` | `data/TAB/splitted/{train,dev,test}.json` | `doc_id`, `text`, nested `annotations` with `entity_mentions`, and `meta.applicant` for record names. |
-| `trustpilot` | `data/Trustpilot/...` | Company- or user-level review splits with optional sentiment metadata. |
 | `db_bio` | `data/DB_Bio/...` | Biomedical abstracts with entity spans. |
 | `reddit` | JSONL file with `response`, `personality`, and auxiliary attributes per line. |
 
