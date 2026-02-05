@@ -1,3 +1,0 @@
-1
-0
-python model.py --data mimic --data_in data/mimic/splitted/test.csv --model dpbart --model_in configs/model/dpbart.yaml --runtime_in configs/runtime/dp/eps_500.yaml --output jsonl --unique_name mimic_dpbart_eps_500

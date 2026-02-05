@@ -1,3 +1,0 @@
-1
-0
-python pii.py --mode train --training-in configs/pii_training/mimic/base.yaml --run-name tab__lr1e-5__bs16__m_partial_recall --set training.learning_rate=1e-5 --set training.batch_size=16 --set selection.metric=partial_recall

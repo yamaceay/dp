@@ -1,3 +1,0 @@
-1
-0
-python pii.py --mode train --training-in configs/pii_training/mimic/base.yaml --run-name tab__lr2e-5__bs8__m_exact_recall --set training.learning_rate=2e-5 --set training.batch_size=8 --set selection.metric=exact_recall
