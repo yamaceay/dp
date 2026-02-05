@@ -16,32 +16,31 @@ class SpacyAnonymizer(Anonymizer):
         except Exception:
             raise ImportError("spaCy is not installed. Please install it with 'uv pip install spacy'.")
 
-        if not hasattr(self, '_nlp'):
-            model_loaded = False
+        model_loaded = False
+        for model in spacy_models:
+            try:    
+                self._nlp = spacy.load(model)
+                model_loaded = True
+                break
+            except Exception:
+                continue
+
+        if not model_loaded:
+            print("Could not load any spaCy model. Attempting to download one...")
+            model_downloaded = False
             for model in spacy_models:
-                try:
-                    self._nlp = spacy.load(model)
-                    model_loaded = True
-                    break
-                except Exception:
-                    continue
+                if not spacy.util.is_package(model):
+                    try:
+                        spacy.cli.download(model)
+                        model_downloaded = True
+                        self._nlp = spacy.load(model)
+                        model_loaded = True
+                        break
+                    except Exception:
+                        continue
 
-            if not model_loaded:
-                print("Could not load any spaCy model. Attempting to download one...")
-                import spacy.cli
-                import spacy.util
-                model_downloaded = False
-                for model in spacy_models:
-                    if not spacy.util.is_package(model):
-                        try:
-                            spacy.cli.download(model)
-                            model_downloaded = True
-                            break
-                        except Exception:
-                            continue
-
-                if not model_downloaded:
-                    raise ImportError("Could not download spaCy models. Please install one of: " + ", ".join(spacy_models))
+        if not model_loaded:
+            raise ImportError("Could not download spaCy models. Please install one of: " + ", ".join(spacy_models))
 
     def anonymize_any_text(self, text: str, labels: List[str] = None, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
         entities = self._extract_entities(text, labels)
