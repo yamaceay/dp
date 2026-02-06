@@ -3,7 +3,7 @@ data_in: data/reddit/reddit.jsonl
 annotations_in:
   - outputs/reddit
 tri:
-  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5__eval
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5
   max_length: 512
 mask_token: "[MASK]"
 output:

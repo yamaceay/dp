@@ -13,10 +13,10 @@ methods: &methods
   - method: dpmlm_shap_masked
     params: [epsilon]
     print_as: "Risk-aware DPMLM with Presidio-deid"
-  - method: dpmlm_shap_unsorted
-    params: [epsilon]
-    params_one_run: [k]
-    print_as: "Risk-aware k-DPMLM with Presidio-deid"
+  # - method: dpmlm_shap_unsorted
+  #   params: [epsilon]
+  #   params_one_run: [k]
+  #   print_as: "Risk-aware k-DPMLM with Presidio-deid"
   - method: dpmlm_shap
     params: [epsilon]
     params_one_run: [k]

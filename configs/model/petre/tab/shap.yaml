@@ -3,11 +3,11 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/tab__lr5e-5__eval
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__lr5e-5
 
 precomputation:
   risk_scores: data/TAB/test_risk_shap.jsonl
-  result_in: outputs/tab/presidio/20260121_170356_tab_presidio.jsonl
+  result_in: outputs/tab/presidio/20260205_184512_tab_presidio.jsonl
 
 tri_chunking:
   enabled: true

@@ -37,6 +37,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
         early_stop_patience: int = 2,
         init_checkpoint: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
+        pretraining_output_dir: Optional[str] = None,
         mask_stopwords: bool = False,
         macro_loss_weight: float = 0.0,
         loss_type: str = "cross_entropy",
@@ -85,6 +86,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        self.pretraining_output_dir = pretraining_output_dir or self.checkpoint_dir
         self.mask_stopwords = bool(mask_stopwords)
         self.macro_loss_weight = float(macro_loss_weight)
         self.loss_type = str(loss_type)
@@ -229,7 +231,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
             self._active_checkpoint = pretrain_backbone_with_mlm(
                 model_name=self.model_name,
                 texts=train_texts,
-                output_dir=self.checkpoint_dir,
+                output_dir=self.pretraining_output_dir,
                 init_checkpoint=self.init_checkpoint,
                 epochs=self.pretraining_epochs,
                 batch_size=self.pretraining_batch_size,

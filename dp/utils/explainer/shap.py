@@ -1,4 +1,5 @@
-from typing import Optional, Sequence, Tuple, Dict, List, Any, Union
+from pathlib import Path
+from typing import Optional, Sequence, Tuple, Dict, List, Any, Union, Callable
 from enum import Enum
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
@@ -81,16 +82,61 @@ class ShapExplainer(TokenExplainer):
         self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}
+        self._tri_predict_fn: Optional[Callable[[Sequence[str]], np.ndarray]] = None
         self.explainer_type: ShapType = explainer_type or ShapType.DEFAULT
     
     def _load_pipeline(self):
         if self.pipeline is None:
             from transformers import pipeline
-            self.pipeline = pipeline("text-classification", model=self.model_name, tokenizer=self.model_name, device=self.device if self.device != "cpu" else -1, top_k=None, max_length=512, truncation=True)
-            config = getattr(self.pipeline.model, "config", None)
-            if config is not None and hasattr(config, "id2label"):
-                self.id_to_label = dict(config.id2label)
-                self.label_to_id = {label: idx for idx, label in self.id_to_label.items()}
+            try:
+                self.pipeline = pipeline(
+                    "text-classification",
+                    model=self.model_name,
+                    tokenizer=self.model_name,
+                    device=self.device if self.device != "cpu" else -1,
+                    top_k=None,
+                    max_length=512,
+                    truncation=True,
+                )
+                config = getattr(self.pipeline.model, "config", None)
+                if config is not None and hasattr(config, "id2label"):
+                    self.id_to_label = dict(config.id2label)
+                    self.label_to_id = {label: idx for idx, label in self.id_to_label.items()}
+                return
+            except Exception as pipeline_error:
+                checkpoint_path = Path(str(self.model_name))
+                tri_checkpoint = checkpoint_path / "bert_classifier.pt"
+                if not tri_checkpoint.exists():
+                    raise pipeline_error
+
+            self.tri_detector.load(str(self.model_name))
+            mapping = dict(self.tri_detector.name_to_label)
+            if not mapping:
+                raise ValueError(f"TRI label mapping unavailable for checkpoint: {self.model_name}")
+            self.label_to_id.update(mapping)
+            self.id_to_label = {idx: name for name, idx in mapping.items()}
+            max_label = max(mapping.values())
+
+            def _predict_with_tri(texts: Sequence[str]) -> np.ndarray:
+                if isinstance(texts, str):
+                    batch = [texts]
+                else:
+                    batch = [str(t) for t in texts]
+                classifier = self.tri_detector.classifier
+                if classifier is None:
+                    raise RuntimeError("TRI classifier is not loaded")
+                rows = classifier.predict_proba(batch)
+                matrix = np.zeros((len(batch), max_label + 1), dtype=float)
+                for i in range(len(batch)):
+                    scores = rows[i]
+                    for name, score in scores.items():
+                        idx = mapping.get(name)
+                        if idx is not None:
+                            matrix[i, idx] = float(score)
+                return matrix
+
+            self._tri_predict_fn = _predict_with_tri
+            self.pipeline = self._tri_predict_fn
 
     def _ensure_tri_mapping(self) -> None:
         if self._tri_mapping_attempted:

@@ -3,12 +3,12 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/reddit__lr5e-5__eval
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5
   risk_temperature: 0.1
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_shap.jsonl
-  result_in: outputs/reddit/presidio/20260121_170408_reddit_presidio.jsonl
+  result_in: outputs/reddit/presidio/20260205_182109_reddit_presidio.jsonl
 
 token_selection:
   name: by_risk

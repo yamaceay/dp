@@ -101,6 +101,7 @@ class TRIDetector:
             pretraining_batch_size=batch_size,
             pretraining_learning_rate=learning_rate,
             checkpoint_dir=f"{resolved_output_dir}/finetuning",
+            pretraining_output_dir=f"{resolved_output_dir}/pretraining",
             init_checkpoint=init_checkpoint,
         )
         train_texts = [record.text for record in self.train_records]
