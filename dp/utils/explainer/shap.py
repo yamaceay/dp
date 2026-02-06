@@ -83,6 +83,7 @@ class ShapExplainer(TokenExplainer):
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}
         self._tri_predict_fn: Optional[Callable[..., Any]] = None
+        self._tri_shap_predict_fn: Optional[Callable[..., np.ndarray]] = None
         self.explainer_type: ShapType = explainer_type or ShapType.DEFAULT
     
     def _load_pipeline(self):
@@ -140,8 +141,45 @@ class ShapExplainer(TokenExplainer):
                     formatted.append(entries)
                 return formatted
 
+            def _predict_with_tri_for_shap(texts: Sequence[str], *args: Any, **kwargs: Any) -> np.ndarray:
+                if isinstance(texts, str):
+                    batch = [texts]
+                else:
+                    batch = [str(t) for t in texts]
+                classifier = self.tri_detector.classifier
+                if classifier is None:
+                    raise RuntimeError("TRI classifier is not loaded")
+                rows = classifier.predict_proba(batch)
+                matrix = np.zeros((len(batch), len(labels_by_id)), dtype=np.float64)
+                for row_idx, scores in enumerate(rows):
+                    for col_idx, (_, name) in enumerate(labels_by_id):
+                        matrix[row_idx, col_idx] = float(scores.get(name, 0.0))
+                return matrix
+
             self._tri_predict_fn = _predict_with_tri
+            self._tri_shap_predict_fn = _predict_with_tri_for_shap
             self.pipeline = self._tri_predict_fn
+
+    def predict_entries(self, texts: Sequence[str], batch_size: int = 1) -> List[List[Dict[str, float]]]:
+        self._load_pipeline()
+        if self._tri_predict_fn is not None:
+            return self._tri_predict_fn(texts, batch_size=batch_size)
+        pipe = self.pipeline
+        if pipe is None:
+            raise RuntimeError("Explainer pipeline is not loaded")
+        batch = [texts] if isinstance(texts, str) else [str(t) for t in texts]
+        raw = pipe(batch, batch_size=batch_size)
+        if not isinstance(raw, list):
+            raise ValueError("Unexpected prediction output from pipeline")
+        normalized: List[List[Dict[str, float]]] = []
+        for item in raw:
+            if isinstance(item, list):
+                normalized.append(item)
+            elif isinstance(item, dict):
+                normalized.append([item])
+            else:
+                raise ValueError("Unexpected prediction item type from pipeline")
+        return normalized
 
     def _ensure_tri_mapping(self) -> None:
         if self._tri_mapping_attempted:
@@ -180,14 +218,15 @@ class ShapExplainer(TokenExplainer):
 
         tokenizer = _SpanTokenizer(text, normalized_offsets)
         masker = shap.maskers.Text(tokenizer=tokenizer, collapse_mask_token=True)
+        shap_model = self._tri_shap_predict_fn or self.pipeline
         explainer = None
         explainer_args = dict(silent=True)
         match self.explainer_type:
             case ShapType.PERMUTATION:
                 num_features = max(2 * len(normalized_offsets) + 1, 500)
-                explainer = shap.PermutationExplainer(self.pipeline, masker, max_evals=num_features, **explainer_args)
+                explainer = shap.PermutationExplainer(shap_model, masker, max_evals=num_features, **explainer_args)
             case _:
-                explainer = shap.Explainer(self.pipeline, masker, **explainer_args)
+                explainer = shap.Explainer(shap_model, masker, **explainer_args)
         shap_values = explainer([text], batch_size=1)
 
         values = shap_values.values[0, :, label_int]

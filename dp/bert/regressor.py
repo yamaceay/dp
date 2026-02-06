@@ -96,6 +96,7 @@ class BertRegressorHead(SupervisedDownstreamHead):
             def __init__(self, base, hidden_size):
                 super().__init__()
                 self.base_model = base
+                self._keys_to_ignore_on_save = []
                 self.regressor = torch.nn.Linear(hidden_size, 1)
 
             def forward(self, input_ids, attention_mask, labels=None):

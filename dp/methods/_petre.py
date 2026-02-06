@@ -138,13 +138,17 @@ class PetreAnonymizer(Anonymizer):
             raise ValueError("PetreAnonymizer requires explainer for rank evaluation")
         if hasattr(self._explainer, "_load_pipeline"):
             self._explainer._load_pipeline()
+        predict_entries = getattr(self._explainer, "predict_entries", None)
         pipe = getattr(self._explainer, "pipeline", None)
-        if pipe is None:
-            raise ValueError("Explainer pipeline is not available for rank evaluation")
+        if predict_entries is None and pipe is None:
+            raise ValueError("Explainer predictions are not available for rank evaluation")
 
         def rank_evaluator(current_text: str, target_label: int) -> int:
             target = f"LABEL_{int(target_label)}"
-            entries = pipe([current_text], batch_size=1)[0]
+            if callable(predict_entries):
+                entries = predict_entries([current_text], batch_size=1)[0]
+            else:
+                entries = pipe([current_text], batch_size=1)[0]
             if not isinstance(entries, list) or not entries:
                 raise ValueError("TRI pipeline returned no predictions")
             scored = [e for e in entries if isinstance(e, dict) and "label" in e and "score" in e]

@@ -133,6 +133,7 @@ class BertClassifierHead(SupervisedDownstreamHead):
             def __init__(self, base, hidden_size, num_labels):
                 super().__init__()
                 self.base_model = base
+                self._keys_to_ignore_on_save = []
                 self.classifier = torch.nn.Linear(hidden_size, num_labels)
 
             def forward(self, input_ids, attention_mask, labels=None):
