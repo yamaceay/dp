@@ -82,7 +82,7 @@ class ShapExplainer(TokenExplainer):
         self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}
-        self._tri_predict_fn: Optional[Callable[[Sequence[str]], np.ndarray]] = None
+        self._tri_predict_fn: Optional[Callable[..., Any]] = None
         self.explainer_type: ShapType = explainer_type or ShapType.DEFAULT
     
     def _load_pipeline(self):
@@ -115,9 +115,11 @@ class ShapExplainer(TokenExplainer):
                 raise ValueError(f"TRI label mapping unavailable for checkpoint: {self.model_name}")
             self.label_to_id.update(mapping)
             self.id_to_label = {idx: name for name, idx in mapping.items()}
-            max_label = max(mapping.values())
+            labels_by_id = sorted([(idx, name) for name, idx in mapping.items()], key=lambda item: item[0])
+            for idx, _ in labels_by_id:
+                self.label_to_id[f"LABEL_{idx}"] = idx
 
-            def _predict_with_tri(texts: Sequence[str]) -> np.ndarray:
+            def _predict_with_tri(texts: Sequence[str], *args: Any, **kwargs: Any) -> List[List[Dict[str, float]]]:
                 if isinstance(texts, str):
                     batch = [texts]
                 else:
@@ -126,14 +128,17 @@ class ShapExplainer(TokenExplainer):
                 if classifier is None:
                     raise RuntimeError("TRI classifier is not loaded")
                 rows = classifier.predict_proba(batch)
-                matrix = np.zeros((len(batch), max_label + 1), dtype=float)
+                formatted: List[List[Dict[str, float]]] = []
                 for i in range(len(batch)):
                     scores = rows[i]
-                    for name, score in scores.items():
-                        idx = mapping.get(name)
-                        if idx is not None:
-                            matrix[i, idx] = float(score)
-                return matrix
+                    entries: List[Dict[str, float]] = []
+                    for idx, name in labels_by_id:
+                        entries.append({
+                            "label": f"LABEL_{idx}",
+                            "score": float(scores.get(name, 0.0)),
+                        })
+                    formatted.append(entries)
+                return formatted
 
             self._tri_predict_fn = _predict_with_tri
             self.pipeline = self._tri_predict_fn

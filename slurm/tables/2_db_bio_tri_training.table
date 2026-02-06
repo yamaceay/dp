@@ -1,2 +1,2 @@
 tri_db_bio_lr5e-5 | python tri_by_bk.py --mode train --training-in configs/tri_training/db_bio/bk_base.yaml --run-name db_bio__lr5e-5 --set training.learning_rate=5e-5
-tri_db_bio_deid_lr5e-5 | python tri_by_bk.py --mode train --training-in configs/tri_training/db_bio/bk_deid.yaml --run-name db_bio__deid_lr5e-5 --set training.learning_rate=5e-5
+tri_db_bio_deid_lr5e-5 | python tri_by_bk.py --mode train --training-in configs/tri_training/db_bio/bk_deid.yaml --run-name db_bio__deid__lr5e-5 --set training.learning_rate=5e-5

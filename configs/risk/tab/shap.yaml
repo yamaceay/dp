@@ -1,7 +1,7 @@
 dataset: tab
 data_in: data/TAB/splitted/test.json
 explainer: shap
-explainer_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__deid_lr5e-5
+explainer_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__deid__lr5e-5
 result_in: outputs/tab/presidio/20260205_184512_tab_presidio.jsonl
 save_to_jsonl: data/TAB/test_risk_shap.jsonl
 sort_by: scores
