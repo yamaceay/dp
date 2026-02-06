@@ -6,6 +6,7 @@ annotations_in:
 target:
   key: feature_label
   type: ordinal
+  preference: bert
   enum:
     - "age: 18-29"
     - "age: 30-44"
@@ -20,7 +21,6 @@ split:
 random_state: 42
 include_confusion_matrix: true
 head:
-  type: bert_ordinal
   params:
     model_name: distilbert-base-uncased
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198

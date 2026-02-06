@@ -6,6 +6,7 @@ annotations_in:
 target:
   key: feature_label
   type: nominal
+  preference: bert
 selection_criteria:
   feature: occupation
 split:
@@ -16,7 +17,6 @@ split:
     val: 0.0
 random_state: 42
 head:
-  type: bert_classifier
   params:
     model_name: distilbert-base-uncased
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198

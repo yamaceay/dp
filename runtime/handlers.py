@@ -92,6 +92,9 @@ def merge_params(config: ConfigDict, args: Any) -> ConfigDict:
     identifier = getattr(args, "identifier", None)
     if identifier is not None:
         out["identifier"] = identifier
+    preference = getattr(args, "preference", None)
+    if preference is not None:
+        out["preference"] = preference
     return out
 
 
@@ -139,13 +142,19 @@ def _resolve_utility_components(spec: Any, params: ConfigDict) -> Tuple[str | No
     vec_name, vec_kwargs = parse_component_config(params.get("vectorizer"))
     head_name, head_kwargs = parse_component_config(params.get("head"))
     if not head_name or not vec_name:
-        from dp.experiments.utility.models import MODE_TO_MODEL
-        desired = MODE_TO_MODEL.get(spec.target.mode)
-        if desired:
-            if not vec_name:
-                vec_name = desired[0]
-            if not head_name:
-                head_name = desired[1]
+        from dp.experiments.utility.models import resolve_model_choice
+
+        target_cfg = params.get("target") if isinstance(params.get("target"), dict) else {}
+        preference = (
+            params.get("preference")
+            or target_cfg.get("preference")
+            or getattr(spec, "preference", None)
+        )
+        desired_vec, desired_head = resolve_model_choice(spec.target.mode, preference)
+        if not vec_name:
+            vec_name = desired_vec
+        if not head_name:
+            head_name = desired_head
     return vec_name, vec_kwargs, head_name, head_kwargs
 
 

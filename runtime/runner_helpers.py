@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import yaml
 
 from dp.experiments.utility.io import build_utility_evaluation_texts
-from dp.experiments.utility.models import UtilitySpec, MODE_TO_MODEL
+from dp.experiments.utility.models import UtilitySpec, resolve_model_choice
 from dp.experiments.utility.vectorizer import (
     BERTVectorizer,
     SentenceEmbeddingVectorizer,
@@ -129,16 +129,20 @@ def align_evaluation_texts(records: List[DatasetRecord], sources: Dict[str, Path
 
 def build_utility_target(params: Dict[str, Any], dataset: str) -> UtilitySpec:
     payload = params.get("target")
+    top_level_preference = params.get("preference")
     if isinstance(payload, str):
         key = payload
         ttype = "nominal"
         enum: List[str] = []
+        preference = str(top_level_preference).strip() if top_level_preference else None
     elif isinstance(payload, dict):
         key = str(payload.get("key", "")).strip()
         if not key:
             raise ValueError("target.key is required")
         ttype = str(payload.get("type", "nominal")).strip().lower() or "nominal"
         enum = ensure_sequence(payload.get("enum"))
+        raw_pref = payload.get("preference", top_level_preference)
+        preference = str(raw_pref).strip() if raw_pref else None
     else:
         raise ValueError("target must be string or mapping with key/type/enum")
     from dp.experiments.utility.base import UtilityTarget
@@ -164,5 +168,12 @@ def build_utility_target(params: Dict[str, Any], dataset: str) -> UtilitySpec:
         getter = wrapped_getter
     label_order = enum if mode is UtilityTarget.Mode.ORDINAL else None
     built = UtilityTarget(name=str(key), source=str(dataset), mode=mode, getter=getter, label_order=label_order)
-    v_name, h_name = MODE_TO_MODEL[mode]
-    return UtilitySpec(dataset=str(dataset), target_key=str(key), target=built, default_vectorizer=v_name, default_head=h_name)
+    v_name, h_name = resolve_model_choice(mode, preference)
+    return UtilitySpec(
+        dataset=str(dataset),
+        target_key=str(key),
+        target=built,
+        default_vectorizer=v_name,
+        default_head=h_name,
+        preference=preference,
+    )

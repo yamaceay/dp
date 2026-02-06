@@ -6,6 +6,7 @@ annotations_in:
 target:
   key: feature_label
   type: ordinal
+  preference: bert
   enum:
     - "sex: male"
     - "sex: female"
@@ -19,7 +20,6 @@ split:
     val: 0.0
 random_state: 42
 head:
-  type: bert_ordinal
   params:
     model_name: distilbert-base-uncased
     init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198

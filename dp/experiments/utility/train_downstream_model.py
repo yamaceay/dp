@@ -1,4 +1,11 @@
 from __future__ import annotations
+"""
+Legacy utility-specific TRI training entrypoint.
+
+Kept for compatibility because it supports label injection (`label_key`/`feature`)
+before TRI training. Prefer `tri_by_bk.py` for general TRI training and `run.py utility`
+for utility experiments.
+"""
 
 import argparse
 from datetime import datetime

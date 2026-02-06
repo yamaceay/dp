@@ -19,6 +19,11 @@ def build_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", type=str, help="Path to experiment config file")
     parser.add_argument("--mode", type=str, choices=["utility", "privacy", "divergence"], help="Experiment mode override (optional)")
     parser.add_argument("--identifier", type=str, help="Optional model identifier override for utility experiments")
+    parser.add_argument(
+        "--preference",
+        type=str,
+        help="Optional utility model preference (e.g. bert, qwen). Defaults to first candidate (bert).",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
