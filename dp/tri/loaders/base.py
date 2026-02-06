@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Tuple
 import json
-from tqdm import tqdm
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
 

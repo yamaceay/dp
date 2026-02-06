@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union, Iterable
+from typing import Optional, Union, Iterable
 from tqdm import tqdm
 
-from dp.loaders.base import DatasetRecord
 from dp.loaders import get_adapter
-from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord
+from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord, _normalize_texts
 from dp.utils.rewriter import BartRewriter
 from dp.utils.device import resolve_device
+from dp.loaders.annotations import apply_annotations
 
 class DBBioAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(

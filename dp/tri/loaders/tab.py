@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple, Union
 
 from dp.loaders.base import DatasetRecord
 from dp.loaders._tab import TabDatasetAdapter
-from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord
+from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord, _normalize_texts
 from dp.utils.chunking import TokenAwareChunker
 from dp.utils.rewriter import BartRewriter
 from dp.utils.device import resolve_device
@@ -106,8 +106,13 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
 
     def iter_records(self, progress: bool = False) -> List[AttackerDatasetRecord]:
         for record in self.adapter.iter_records():
-            train_texts = self.prepare_train_texts(record)
-            eval_texts = self.prepare_eval_texts(record)
+            if self._cache_map is not None and record.name in self._cache_map:
+                ext = self._cache_map.get(record.name, {})
+                train_texts = _normalize_texts(ext.get("train_texts", []))
+                eval_texts = _normalize_texts(ext.get("eval_texts", []))
+            else:
+                train_texts = self.prepare_train_texts(record)
+                eval_texts = self.prepare_eval_texts(record)
             yield AttackerDatasetRecord(
                 name=record.name,
                 train_texts=train_texts,

@@ -276,7 +276,7 @@ class BertOrdinalHead(SupervisedDownstreamHead):
             learning_rate=self.head_lr,
             weight_decay=self.weight_decay if self.weight_decay is not None else 0.01,
             logging_steps=10,
-            eval_strategy="epoch",
+            evaluation_strategy="epoch",
             save_strategy="epoch",
             load_best_model_at_end=True,
             metric_for_best_model="macro_mae",

@@ -8,6 +8,13 @@ INSTALL_FILE="scripts/install.sh"
 PARTITION="RTXA6000"
 YES=0
 
+trim_whitespace() {
+    local s="$1"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "$s"
+}
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --mail-to=*) MAILTO="${1#*=}"; shift ;;
@@ -56,14 +63,14 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "${line//[[:space:]]/}" || "${line:0:1}" == "#" ]] && continue
 
     IFS='|' read -r -a parts <<< "$line"
-    NAME="$(echo "${parts[0]}" | xargs)"
+    NAME="$(trim_whitespace "${parts[0]}")"
     if [[ -z "$NAME" ]]; then
         echo "Skipping line with empty job name: $line" >&2
         continue
     fi
 
     if [[ ${#parts[@]} -gt 1 ]]; then
-        CMD="$(echo "${parts[1]}" | xargs)"
+        CMD="$(trim_whitespace "${parts[1]}")"
         if [[ -n "$CMD" ]]; then
             STATE_FILE_NAME="${FILE_NAME}/${NAME}_${idx}"
             job_names[$idx]="$STATE_FILE_NAME"

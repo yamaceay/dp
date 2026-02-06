@@ -196,7 +196,7 @@ class BertRegressorHead(SupervisedDownstreamHead):
             learning_rate=self.head_lr,
             weight_decay=self.weight_decay,
             logging_steps=10,
-            eval_strategy="epoch",
+            evaluation_strategy="epoch",
             save_strategy="epoch",
             load_best_model_at_end=True,
             metric_for_best_model="r2",
