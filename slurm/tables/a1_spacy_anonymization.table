@@ -1,3 +1,0 @@
-tab_spacy|python model.py   --data tab --data_in data/TAB/splitted/test.json   --model spacy --model_in configs/model/spacy.yaml      --output jsonl --unique_name tab_spacy 
-db_bio_spacy|python model.py   --data db_bio --data_in data/db_bio/test/data-00000-of-00001.arrow   --model spacy --model_in configs/model/spacy.yaml      --output jsonl --unique_name db_bio_spacy 
-reddit_spacy|python model.py   --data reddit --data_in data/reddit/reddit.jsonl   --model spacy --model_in configs/model/spacy.yaml      --output jsonl --unique_name reddit_spacy 
