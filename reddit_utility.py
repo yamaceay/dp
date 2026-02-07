@@ -103,3 +103,4 @@ if __name__ == "__main__":
 
             item = {k: v for k, v in item.items() if k in selected_keys}
             json.dump(item, f, ensure_ascii=False)
+            f.write("\n")
