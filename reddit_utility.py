@@ -6,7 +6,14 @@ from dp.vllm.client import infer
 from dp.loaders.derive import get_getter
 from dp.loaders import get_adapter
 
-pattern = re.compile(r"\"top1\": \"(.*?)\"\s*,", re.DOTALL)
+pattern = re.compile(r"([\"'])top1\1: ([\"'])(.*?)\2\s*,", re.DOTALL)
+
+def extract_top1(response: str) -> str:
+    matched = pattern.search(response)
+    if matched:
+        return matched.group(3)
+    else:
+        raise ValueError(f"Failed to extract top1 from response: {response}")
 
 selected_keys = {"feature", "label", "question_asked", "response", "hardness", "prediction", "prediction_raw"}
 
@@ -94,11 +101,10 @@ if __name__ == "__main__":
             )
             item["prediction_raw"] = resp
 
-            matched = pattern.search(resp["response"])
-            if matched:                
-                item["prediction"] = matched.group(1)
-            else:
-                print(f"Failed to extract top1 from response [{i}]: {resp['response']}")
+            try:
+                item["prediction"] = extract_top1(resp["response"])
+            except ValueError as e:
+                print(f"Error processing record {i}: {e}")
                 item["prediction"] = None
 
             item = {k: v for k, v in item.items() if k in selected_keys}

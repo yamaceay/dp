@@ -20,7 +20,7 @@ def http_json(method: str, url: str, payload: dict | None = None) -> dict:
         body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url=url, data=body, method=method, headers=headers)
-    with urllib.request.urlopen(req, timeout=600) as resp:
+    with urllib.request.urlopen(req, timeout=1200) as resp:
         data = resp.read().decode("utf-8")
     return json.loads(data)
 
