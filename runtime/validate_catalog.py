@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
 import argparse
+import sys
+from pathlib import Path
 
-from runtime.catalog_loader import load_catalog, validate_catalog, get_experiments, to_runtime_spec
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from runtime.catalog_loader import get_experiments, load_catalog, to_runtime_spec, validate_catalog
 
 
 def main() -> None:
