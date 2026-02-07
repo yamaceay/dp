@@ -83,6 +83,9 @@ class BaroudAnonymizer(Anonymizer):
         self._unit.set_thresholds(lambda_params.values(), name="lambda")
         
         spans = [(ann.start, ann.end) for ann in anns]
+        if hasattr(self._unit, "_cached_text") and hasattr(self._unit, "_cached_predictions"):
+            self._unit._cached_text = text
+            self._unit._cached_predictions = anns
         
         runtime_stats: Dict[str, int] = {"masked": 0}
         apply_fn = self._make_apply_fn(text, anns, runtime_stats)

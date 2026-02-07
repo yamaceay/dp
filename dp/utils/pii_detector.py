@@ -99,7 +99,12 @@ class PIIDetector:
                 latest_checkpoint = sorted(checkpoints, key=lambda x: int(x.split('-')[1]))[-1]
                 model_path = os.path.join(model_path, latest_checkpoint)
         
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.tokenizer = self._load_tokenizer(model_path)
+        if getattr(self.tokenizer, "is_fast", False) is not True:
+            print(
+                "Warning: loaded a slow tokenizer. Token-classification offsets may be missing, "
+                "which can reduce or disable span extraction."
+            )
         self.model = AutoModelForTokenClassification.from_pretrained(model_path)
         self.model.to(self.device)
         if self.max_length > 2:
@@ -140,7 +145,12 @@ class PIIDetector:
             raise ValueError("Labels must be provided or model must be loaded to initialize labels")
 
     def _initialize_model_and_tokenizer(self, labels: List[str]) -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.tokenizer = self._load_tokenizer(self.model_name)
+        if getattr(self.tokenizer, "is_fast", False) is not True:
+            print(
+                "Warning: loaded a slow tokenizer. Token-classification offsets may be missing, "
+                "which can reduce or disable span extraction."
+            )
         self.model = AutoModelForTokenClassification.from_pretrained(
             self.model_name,
             num_labels=len(labels),
@@ -152,6 +162,28 @@ class PIIDetector:
             self.chunker = TokenAwareChunker(self.tokenizer, self.max_length - 2)
         else:
             self.chunker = TokenAwareChunker(self.tokenizer, 1)
+
+    def _load_tokenizer(self, model_path: str):
+        # Token classification needs reliable char offsets; prefer fast tokenizers.
+        try:
+            return AutoTokenizer.from_pretrained(model_path, use_fast=True)
+        except Exception as exc_fast:
+            print(
+                f"Warning: fast tokenizer load failed for '{model_path}': {exc_fast}. "
+                "Retrying fast load with tokenizer_file=None."
+            )
+        try:
+            # Some checkpoints ship a corrupted/incompatible tokenizer.json while
+            # vocab/merges are still valid. Forcing tokenizer_file=None rebuilds
+            # the fast tokenizer from vocab assets.
+            return AutoTokenizer.from_pretrained(model_path, use_fast=True, tokenizer_file=None)
+        except Exception as exc_fast_no_file:
+            print(
+                f"Warning: fast tokenizer load with tokenizer_file=None failed for '{model_path}': "
+                f"{exc_fast_no_file}. "
+                "Retrying with use_fast=False."
+            )
+            return AutoTokenizer.from_pretrained(model_path, use_fast=False)
 
     def train(
         self,
