@@ -58,7 +58,7 @@ def read_data(files: Sequence[Tuple[str, str]]) -> Iterable[Dict[str, Any]]:
                 params = dict(sorted(params.items(), key=lambda item: item[0]))
                 res = data["summary"]
                 values = {
-                    "divergence_mean": res["divergence_mean"],
+                    f"divergence_{metric_name}": res["divergence_mean"],
                 }
                 yield {"method": key, "params": params, "dataset": dataset_name, "metric": metric_name, **values}
 

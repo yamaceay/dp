@@ -8,30 +8,15 @@ from dp.runtime import load_runtime_bundle
 texts_processed_expected = {
     "tab": 127,
     "reddit": 525,
+    "db_bio": 239,
 }
 pdirs = {
-    "tab": [
-        "tab_lrec1",
-        "tab_lrec2_1",
-        "tab_lrec2_2",
-        "tab_lrec2_3",
-        "tab_lrec2_4",
-        "tab_lrec2_5",
-        "tab_lrec2_6",
-        "tab_lrec2_7",
-    ],
-    "reddit": [
-        "reddit_lrec1",
-        "reddit_lrec2_1",
-        "reddit_lrec2_2",
-        "reddit_lrec2_3",
-        "reddit_lrec2_4",
-        "reddit_lrec2_5",
-        "reddit_lrec2_6",
-    ],
+    dataset: [f"0_{dataset}_simple_anonymization", f"4_{dataset}_further_anonymization"]
+    for dataset in texts_processed_expected.keys()
 }
-files = [(dataset, pdir, "logs/" + pdir + "/" + f) for dataset, pdirs in pdirs.items() for pdir in pdirs for f in os.listdir("logs/" + pdir) if f.endswith(".out")]
-cmd_pattern = r"\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\] Running command: scripts/task.sh --incr --state slurm/states/.*?/(.*?).state"
+FILES = [(dataset, pdir, "logs/" + pdir + "/" + f) for dataset, pdirs in pdirs.items() for pdir in pdirs for f in os.listdir("logs/" + pdir) if f.endswith(".out")]
+
+cmd_pattern = r"State file: slurm/states/(.*?)/(.*?).state"
 time_pattern = r"Total time: (\d+\.\d+)s\s+Texts processed: (\d+)\s+Average time per text: (\d+\.\d+)s\s+Throughput: (\d+\.\d+) texts/s"
 unique_name_pattern = r"--unique_name (.*?)_(.+?)(?:(?:_k|_risk|_pii)?(?:_eps_[0-9]+)?)?$"
 runtime_pattern = r"--runtime_in (.+?) --output"
@@ -53,17 +38,21 @@ def resolve_runtime_params(runtime_in: list[str]) -> dict[str, float | int]:
     return resolved
 
 time_stats = []
-for dataset, pdir, file in files:
+for dataset, pdir, file in FILES:
     with open(file, "r") as f:
-        content = f.read()
-
-        cmd_match = re.search(cmd_pattern, content, re.MULTILINE)
+        cmd_match = re.search(cmd_pattern, f.read(), re.MULTILINE)
         if not cmd_match:
             raise ValueError(f"No command found in {file}")
-        command = cmd_match.group(1)
+        state_group = cmd_match.group(1)
+        job_name = cmd_match.group(2)
 
-        with open("slurm/states/" + pdir + "/" + command + ".state", "r") as sf:
-            real_command = sf.readlines()[2].strip()
+        with open(f"slurm/tables/{state_group}.table", "r") as sf:
+            for line in sf:
+                [real_job_name, real_command] = line.split("|", 1)
+                real_job_name = real_job_name.strip()
+                real_command = real_command.strip()
+                if real_job_name != job_name:
+                    break
 
             get_unique_name_match = re.search(unique_name_pattern, real_command)
             if not get_unique_name_match:
@@ -79,7 +68,7 @@ for dataset, pdir, file in files:
                 runtime_in = get_runtime_in_match.group(1).split(" ")
             runtimes_grouped = resolve_runtime_params(runtime_in)
 
-        matches = re.search(time_pattern, content, re.MULTILINE)
+        matches = re.search(time_pattern, f.read(), re.MULTILINE)
         if not matches:
             raise ValueError(f"No time stats found in {file}")
         

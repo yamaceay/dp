@@ -56,7 +56,7 @@ elif [ "$TYPE" = "divergence" ]; then
 fi
 
 cmds+=("python3 visualize/${TYPE}.py")
-cmds+=("python3 visualize/summary_plots.py --results-set ${result_set} --methods-set lrec_paper --dataset ${DATASET} --experiment ${TYPE} --metric ${metric} --debug")
+cmds+=("python3 visualize/summary_plots.py plot-bars --results-set ${result_set} --methods-set lrec_paper --config configs/visualize/lrec.yaml --results-config visualize/configs/results.yaml --dataset ${DATASET} --experiment ${TYPE} --metric ${metric} --debug")
 
 for cmd in "${cmds[@]}"; do
     echo "Running: $cmd"
