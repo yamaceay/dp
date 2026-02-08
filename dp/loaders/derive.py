@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from dp.loaders.base import DatasetRecord
 
@@ -100,7 +100,7 @@ def group_education(label: str) -> str:
         return "master"
     if l.startswith("phd") or "doctorate" in l:
         return "doctorate"
-    return "other"
+    raise ValueError(f"Unknown education label: {label}")
 
 
 def group_occupation(label: str) -> str:
@@ -136,16 +136,23 @@ def group_relationship(label: str) -> str:
 def group_sex(label: str) -> str:
     return label
 
+ORDINAL_GROUPERS: Dict[str, Tuple[Callable[[str], str], List[str]]] = {
+    "income_level": (group_income, ["low", "middle", "high"]),
+    "age": (group_age, ["18-29", "30-44", "45-59", "60+"]),
+    "education": (group_education, ["secondary", "studying", "bachelor", "master", "doctorate", "other"]),
+}
 
-GROUPERS: Dict[str, Callable[[str], str]] = {
-    "income_level": group_income,
+NOMINAL_GROUPERS: Dict[str, Callable[[str], str]] = {
     "birth_city_country": group_region,
     "city_country": group_region,
-    "age": group_age,
-    "education": group_education,
     "occupation": group_occupation,
     "relationship_status": group_relationship,
     "sex": group_sex,
+}
+
+GROUPERS: Dict[str, Callable[[str], str]] = {
+    **{feature: func for feature, (func, _) in ORDINAL_GROUPERS.items()},
+    **NOMINAL_GROUPERS,
 }
 
 
@@ -166,6 +173,9 @@ def reddit_feature_label(record: DatasetRecord, group: bool = True) -> Optional[
     if group and feature in GROUPERS:
         label = GROUPERS[feature](label)
     return f"{feature}: {label}"
+
+def reddit_hardness(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("hardness"))
 
 
 def tab_country(record: DatasetRecord) -> Optional[str]:
@@ -218,6 +228,7 @@ DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
     "reddit": {
         "feature": reddit_feature,
         "label": reddit_label,
+        "hardness": reddit_hardness,
         "feature_label": reddit_feature_label,
         "feature_label_exact": lambda r: reddit_feature_label(r, group=False),
     },

@@ -45,12 +45,14 @@ class EndpointRuntime:
         dtype: str,
         trust_remote_code: bool,
         defaults: dict,
+        max_batch_size: int,
     ) -> None:
         self.endpoint_id = endpoint_id
         self.model_id = model
         self.dtype_name = dtype
         self.trust_remote_code = trust_remote_code
         self.defaults = defaults
+        self.max_batch_size = int(max_batch_size)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.lock = threading.Lock()
 
@@ -73,28 +75,73 @@ class EndpointRuntime:
         prompt = str(payload.get("prompt", "")).strip()
         if not prompt:
             raise ValueError("missing_prompt")
+        batch_payload = dict(payload)
+        batch_payload["prompts"] = [prompt]
+        result = self.infer_batch(batch_payload)
+        return {
+            "endpoint_id": result["endpoint_id"],
+            "model": result["model"],
+            "device": result["device"],
+            "response": result["responses"][0] if result.get("responses") else "",
+            "timestamp_utc": result["timestamp_utc"],
+        }
+
+    def infer_batch(self, payload: dict) -> dict:
+        prompts_raw = payload.get("prompts")
+        if not isinstance(prompts_raw, list) or len(prompts_raw) == 0:
+            raise ValueError("missing_prompts")
+
+        if len(prompts_raw) > self.max_batch_size:
+            raise ValueError("max_batch_size_exceeded")
 
         use_chat = bool(payload.get("chat", self.defaults["chat"]))
-        system_prompt = str(payload.get("system_prompt", self.defaults["system_prompt"]))
+        system_prompt_default = str(payload.get("system_prompt", self.defaults["system_prompt"]))
         max_new_tokens = int(payload.get("max_new_tokens", self.defaults["max_new_tokens"]))
         temperature = float(payload.get("temperature", self.defaults["temperature"]))
         top_p = float(payload.get("top_p", self.defaults["top_p"]))
 
-        if use_chat:
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ]
-            if hasattr(self.tokenizer, "apply_chat_template"):
-                prompt_text = self.tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=True
-                )
+        prompt_texts: list[str] = []
+        for item in prompts_raw:
+            if isinstance(item, str):
+                ptxt = item.strip()
+                if not ptxt:
+                    raise ValueError("empty_prompt_in_batch")
+                if use_chat:
+                    messages = [
+                        {"role": "system", "content": system_prompt_default},
+                        {"role": "user", "content": ptxt},
+                    ]
+                    if hasattr(self.tokenizer, "apply_chat_template"):
+                        prompt_texts.append(
+                            self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                        )
+                    else:
+                        prompt_texts.append(f"User: {ptxt}\nAssistant:")
+                else:
+                    prompt_texts.append(ptxt)
+            elif isinstance(item, dict):
+                ptxt = str(item.get("prompt", "")).strip()
+                if not ptxt:
+                    raise ValueError("empty_prompt_in_batch")
+                item_chat = bool(item.get("chat", use_chat))
+                item_system = str(item.get("system_prompt", system_prompt_default))
+                if item_chat:
+                    messages = [
+                        {"role": "system", "content": item_system},
+                        {"role": "user", "content": ptxt},
+                    ]
+                    if hasattr(self.tokenizer, "apply_chat_template"):
+                        prompt_texts.append(
+                            self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                        )
+                    else:
+                        prompt_texts.append(f"User: {ptxt}\nAssistant:")
+                else:
+                    prompt_texts.append(ptxt)
             else:
-                prompt_text = f"User: {prompt}\nAssistant:"
-        else:
-            prompt_text = prompt
+                raise ValueError("invalid_prompt_item")
 
-        inputs = self.tokenizer(prompt_text, return_tensors="pt").to(self.model.device)
+        inputs = self.tokenizer(prompt_texts, return_tensors="pt", padding=True).to(self.model.device)
         with self.lock, torch.inference_mode():
             generated = self.model.generate(
                 **inputs,
@@ -104,14 +151,20 @@ class EndpointRuntime:
                 top_p=top_p,
                 pad_token_id=self.tokenizer.eos_token_id,
             )
-        new_tokens = generated[0][inputs["input_ids"].shape[1] :]
-        response = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+
+        attn_lengths = inputs["attention_mask"].sum(dim=1).tolist()
+        responses: list[str] = []
+        for i, attn_len in enumerate(attn_lengths):
+            seq = generated[i]
+            new_tokens = seq[int(attn_len) :]
+            responses.append(self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip())
 
         return {
             "endpoint_id": self.endpoint_id,
             "model": self.model_id,
             "device": self.device,
-            "response": response,
+            "responses": responses,
+            "count": len(responses),
             "timestamp_utc": utc_now(),
         }
 
@@ -159,6 +212,7 @@ class ProviderState:
             "temperature": float(payload.get("temperature", 0.2)),
             "top_p": float(payload.get("top_p", 0.9)),
         }
+        max_batch_size = int(payload.get("max_batch_size", 8))
 
         with self.lock:
             if endpoint_id in self.endpoints:
@@ -172,6 +226,7 @@ class ProviderState:
             dtype=dtype,
             trust_remote_code=trust_remote_code,
             defaults=defaults,
+            max_batch_size=max_batch_size,
         )
 
         with self.lock:
@@ -183,6 +238,7 @@ class ProviderState:
                 "trust_remote_code": trust_remote_code,
                 "device": runtime.device,
                 "defaults": defaults,
+                "max_batch_size": max_batch_size,
                 "loaded_at_utc": utc_now(),
             }
             self.persist()
@@ -209,8 +265,11 @@ class ProviderState:
                 runtime.defaults["temperature"] = float(payload["temperature"])
             if "top_p" in payload:
                 runtime.defaults["top_p"] = float(payload["top_p"])
+            if "max_batch_size" in payload:
+                runtime.max_batch_size = int(payload["max_batch_size"])
 
             meta["defaults"] = dict(runtime.defaults)
+            meta["max_batch_size"] = int(runtime.max_batch_size)
             meta["updated_at_utc"] = utc_now()
             self.persist()
             return meta
@@ -230,6 +289,13 @@ class ProviderState:
         if runtime is None:
             raise ValueError("endpoint_not_found")
         return runtime.infer(payload)
+
+    def infer_batch(self, endpoint_id: str, payload: dict) -> dict:
+        with self.lock:
+            runtime = self.endpoints.get(endpoint_id)
+        if runtime is None:
+            raise ValueError("endpoint_not_found")
+        return runtime.infer_batch(payload)
 
 
 def read_json_body(handler: BaseHTTPRequestHandler) -> dict:
@@ -292,6 +358,13 @@ def main() -> None:
                 if parsed.path == "/endpoints/update":
                     ep = state.update(payload)
                     self._send_json(200, {"ok": True, "endpoint": ep})
+                    return
+                if parsed.path == "/infer/batch":
+                    endpoint_id = str(payload.get("endpoint_id", "")).strip()
+                    if not endpoint_id:
+                        raise ValueError("missing_endpoint_id")
+                    result = state.infer_batch(endpoint_id, payload)
+                    self._send_json(200, {"ok": True, **result})
                     return
                 if parsed.path == "/infer":
                     endpoint_id = str(payload.get("endpoint_id", "")).strip()
