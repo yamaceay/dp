@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from statistics import mean, median
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from tqdm import tqdm
 
 from dp.experiments import Experiment, ExperimentResult
 from dp.loaders.base import DatasetRecord
-from dp.tri import TRIDetector
+from dp.tri.base import TRIDetector
 from dp.utils.device import resolve_device
 
 class TextPrivacyExperiment(Experiment):
@@ -117,6 +117,7 @@ class TextPrivacyExperiment(Experiment):
         self.original_dataset = []
         self.evaluation_datasets = {}
         self.original_ranks = {}
+        self.original_candidates = {}
         self.record_keys = []
         self.record_info = {}
         super().cleanup()

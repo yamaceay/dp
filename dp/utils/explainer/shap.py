@@ -4,7 +4,7 @@ from enum import Enum
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.device import resolve_device
-from dp.tri import TRIDetector
+from dp.tri.base import TRIDetector
 
 class _SpanTokenizer:
     def __init__(self, text: str, spans: Sequence[Tuple[int, int]]):
@@ -71,14 +71,14 @@ class ShapType(Enum):
     PERMUTATION = "shap_permutation"
 
 class ShapExplainer(TokenExplainer):
-    def __init__(self, model_name: str = None, device: Optional[Union[str, int]] = None, use_chunking: bool = False, explainer_type: Optional[ShapType] = None, **kwargs):
+    def __init__(self, model_name: str = None, device: Optional[Union[str, int]] = None, use_chunking: bool = False, explainer_type: Optional[ShapType] = None, p_agg: str = "avg", **kwargs):
         super().__init__(**kwargs)
         if model_name is None:
             raise ValueError("ShapExplainer requires model_name")
         self.model_name = model_name
         self.device = resolve_device(device)
         self.pipeline = None
-        self.tri_detector = TRIDetector(model_name=model_name, device=self.device, use_chunking=use_chunking)
+        self.tri_detector = TRIDetector(model_name=model_name, device=self.device, use_chunking=use_chunking, p_agg=p_agg)
         self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}
@@ -116,48 +116,25 @@ class ShapExplainer(TokenExplainer):
                 raise ValueError(f"TRI label mapping unavailable for checkpoint: {self.model_name}")
             self.label_to_id.update(mapping)
             self.id_to_label = {idx: name for name, idx in mapping.items()}
-            labels_by_id = sorted([(idx, name) for name, idx in mapping.items()], key=lambda item: item[0])
+            labels_by_id = self.tri_detector.labels_by_id()
             for idx, _ in labels_by_id:
                 self.label_to_id[f"LABEL_{idx}"] = idx
-
-            def _predict_with_tri(texts: Sequence[str], *args: Any, **kwargs: Any) -> List[List[Dict[str, float]]]:
-                if isinstance(texts, str):
-                    batch = [texts]
-                else:
-                    batch = [str(t) for t in texts]
-                classifier = self.tri_detector.classifier
-                if classifier is None:
-                    raise RuntimeError("TRI classifier is not loaded")
-                rows = classifier.predict_proba(batch)
+            def _predict_entries(texts: Sequence[str], *args: Any, **kwargs: Any) -> List[List[Dict[str, float]]]:
+                batch = [texts] if isinstance(texts, str) else [str(t) for t in texts]
+                proba = self.tri_detector.predict_proba_matrix(batch)
                 formatted: List[List[Dict[str, float]]] = []
-                for i in range(len(batch)):
-                    scores = rows[i]
+                for row in proba:
                     entries: List[Dict[str, float]] = []
-                    for idx, name in labels_by_id:
+                    for col_idx, (idx, _) in enumerate(labels_by_id):
                         entries.append({
                             "label": f"LABEL_{idx}",
-                            "score": float(scores.get(name, 0.0)),
+                            "score": float(row[col_idx]),
                         })
                     formatted.append(entries)
                 return formatted
 
-            def _predict_with_tri_for_shap(texts: Sequence[str], *args: Any, **kwargs: Any) -> np.ndarray:
-                if isinstance(texts, str):
-                    batch = [texts]
-                else:
-                    batch = [str(t) for t in texts]
-                classifier = self.tri_detector.classifier
-                if classifier is None:
-                    raise RuntimeError("TRI classifier is not loaded")
-                rows = classifier.predict_proba(batch)
-                matrix = np.zeros((len(batch), len(labels_by_id)), dtype=np.float64)
-                for row_idx, scores in enumerate(rows):
-                    for col_idx, (_, name) in enumerate(labels_by_id):
-                        matrix[row_idx, col_idx] = float(scores.get(name, 0.0))
-                return matrix
-
-            self._tri_predict_fn = _predict_with_tri
-            self._tri_shap_predict_fn = _predict_with_tri_for_shap
+            self._tri_predict_fn = _predict_entries
+            self._tri_shap_predict_fn = self.tri_detector.predict_proba_matrix
             self.pipeline = self._tri_predict_fn
 
     def predict_entries(self, texts: Sequence[str], batch_size: int = 1) -> List[List[Dict[str, float]]]:

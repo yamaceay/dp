@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Optional
 import yaml
 
-from dp.tri import TRIDetector
+from dp.tri.base import TRIDetector
 from dp.tri.loaders import get_attacker_adapter, ATTACKER_ADAPTER_REGISTRY
 
 
@@ -202,6 +202,7 @@ def main() -> int:
     parser.add_argument("--focal_alpha", type=float, default=None)
     parser.add_argument("--focal_ignore_pt", type=float, default=None)
     parser.add_argument("--exclude_stopwords", action="store_true")
+    parser.add_argument("--p_agg", type=str, default="avg", choices=["avg", "max"], help="Method to aggregate token-level scores into record-level score")
 
     args = parser.parse_args()
 
@@ -229,6 +230,7 @@ def main() -> int:
         focal_alpha = training.get("focal_alpha")
         focal_ignore_pt = training.get("focal_ignore_pt")
         exclude_stopwords = bool(training.get("exclude_stopwords", False))
+        p_agg = training.get("p_agg", "avg")
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = args.run_name or cfg.get("run_name") or timestamp
@@ -255,7 +257,7 @@ def main() -> int:
         focal_alpha = args.focal_alpha
         focal_ignore_pt = args.focal_ignore_pt
         exclude_stopwords = bool(args.exclude_stopwords)
-
+        p_agg = args.p_agg
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
         run_name = args.run_name or timestamp
@@ -268,7 +270,7 @@ def main() -> int:
     if not records:
         raise SystemExit("No records loaded")
 
-    tri = TRIDetector(dataset_name=dataset, model_name=model_name, max_length=max_length, device=device)
+    tri = TRIDetector(dataset_name=dataset, model_name=model_name, max_length=max_length, device=device, p_agg=p_agg)
 
     if args.mode == "train":
         if args.model_path:

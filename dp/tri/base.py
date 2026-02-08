@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Sequence, Tuple
 
 import torch
+import numpy as np
 
 from dp.bert.classifier import BertClassifierHead
 from dp.loaders.base import DatasetRecord
@@ -22,6 +23,7 @@ class TRIDetector:
         max_length: int = 512,
         device: Optional[Union[str, int]] = None,
         use_chunking: bool = True,
+        p_agg: str = "avg",
     ):
         if max_length <= 0:
             raise ValueError(f"max_length must be positive, got {max_length}")
@@ -30,6 +32,7 @@ class TRIDetector:
         self.max_length = int(max_length)
         self.device = torch.device(resolve_device(device))
         self.use_chunking = bool(use_chunking)
+        self.p_agg = p_agg
         self.label_to_name: Dict[int, str] = {}
         self.name_to_label: Dict[str, int] = {}
         self.num_labels = 0
@@ -152,7 +155,7 @@ class TRIDetector:
         if self.classifier is None:
             raise ValueError("Model not initialized. Train or load a model first.")
         if self.use_chunking and self.chunker is not None:
-            aggregator = ProbabilityAggregator()
+            aggregator = ProbabilityAggregator(self.p_agg)
 
             def classify(text: str) -> Dict[str, float]:
                 return self.classifier.predict_proba([text])[0]
@@ -167,6 +170,33 @@ class TRIDetector:
             (record.uid or str(idx)): scores
             for idx, (record, scores) in enumerate(zip(records, probabilities))
         }
+
+    def labels_by_id(self) -> List[Tuple[int, str]]:
+        if not self.label_to_name:
+            return []
+        return sorted(self.label_to_name.items(), key=lambda item: item[0])
+
+    def predict_proba_batch(self, texts: Sequence[str]) -> List[Dict[str, float]]:
+        if self.classifier is None:
+            raise ValueError("Model not initialized. Train or load a model first.")
+        batch = [str(t) for t in texts]
+        if self.use_chunking and self.chunker is not None:
+            aggregator = ProbabilityAggregator(self.p_agg)
+
+            def classify(text: str) -> Dict[str, float]:
+                return self.classifier.predict_proba([text])[0]
+
+            return [process_with_chunking(text, self.chunker, classify, aggregator) for text in batch]
+        return self.classifier.predict_proba(batch)
+
+    def predict_proba_matrix(self, texts: Sequence[str]) -> np.ndarray:
+        rows = self.predict_proba_batch(texts)
+        labels = self.labels_by_id()
+        matrix = np.zeros((len(rows), len(labels)), dtype=np.float64)
+        for row_idx, scores in enumerate(rows):
+            for col_idx, (_, name) in enumerate(labels):
+                matrix[row_idx, col_idx] = float(scores.get(name, 0.0))
+        return matrix
 
     def evaluate(self, records: List[DatasetRecord]) -> Dict[str, Any]:
         if not records:

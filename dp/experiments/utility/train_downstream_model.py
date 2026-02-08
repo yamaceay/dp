@@ -9,7 +9,7 @@ import yaml
 
 from dp.loaders.base import DatasetRecord
 from dp.loaders.derive import get_getter
-from dp.tri import TRIDetector
+from dp.tri.base import TRIDetector
 from dp.tri.loaders import ATTACKER_ADAPTER_REGISTRY, AttackerDatasetRecord, get_attacker_adapter
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())

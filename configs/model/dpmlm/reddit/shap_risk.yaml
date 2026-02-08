@@ -4,7 +4,7 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__deid__lr5e-5
   risk_temperature: 0.1
 
 precomputation:

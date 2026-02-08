@@ -1,3 +1,4 @@
 data: tab
 data_in: data/TAB/splitted/test.json
 pipeline_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__deid__lr5e-5
+n_first_predictions: 10

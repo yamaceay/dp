@@ -1,2 +1,4 @@
 orig_orig_reddit|python debug_tri.py --config configs/debug_tri/reddit/orig_orig.yaml
 orig_deid_reddit|python debug_tri.py --config configs/debug_tri/reddit/orig_deid.yaml
+deid_orig_reddit|python debug_tri.py --config configs/debug_tri/reddit/deid_orig.yaml
+deid_deid_reddit|python debug_tri.py --config configs/debug_tri/reddit/deid_deid.yaml

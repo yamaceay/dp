@@ -3,7 +3,7 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__deid__lr5e-5
 
 precomputation:
   risk_scores: data/reddit/reddit_risk_shap.jsonl

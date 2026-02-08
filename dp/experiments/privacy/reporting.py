@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .. import ExperimentResult
-from ..utils import OutputCallback
+from dp.experiments import ExperimentResult
+from dp.experiments.utils import OutputCallback
 
 
 @dataclass(frozen=True)
@@ -44,95 +43,7 @@ class PrivacyReportOutputter:
         raise NotImplementedError
 
 
-class TextPrivacyReportOutputter(PrivacyReportOutputter):
-    def output(self, report: PrivacyExperimentReport) -> None:
-        lines: List[str] = [
-            f"Score: {', '.join(f'{k}: {v:.4f}' for k, v in report.score.items())}",
-            "",
-            "Original dataset",
-            f"  records: {report.original_record_count}",
-            "",
-            "Original ranks",
-        ]
-        if report.original_ranks:
-            for entry in report.original_ranks:
-                suffix = f" ({entry.name})" if entry.name else ""
-                lines.append(f"  [{entry.index}] {entry.key}{suffix}: {entry.rank}")
-        else:
-            lines.append("  none")
-        lines.append("")
-        lines.append("Evaluation datasets")
-        if not report.evaluations:
-            lines.append("  none")
-        else:
-            for evaluation in report.evaluations:
-                description = f"  {evaluation.name}: {evaluation.record_count} records"
-                if evaluation.source:
-                    description += f" from {evaluation.source}"
-                lines.append(description)
-                summary = evaluation.summary or {}
-                if summary:
-                    lines.append(
-                        "    summary: "
-                        f"count={summary.get('count', 0)} "
-                        f"improved={summary.get('improved', 0)} "
-                        f"degraded={summary.get('degraded', 0)} "
-                        f"unchanged={summary.get('unchanged', 0)} "
-                        f"mean={summary.get('mean', 0.0):.4f} "
-                        f"median={summary.get('median', 0.0):.4f} "
-                        f"min={summary.get('min', 0)} "
-                        f"max={summary.get('max', 0)}"
-                    )
-                for entry in evaluation.ranks:
-                    suffix = f" ({entry.name})" if entry.name else ""
-                    if entry.delta is not None:
-                        lines.append(f"    [{entry.index}] {entry.key}{suffix}: {entry.rank} delta={entry.delta:+d}")
-                    else:
-                        lines.append(f"    [{entry.index}] {entry.key}{suffix}: {entry.rank}")
-        self.sink("\n".join(lines))
-
-
-class JsonPrivacyReportOutputter(PrivacyReportOutputter):
-    def output(self, report: PrivacyExperimentReport) -> None:
-        payload: Dict[str, Any] = {
-            "score": report.score,
-            "original": {
-                "record_count": report.original_record_count,
-                "ranks": [self._serialize_rank(entry) for entry in report.original_ranks],
-            },
-            "evaluations": [
-                {
-                    "name": evaluation.name,
-                    "record_count": evaluation.record_count,
-                    "source": str(evaluation.source) if evaluation.source else None,
-                    "summary": evaluation.summary,
-                    "ranks": [self._serialize_rank(entry) for entry in evaluation.ranks],
-                }
-                for evaluation in report.evaluations
-            ],
-        }
-        self.sink(json.dumps(payload, ensure_ascii=False, indent=2))
-
-    @staticmethod
-    def _serialize_rank(entry: RankEntry) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
-            "key": entry.key,
-            "rank": entry.rank,
-            "index": entry.index,
-        }
-        if entry.name:
-            payload["name"] = entry.name
-        if entry.delta is not None:
-            payload["delta"] = entry.delta
-        return payload
-
-
 class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
-    def __init__(self, sink: OutputCallback, log_base: str = "natural"):
-        super().__init__(sink)
-        self.log_fn = math.log if log_base == "natural" else math.log2
-        self.log_base = log_base
-    
     def output(self, report: PrivacyExperimentReport) -> None:
         records: List[Dict[str, Any]] = [
             {
@@ -259,10 +170,6 @@ def build_privacy_report(
 
 
 def create_privacy_outputter(fmt: str, sink: OutputCallback) -> PrivacyReportOutputter:
-    if fmt == "text":
-        return TextPrivacyReportOutputter(sink)
-    if fmt == "json":
-        return JsonPrivacyReportOutputter(sink)
     if fmt == "jsonl":
-        return JsonLinesPrivacyReportOutputter(sink, log_base="natural")
+        return JsonLinesPrivacyReportOutputter(sink)
     raise ValueError(f"Unsupported output format '{fmt}'")

@@ -6,7 +6,7 @@ import argparse
 
 from dp.loaders import get_adapter
 from dp.loaders.results import build_dataset_from_results, load_result_records
-from dp.tri import TRIDetector
+from dp.tri.base import TRIDetector
 from runtime.config_loader import _read_yaml
 
 def normalize_config(config: Dict) -> argparse.Namespace:
@@ -25,6 +25,7 @@ def normalize_config(config: Dict) -> argparse.Namespace:
     parser.add_argument('--save_to_jsonl', type=str, default=None, help='Path to save the output records as JSONL')
     parser.add_argument('--offset_mode', type=str, choices=['original', 'result'], default='result', help='Whether risk offsets are in original or result text coordinates')
     parser.add_argument('--abs', action='store_true', help='Use absolute scores')
+    parser.add_argument('--n_first_predictions', type=int, default=0, help='Number of top predictions to print per record')
 
     args = parser.parse_args([])
     for key, value in config.items():
@@ -111,6 +112,7 @@ if __name__ == "__main__":
     mrr = None
     acc = None
     ranks = None
+    first_preds = None
 
     if args.pipeline_in:
         detector = TRIDetector(dataset_name=args.data)
@@ -120,9 +122,14 @@ if __name__ == "__main__":
         mrr = 0.0
         acc = 0.0
         ranks = []
+        if args.n_first_predictions > 0:
+            first_preds = []
+
         for record in records:
             prediction = predictions.get(record.uid, {})
             ordered = sorted(prediction.items(), key=lambda item: item[1], reverse=True)
+            if args.n_first_predictions > 0:
+                first_preds.append([x[0] for x in ordered[:args.n_first_predictions]])
             rank = None
             for position, (candidate, _) in enumerate(ordered, start=1):
                 if candidate == record.name:
@@ -148,10 +155,14 @@ if __name__ == "__main__":
             if args.full_record and args.risk_in and args.result_in:
                 for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
                     print(f"Token: '{token}' | Offset: {offset} | Score: {score}")
+            if args.n_first_predictions > 0 and first_preds is not None:
+                print(f"Top {args.n_first_predictions} Predictions for UID {records[j].uid}: {first_preds[j]}")
         else:
             if args.pipeline_in:
                 f.write(json.dumps({"uid": records[j].uid, "rank": ranks[j]}) + '\n')
             if args.risk_in and args.result_in:
                 for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
                     f.write(json.dumps({"uid": records[j].uid, "token": token, "offset": offset, "score": score}) + '\n')
+            if args.n_first_predictions > 0 and first_preds is not None:
+                f.write(json.dumps({"uid": records[j].uid, "top_predictions": first_preds[j]}) + '\n')
         j += 1

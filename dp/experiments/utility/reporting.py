@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .. import ExperimentResult
-from ..utils import OutputCallback
+from dp.experiments import ExperimentResult
+from dp.experiments.utils import OutputCallback
 
 
 @dataclass(frozen=True)
@@ -46,87 +46,6 @@ class UtilityReportOutputter:
 
     def output(self, report: UtilityExperimentReport) -> None:
         raise NotImplementedError
-
-
-class TextUtilityReportOutputter(UtilityReportOutputter):
-    def output(self, report: UtilityExperimentReport) -> None:
-        lines: List[str] = [
-            f"Score ({report.primary_metric}): {report.baseline_metrics[report.primary_metric]:.4f}",
-            f"Model: {report.model_name}",
-            "",
-            "Baseline",
-        ]
-        if report.baseline_metrics:
-            baseline_text = " ".join(
-                f"{name}={value:.4f}" for name, value in sorted(report.baseline_metrics.items())
-            )
-            lines.append(f"  {baseline_text}")
-        else:
-            lines.append("  none")
-        lines.append(f"  train={report.baseline_train_size} test={report.baseline_test_size}")
-        lines.append("")
-        lines.append("Evaluation datasets")
-        if not report.evaluations:
-            lines.append("  none")
-        else:
-            for evaluation in report.evaluations:
-                prefix = f"  {evaluation.name}: "
-                if evaluation.valid and evaluation.metrics:
-                    metrics_text = " ".join(
-                        f"{name}={value:.4f}" for name, value in sorted(evaluation.metrics.items())
-                    )
-                    prefix += metrics_text
-                    if evaluation.drops:
-                        drops_text = " ".join(
-                            f"{name}={value:.4f}" for name, value in sorted(evaluation.drops.items())
-                        )
-                        prefix += f" drops[{drops_text}]"
-                else:
-                    prefix += "insufficient coverage"
-                prefix += (
-                    f" (train {evaluation.train_matched}/{evaluation.train_total},"
-                    f" test {evaluation.test_matched}/{evaluation.test_total})"
-                )
-                if evaluation.source:
-                    prefix += f" from {evaluation.source}"
-                lines.append(prefix)
-        self.sink("\n".join(lines))
-
-
-class JsonUtilityReportOutputter(UtilityReportOutputter):
-    def output(self, report: UtilityExperimentReport) -> None:
-        payload: Dict[str, Any] = {
-            "model": report.model_name,
-            "primary_metric": report.primary_metric,
-            "baseline": {
-                "metrics": report.baseline_metrics,
-                "train_size": report.baseline_train_size,
-                "test_size": report.baseline_test_size,
-                "train_metrics": report.baseline_train_metrics,
-                "test_metrics": report.baseline_test_metrics,
-                "overall_metrics": report.baseline_overall_metrics,
-            },
-            "evaluations": [
-                {
-                    "name": evaluation.name,
-                    "source": str(evaluation.source) if evaluation.source else None,
-                    "valid": evaluation.valid,
-                    "metrics": evaluation.metrics,
-                    "drops": evaluation.drops,
-                    "train_matched": evaluation.train_matched,
-                    "train_total": evaluation.train_total,
-                    "test_matched": evaluation.test_matched,
-                    "test_total": evaluation.test_total,
-                    "available": evaluation.available,
-                    "train_results": evaluation.train_results,
-                    "val_results": evaluation.val_results,
-                    "test_results": evaluation.test_results,
-                    "overall_results": evaluation.overall_results,
-                }
-                for evaluation in report.evaluations
-            ],
-        }
-        self.sink(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 class JsonLinesUtilityReportOutputter(UtilityReportOutputter):
@@ -222,10 +141,6 @@ def build_utility_report(result: ExperimentResult, sources: Dict[str, Path]) -> 
 
 
 def create_utility_outputter(fmt: str, sink: OutputCallback) -> UtilityReportOutputter:
-    if fmt == "text":
-        return TextUtilityReportOutputter(sink)
-    if fmt == "json":
-        return JsonUtilityReportOutputter(sink)
     if fmt == "jsonl":
         return JsonLinesUtilityReportOutputter(sink)
     raise ValueError(f"Unsupported output format '{fmt}'")

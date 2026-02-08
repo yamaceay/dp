@@ -1,1 +1,2 @@
+reddit_deid|python data_for_tri.py --config configs/tri_preprocessing/reddit_deid.yaml
 reddit_sum|python data_for_tri.py --config configs/tri_preprocessing/reddit_sum.yaml
