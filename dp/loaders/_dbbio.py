@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Union
 
-from datasets import Dataset, DatasetDict, load_dataset
-
 from dp.loaders.base import DatasetAdapter, DatasetRecord
 
 class DBBioDatasetAdapter(DatasetAdapter):
@@ -26,6 +24,11 @@ class DBBioDatasetAdapter(DatasetAdapter):
         self.start = start
         self.end = end
         self.step = step
+
+        try:
+            from datasets import Dataset, DatasetDict, load_dataset
+        except ImportError as exc:
+            raise ImportError("The 'datasets' library is required to use DBBioDatasetAdapter") from exc
 
         try:
             if self.data_in.is_dir():

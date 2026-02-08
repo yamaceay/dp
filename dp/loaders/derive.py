@@ -178,6 +178,10 @@ def reddit_hardness(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("hardness"))
 
 
+def reddit_question(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("question"))
+
+
 def tab_country(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("country"))
 
@@ -229,6 +233,7 @@ DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
         "feature": reddit_feature,
         "label": reddit_label,
         "hardness": reddit_hardness,
+        "question": reddit_question,
         "feature_label": reddit_feature_label,
         "feature_label_exact": lambda r: reddit_feature_label(r, group=False),
     },
