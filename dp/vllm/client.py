@@ -46,6 +46,7 @@ def load_model(
     max_new_tokens: int = 128,
     temperature: float = 0.2,
     top_p: float = 0.9,
+    max_batch_size: int | None = None,
     server_info_file: str = "logs/vllm_server.json",
     url: str = "",
 ) -> dict:
@@ -61,6 +62,8 @@ def load_model(
         "temperature": temperature,
         "top_p": top_p,
     }
+    if max_batch_size is not None:
+        payload["max_batch_size"] = int(max_batch_size)
     return http_json("POST", f"{base}/endpoints/load", payload)
 
 
@@ -72,6 +75,7 @@ def update_endpoint(
     max_new_tokens: int | None = None,
     temperature: float | None = None,
     top_p: float | None = None,
+    max_batch_size: int | None = None,
     server_info_file: str = "logs/vllm_server.json",
     url: str = "",
 ) -> dict:
@@ -87,6 +91,8 @@ def update_endpoint(
         payload["temperature"] = float(temperature)
     if top_p is not None:
         payload["top_p"] = float(top_p)
+    if max_batch_size is not None:
+        payload["max_batch_size"] = int(max_batch_size)
     return http_json("POST", f"{base}/endpoints/update", payload)
 
 
@@ -131,6 +137,36 @@ def infer(
     return http_json("POST", f"{base}/infer", payload)
 
 
+def infer_batch(
+    *,
+    endpoint_id: str,
+    prompts: list[str] | list[dict],
+    chat: bool | None = None,
+    system_prompt: str | None = None,
+    max_new_tokens: int | None = None,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    server_info_file: str = "logs/vllm_server.json",
+    url: str = "",
+) -> dict:
+    base = load_base_url(server_info_file, url)
+    payload: dict = {
+        "endpoint_id": endpoint_id,
+        "prompts": prompts,
+    }
+    if chat is not None:
+        payload["chat"] = bool(chat)
+    if system_prompt is not None:
+        payload["system_prompt"] = system_prompt
+    if max_new_tokens is not None:
+        payload["max_new_tokens"] = int(max_new_tokens)
+    if temperature is not None:
+        payload["temperature"] = float(temperature)
+    if top_p is not None:
+        payload["top_p"] = float(top_p)
+    return http_json("POST", f"{base}/infer/batch", payload)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Client for vllm/server.py")
     parser.add_argument("--server-info-file", default="logs/vllm_server.json")
@@ -150,6 +186,7 @@ def main() -> None:
     load.add_argument("--max-new-tokens", type=int, default=128)
     load.add_argument("--temperature", type=float, default=0.2)
     load.add_argument("--top-p", type=float, default=0.9)
+    load.add_argument("--max-batch-size", type=int, default=-1)
 
     update = sub.add_parser("update-endpoint")
     update.add_argument("--endpoint-id", required=True)
@@ -158,6 +195,7 @@ def main() -> None:
     update.add_argument("--max-new-tokens", type=int, default=-1)
     update.add_argument("--temperature", type=float, default=-1.0)
     update.add_argument("--top-p", type=float, default=-1.0)
+    update.add_argument("--max-batch-size", type=int, default=-1)
 
     unload = sub.add_parser("unload-model")
     unload.add_argument("--endpoint-id", required=True)
@@ -170,6 +208,16 @@ def main() -> None:
     infer_args.add_argument("--max-new-tokens", type=int, default=-1)
     infer_args.add_argument("--temperature", type=float, default=-1.0)
     infer_args.add_argument("--top-p", type=float, default=-1.0)
+
+    infer_batch_args = sub.add_parser("infer-batch")
+    infer_batch_args.add_argument("--endpoint-id", required=True)
+    infer_batch_args.add_argument("--prompt", action="append", default=[])
+    infer_batch_args.add_argument("--prompts-file", default="")
+    infer_batch_args.add_argument("--chat", action="store_true")
+    infer_batch_args.add_argument("--system-prompt", default="")
+    infer_batch_args.add_argument("--max-new-tokens", type=int, default=-1)
+    infer_batch_args.add_argument("--temperature", type=float, default=-1.0)
+    infer_batch_args.add_argument("--top-p", type=float, default=-1.0)
 
     args = parser.parse_args()
 
@@ -198,6 +246,7 @@ def main() -> None:
                     max_new_tokens=args.max_new_tokens,
                     temperature=args.temperature,
                     top_p=args.top_p,
+                    max_batch_size=args.max_batch_size if args.max_batch_size >= 0 else None,
                     server_info_file=args.server_info_file,
                     url=args.url,
                 ),
@@ -216,6 +265,7 @@ def main() -> None:
                     max_new_tokens=args.max_new_tokens if args.max_new_tokens >= 0 else None,
                     temperature=args.temperature if args.temperature >= 0 else None,
                     top_p=args.top_p if args.top_p >= 0 else None,
+                    max_batch_size=args.max_batch_size if args.max_batch_size >= 0 else None,
                     server_info_file=args.server_info_file,
                     url=args.url,
                 ),
@@ -243,6 +293,42 @@ def main() -> None:
                 infer(
                     endpoint_id=args.endpoint_id,
                     prompt=args.prompt,
+                    chat=True if args.chat else None,
+                    system_prompt=args.system_prompt if args.system_prompt else None,
+                    max_new_tokens=args.max_new_tokens if args.max_new_tokens >= 0 else None,
+                    temperature=args.temperature if args.temperature >= 0 else None,
+                    top_p=args.top_p if args.top_p >= 0 else None,
+                    server_info_file=args.server_info_file,
+                    url=args.url,
+                ),
+                ensure_ascii=True,
+                indent=2,
+            )
+        )
+        return
+    if args.cmd == "infer-batch":
+        prompts: list[str] = []
+        if args.prompt:
+            prompts.extend([str(p) for p in args.prompt if str(p).strip()])
+        if args.prompts_file:
+            with open(args.prompts_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            try:
+                maybe_json = json.loads(content)
+                if isinstance(maybe_json, list):
+                    prompts.extend([str(p) for p in maybe_json if str(p).strip()])
+                else:
+                    raise ValueError("not_list")
+            except Exception:
+                for line in content.splitlines():
+                    s = line.strip()
+                    if s:
+                        prompts.append(s)
+        print(
+            json.dumps(
+                infer_batch(
+                    endpoint_id=args.endpoint_id,
+                    prompts=prompts,
                     chat=True if args.chat else None,
                     system_prompt=args.system_prompt if args.system_prompt else None,
                     max_new_tokens=args.max_new_tokens if args.max_new_tokens >= 0 else None,
