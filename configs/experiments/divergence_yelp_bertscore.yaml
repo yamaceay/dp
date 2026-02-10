@@ -1,0 +1,11 @@
+dataset: yelp
+data_in: data/yelp/all.jsonl
+annotations_in:
+  - outputs/yelp
+metric:
+  type: bertscore
+  model_type: roberta-large
+  batch_size: 8
+output:
+  format: jsonl
+  file: logs/yelp_div_bertscore_exp.jsonl

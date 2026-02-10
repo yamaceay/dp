@@ -1,0 +1,12 @@
+dataset: yelp
+data_in: data/yelp/all.jsonl
+annotations_in:
+  - outputs/yelp
+metric:
+  type: cosine
+  vectorizer:
+    type: sentence
+    model_name: sentence-transformers/all-MiniLM-L6-v2
+output:
+  format: jsonl
+  file: logs/yelp_div_cosine_exp.jsonl
