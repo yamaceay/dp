@@ -228,6 +228,20 @@ def tab_country_groups(record: DatasetRecord, region_groups: List[str] | None = 
 def db_bio_label(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("label"))
 
+def yelp_is_positive(record: DatasetRecord) -> Optional[bool]:
+    stars = record.metadata.get("stars")
+    if stars is None:
+        return None
+    if isinstance(stars, (int, float)):
+        return stars >= 3
+    if isinstance(stars, str):
+        try:
+            return float(stars) >= 3
+        except ValueError:
+            return None
+    return None
+
+
 DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
     "reddit": {
         "feature": reddit_feature,
@@ -248,6 +262,9 @@ DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
     "db_bio": {
         "label": db_bio_label,
     },
+    "yelp": {
+        "is_positive": yelp_is_positive, 
+    }
 }
 
 

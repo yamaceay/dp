@@ -5,31 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Union
 
+from datasets import Dataset, DatasetDict, load_dataset
+
 from dp.loaders.base import DatasetAdapter, DatasetRecord
 
 class DBBioDatasetAdapter(DatasetAdapter):
     """Adapter for the DB-Bio legal dataset."""
 
-    def __init__(
-        self,
-        data: Optional[str] = None,
-        data_in: Optional[str] = None,
-        max_records: Optional[int] = None,
-        start: Optional[int] = None,
-        end: Optional[int] = None,
-        step: Optional[int] = None,
-    ):
-        self.data_in = Path(data_in)
-        self.max_records = max_records
-        self.start = start
-        self.end = end
-        self.step = step
-
-        try:
-            from datasets import Dataset, DatasetDict, load_dataset
-        except ImportError as exc:
-            raise ImportError("The 'datasets' library is required to use DBBioDatasetAdapter") from exc
-
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.data_in = Path(self.data_in)
         try:
             if self.data_in.is_dir():
                 data_files = self._discover_split_files(self.data_in)

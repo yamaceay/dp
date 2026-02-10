@@ -1,0 +1,15 @@
+dataset: yelp
+data_path: data/yelp/all.jsonl
+attacker_extensions: data/yelp/yelp_bk_sum.jsonl
+model_name: distilbert-base-uncased
+output_root: ../../../netscratch/yay/tri_pipelines/yelp/_checkpoints
+max_records: null
+max_length: 512
+
+training:
+  finetuning_epochs: 3
+  batch_size: 16
+  use_pretraining: true
+  pretraining_epochs: 1
+  per_step: null
+  p_agg: max

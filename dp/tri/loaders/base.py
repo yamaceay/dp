@@ -127,3 +127,41 @@ def _normalize_texts(raw: Any) -> List[str]:
             out.append(item)
         return out
     raise ValueError("Unsupported texts value")
+
+_PRESIDIO_ANALYZER = None
+_PRESIDIO_ANONYMIZER = None
+
+def presidio_anonymize(
+    text: str,
+    language: str = "en",
+    categories: Optional[List[str]] = None,
+    replacement: str = "[REDACTED]",
+    analyzer: Any = None,
+    anonymizer: Any = None,
+) -> str:
+    if not isinstance(text, str):
+        raise TypeError("text must be a str")
+    if analyzer is None or anonymizer is None:
+        global _PRESIDIO_ANALYZER, _PRESIDIO_ANONYMIZER
+        if _PRESIDIO_ANALYZER is None or _PRESIDIO_ANONYMIZER is None:
+            try:
+                from presidio_analyzer import AnalyzerEngine
+                from presidio_anonymizer import AnonymizerEngine
+            except ImportError as e:
+                raise ImportError("Presidio packages are required: presidio-analyzer, presidio-anonymizer") from e
+            _PRESIDIO_ANALYZER = AnalyzerEngine()
+            _PRESIDIO_ANONYMIZER = AnonymizerEngine()
+        analyzer = analyzer or _PRESIDIO_ANALYZER
+        anonymizer = anonymizer or _PRESIDIO_ANONYMIZER
+    results = analyzer.analyze(text=text, language=language, entities=categories)
+    entity_types = {r.entity_type for r in results}
+    try:
+        from presidio_anonymizer.entities import OperatorConfig
+    except ImportError as e:
+        raise ImportError("Presidio anonymizer entities not available") from e
+    operators = {t: OperatorConfig(operator_name="replace", params={"new_value": replacement}) for t in entity_types}
+    anonymized = anonymizer.anonymize(text=text, analyzer_results=results, operators=operators)
+    out = getattr(anonymized, "text", None) or getattr(anonymized, "result", None)
+    if not isinstance(out, str):
+        raise ValueError("Unexpected anonymizer result format")
+    return out

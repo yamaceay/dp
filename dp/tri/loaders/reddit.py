@@ -4,12 +4,11 @@ import hashlib
 import random
 import re
 from tqdm import tqdm
-from typing import Dict, List, Tuple, cast, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, Iterable
 
 from dp.loaders.base import DatasetRecord
 from dp.loaders._reddit import RedditDatasetAdapter
-from dp.tri.loaders.base import AttackerDatasetRecord, AttackerDatasetAdapter, merge_records
-from dp.loaders.base import TextAnnotation
+from dp.tri.loaders.base import AttackerDatasetRecord, AttackerDatasetAdapter, merge_records, presidio_anonymize
 
 SECTION_PATTERN = re.compile(r"(Type|Inference|Guess):\s*(.*?)(?=(?:Type|Inference|Guess):|\Z)", re.S)
 
@@ -198,11 +197,13 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
         self,
         seed: int = 42,
+        need_to_deidentify: bool = False,
         **data_kwargs,
     ) -> None:
         adapter = RedditDatasetAdapter(**data_kwargs)
         super().__init__(adapter=adapter)
         self._seed = seed
+        self._need_to_deidentify = need_to_deidentify
 
     def _persona_seed(self, persona: Dict[str, str]) -> int:
         entries = "|".join(f"{key}={normalize_space(persona.get(key, ''))}" for key in sorted(persona.keys()))
@@ -210,8 +211,10 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
         digest = hashlib.sha256(seed_source.encode("utf-8")).hexdigest()
         return int(digest[:16], 16)
 
-    def _persona_text(self, persona: Dict[str, str]) -> str:
-        rng = random.Random(self._persona_seed(persona))
+    def _persona_text(self, persona: Dict[str, str], variant: str) -> str:
+        seed_src = f"{self._persona_seed(persona)}|{variant}"
+        h = hashlib.sha256(seed_src.encode("utf-8")).hexdigest()
+        rng = random.Random(int(h[:16], 16))
         return render_persona(persona, rng)
 
     def _build_background_entry(
@@ -219,6 +222,7 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
         record: DatasetRecord,
         persona: Dict[str, str],
         pronouns: Tuple[str, str, str],
+        variant: str,
     ) -> str:
         metadata = dict(record.metadata or {})
         question_raw = strip_matching_quotes(normalize_text(metadata.get("question")))
@@ -236,10 +240,16 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
 
         subject = pronouns[0]
         subject_cap = subject.capitalize()
-        interaction = ensure_period(
-            f"The question was asked in a forum: '{question_clean}' {subject_cap} answered with: '{answer_clean}'"
-        )
-        return ensure_period(f"{interaction} {inference_text}")
+        parts = [
+            ensure_period(f"The question was asked in a forum: '{question_clean}'"),
+            ensure_period(f"{subject_cap} answered with: '{answer_clean}'"),
+            ensure_period(inference_text),
+        ]
+        order_seed_src = f"{self._seed}|{record.uid}|{variant}|order"
+        h = hashlib.sha256(order_seed_src.encode("utf-8")).hexdigest()
+        rng = random.Random(int(h[:16], 16))
+        rng.shuffle(parts)
+        return ensure_period(" ".join(parts))
 
     def prepare_train_texts(self, record: DatasetRecord) -> List[Tuple[str, str]]:
         raise NotImplementedError("RedditAttackerDatasetAdapter aggregates records by persona; use iter_records()")
@@ -258,14 +268,10 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
             pronouns = resolve_pronouns(persona.get("sex"))
 
             modified_record = record
-            if self._starting_anonymizations_by_idx is not None and idx < len(self._starting_anonymizations_by_idx):
-                anns = self._starting_anonymizations_by_idx[idx]
-                if anns:
-                    modified_record.text = self._apply_starting_anonymizations(record.text, anns)
-
-            background_entry = self._build_background_entry(modified_record, persona, pronouns)
-            
-            persona_text = self._persona_text(persona)
+            background_entry = self._build_background_entry(modified_record, persona, pronouns, variant="train")
+            if self._need_to_deidentify:
+                background_entry = presidio_anonymize(background_entry)
+            persona_text = self._persona_text(persona, variant="eval")
 
             grouped_train_texts.setdefault(record.name, []).append(background_entry)
             grouped_eval_texts.setdefault(record.name, []).append(persona_text)

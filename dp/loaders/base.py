@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional
 import itertools
 
@@ -79,12 +80,23 @@ class DatasetRecord:
 class DatasetAdapter:
     """Base adapter providing a unified interface across datasets."""
 
-    data: Optional[str] = None
-    data_in: Optional[str] = None
-    max_records: Optional[int] = None
-    start: Optional[int] = None
-    end: Optional[int] = None
-    step: Optional[int] = None
+    def __init__(self, 
+                 data: Optional[str] = None, 
+                 data_in: Optional[str] = None, 
+                 max_records: Optional[int] = None, 
+                 start: Optional[int] = None, 
+                 end: Optional[int] = None, 
+                 step: Optional[int] = None):
+        if data_in is None:
+            raise ValueError("data_in must point to a JSONL file")
+        data_path = Path(data_in)
+        if not data_path.exists():
+            raise ValueError(f"data_in path '{data_in}' does not exist or is not a file")
+        self.data_in = data_in
+        self.max_records = max_records
+        self.start = start
+        self.end = end
+        self.step = step
 
     def __iter__(self) -> Iterator[DatasetRecord]:
         return iter(self.iter_records())
@@ -99,10 +111,13 @@ class DatasetAdapter:
 
     def _slice_records(self, iterable: Iterable[Any]) -> Iterable[Any]:
         """Apply slicing (start/end/step) before enforcing max_records."""
-        start = 0 if self.start is None else self.start
-        stop = self.end
-        step = 1 if self.step is None else self.step
-        sliced = itertools.islice(iterable, start, stop, step)
-        if self.max_records is not None:
-            sliced = itertools.islice(sliced, self.max_records)
-        return sliced
+        return slice_records(iterable, self.start, self.end, self.step, self.max_records)
+
+def slice_records(iterable: Iterable[Any], start: int, end: int, step: int, max_records: int) -> Iterable[Any]:
+    start = 0 if start is None else start
+    stop = end
+    step = 1 if step is None else step
+    sliced = itertools.islice(iterable, start, stop, step)
+    if max_records is not None:
+        sliced = itertools.islice(sliced, max_records)
+    return sliced

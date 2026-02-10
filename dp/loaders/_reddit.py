@@ -3,34 +3,20 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord
 
 
 class RedditDatasetAdapter(DatasetAdapter):
-    def __init__(
-        self,
-        data: Optional[str] = None,
-        data_in: Optional[str] = None,
-        max_records: Optional[int] = None,
-        start: Optional[int] = None,
-        end: Optional[int] = None,
-        step: Optional[int] = None,
-    ):
-        if data_in is None:
-            raise ValueError("data_in must point to a JSONL file")
-        path = Path(data_in)
-        if not path.exists():
-            raise ValueError(f"Reddit dataset file not found: {path}")
-        self.data_in = path
-        self.max_records = max_records
-        self.start = start
-        self.end = end
-        self.step = step
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._records = list(self._read_records())
+        self.data_in = Path(self.data_in)
 
     def _read_records(self) -> Iterable[Dict]:
+        if isinstance(self.data_in, str):
+            self.data_in = Path(self.data_in)
         with self.data_in.open("r", encoding="utf-8") as handle:
             for raw_idx, line in enumerate(handle):
                 if not line.strip():

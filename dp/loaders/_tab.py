@@ -8,20 +8,9 @@ from typing import Iterable, List, Optional
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
 
 class TabDatasetAdapter(DatasetAdapter):
-    def __init__(
-        self,
-        data: Optional[str] = None,
-        data_in: Optional[str] = None,
-        max_records: Optional[int] = None,
-        start: Optional[int] = None,
-        end: Optional[int] = None,
-        step: Optional[int] = None,
-    ):
-        self.data_in = Path(data_in)
-        self.max_records = max_records
-        self.start = start
-        self.end = end
-        self.step = step
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.data_in = Path(self.data_in)
         try:
             with self.data_in.open("r", encoding="utf-8") as handle:
                 self._records: List[dict] = json.load(handle)

@@ -1,0 +1,3 @@
+data: yelp
+data_in: data/yelp/all.jsonl
+save_to_jsonl: data/yelp/yelp_bk_deid.jsonl

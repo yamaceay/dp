@@ -1,0 +1,20 @@
+dataset: yelp
+data_in: data/yelp/all.jsonl
+debug: true
+annotations_in:
+  - outputs/yelp
+target:
+  key: label
+  type: nominal
+split:
+  - train: 0.8
+    val: 0.2
+random_state: 42
+head:
+  type: bert_classifier
+  params:
+    epochs: 2
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/yelp/_checkpoints
+output:
+  format: jsonl
+  file: logs/yelp_is_positive_label_exp.jsonl

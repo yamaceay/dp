@@ -18,6 +18,7 @@ def add_data_args(parser: argparse.ArgumentParser) -> list[str]:
     parser.add_argument('--end', type=int, default=None, help='End index for slicing (exclusive, python slicing semantics)')
     parser.add_argument('--step', type=int, default=None, help='Step for slicing (python slicing semantics)')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load after slicing')
+    parser.add_argument('--deidentify', action='store_true', default=None, help='Apply de-identification to train background entries')
     return ['data', 'data_in', 'start', 'end', 'step', 'max_records']
 
 
@@ -49,6 +50,7 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
     full_record = bool(params.get('full_record') or False)
     save_to_jsonl = params.get('save_to_jsonl')
     load_from_jsonl = params.get('load_from_jsonl')
+    deidentify = bool(params.get('deidentify') or False)
     return {
         'data': data,
         'data_in': data_in,
@@ -60,6 +62,7 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
         'full_record': full_record,
         'save_to_jsonl': save_to_jsonl,
         'load_from_jsonl': load_from_jsonl,
+        'deidentify': deidentify,
     }
 
 def main() -> None:
@@ -80,7 +83,11 @@ def main() -> None:
         raise ValueError('data and data_in are required (pass via args or --config)')
 
     data_kwargs = {k: resolved[k] for k in data_keys}
-    adapter = get_attacker_adapter(data_kwargs.pop("data"), **data_kwargs)
+    dataset_name = data_kwargs.pop("data")
+    adapter_kwargs = dict(**data_kwargs)
+    if dataset_name in {"reddit", "yelp"}:
+        adapter_kwargs["need_to_deidentify"] = resolved['deidentify']
+    adapter = get_attacker_adapter(dataset_name, **adapter_kwargs)
 
     original_records = list(adapter.adapter.iter_records())
     if resolved['result_in']:
