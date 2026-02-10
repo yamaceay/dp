@@ -8,7 +8,7 @@ explainer:
 
 precomputation:
   risk_scores: data/yelp/yelp_risk_shap.jsonl
-  result_in: outputs/yelp/presidio/20260205_182109_yelp_presidio.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs/yelp/presidio/20260210_100853_yelp_presidio.jsonl
 
 tri_chunking:
   enabled: true

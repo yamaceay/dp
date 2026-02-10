@@ -2,7 +2,7 @@ dataset: yelp
 data_in: data/yelp/all.jsonl
 debug: true
 annotations_in:
-  - outputs/yelp
+  - ../../../netscratch/yay/_ext_outputs/yelp
 target:
   key: label
   type: nominal

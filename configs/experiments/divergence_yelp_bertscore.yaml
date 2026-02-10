@@ -1,7 +1,7 @@
 dataset: yelp
 data_in: data/yelp/all.jsonl
 annotations_in:
-  - outputs/yelp
+  - ../../../netscratch/yay/_ext_outputs/yelp
 metric:
   type: bertscore
   model_type: roberta-large

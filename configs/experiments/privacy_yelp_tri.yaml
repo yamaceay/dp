@@ -1,7 +1,7 @@
 dataset: yelp
 data_in: data/yelp/all.jsonl
 annotations_in:
-  - outputs/yelp
+  - ../../../netscratch/yay/_ext_outputs/yelp
 tri:
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/yelp/_checkpoints/yelp__lr5e-5
   max_length: 512
