@@ -183,6 +183,7 @@ def read_batch_annotations(
     dataset: str,
     model: str,
     timestamp: str,
+    base_path: str = "outputs",
 ) -> List[List[TextAnnotation]]:
     """
     Read batch annotations from file. Automatically detects format based on file extension.
@@ -190,9 +191,7 @@ def read_batch_annotations(
     - .jsonl format (one JSON object per line)
     - .json format (separate files per record)
     """
-    from dp.utils.output import OUTPUT_STRUCTURE
-    
-    pattern = OUTPUT_STRUCTURE.get(model, f"outputs/{{dataset}}/{model}")
+    pattern = f"{base_path}/{{dataset}}/{model}"
     output_dir = Path(pattern.format(dataset=dataset))
     
     jsonl_path = output_dir / f"{timestamp}.jsonl"
@@ -207,10 +206,9 @@ def read_batch_textannotations(
     dataset: str,
     model: str,
     timestamp: str,
+    base_path: str = "outputs",
 ) -> List[TextAnnotations]:
-    from dp.utils.output import OUTPUT_STRUCTURE
-
-    pattern = OUTPUT_STRUCTURE.get(model, f"outputs/{{dataset}}/{model}")
+    pattern = f"{base_path}/{{dataset}}/{model}"
     output_dir = Path(pattern.format(dataset=dataset))
     jsonl_path = output_dir / f"{timestamp}.jsonl"
 
@@ -327,10 +325,9 @@ def _read_jsonl_textannotations(jsonl_path: Path) -> List[TextAnnotations]:
 def list_batch_timestamps(
     dataset: str,
     model: str,
+    base_path: str = "outputs",
 ) -> List[str]:
-    from dp.utils.output import OUTPUT_STRUCTURE
-    
-    pattern = OUTPUT_STRUCTURE.get(model, f"outputs/{{dataset}}/{model}")
+    pattern = f"{base_path}/{{dataset}}/{model}"
     output_dir = Path(pattern.format(dataset=dataset))
     
     if not output_dir.exists():

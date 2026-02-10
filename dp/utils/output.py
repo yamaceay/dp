@@ -7,7 +7,6 @@ import numpy as np
 from dp.methods.anonymizer import AnonymizationResult
 from dp.loaders.base import TextAnnotation
 
-
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles NumPy types"""
     def default(self, o):
@@ -20,15 +19,6 @@ class NumpyEncoder(json.JSONEncoder):
         elif isinstance(o, np.bool_):
             return bool(o)
         return super().default(o)
-
-
-OUTPUT_STRUCTURE = {
-    model: "outputs/{dataset}" + f"/{model}" for model in [
-        "spacy", "presidio", "baroud", "risk",  "manual",
-        "dpmlm", "dpbart", "dpprompt", "dpparaphrase",
-        "petre",
-    ]
-}
 
 
 class OutputHandler:
@@ -93,7 +83,7 @@ class JsonlOutputHandler(OutputHandler):
         self._paths.clear()
 
     def _get_output_dir(self, dataset: str, model: str) -> Path:
-        pattern = OUTPUT_STRUCTURE.get(model, f"outputs/{{dataset}}/{model}")
+        pattern = f"{self.base_path}/{{dataset}}/{model}"
         path_str = pattern.format(dataset=dataset)
         return Path(path_str)
 

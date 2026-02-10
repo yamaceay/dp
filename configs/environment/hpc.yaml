@@ -1,7 +1,7 @@
 gpt2-paraphraser: ../../../netscratch/yay/gpt2-paraphraser
 reddit:
   data_in: data/reddit/reddit.jsonl
-  result_in: outputs/reddit/presidio/20260205_182109_reddit_presidio.jsonl
+  result_in: outputs/reddit/presidio/20260210_023708_reddit_presidio.jsonl
   tri_location: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__deid__lr5e-5
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5

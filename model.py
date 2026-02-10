@@ -43,10 +43,11 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--texts', type=str, nargs='+')
     parser.add_argument('--indices', type=int, nargs='+')
     parser.add_argument('--output', type=str, default='print', choices=list(OUTPUT_HANDLER_REGISTRY.keys()))
+    parser.add_argument('--base_output_path', type=str, default="outputs")
     parser.add_argument('--timestamp', type=str, default=None)
     parser.add_argument('--unique_name', type=str, default=None)
     parser.add_argument('--as_task', action='store_true')
-    return ['runtime_in', 'texts', 'indices', 'output', 'unique_name', 'as_task']
+    return ['runtime_in', 'texts', 'indices', 'output', 'base_output_path', 'timestamp', 'unique_name', 'as_task']
 
 
 def load_config(path: Optional[str]) -> dict:
@@ -511,7 +512,7 @@ if __name__ == "__main__":
     
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])
     batch_timestamp = args.timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_handler = output_handler_cls(timestamp=batch_timestamp) if args.output == "jsonl" else output_handler_cls()
+    output_handler = output_handler_cls(timestamp=batch_timestamp, base_path=args.base_output_path) if args.output == "jsonl" else output_handler_cls()
     
     buckets = initialize_builder_params(model, runtime_bundle)
 
@@ -561,7 +562,7 @@ if __name__ == "__main__":
     metadata = {
         "dataset": args.data,
         "model": args.model,
-        "unique_name": args.unique_name
+        "unique_name": args.unique_name,
     }
     if args.as_task:
         metadata["task_id"] = args.start
@@ -590,7 +591,7 @@ if __name__ == "__main__":
     stream = model.stream_anonymize(texts_or_indices=anonymization_inputs, buckets=buckets)
     for abs_idx, result_list in zip(output_indices, stream):
         for hp, result in result_list:
-            output_handler.output(result, idx=abs_idx, **metadata, hyperparams=hp)
+            output_handler.output(result, idx=abs_idx, hyperparams=hp, **metadata)
         processed += 1
 
     total_time = time.time() - run_start
