@@ -1,22 +1,21 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
-from transformers import AutoModel, AutoTokenizer, EvalPrediction, Trainer, TrainingArguments
+from transformers import EvalPrediction
 
 from dp.bert.base import SupervisedDownstreamHead
-from dp.bert.common import (
-    EarlyStoppingCallback,
-    build_optimizer_and_scheduler,
-    mask_stopword_tokens,
-    pretrain_backbone_with_mlm,
+from dp.bert.hf_shared import (
+    BertHFPlumbing,
+    EncodedDataset,
+    HFTrainSpec,
+    load_backbone_with_optional_checkpoint,
 )
-from dp.utils.device import resolve_device
 
 
-class BertOrdinalHead(SupervisedDownstreamHead):
+class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
     def __init__(
         self,
         model_name: str = "distilbert-base-uncased",
@@ -44,7 +43,8 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         pretraining_learning_rate: float = 5e-5,
         pretraining_mlm_probability: float = 0.15,
     ):
-        super().__init__(name="bert_ordinal", primary_metric=primary_metric)
+        SupervisedDownstreamHead.__init__(self, name="bert_ordinal", primary_metric=primary_metric)
+        BertHFPlumbing.__init__(self, device=device)
         if pretraining_epochs <= 0:
             raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
         if pretraining_batch_size is not None and pretraining_batch_size <= 0:
@@ -64,7 +64,6 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         self.head_lr = float(head_lr)
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
-        self.device = resolve_device(device)
         self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
@@ -80,25 +79,15 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         self.pretraining_batch_size = int(pretraining_batch_size) if pretraining_batch_size is not None else self.batch_size
         self.pretraining_learning_rate = float(pretraining_learning_rate)
         self.pretraining_mlm_probability = float(pretraining_mlm_probability)
-        self._tokenizer: Optional[AutoTokenizer] = None
         self._model: Optional[torch.nn.Module] = None
-        self._trainer: Optional[Trainer] = None
         self._label_order: Optional[List[str]] = None
         self._label_to_index: Optional[Dict[str, int]] = None
         self._index_to_label: Optional[Dict[int, str]] = None
         self._num_classes: int = 0
-        self._stopwords: Set[str] = set()
-        self._active_checkpoint: Optional[str] = None
 
     def _create_model(self, num_classes: int):
-        base_model = AutoModel.from_pretrained(self.model_name)
         checkpoint_source = self._active_checkpoint or self.init_checkpoint
-        if checkpoint_source:
-            try:
-                checkpoint_model = AutoModel.from_pretrained(checkpoint_source)
-                base_model.load_state_dict(checkpoint_model.state_dict(), strict=False)
-            except Exception:
-                pass
+        base_model = load_backbone_with_optional_checkpoint(self.model_name, checkpoint_source)
 
         num_thresholds = num_classes - 1
         hidden_size = base_model.config.hidden_size
@@ -194,55 +183,29 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         train_targets, val_targets, num_classes, bias_init = self._prepare_targets(train_labels, val_labels, union_labels)
         self._num_classes = num_classes
 
-        if self.use_pretraining:
-            self._active_checkpoint = pretrain_backbone_with_mlm(
-                model_name=self.model_name,
-                texts=train_texts,
-                output_dir=self.checkpoint_dir,
-                init_checkpoint=self.init_checkpoint,
-                epochs=self.pretraining_epochs,
-                batch_size=self.pretraining_batch_size,
-                learning_rate=self.pretraining_learning_rate,
-                mlm_probability=self.pretraining_mlm_probability,
-            )
-        tokenizer_source = self._active_checkpoint or self.init_checkpoint or self.model_name
-        try:
-            self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
-        except Exception:
-            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-
-        if self.mask_stopwords:
-            from dp.utils.stopwords import DEFAULT_STOPWORDS
-            self._stopwords = DEFAULT_STOPWORDS
-            print(f"Stopword masking enabled: {len(self._stopwords)} stopwords will be masked")
+        self._maybe_pretrain(
+            use_pretraining=self.use_pretraining,
+            model_name=self.model_name,
+            texts=train_texts,
+            output_dir=self.checkpoint_dir,
+            init_checkpoint=self.init_checkpoint,
+            pretraining_epochs=self.pretraining_epochs,
+            pretraining_batch_size=self.pretraining_batch_size,
+            pretraining_learning_rate=self.pretraining_learning_rate,
+            pretraining_mlm_probability=self.pretraining_mlm_probability,
+        )
+        self._load_tokenizer_with_fallback(model_name=self.model_name, init_checkpoint=self.init_checkpoint)
+        self._maybe_enable_stopwords(self.mask_stopwords)
 
         self._model = self._create_model(num_classes)
 
         with torch.no_grad():
             self._model.biases.data = torch.from_numpy(bias_init).float()
 
-        train_encodings = self._tokenizer(train_texts, padding=True, truncation=True, return_tensors="pt")
-        val_encodings = self._tokenizer(val_texts, padding=True, truncation=True, return_tensors="pt")
-
-        if self.mask_stopwords:
-            train_encodings = mask_stopword_tokens(self._tokenizer, self._stopwords, train_encodings, train_texts)
-            val_encodings = mask_stopword_tokens(self._tokenizer, self._stopwords, val_encodings, val_texts)
-
-        class OrdinalDataset(torch.utils.data.Dataset):
-            def __init__(self, encodings, labels):
-                self.encodings = encodings
-                self.labels = labels
-
-            def __len__(self):
-                return len(self.labels)
-
-            def __getitem__(self, idx):
-                item = {key: val[idx] for key, val in self.encodings.items()}
-                item["labels"] = torch.tensor(self.labels[idx], dtype=torch.float)
-                return item
-
-        train_dataset = OrdinalDataset(train_encodings, train_targets)
-        val_dataset = OrdinalDataset(val_encodings, val_targets)
+        train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
+        val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
+        train_dataset = EncodedDataset(train_encodings, train_targets, label_dtype=torch.float)
+        val_dataset = EncodedDataset(val_encodings, val_targets, label_dtype=torch.float)
 
         def compute_metrics(eval_pred: EvalPrediction):
             logits = eval_pred.predictions
@@ -267,54 +230,32 @@ class BertOrdinalHead(SupervisedDownstreamHead):
                 "mae": overall_mae,
             }
 
-        training_args = TrainingArguments(
-            output_dir=self.checkpoint_dir,
-            num_train_epochs=self.epochs,
-            per_device_train_batch_size=self.batch_size,
-            per_device_eval_batch_size=self.batch_size,
-            warmup_steps=self.warmup_steps,
-            learning_rate=self.head_lr,
-            weight_decay=self.weight_decay if self.weight_decay is not None else 0.01,
-            logging_steps=10,
-            evaluation_strategy="epoch",
-            save_strategy="epoch",
-            load_best_model_at_end=True,
-            metric_for_best_model="macro_mae",
-            greater_is_better=False,
-            max_grad_norm=self.gradient_clip,
-            report_to="none",
+        wd_eff = self.weight_decay if self.weight_decay is not None else 0.01
+        spec = HFTrainSpec(
+            metric_name="macro_mae",
+            minimize_metric=True,
+            weight_decay_effective=wd_eff,
+            compute_metrics=compute_metrics,
         )
-        steps_per_epoch = max(1, int(np.ceil(len(train_dataset) / self.batch_size)))
-        num_training_steps = steps_per_epoch * self.epochs
-        optimizer, scheduler = build_optimizer_and_scheduler(
-            self._model,
+        self._trainer, early_stopping = self._make_trainer(
+            model=self._model,
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            spec=spec,
+            checkpoint_dir=self.checkpoint_dir,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            warmup_steps=self.warmup_steps,
+            head_lr=self.head_lr,
+            gradient_clip=self.gradient_clip,
             optimizer_type=self.optimizer_type,
             scheduler_type=self.scheduler_type,
             encoder_lr=self.encoder_lr,
-            head_lr=self.head_lr,
-            weight_decay=self.weight_decay if self.weight_decay is not None else 0.01,
-            warmup_steps=self.warmup_steps,
+            weight_decay=wd_eff,
             warmup_ratio=self.warmup_ratio,
-            num_training_steps=num_training_steps,
+            early_stop_patience=self.early_stop_patience,
+            early_stop_threshold=self.early_stop_threshold,
         )
-
-        early_stopping = EarlyStoppingCallback(
-            early_stopping_patience=self.early_stop_patience,
-            early_stopping_threshold=self.early_stop_threshold,
-            metric_name="macro_mae",
-            minimize=True,
-        )
-
-        self._trainer = Trainer(
-            model=self._model,
-            args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=val_dataset,
-            compute_metrics=compute_metrics,
-            callbacks=[early_stopping],
-            optimizers=(optimizer, scheduler),
-        )
-
         self._trainer.train()
         print(f"Restored best model with macro_mae: {early_stopping.best_metric:.4f}")
 
@@ -322,24 +263,22 @@ class BertOrdinalHead(SupervisedDownstreamHead):
         if self._model is None or self._tokenizer is None:
             raise RuntimeError("Model not fitted")
         texts = list(x)
-        self._model.eval()
+        outs = self._predict_in_batches(
+            model=self._model,
+            texts=texts,
+            batch_size=self.batch_size,
+            mask_stopwords=self.mask_stopwords,
+        )
         all_preds = []
-        with torch.no_grad():
-            for i in range(0, len(texts), self.batch_size):
-                batch_texts = texts[i:i + self.batch_size]
-                encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
-                if self.mask_stopwords:
-                    encodings = mask_stopword_tokens(self._tokenizer, self._stopwords, encodings, batch_texts)
-                encodings = {k: v.to(self._model_device()) for k, v in encodings.items()}
-                outputs = self._model(**encodings)
-                logits = outputs["logits"]
-                probs = torch.sigmoid(logits)
-                class_preds = (probs > 0.5).sum(dim=1).cpu().numpy().astype(int)
-                if self._index_to_label is not None:
-                    preds = [self._index_to_label[idx] for idx in class_preds]
-                else:
-                    preds = class_preds
-                all_preds.extend(preds)
+        for out in outs:
+            logits = out["logits"]
+            probs = torch.sigmoid(logits)
+            class_preds = (probs > 0.5).sum(dim=1).cpu().numpy().astype(int)
+            if self._index_to_label is not None:
+                preds = [self._index_to_label[idx] for idx in class_preds]
+            else:
+                preds = class_preds
+            all_preds.extend(preds)
         return np.array(all_preds)
 
     def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
@@ -388,22 +327,5 @@ class BertOrdinalHead(SupervisedDownstreamHead):
     def setup(self) -> None:
         pass
 
-    def _model_device(self) -> torch.device:
-        if self._model is None:
-            raise RuntimeError("Model not fitted")
-        return next(self._model.parameters()).device
-
     def cleanup(self) -> None:
-        if self._model is not None:
-            del self._model
-        if self._tokenizer is not None:
-            del self._tokenizer
-        if self._trainer is not None:
-            del self._trainer
-        self._model = None
-        self._tokenizer = None
-        self._trainer = None
-        import gc
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        self.cleanup_plumbing(model_attr_names=["_model"])
