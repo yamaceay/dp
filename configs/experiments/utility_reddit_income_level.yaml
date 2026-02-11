@@ -19,23 +19,24 @@ split:
     train: 1.0
     val: 0.0
 random_state: 42
+include_confusion_matrix: true
 head:
   type: bert_ordinal
   params:
-    model_name: distilbert-base-uncased
-    init_checkpoint: models/tri_pipelines/reddit/old_pipeline/finetuning/checkpoint-198
-    checkpoint_dir: models/tri_pipelines/reddit/utility_income_level
-    batch_size: 4
     epochs: 5
+    model_name: distilbert-base-uncased
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5/finetuning/checkpoint-462
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/_checkpoints
+    primary_metric: macro_mae
+    optimizer_type: adamw
+    scheduler_type: linear
+    weight_decay: 0.01
+    warmup_ratio: 0.1
+    macro_loss_weight: 0.5
     encoder_lr: 5e-6
     head_lr: 1e-4
     warmup_steps: 10
     gradient_clip: 1.0
-    device: auto
-    primary_metric: macro_mae
-    early_stop_threshold: 0.4
-    early_stop_patience: 2
-    macro_loss_weight: 0.0
 output:
   format: jsonl
   file: logs/reddit_income_level_exp.jsonl
