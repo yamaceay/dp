@@ -21,8 +21,6 @@ head:
   params:
     epochs: 5
     model_name: distilbert-base-uncased
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5/finetuning/checkpoint-462
-    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/_checkpoints
     primary_metric: macro_f1
     optimizer_type: adamw
     scheduler_type: linear

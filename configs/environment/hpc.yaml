@@ -6,15 +6,9 @@ reddit:
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__deid__lr5e-5
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5
   util_tri_pipeline: ../../../netscratch/yay/util_tri_pipelines/reddit/_checkpoints
-yelp:
-  data_in: data/yelp/all.jsonl
-  result_in: ../../../netscratch/yay/_ext_outputs/yelp/presidio/20260210_100853_yelp_presidio.jsonl
-  tri_location: ../../../netscratch/yay/tri_pipelines/yelp/_checkpoints
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/yelp/_checkpoints/yelp__deid__lr5e-5
-  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/yelp/_checkpoints/yelp__lr5e-5
-  util_tri_pipeline: ../../../netscratch/yay/util_tri_pipelines/yelp/_checkpoints
 tab:
   data_in: data/TAB/splitted/test.json
+  full_data_in: data/TAB/tab.json
   pii_annotator: ../../../netscratch/yay/pii_detectors/tab/tab__lr3e-5__bs8__m_partial_recall
   result_in: outputs/tab/presidio/20260205_184512_tab_presidio.jsonl
   tri_location: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints
@@ -23,6 +17,7 @@ tab:
   util_tri_pipeline: ../../../netscratch/yay/util_tri_pipelines/tab/_checkpoints
 db_bio:
   data_in: data/db_bio/test/data-00000-of-00001.arrow
+  full_data_in: data/db_bio
   result_in: outputs/db_bio/presidio/20260205_192847_db_bio_presidio.jsonl
   tri_location: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/db_bio__deid__lr5e-5

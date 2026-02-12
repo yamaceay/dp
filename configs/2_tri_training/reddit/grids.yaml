@@ -1,0 +1,7 @@
+model_name: [distilbert-base-uncased]
+epochs: [8, 12]
+batch_size: [8, 16]
+lr: [1.0e-5, 2.0e-5, 5.0e-5, 1.0e-4]
+warmup_steps: [100]
+weight_decay: [0.01]
+early_stop_patience: [10]

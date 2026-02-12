@@ -92,7 +92,7 @@ class TRIDetector:
             model_name=self.model_name,
             batch_size=batch_size,
             epochs=epochs,
-            head_lr=learning_rate,
+            encoder_lr=learning_rate,
             device=str(self.device),
             early_stop_threshold=early_stop_threshold,
             loss_type=loss_type,
@@ -138,7 +138,12 @@ class TRIDetector:
                 f"Unsupported TRI checkpoint format at {resolved_model_path}. "
                 "Expected BertClassifierHead checkpoint 'bert_classifier.pt'."
             )
-        self.classifier = BertClassifierHead(model_name=self.model_name, batch_size=16, device=str(self.device))
+        self.classifier = BertClassifierHead(
+            model_name=self.model_name,
+            batch_size=16,
+            device=str(self.device),
+            encoder_lr=1e-5,
+        )
         self.classifier.load(str(model_dir))
         label_mapping_path = model_dir / "label_mapping.json"
         if not label_mapping_path.exists():

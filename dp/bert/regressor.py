@@ -18,11 +18,11 @@ from dp.bert.hf_shared import (
 class BertRegressorHead(SupervisedDownstreamHead, BertHFPlumbing):
     def __init__(
         self,
+        encoder_lr: float,
+        head_lr: Optional[float] = None,
         model_name: str = "distilbert-base-uncased",
         batch_size: int = 8,
         epochs: int = 5,
-        encoder_lr: float = 1e-5,
-        head_lr: float = 5e-5,
         warmup_steps: int = 10,
         gradient_clip: float = 1.0,
         device: Optional[str] = None,
@@ -59,8 +59,12 @@ class BertRegressorHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
+        if encoder_lr <= 0:
+            raise ValueError(f"encoder_lr must be positive, got {encoder_lr}")
+        if head_lr is not None and head_lr <= 0:
+            raise ValueError(f"head_lr must be positive, got {head_lr}")
         self.encoder_lr = float(encoder_lr)
-        self.head_lr = float(head_lr)
+        self.head_lr = float(head_lr) if head_lr is not None else float(encoder_lr)
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
         self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None

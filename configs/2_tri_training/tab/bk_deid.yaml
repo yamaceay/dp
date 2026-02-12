@@ -17,3 +17,4 @@ training:
   focal_gamma: 5.0
   focal_ignore_pt: 0.95
   exclude_stopwords: true
+  p_agg: avg

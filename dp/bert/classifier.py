@@ -22,11 +22,11 @@ from dp.bert.losses import compute_focal_loss
 class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
     def __init__(
         self,
+        encoder_lr: float,
+        head_lr: Optional[float] = None,
         model_name: str = "distilbert-base-uncased",
         batch_size: int = 8,
         epochs: int = 5,
-        encoder_lr: float = 1e-5,
-        head_lr: float = 5e-5,
         warmup_steps: int = 10,
         gradient_clip: float = 1.0,
         label_smoothing: float = 0.0,
@@ -76,15 +76,19 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
+        if encoder_lr <= 0:
+            raise ValueError(f"encoder_lr must be positive, got {encoder_lr}")
+        if head_lr is not None and head_lr <= 0:
+            raise ValueError(f"head_lr must be positive, got {head_lr}")
         self.encoder_lr = float(encoder_lr)
-        self.head_lr = float(head_lr)
+        self.head_lr = float(head_lr) if head_lr is not None else float(encoder_lr)
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
         self.label_smoothing = float(label_smoothing)
         self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
-        self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        self.checkpoint_dir = checkpoint_dir
         self.pretraining_output_dir = pretraining_output_dir or self.checkpoint_dir
         self.mask_stopwords = bool(mask_stopwords)
         self.macro_loss_weight = float(macro_loss_weight)
