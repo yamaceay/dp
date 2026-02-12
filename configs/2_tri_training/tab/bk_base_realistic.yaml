@@ -17,4 +17,8 @@ training:
   focal_gamma: 5.0
   focal_ignore_pt: 0.95
   exclude_stopwords: true
+  sensitive_selector: auto
+  sensitive_selector_kwargs:
+    subset_file: data/TAB/splitted/test.json
+  other_label: __OTHER__
   p_agg: avg

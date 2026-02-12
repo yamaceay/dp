@@ -12,4 +12,8 @@ training:
   use_pretraining: true
   pretraining_epochs: 1
   per_step: null
+  sensitive_selector: auto
+  sensitive_selector_kwargs:
+    subset_file: data/db_bio/test/data-00000-of-00001.arrow
+  other_label: __OTHER__
   p_agg: avg

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -52,6 +53,8 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         scheduler_type: str = "linear",
         weight_decay: float = 0.01,
         warmup_ratio: Optional[float] = None,
+        other_label: Optional[str] = None,
+        other_count: int = 1,
     ):
         SupervisedDownstreamHead.__init__(self, name="bert_classifier", primary_metric=primary_metric)
         BertHFPlumbing.__init__(self, device=device)
@@ -73,6 +76,8 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             raise ValueError(f"weight_decay must be >= 0, got {weight_decay}")
         if warmup_ratio is not None and (warmup_ratio < 0.0 or warmup_ratio >= 1.0):
             raise ValueError(f"warmup_ratio must be in [0, 1), got {warmup_ratio}")
+        if other_count <= 0:
+            raise ValueError(f"other_count must be positive, got {other_count}")
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
@@ -105,12 +110,14 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.scheduler_type = str(scheduler_type)
         self.weight_decay = float(weight_decay)
         self.warmup_ratio = float(warmup_ratio) if warmup_ratio is not None else None
+        self.other_label = str(other_label) if other_label is not None else None
+        self.other_count = int(other_count)
         self._model: Optional[torch.nn.Module] = None
         self._label_list: Optional[List[str]] = None
         self._label_to_id: Optional[Dict[str, int]] = None
         self._id_to_label: Optional[Dict[int, str]] = None
 
-    def _create_model(self, num_labels: int):
+    def _create_model(self, num_labels: int, other_label_id: Optional[int] = None):
         checkpoint_source = self._active_checkpoint or self.init_checkpoint
         base_model = load_backbone_with_optional_checkpoint(self.model_name, checkpoint_source)
 
@@ -121,6 +128,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         focal_gamma = self.focal_gamma
         focal_alpha = self.focal_alpha
         focal_ignore_pt = self.focal_ignore_pt
+        other_scale = math.log(float(self.other_count)) if other_label_id is not None and self.other_count > 1 else 0.0
 
         class ClassifierModel(torch.nn.Module):
             def __init__(self, base, hidden_size, num_labels):
@@ -132,7 +140,11 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             def forward(self, input_ids, attention_mask, labels=None):
                 outputs = self.base_model(input_ids=input_ids, attention_mask=attention_mask)
                 hidden = outputs.last_hidden_state[:, 0, :]
-                logits = self.classifier(hidden)
+                raw_logits = self.classifier(hidden)
+                logits = raw_logits
+                if other_label_id is not None and other_scale > 0.0:
+                    logits = raw_logits.clone()
+                    logits[:, other_label_id] = logits[:, other_label_id] + other_scale
 
                 loss = None
                 if labels is not None:
@@ -212,6 +224,11 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self._label_list = label_encoder.classes_.tolist()
         self._label_to_id = {label: idx for idx, label in enumerate(self._label_list)}
         self._id_to_label = {idx: label for idx, label in enumerate(self._label_list)}
+        other_label_id: Optional[int] = None
+        if self.other_label is not None:
+            other_label_id = self._label_to_id.get(self.other_label)
+            if other_label_id is None:
+                raise ValueError(f"Configured other_label '{self.other_label}' not present in training labels")
 
         train_encoded = label_encoder.transform(train_labels)
         val_encoded = label_encoder.transform(val_labels)
@@ -235,7 +252,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self._load_tokenizer_with_fallback(model_name=self.model_name, init_checkpoint=self.init_checkpoint)
         self._maybe_enable_stopwords(self.mask_stopwords)
 
-        self._model = self._create_model(len(self._label_list))
+        self._model = self._create_model(len(self._label_list), other_label_id=other_label_id)
 
         train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
         val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
@@ -371,6 +388,8 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             "focal_alpha": self.focal_alpha,
             "focal_ignore_pt": self.focal_ignore_pt,
             "mask_stopwords": self.mask_stopwords,
+            "other_label": self.other_label,
+            "other_count": self.other_count,
         }
         torch.save(payload, checkpoint_path)
         self._tokenizer.save_pretrained(str(output_dir))
@@ -391,8 +410,15 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self._label_list = [str(label) for label in label_list]
         self._label_to_id = {label: idx for idx, label in enumerate(self._label_list)}
         self._id_to_label = {idx: label for idx, label in enumerate(self._label_list)}
+        checkpoint_other_label = checkpoint.get("other_label")
+        self.other_label = str(checkpoint_other_label) if checkpoint_other_label is not None else None
+        checkpoint_other_count = checkpoint.get("other_count", 1)
+        if not isinstance(checkpoint_other_count, int) or checkpoint_other_count <= 0:
+            raise ValueError("Invalid other_count in bert classifier checkpoint")
+        self.other_count = int(checkpoint_other_count)
         self._tokenizer = AutoTokenizer.from_pretrained(model_dir)
-        self._model = self._create_model(len(self._label_list))
+        other_label_id = self._label_to_id.get(self.other_label) if self.other_label is not None else None
+        self._model = self._create_model(len(self._label_list), other_label_id=other_label_id)
         state_dict = checkpoint.get("model_state_dict")
         if not isinstance(state_dict, dict):
             raise ValueError("Invalid model_state_dict in bert classifier checkpoint")

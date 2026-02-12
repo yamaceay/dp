@@ -40,9 +40,22 @@ class TRIDetector:
         self.chunker: Optional[TokenAwareChunker] = None
         self.train_records: Optional[List[DatasetRecord]] = None
         self.eval_records: Optional[List[DatasetRecord]] = None
+        self.other_label: Optional[str] = None
+        self.other_count: int = 1
 
-    def setup(self, records: List[AttackerDatasetRecord], exclude_stopwords: bool = False) -> None:
-        self._set_dataset(records, exclude_stopwords=exclude_stopwords)
+    def setup(
+        self,
+        records: List[AttackerDatasetRecord],
+        exclude_stopwords: bool = False,
+        sensitive_names: Optional[Sequence[str]] = None,
+        other_label: str = "__OTHER__",
+    ) -> None:
+        self._set_dataset(
+            records,
+            exclude_stopwords=exclude_stopwords,
+            sensitive_names=sensitive_names,
+            other_label=other_label,
+        )
         self.build_label_mappings()
 
     def train(
@@ -106,6 +119,8 @@ class TRIDetector:
             checkpoint_dir=f"{resolved_output_dir}/finetuning",
             pretraining_output_dir=f"{resolved_output_dir}/pretraining",
             init_checkpoint=init_checkpoint,
+            other_label=self.other_label,
+            other_count=self.other_count,
         )
         train_texts = [record.text for record in self.train_records]
         train_labels = [record.name for record in self.train_records]
@@ -244,19 +259,46 @@ class TRIDetector:
         self.name_to_label = {name: idx for idx, name in self.label_to_name.items()}
         self.num_labels = len(names)
 
-    def _set_dataset(self, records: List[AttackerDatasetRecord], exclude_stopwords: bool) -> None:
+    def _set_dataset(
+        self,
+        records: List[AttackerDatasetRecord],
+        exclude_stopwords: bool,
+        sensitive_names: Optional[Sequence[str]],
+        other_label: str,
+    ) -> None:
         if not records:
             raise ValueError("Training records cannot be empty")
+        if not isinstance(other_label, str) or not other_label.strip():
+            raise ValueError("other_label must be a non-empty string")
+        resolved_other_label = other_label.strip()
+        total_names = {str(record.name).strip() for record in records if str(record.name).strip()}
+        if sensitive_names is not None:
+            selected_names = {str(name).strip() for name in sensitive_names if str(name).strip()}
+            sensitive_set = total_names.intersection(selected_names)
+            if not sensitive_set:
+                raise ValueError("No sensitive individuals overlap with loaded training records")
+            if resolved_other_label in sensitive_set:
+                raise ValueError(f"other_label collides with selected sensitive name: {resolved_other_label}")
+            self.other_label = resolved_other_label
+            self.other_count = len(total_names.difference(sensitive_set))
+        else:
+            sensitive_set = set()
+            self.other_label = None
+            self.other_count = 1
         self.train_records = []
         self.eval_records = []
         for record in records:
+            name_raw = str(record.name).strip()
+            mapped_name = name_raw
+            if sensitive_names is not None and name_raw not in sensitive_set:
+                mapped_name = resolved_other_label
             train_texts = list(record.train_texts)
             eval_texts = list(record.eval_texts)
             if exclude_stopwords:
                 train_texts = [strip_stopwords(text) for text in train_texts]
                 eval_texts = [strip_stopwords(text) for text in eval_texts]
-            self.train_records.extend(DatasetRecord(text=text, name=record.name) for text in train_texts)
-            self.eval_records.extend(DatasetRecord(text=text, name=record.name) for text in eval_texts)
+            self.train_records.extend(DatasetRecord(text=text, name=mapped_name) for text in train_texts)
+            self.eval_records.extend(DatasetRecord(text=text, name=mapped_name) for text in eval_texts)
         if not self.train_records:
             raise ValueError("No training records built from attacker records")
         if not self.eval_records:

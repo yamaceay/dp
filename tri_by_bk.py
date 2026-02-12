@@ -8,6 +8,7 @@ import yaml
 
 from dp.tri.base import TRIDetector
 from dp.tri.loaders import get_attacker_adapter, ATTACKER_ADAPTER_REGISTRY
+from dp.tri.sensitive_selectors import get_sensitive_selector
 
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
@@ -165,7 +166,10 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
             "focal_alpha": _optional_float(training, "focal_alpha"),
             "focal_ignore_pt": _optional_float(training, "focal_ignore_pt"),
             "exclude_stopwords": bool(training.get("exclude_stopwords", False)),
-        },
+            "sensitive_selector": _optional_str(training, "sensitive_selector"),
+            "sensitive_selector_kwargs": _get_mapping(training, "sensitive_selector_kwargs"),
+            "other_label": str(training.get("other_label", "__OTHER__")),
+            },
     }
     return cfg
 
@@ -230,6 +234,11 @@ def main() -> int:
         focal_alpha = training.get("focal_alpha")
         focal_ignore_pt = training.get("focal_ignore_pt")
         exclude_stopwords = bool(training.get("exclude_stopwords", False))
+        sensitive_selector = training.get("sensitive_selector")
+        sensitive_selector_kwargs = training.get("sensitive_selector_kwargs")
+        if not isinstance(sensitive_selector_kwargs, dict):
+            raise SystemExit("training.sensitive_selector_kwargs must be a mapping")
+        other_label = str(training.get("other_label", "__OTHER__"))
         p_agg = training.get("p_agg", "avg")
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -257,6 +266,9 @@ def main() -> int:
         focal_alpha = args.focal_alpha
         focal_ignore_pt = args.focal_ignore_pt
         exclude_stopwords = bool(args.exclude_stopwords)
+        sensitive_selector = None
+        sensitive_selector_kwargs = {}
+        other_label = "__OTHER__"
         p_agg = args.p_agg
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
@@ -269,6 +281,20 @@ def main() -> int:
     records = list(adapter.iter_records())
     if not records:
         raise SystemExit("No records loaded")
+    sensitive_names = None
+    if sensitive_selector is not None:
+        selector_name = str(sensitive_selector).strip().lower()
+        if selector_name == "auto":
+            selector_name = dataset
+        selector = get_sensitive_selector(selector_name)
+        total_individuals = sorted({str(record.name).strip() for record in records if str(record.name).strip()})
+        sensitive_names = sorted(selector.select_individuals(total_individuals, **sensitive_selector_kwargs))
+        if not sensitive_names:
+            raise SystemExit("Sensitive selector returned an empty set")
+        print(
+            f"sensitive selector='{selector_name}' selected {len(sensitive_names)} "
+            f"of {len(total_individuals)} individuals"
+        )
 
     tri = TRIDetector(dataset_name=dataset, model_name=model_name, max_length=max_length, device=device, p_agg=p_agg)
 
@@ -278,7 +304,12 @@ def main() -> int:
             if not base_path.exists():
                 raise ValueError(f"Model path not found: {base_path}")
             tri.load(str(base_path))
-        tri.setup(records=records, exclude_stopwords=exclude_stopwords)
+        tri.setup(
+            records=records,
+            exclude_stopwords=exclude_stopwords,
+            sensitive_names=sensitive_names,
+            other_label=other_label,
+        )
         model_path.mkdir(parents=True, exist_ok=True)
         tri.train(
             epochs=finetuning_epochs,
