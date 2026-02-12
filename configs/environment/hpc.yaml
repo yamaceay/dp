@@ -3,8 +3,8 @@ reddit:
   data_in: data/reddit/reddit.jsonl
   result_in: outputs/reddit/presidio/20260210_023708_reddit_presidio.jsonl
   tri_location: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__deid__lr5e-5
-  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit_8_16_0.0001
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit_8_16_0.0001
   util_tri_pipeline: ../../../netscratch/yay/util_tri_pipelines/reddit/_checkpoints
 tab:
   data_in: data/TAB/splitted/test.json
@@ -12,7 +12,6 @@ tab:
   pii_annotator: ../../../netscratch/yay/pii_detectors/tab/tab__lr3e-5__bs8__m_partial_recall
   result_in: outputs/tab/presidio/20260205_184512_tab_presidio.jsonl
   tri_location: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__deid__lr5e-5
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__lr5e-5
   util_tri_pipeline: ../../../netscratch/yay/util_tri_pipelines/tab/_checkpoints
 db_bio:
