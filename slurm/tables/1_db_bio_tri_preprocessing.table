@@ -1,2 +1,3 @@
-db_bio_deid|python data_for_tri.py --config configs/tri_preprocessing/db_bio_deid.yaml
-db_bio_sum|python data_for_tri.py --config configs/tri_preprocessing/db_bio_sum.yaml
+db_bio_deid|python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/deid.yaml
+db_bio_sum|python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/sum.yaml
+db_bio_sum_realistic|python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/sum_realistic.yaml

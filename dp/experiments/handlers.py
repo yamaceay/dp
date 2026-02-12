@@ -36,6 +36,7 @@ from dp.experiments.utility.base import TextUtilityExperiment
 from dp.experiments.utility.reporting import build_utility_report, create_utility_outputter
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
+from dp.loaders.derive import get_getter
 
 
 ConfigDict = Dict[str, Any]
@@ -45,6 +46,7 @@ class UtilityCtx(NamedTuple):
     dataset: str
     data_in: str
     annotations: List[str]
+    group_by: Optional[str]
     spec: Any
     selection_criteria: Dict[str, Any]
     debug: bool
@@ -173,6 +175,7 @@ def _prepare_utility(params: ConfigDict) -> UtilityCtx:
     _require_fields(params, ["dataset", "data_in", "target"])
     dataset = str(params.get("dataset"))
     data_in = str(params.get("data_in"))
+    group_by = params.get("group_by")
     spec = build_utility_target(params, dataset)
     selection_criteria = params.get("selection_criteria", {}) or {}
     debug = bool(params.get("debug", False))
@@ -190,7 +193,7 @@ def _prepare_utility(params: ConfigDict) -> UtilityCtx:
             except Exception:
                 pass
     identifier = params.get("identifier")
-    return UtilityCtx(dataset, data_in, annotations, spec, selection_criteria, debug, test_size, random_state, dry_run, output_format, output_file, identifier)
+    return UtilityCtx(dataset, data_in, annotations, group_by, spec, selection_criteria, debug, test_size, random_state, dry_run, output_format, output_file, identifier)
 
 
 def _prepare_divergence(params: ConfigDict) -> DivergenceCtx:
@@ -248,6 +251,15 @@ def build_divergence_experiment(metric_type: str, metric_params: Dict[str, Any])
     raise ValueError(f"unsupported divergence metric '{metric_type}'")
 
 
+def map_record_key_to_group_label(records: List[DatasetRecord], dataset: str, group_by: str) -> Dict[str, Any]:
+    group_getter = get_getter(dataset, group_by)
+    mapping: Dict[str, Any] = {}
+    for index, record in enumerate(records):
+        key = record.uid or f"record_{index + 1}"
+        mapping[key] = group_getter(record)
+    return mapping
+
+
 def handle_utility(args: Any, config: ConfigDict) -> None:
     params = merge_params(config, args)
     normalize_output_settings(params)
@@ -256,11 +268,14 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         raise ValueError("annotations are required")
     include_cm = bool(params.get("include_confusion_matrix", False))
     records = load_records(ctx.dataset, ctx.data_in, params.get("max_records"))
+    maybe_group_mapping = None
     if ctx.debug:
         _debug_print_target(ctx.spec, params)
     records = select_records(records, ctx.selection_criteria)
     if not records:
         raise RuntimeError("no records selected by criteria")
+    if ctx.group_by:
+        maybe_group_mapping = map_record_key_to_group_label(records, ctx.dataset, ctx.group_by)
     if ctx.debug:
         _debug_print_records(ctx.spec, records)
     if ctx.dry_run:
@@ -403,6 +418,8 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         train_labels_override=train_labels_override or None,
         test_texts_override=test_texts_override or None,
         test_labels_override=test_labels_override or None,
+        maybe_group_mapping=maybe_group_mapping,
+        group_by=ctx.group_by,
     )
     if ctx.debug:
         train_sz = len(getattr(experiment, "_train_keys", []))

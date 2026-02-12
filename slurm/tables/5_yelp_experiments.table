@@ -1,3 +1,3 @@
-privacy_yelp|python run.py privacy --config configs/experiments/privacy_yelp_tri.yaml
-divergence_yelp_bertscore|python run.py divergence --config configs/experiments/divergence_yelp_bertscore.yaml
-divergence_yelp_cosine|python run.py divergence --config configs/experiments/divergence_yelp_cosine.yaml
+privacy_yelp|python run.py privacy --config configs/5_experiments/yelp/privacy/exact.yaml
+divergence_yelp_bertscore|python run.py divergence --config configs/5_experiments/yelp/divergence/bertscore.yaml
+divergence_yelp_cosine|python run.py divergence --config configs/5_experiments/yelp/divergence/cosine.yaml

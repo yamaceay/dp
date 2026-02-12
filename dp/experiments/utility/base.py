@@ -102,6 +102,9 @@ class TextUtilityExperiment(Experiment):
         self._record_info: Dict[str, Dict[str, Any]] = {}
         self._train_override_texts: Optional[Sequence[str]] = None
         self._train_override_labels: Optional[Sequence[Any]] = None
+        self._group_by: Optional[str] = None
+        self._group_keys: Dict[str, List[str]] = {}
+        self._baseline_group_metrics: Dict[str, Dict[str, float]] = {}
 
     def setup(
         self,
@@ -113,6 +116,8 @@ class TextUtilityExperiment(Experiment):
         train_labels_override: Optional[Sequence[Any]] = None,
         test_texts_override: Optional[Sequence[str]] = None,
         test_labels_override: Optional[Sequence[Any]] = None,
+        maybe_group_mapping: Optional[Dict[str, Any]] = None,
+        group_by: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         if not records:
@@ -142,6 +147,7 @@ class TextUtilityExperiment(Experiment):
         self._records = filtered_records
         self._keys = keys
         self._labels = labels
+        self._group_by = str(group_by) if group_by else None
         
         has_train_override = (
             train_texts_override is not None
@@ -216,14 +222,34 @@ class TextUtilityExperiment(Experiment):
         x_all_eval = self._vectorizer.transform(all_texts)
         self._baseline_overall_metrics = self._model.evaluate(x_all_eval, all_labels)
         self._label_by_key = {key: self._labels[idx] for idx, key in enumerate(self._keys)}
-        self._record_info = {
-            key: {
+        self._record_info = {}
+        self._group_keys = {}
+        for idx, key in enumerate(self._keys):
+            row = {
                 "index": idx + 1,
                 "split": "train" if key in self._train_key_set else "test",
                 "label": self._labels[idx],
             }
-            for idx, key in enumerate(self._keys)
-        }
+            if maybe_group_mapping is not None and key in maybe_group_mapping:
+                group_value = maybe_group_mapping[key]
+                group_key = str(group_value)
+                row["group"] = group_key
+                if self._group_by:
+                    row["group_by"] = self._group_by
+                self._group_keys.setdefault(group_key, []).append(key)
+            self._record_info[key] = row
+        self._baseline_group_metrics = {}
+        if self._group_keys:
+            key_to_index = {key: idx for idx, key in enumerate(self._keys)}
+            for group_key, group_keys in self._group_keys.items():
+                if not group_keys:
+                    continue
+                group_indices = [key_to_index[key] for key in group_keys if key in key_to_index]
+                group_texts = [self._records[i].text for i in group_indices]
+                group_labels = [self._labels[i] for i in group_indices]
+                x_group = self._vectorizer.transform(group_texts)
+                group_metrics = self._model.evaluate(x_group, group_labels)
+                self._baseline_group_metrics[group_key] = {k: float(v) for k, v in group_metrics.items()}
         super().setup(**kwargs)
 
     def run(self, evaluation_texts: Dict[str, Dict[str, str]], **kwargs: Any) -> ExperimentResult:
@@ -243,7 +269,9 @@ class TextUtilityExperiment(Experiment):
                 if self.include_confusion_matrix:
                     from sklearn.metrics import confusion_matrix
                     preds = self._model.predict(x_eval)
-                    label_order = getattr(self._model, "_label_order", None) or sorted(list(set(labels)))
+                    label_order = getattr(self._model, "_label_order", None)
+                    if not label_order:
+                        label_order = sorted(list(set(self._labels)))
                     cm_array = confusion_matrix(labels, preds, labels=label_order)
                     cm = cm_array.tolist()
                 return metrics, len(subset_keys), cm
@@ -328,6 +356,27 @@ class TextUtilityExperiment(Experiment):
                         "total": 0,
                     },
                 }
+            grouped_results: Dict[str, Dict[str, Any]] = {}
+            if self._group_keys:
+                for group_key, group_keys in sorted(self._group_keys.items(), key=lambda item: item[0]):
+                    group_metrics, group_matched, group_cm = _eval_subset(group_keys)
+                    group_drops = {}
+                    if group_metrics:
+                        baseline_group = self._baseline_group_metrics.get(group_key, {})
+                        group_drops = self._score_difference(baseline_group, group_metrics)
+                    group_payload: Dict[str, Any] = {
+                        "metrics": group_metrics,
+                        "drops": group_drops,
+                        "matched": group_matched,
+                        "total": len(group_keys),
+                        "valid": bool(group_matched),
+                    }
+                    if self._group_by:
+                        group_payload["group_by"] = self._group_by
+                    if group_cm is not None:
+                        group_payload["confusion_matrix"] = group_cm
+                    grouped_results[group_key] = group_payload
+            evaluations[name]["grouped_results"] = grouped_results
         has_test = bool(self._test_keys)
         baseline_primary = self._baseline_metrics if has_test else (self._baseline_overall_metrics or {})
         baseline_test_metrics = self._baseline_metrics if has_test else {}
@@ -345,6 +394,10 @@ class TextUtilityExperiment(Experiment):
             "evaluations": evaluations,
             "records": self._record_info,
         }
+        if self._group_by:
+            metrics_payload["group_by"] = self._group_by
+        if self._baseline_group_metrics:
+            metrics_payload["group_baseline"] = self._baseline_group_metrics
         score = float(self._baseline_metrics.get(self._model.primary_metric, 0.0))
         return ExperimentResult(score=score, metrics=metrics_payload)
 
@@ -366,6 +419,9 @@ class TextUtilityExperiment(Experiment):
         self._train_key_set = set()
         self._test_key_set = set()
         self._record_info = {}
+        self._group_by = None
+        self._group_keys = {}
+        self._baseline_group_metrics = {}
         super().cleanup()
 
     def _clone_vectorizer(self) -> SelfSupervisedFeatureExtractor:

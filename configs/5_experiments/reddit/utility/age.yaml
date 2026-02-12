@@ -7,10 +7,13 @@ target:
   key: feature_label
   type: ordinal
   enum:
-    - "sex: male"
-    - "sex: female"
+    - "age: 18-29"
+    - "age: 30-44"
+    - "age: 45-59"
+    - "age: 60+"
 selection_criteria:
-  feature: sex
+  feature: age
+group_by: hardness
 split:
   - train: 0.0
     val: 1.0
@@ -22,20 +25,21 @@ include_confusion_matrix: true
 head:
   type: bert_ordinal
   params:
-    epochs: 5
+    epochs: 40
+    batch_size: 4
     model_name: distilbert-base-uncased
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5/finetuning/checkpoint-462
-    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/_checkpoints
     primary_metric: macro_mae
+    early_stop_patience: 12
     optimizer_type: adamw
     scheduler_type: linear
-    weight_decay: 0.01
-    warmup_ratio: 0.1
-    macro_loss_weight: 0.5
-    encoder_lr: 5e-6
-    head_lr: 1e-4
-    warmup_steps: 10
+    weight_decay: 0.0
+    warmup_ratio: null
+    macro_loss_weight: 0.0
+    use_pos_weight: true
+    encoder_lr: 2e-6
+    head_lr: 2e-4
+    warmup_steps: 0
     gradient_clip: 1.0
 output:
   format: jsonl
-  file: logs/reddit_sex_exp.jsonl
+  file: logs/reddit_age_exp.jsonl

@@ -147,6 +147,7 @@ class TextPrivacyExperiment(Experiment):
     ) -> Dict[str, int]:
         if not self.detector:
             raise RuntimeError("detector is not initialized")
+        candidate_names = self._candidate_names(records)
         ranks: Dict[str, int] = {}
         iterator = zip(keys, records)
         if progress:
@@ -160,11 +161,26 @@ class TextPrivacyExperiment(Experiment):
             scores = predictions.get(record.uid)
             if not scores:
                 continue
+            if candidate_names:
+                scores = {
+                    candidate: score
+                    for candidate, score in scores.items()
+                    if candidate in candidate_names
+                }
+                if not scores:
+                    continue
             ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
             rank = self._rank_for_name(name, ordered)
             if rank is not None:
                 ranks[key] = rank
         return ranks
+
+    def _candidate_names(self, records: List[DatasetRecord]) -> set[str]:
+        names: set[str] = set()
+        for record in records:
+            if record.name:
+                names.add(record.name)
+        return names
 
     def _rank_for_name(self, name: str, ordered: List[tuple[str, float]]) -> Optional[int]:
         for position, (candidate, _) in enumerate(ordered, start=1):

@@ -1,8 +1,8 @@
-utility_reddit_age|python run.py utility --config configs/experiments/utility_reddit_age.yaml
-utility_reddit_birth_city_country|python run.py utility --config configs/experiments/utility_reddit_birth_city_country.yaml
-utility_reddit_city_country|python run.py utility --config configs/experiments/utility_reddit_city_country.yaml
-utility_reddit_education|python run.py utility --config configs/experiments/utility_reddit_education.yaml
-utility_reddit_income_level|python run.py utility --config configs/experiments/utility_reddit_income_level.yaml
-utility_reddit_occupation|python run.py utility --config configs/experiments/utility_reddit_occupation.yaml
-utility_reddit_relationship_status|python run.py utility --config configs/experiments/utility_reddit_relationship_status.yaml
-utility_reddit_sex|python run.py utility --config configs/experiments/utility_reddit_sex.yaml
+utility_reddit_age|python run.py utility --config configs/5_experiments/utility_reddit_age.yaml
+utility_reddit_birth_city_country|python run.py utility --config configs/5_experiments/utility_reddit_birth_city_country.yaml
+utility_reddit_city_country|python run.py utility --config configs/5_experiments/utility_reddit_city_country.yaml
+utility_reddit_education|python run.py utility --config configs/5_experiments/utility_reddit_education.yaml
+utility_reddit_income_level|python run.py utility --config configs/5_experiments/utility_reddit_income_level.yaml
+utility_reddit_occupation|python run.py utility --config configs/5_experiments/utility_reddit_occupation.yaml
+utility_reddit_relationship_status|python run.py utility --config configs/5_experiments/utility_reddit_relationship_status.yaml
+utility_reddit_sex|python run.py utility --config configs/5_experiments/utility_reddit_sex.yaml

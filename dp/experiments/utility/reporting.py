@@ -25,6 +25,7 @@ class UtilityEvaluationReport:
     val_results: Dict[str, Any]
     test_results: Dict[str, Any]
     overall_results: Dict[str, Any]
+    grouped_results: Dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,7 @@ class JsonLinesUtilityReportOutputter(UtilityReportOutputter):
                     "val_results": evaluation.val_results,
                     "test_results": evaluation.test_results,
                     "overall_results": evaluation.overall_results,
+                    "grouped_results": evaluation.grouped_results,
                 }
             )
         serialized = "\n".join(json.dumps(record, ensure_ascii=False) for record in records)
@@ -109,6 +111,7 @@ def build_utility_report(result: ExperimentResult, sources: Dict[str, Path]) -> 
         val_results = payload.get("val_results", {}) or {}
         test_results = payload.get("test_results", {}) or {}
         overall_results = payload.get("overall_results", {}) or {}
+        grouped_results = payload.get("grouped_results", {}) or {}
         evaluations.append(
             UtilityEvaluationReport(
                 name=name,
@@ -125,6 +128,7 @@ def build_utility_report(result: ExperimentResult, sources: Dict[str, Path]) -> 
                 val_results=val_results,
                 test_results=test_results,
                 overall_results=overall_results,
+                grouped_results=grouped_results,
             )
         )
     return UtilityExperimentReport(

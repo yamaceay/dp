@@ -139,7 +139,7 @@ DP models expect `EpsilonParam` buckets, so make sure the runtime bundle contain
 
 ## Evaluation pipelines (`run.py`)
 
-`run.py` orchestrates three experiment families defined under `configs/experiments`:
+`run.py` orchestrates three experiment families defined under `configs/5_experiments`:
 
 - **Privacy**: builds adversarial datasets from anonymized JSONL files and evaluates TRI success rates (`privacy_*.yaml`).
 - **Divergence**: computes semantic similarity metrics (BERTScore, cosine TF-IDF) between original and anonymized texts.

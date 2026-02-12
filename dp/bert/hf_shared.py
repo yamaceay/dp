@@ -142,7 +142,7 @@ class BertHFPlumbing:
             learning_rate=head_lr,
             weight_decay=spec.weight_decay_effective,
             logging_steps=10,
-            evaluation_strategy="epoch",
+            eval_strategy="epoch",
             save_strategy="epoch",
             load_best_model_at_end=True,
             metric_for_best_model=spec.metric_name,

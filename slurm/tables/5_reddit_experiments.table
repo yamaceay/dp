@@ -1,11 +1,3 @@
-privacy_reddit|python run.py privacy --config configs/experiments/privacy_reddit_tri.yaml
-divergence_reddit_bertscore|python run.py divergence --config configs/experiments/divergence_reddit_bertscore.yaml
-divergence_reddit_cosine|python run.py divergence --config configs/experiments/divergence_reddit_cosine.yaml
-utility_reddit_age|python run.py utility --config configs/experiments/utility_reddit_age.yaml
-utility_reddit_birth_city_country|python run.py utility --config configs/experiments/utility_reddit_birth_city_country.yaml
-utility_reddit_city_country|python run.py utility --config configs/experiments/utility_reddit_city_country.yaml
-utility_reddit_education|python run.py utility --config configs/experiments/utility_reddit_education.yaml
-utility_reddit_income_level|python run.py utility --config configs/experiments/utility_reddit_income_level.yaml
-utility_reddit_occupation|python run.py utility --config configs/experiments/utility_reddit_occupation.yaml
-utility_reddit_relationship_status|python run.py utility --config configs/experiments/utility_reddit_relationship_status.yaml
-utility_reddit_sex|python run.py utility --config configs/experiments/utility_reddit_sex.yaml
+privacy_reddit|python run.py privacy --config configs/5_experiments/reddit/privacy/exact.yaml
+divergence_reddit_bertscore|python run.py divergence --config configs/5_experiments/reddit/divergence/bertscore.yaml
+divergence_reddit_cosine|python run.py divergence --config configs/5_experiments/reddit/divergence/cosine.yaml

@@ -37,6 +37,7 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         weight_decay: Optional[float] = None,
         warmup_ratio: Optional[float] = None,
         macro_loss_weight: float = 0.0,
+        use_pos_weight: bool = True,
         use_pretraining: bool = False,
         pretraining_epochs: int = 1,
         pretraining_batch_size: Optional[int] = None,
@@ -74,6 +75,7 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.weight_decay = float(weight_decay) if weight_decay is not None else None
         self.warmup_ratio = float(warmup_ratio) if warmup_ratio is not None else None
         self.macro_loss_weight = float(macro_loss_weight)
+        self.use_pos_weight = bool(use_pos_weight)
         self.use_pretraining = bool(use_pretraining)
         self.pretraining_epochs = int(pretraining_epochs)
         self.pretraining_batch_size = int(pretraining_batch_size) if pretraining_batch_size is not None else self.batch_size
@@ -84,6 +86,7 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         self._label_to_index: Optional[Dict[str, int]] = None
         self._index_to_label: Optional[Dict[int, str]] = None
         self._num_classes: int = 0
+        self._loss_pos_weight: Optional[np.ndarray] = None
 
     def _create_model(self, num_classes: int):
         checkpoint_source = self._active_checkpoint or self.init_checkpoint
@@ -92,6 +95,7 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         num_thresholds = num_classes - 1
         hidden_size = base_model.config.hidden_size
         macro_loss_weight = self.macro_loss_weight
+        loss_pos_weight = self._loss_pos_weight
 
         class OrdinalModel(torch.nn.Module):
             def __init__(self, base, hidden_size, num_thresholds):
@@ -114,9 +118,13 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
 
                 loss = None
                 if labels is not None:
+                    pos_weight = None
+                    if loss_pos_weight is not None:
+                        pos_weight = torch.tensor(loss_pos_weight, dtype=logits.dtype, device=logits.device)
                     base_loss = torch.nn.functional.binary_cross_entropy_with_logits(
                         logits,
                         labels,
+                        pos_weight=pos_weight,
                         reduction="none",
                     )
                     base_loss_mean = base_loss.mean()
@@ -182,6 +190,13 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
 
         train_targets, val_targets, num_classes, bias_init = self._prepare_targets(train_labels, val_labels, union_labels)
         self._num_classes = num_classes
+        self._loss_pos_weight = None
+        if self.use_pos_weight and train_targets.size > 0:
+            positives = train_targets.sum(axis=0)
+            negatives = train_targets.shape[0] - positives
+            eps = 1e-8
+            self._loss_pos_weight = (negatives / (positives + eps)).astype(np.float32)
+            print(f"CORAL pos_weight: {self._loss_pos_weight.tolist()}")
 
         self._maybe_pretrain(
             use_pretraining=self.use_pretraining,
@@ -328,4 +343,5 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         pass
 
     def cleanup(self) -> None:
+        self._loss_pos_weight = None
         self.cleanup_plumbing(model_attr_names=["_model"])

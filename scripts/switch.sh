@@ -20,7 +20,7 @@ fi
 
 echo "Using models file: $MODELS_FILE"
 
-CONFIG_DIRS=("configs/model" "configs/lrec" "configs/experiments" "configs/tri_training" "configs/risk")
+CONFIG_DIRS=("configs/model" "configs/lrec" "configs/5_experiments" "configs/2_tri_training" "configs/3_tri_risk_precomputation")
 
 yaml_top_value() {
     local key="$1"

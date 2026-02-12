@@ -1,2 +1,2 @@
-yelp_deid|python data_for_tri.py --config configs/tri_preprocessing/yelp_deid.yaml
-yelp_sum|python data_for_tri.py --config configs/tri_preprocessing/yelp_sum.yaml
+yelp_deid|python data_for_tri.py --config configs/1_tri_preprocessing/yelp/deid.yaml
+yelp_sum|python data_for_tri.py --config configs/1_tri_preprocessing/yelp/sum.yaml

@@ -1,1 +1,1 @@
-reddit_shap|python risk.py --config configs/risk/reddit/shap.yaml
+reddit_shap|python risk.py --config configs/3_tri_risk_precomputation/reddit/shap.yaml
