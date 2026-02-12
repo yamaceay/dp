@@ -252,7 +252,7 @@ class PIIDetector:
             weight_decay=weight_decay,
             logging_dir=f"{output_dir}/logs",
             logging_steps=logging_steps,
-            eval_strategy="steps" if eval_dataset else "no",
+            evaluation_strategy="steps" if eval_dataset else "no",
             eval_steps=eval_steps if eval_dataset else None,
             save_strategy="steps",
             save_steps=save_steps,

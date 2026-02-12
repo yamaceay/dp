@@ -9,7 +9,7 @@ from dp.loaders.results import build_dataset_from_results, load_result_records
 from dp.tri.base import TRIDetector
 from runtime.config_loader import _read_yaml
 
-def normalize_config(config: Dict) -> argparse.Namespace:
+def normalize_config(config: Dict, args: argparse.Namespace) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default=None, help='Path to config file')
     parser.add_argument('--data', type=str, default=None, help='Dataset name')
@@ -27,20 +27,25 @@ def normalize_config(config: Dict) -> argparse.Namespace:
     parser.add_argument('--abs', action='store_true', help='Use absolute scores')
     parser.add_argument('--n_first_predictions', type=int, default=0, help='Number of top predictions to print per record')
 
-    args = parser.parse_args([])
+    new_args = parser.parse_args([])
     for key, value in config.items():
-        if hasattr(args, key):
-            setattr(args, key, value)
-    return args
+        if hasattr(new_args, key):
+            setattr(new_args, key, value)
+    for key, value in vars(args).items():
+        if value is not None:
+            setattr(new_args, key, value)
+    return new_args
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test RiskAnonymizer")
     parser.add_argument('--config', type=str, required=True, help='Path to config file')
+    parser.add_argument('--pipeline_in', type=str, default=None, help='Path to anonymization pipeline JSON file')
     args = parser.parse_args()
-    args = normalize_config(_read_yaml(args.config))
+    args = normalize_config(_read_yaml(args.config), args)
 
     if not args.data or not args.data_in:
         raise ValueError("data and data_in are required")
+
     original_records = list(get_adapter(args.data, 
                                         data_in=args.data_in,
                                         max_records=args.max_records,
