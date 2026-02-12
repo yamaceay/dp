@@ -1,11 +1,12 @@
 import argparse
 import os
 import json
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, Optional, Sequence
 
 from dp.tri.loaders import ATTACKER_ADAPTER_REGISTRY, get_attacker_adapter
 from dp.loaders.base import DatasetAdapter, DatasetRecord
 from dp.loaders.results import build_dataset_from_results
+from dp.tri.sensitive_selectors import get_sensitive_selector
 from runtime.config_loader import _read_yaml
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
@@ -51,6 +52,24 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
     save_to_jsonl = params.get('save_to_jsonl')
     load_from_jsonl = params.get('load_from_jsonl')
     deidentify = bool(params.get('deidentify') or False)
+    sensitive_selector = params.get('sensitive_selector')
+    sensitive_selector_kwargs = params.get('sensitive_selector_kwargs') or {}
+    n_train_samples_for_selected = params.get('n_train_samples_for_selected')
+    n_train_samples_for_other = params.get('n_train_samples_for_other')
+    n_eval_samples_for_selected = params.get('n_eval_samples_for_selected')
+    n_eval_samples_for_other = params.get('n_eval_samples_for_other')
+    if sensitive_selector is not None and not isinstance(sensitive_selector, str):
+        raise ValueError('sensitive_selector must be a string when provided')
+    if not isinstance(sensitive_selector_kwargs, dict):
+        raise ValueError('sensitive_selector_kwargs must be a mapping')
+    for key, value in {
+        'n_train_samples_for_selected': n_train_samples_for_selected,
+        'n_train_samples_for_other': n_train_samples_for_other,
+        'n_eval_samples_for_selected': n_eval_samples_for_selected,
+        'n_eval_samples_for_other': n_eval_samples_for_other,
+    }.items():
+        if value is not None and (not isinstance(value, int) or value <= 0):
+            raise ValueError(f'{key} must be a positive integer when provided')
     return {
         'data': data,
         'data_in': data_in,
@@ -63,7 +82,42 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
         'save_to_jsonl': save_to_jsonl,
         'load_from_jsonl': load_from_jsonl,
         'deidentify': deidentify,
+        'sensitive_selector': sensitive_selector,
+        'sensitive_selector_kwargs': sensitive_selector_kwargs,
+        'n_train_samples_for_selected': n_train_samples_for_selected,
+        'n_train_samples_for_other': n_train_samples_for_other,
+        'n_eval_samples_for_selected': n_eval_samples_for_selected,
+        'n_eval_samples_for_other': n_eval_samples_for_other,
     }
+
+
+def _resolve_sensitive_names(
+    dataset: str,
+    records: Sequence[DatasetRecord],
+    selector_name: Optional[str],
+    selector_kwargs: Dict[str, Any],
+) -> Optional[set[str]]:
+    if selector_name is None:
+        return None
+    resolved_selector_name = str(selector_name).strip().lower()
+    if resolved_selector_name == "auto":
+        resolved_selector_name = dataset
+    selector = get_sensitive_selector(resolved_selector_name)
+    total_individuals = sorted({str(record.name).strip() for record in records if str(record.name).strip()})
+    selected_names = {str(name).strip() for name in selector.select_individuals(total_individuals, **selector_kwargs) if str(name).strip()}
+    if not selected_names:
+        raise ValueError("Sensitive selector returned an empty set")
+    print(
+        f"sensitive selector='{resolved_selector_name}' selected {len(selected_names)} "
+        f"of {len(total_individuals)} individuals"
+    )
+    return selected_names
+
+
+def _cap_texts(values: list[str], cap: Optional[int]) -> list[str]:
+    if cap is None:
+        return list(values)
+    return list(values[:cap])
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate/load attacker record extensions (BK + summary)")
@@ -102,6 +156,12 @@ def main() -> None:
     else:
         records = original_records
     adapter.adapter = InMemoryDatasetAdapter(records)
+    selected_names = _resolve_sensitive_names(
+        dataset=dataset_name,
+        records=records,
+        selector_name=resolved['sensitive_selector'],
+        selector_kwargs=resolved['sensitive_selector_kwargs'],
+    )
 
     if resolved['load_from_jsonl'] and os.path.exists(resolved['load_from_jsonl']):
         print(f"Loading record extensions from {resolved['load_from_jsonl']}...")
@@ -116,14 +176,22 @@ def main() -> None:
     unique_names = set()
 
     for record in adapter.iter_records(progress=True):
+        train_texts = list(record.train_texts or [])
+        eval_texts = list(record.eval_texts or [])
+        if selected_names is not None:
+            is_selected = str(record.name).strip() in selected_names
+            train_cap = resolved['n_train_samples_for_selected'] if is_selected else resolved['n_train_samples_for_other']
+            eval_cap = resolved['n_eval_samples_for_selected'] if is_selected else resolved['n_eval_samples_for_other']
+            train_texts = _cap_texts(train_texts, train_cap)
+            eval_texts = _cap_texts(eval_texts, eval_cap)
         if resolved['full_record']:
             print(record)
         if resolved['save_to_jsonl']:
             with open(resolved['save_to_jsonl'], 'a', encoding='utf-8') as f:
                 json_record = {
                     'name': record.name,
-                    'train_texts': list(record.train_texts or []),
-                    'eval_texts': list(record.eval_texts or []),
+                    'train_texts': train_texts,
+                    'eval_texts': eval_texts,
                 }
                 f.write(json.dumps(json_record) + '\n')
         unique_names.add(record.name)

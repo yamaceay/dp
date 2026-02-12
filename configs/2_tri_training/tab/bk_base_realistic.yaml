@@ -20,5 +20,6 @@ training:
   sensitive_selector: auto
   sensitive_selector_kwargs:
     subset_file: data/TAB/splitted/test.json
+  selected_label: __SELECTED__
   other_label: __OTHER__
   p_agg: avg

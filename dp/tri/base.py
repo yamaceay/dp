@@ -48,12 +48,14 @@ class TRIDetector:
         records: List[AttackerDatasetRecord],
         exclude_stopwords: bool = False,
         sensitive_names: Optional[Sequence[str]] = None,
+        selected_label: Optional[str] = None,
         other_label: str = "__OTHER__",
     ) -> None:
         self._set_dataset(
             records,
             exclude_stopwords=exclude_stopwords,
             sensitive_names=sensitive_names,
+            selected_label=selected_label,
             other_label=other_label,
         )
         self.build_label_mappings()
@@ -264,6 +266,7 @@ class TRIDetector:
         records: List[AttackerDatasetRecord],
         exclude_stopwords: bool,
         sensitive_names: Optional[Sequence[str]],
+        selected_label: Optional[str],
         other_label: str,
     ) -> None:
         if not records:
@@ -271,6 +274,11 @@ class TRIDetector:
         if not isinstance(other_label, str) or not other_label.strip():
             raise ValueError("other_label must be a non-empty string")
         resolved_other_label = other_label.strip()
+        resolved_selected_label = None
+        if selected_label is not None:
+            if not isinstance(selected_label, str) or not selected_label.strip():
+                raise ValueError("selected_label must be a non-empty string when provided")
+            resolved_selected_label = selected_label.strip()
         total_names = {str(record.name).strip() for record in records if str(record.name).strip()}
         if sensitive_names is not None:
             selected_names = {str(name).strip() for name in sensitive_names if str(name).strip()}
@@ -279,8 +287,18 @@ class TRIDetector:
                 raise ValueError("No sensitive individuals overlap with loaded training records")
             if resolved_other_label in sensitive_set:
                 raise ValueError(f"other_label collides with selected sensitive name: {resolved_other_label}")
+            if resolved_selected_label is not None:
+                if resolved_selected_label == resolved_other_label:
+                    raise ValueError("selected_label and other_label must be different")
+                if resolved_selected_label in total_names:
+                    raise ValueError(f"selected_label collides with source individual name: {resolved_selected_label}")
             self.other_label = resolved_other_label
-            self.other_count = len(total_names.difference(sensitive_set))
+            other_individual_count = len(total_names.difference(sensitive_set))
+            if resolved_selected_label is not None:
+                selected_individual_count = len(sensitive_set)
+                self.other_count = max(1, int(round(other_individual_count / max(1, selected_individual_count))))
+            else:
+                self.other_count = other_individual_count
         else:
             sensitive_set = set()
             self.other_label = None
@@ -290,8 +308,12 @@ class TRIDetector:
         for record in records:
             name_raw = str(record.name).strip()
             mapped_name = name_raw
-            if sensitive_names is not None and name_raw not in sensitive_set:
-                mapped_name = resolved_other_label
+            if sensitive_names is not None:
+                if name_raw in sensitive_set:
+                    if resolved_selected_label is not None:
+                        mapped_name = resolved_selected_label
+                else:
+                    mapped_name = resolved_other_label
             train_texts = list(record.train_texts)
             eval_texts = list(record.eval_texts)
             if exclude_stopwords:

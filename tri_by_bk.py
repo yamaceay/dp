@@ -168,6 +168,7 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
             "exclude_stopwords": bool(training.get("exclude_stopwords", False)),
             "sensitive_selector": _optional_str(training, "sensitive_selector"),
             "sensitive_selector_kwargs": _get_mapping(training, "sensitive_selector_kwargs"),
+            "selected_label": _optional_str(training, "selected_label"),
             "other_label": str(training.get("other_label", "__OTHER__")),
             },
     }
@@ -238,6 +239,9 @@ def main() -> int:
         sensitive_selector_kwargs = training.get("sensitive_selector_kwargs")
         if not isinstance(sensitive_selector_kwargs, dict):
             raise SystemExit("training.sensitive_selector_kwargs must be a mapping")
+        selected_label = training.get("selected_label")
+        if selected_label is not None and not isinstance(selected_label, str):
+            raise SystemExit("training.selected_label must be a string when provided")
         other_label = str(training.get("other_label", "__OTHER__"))
         p_agg = training.get("p_agg", "avg")
 
@@ -268,6 +272,7 @@ def main() -> int:
         exclude_stopwords = bool(args.exclude_stopwords)
         sensitive_selector = None
         sensitive_selector_kwargs = {}
+        selected_label = None
         other_label = "__OTHER__"
         p_agg = args.p_agg
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -308,6 +313,7 @@ def main() -> int:
             records=records,
             exclude_stopwords=exclude_stopwords,
             sensitive_names=sensitive_names,
+            selected_label=selected_label,
             other_label=other_label,
         )
         model_path.mkdir(parents=True, exist_ok=True)
@@ -330,7 +336,13 @@ def main() -> int:
     if args.model_path is None:
         raise SystemExit("--model_path is required")
     tri.load(str(Path(args.model_path).expanduser().resolve()))
-    tri.setup(records=records, exclude_stopwords=exclude_stopwords)
+    tri.setup(
+        records=records,
+        exclude_stopwords=exclude_stopwords,
+        sensitive_names=sensitive_names,
+        selected_label=selected_label,
+        other_label=other_label,
+    )
 
     if args.mode == "evaluate":
         results = tri.evaluate(tri.eval_records)

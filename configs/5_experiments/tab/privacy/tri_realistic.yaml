@@ -3,10 +3,10 @@ data_in: data/TAB/splitted/test.json
 annotations_in:
   - outputs/tab
 tri:
-  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__realistic__lr5e-5
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints_realistic/tab__realistic__binary__lr5e-5
   max_length: 512
 mask_token: "[MASK]"
 output:
   format: jsonl
-  file: logs/tab_priv_exp_realistic.jsonl
+  file: logs/tab_priv_exp_realistic_binary.jsonl
 progress: false

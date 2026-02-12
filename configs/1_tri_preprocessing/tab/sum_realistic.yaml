@@ -1,3 +1,10 @@
 data: tab
 data_in: data/TAB/tab.json
 save_to_jsonl: data/TAB/test_bk_sum_realistic.jsonl
+sensitive_selector: auto
+sensitive_selector_kwargs:
+  subset_file: data/TAB/splitted/test.json
+n_train_samples_for_selected: null
+n_train_samples_for_other: 1
+n_eval_samples_for_selected: null
+n_eval_samples_for_other: 1

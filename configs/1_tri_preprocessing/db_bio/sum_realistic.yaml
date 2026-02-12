@@ -1,3 +1,10 @@
 data: db_bio
 data_in: data/db_bio
 save_to_jsonl: data/db_bio/db_bio_bk_sum_realistic.jsonl
+sensitive_selector: auto
+sensitive_selector_kwargs:
+  subset_file: data/db_bio/test/data-00000-of-00001.arrow
+n_train_samples_for_selected: null
+n_train_samples_for_other: 1
+n_eval_samples_for_selected: null
+n_eval_samples_for_other: 1
