@@ -1,3 +1,2 @@
 tri_tab_lr5e-5 | python tri_by_bk.py --mode train --training-in configs/2_tri_training/tab/bk_base.yaml --run-name tab__lr5e-5 --set training.learning_rate=5e-5
 tri_tab_deid_lr5e-5 | python tri_by_bk.py --mode train --training-in configs/2_tri_training/tab/bk_deid.yaml --run-name tab__deid__lr5e-5 --set training.learning_rate=5e-5
-tri_tab_realistic_binary_lr5e-5 | python tri_by_bk.py --mode train --training-in configs/2_tri_training/tab/bk_base_realistic.yaml --run-name tab__realistic__binary__lr5e-5 --set training.learning_rate=5e-5
