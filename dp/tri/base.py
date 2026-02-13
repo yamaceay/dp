@@ -58,10 +58,16 @@ class TRIDetector:
         use_pretraining: bool = False,
         pretraining_epochs: int = 3,
         early_stop_threshold: Optional[float] = None,
+        early_stop_patience: Optional[int] = None,
         loss_type: str = "cross_entropy",
         focal_gamma: float = 2.0,
         focal_alpha: Optional[float] = None,
         focal_ignore_pt: Optional[float] = None,
+        weight_decay: float = 0.01,
+        scheduler_type: str = "linear",
+        optimizer_type: str = "adamw",
+        warmup_steps: int = 10,
+        warmup_ratio: Optional[float] = None,
         init_checkpoint: Optional[str] = None,
     ) -> None:
         if not self.train_records:
@@ -78,12 +84,20 @@ class TRIDetector:
             raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
         if early_stop_threshold is not None and (early_stop_threshold <= 0.0 or early_stop_threshold > 1.0):
             raise ValueError(f"early_stop_threshold must be in (0, 1], got {early_stop_threshold}")
+        if early_stop_patience is not None and early_stop_patience <= 0:
+            raise ValueError(f"early_stop_patience must be positive, got {early_stop_patience}")
         if loss_type not in {"cross_entropy", "focal"}:
             raise ValueError(f"Unknown loss_type: {loss_type}")
         if focal_gamma < 0:
             raise ValueError(f"focal_gamma must be >= 0, got {focal_gamma}")
         if focal_ignore_pt is not None and (focal_ignore_pt <= 0.0 or focal_ignore_pt >= 1.0):
             raise ValueError(f"focal_ignore_pt must be in (0, 1), got {focal_ignore_pt}")
+        if weight_decay < 0:
+            raise ValueError(f"weight_decay must be >= 0, got {weight_decay}")
+        if warmup_steps < 0:
+            raise ValueError(f"warmup_steps must be >= 0, got {warmup_steps}")
+        if warmup_ratio is not None and (warmup_ratio < 0.0 or warmup_ratio >= 1.0):
+            raise ValueError(f"warmup_ratio must be in [0, 1), got {warmup_ratio}")
 
         resolved_output_dir = output_dir
         if resolved_output_dir is None:
@@ -99,6 +113,7 @@ class TRIDetector:
             encoder_lr=learning_rate,
             device=str(self.device),
             early_stop_threshold=early_stop_threshold,
+            early_stop_patience=(early_stop_patience if early_stop_patience is not None else 2),
             loss_type=loss_type,
             focal_gamma=focal_gamma,
             focal_alpha=focal_alpha,
@@ -107,6 +122,11 @@ class TRIDetector:
             pretraining_epochs=pretraining_epochs,
             pretraining_batch_size=batch_size,
             pretraining_learning_rate=learning_rate,
+            optimizer_type=optimizer_type,
+            scheduler_type=scheduler_type,
+            weight_decay=weight_decay,
+            warmup_steps=warmup_steps,
+            warmup_ratio=warmup_ratio,
             checkpoint_dir=f"{resolved_output_dir}/finetuning",
             pretraining_output_dir=f"{resolved_output_dir}/pretraining",
             init_checkpoint=init_checkpoint,

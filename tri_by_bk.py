@@ -110,6 +110,15 @@ def _optional_float(payload: dict[str, Any], key: str) -> Optional[float]:
     return float(value)
 
 
+def _optional_int_or_none(payload: dict[str, Any], key: str) -> Optional[int]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, int):
+        raise ValueError(f"Invalid '{key}'")
+    return int(value)
+
+
 def _get_mapping(payload: dict[str, Any], key: str) -> dict[str, Any]:
     value = payload.get(key)
     if value is None:
@@ -142,6 +151,15 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
     model_name = _require_str(payload, "model_name")
     output_root = _resolve_path(project_root, _require_str(payload, "output_root"))
     training = _get_mapping(payload, "training")
+    learning_rate = training.get("learning_rate", training.get("lr", 5e-5))
+    if not isinstance(learning_rate, (int, float)):
+        raise ValueError("Invalid 'training.learning_rate'")
+    scheduler_type = training.get("scheduler_type", "linear")
+    if not isinstance(scheduler_type, str):
+        raise ValueError("Invalid 'training.scheduler_type'")
+    optimizer_type = training.get("optimizer_type", "adamw")
+    if not isinstance(optimizer_type, str):
+        raise ValueError("Invalid 'training.optimizer_type'")
 
     cfg: dict[str, Any] = {
         "dataset": dataset,
@@ -156,15 +174,21 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
         "training": {
             "finetuning_epochs": int(training.get("finetuning_epochs", 15)),
             "batch_size": int(training.get("batch_size", 16)),
-            "learning_rate": float(training.get("learning_rate", 5e-5)),
+            "learning_rate": float(learning_rate),
             "use_pretraining": bool(training.get("use_pretraining", False)),
             "pretraining_epochs": int(training.get("pretraining_epochs", 3)),
             "early_stop_threshold": _optional_float(training, "early_stop_threshold"),
+            "early_stop_patience": _optional_int_or_none(training, "early_stop_patience"),
             "loss_type": str(training.get("loss_type", "cross_entropy")),
             "focal_gamma": float(training.get("focal_gamma", 2.0)),
             "focal_alpha": _optional_float(training, "focal_alpha"),
             "focal_ignore_pt": _optional_float(training, "focal_ignore_pt"),
             "exclude_stopwords": bool(training.get("exclude_stopwords", False)),
+            "weight_decay": float(training.get("weight_decay", 0.01)),
+            "scheduler_type": scheduler_type,
+            "optimizer_type": optimizer_type,
+            "warmup_steps": int(training.get("warmup_steps", 10)),
+            "warmup_ratio": _optional_float(training, "warmup_ratio"),
             },
     }
     return cfg
@@ -225,11 +249,17 @@ def main() -> int:
         use_pretraining = bool(training.get("use_pretraining", False))
         pretraining_epochs = int(training.get("pretraining_epochs", 3))
         early_stop_threshold = training.get("early_stop_threshold")
+        early_stop_patience = training.get("early_stop_patience")
         loss_type = str(training.get("loss_type", "cross_entropy"))
         focal_gamma = float(training.get("focal_gamma", 2.0))
         focal_alpha = training.get("focal_alpha")
         focal_ignore_pt = training.get("focal_ignore_pt")
         exclude_stopwords = bool(training.get("exclude_stopwords", False))
+        weight_decay = float(training.get("weight_decay", 0.01))
+        scheduler_type = str(training.get("scheduler_type", "linear"))
+        optimizer_type = str(training.get("optimizer_type", "adamw"))
+        warmup_steps = int(training.get("warmup_steps", 10))
+        warmup_ratio = training.get("warmup_ratio")
         p_agg = training.get("p_agg", "avg")
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -252,11 +282,17 @@ def main() -> int:
         use_pretraining = bool(args.use_pretraining)
         pretraining_epochs = args.pretraining_epochs
         early_stop_threshold = args.early_stop_threshold
+        early_stop_patience = None
         loss_type = args.loss_type
         focal_gamma = args.focal_gamma
         focal_alpha = args.focal_alpha
         focal_ignore_pt = args.focal_ignore_pt
         exclude_stopwords = bool(args.exclude_stopwords)
+        weight_decay = 0.01
+        scheduler_type = "linear"
+        optimizer_type = "adamw"
+        warmup_steps = 10
+        warmup_ratio = None
         p_agg = args.p_agg
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
@@ -291,10 +327,16 @@ def main() -> int:
             use_pretraining=use_pretraining,
             pretraining_epochs=pretraining_epochs,
             early_stop_threshold=early_stop_threshold,
+            early_stop_patience=early_stop_patience,
             loss_type=loss_type,
             focal_gamma=focal_gamma,
             focal_alpha=focal_alpha,
             focal_ignore_pt=focal_ignore_pt,
+            weight_decay=weight_decay,
+            scheduler_type=scheduler_type,
+            optimizer_type=optimizer_type,
+            warmup_steps=warmup_steps,
+            warmup_ratio=warmup_ratio,
         )
         print(str(model_path))
         return 0

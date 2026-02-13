@@ -32,10 +32,16 @@ class EarlyStoppingCallback(TrainerCallback):
         current = metrics.get(f"eval_{self.metric_name}")
         if current is None:
             return
-        if self.threshold is not None:
-            if (self.minimize and current <= self.threshold) or (not self.minimize and current >= self.threshold):
-                control.should_training_stop = True
-                return
+        if self.threshold is None:
+            improved = (current < self.best_metric) if self.minimize else (current > self.best_metric)
+            if improved:
+                self.best_metric = current
+                self.wait = 0
+                control.should_save = True
+            return
+        if (self.minimize and current <= self.threshold) or (not self.minimize and current >= self.threshold):
+            control.should_training_stop = True
+            return
         improved = (current < self.best_metric) if self.minimize else (current > self.best_metric)
         if improved:
             self.best_metric = current
