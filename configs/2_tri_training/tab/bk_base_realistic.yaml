@@ -13,7 +13,7 @@ training:
   pretraining_epochs: 1
   per_step: null
   early_stop_threshold: null
-  learning_rate: 8e-5
+  lr: 0.00008
   scheduler_type: cosine
   optimizer_type: adamw
   warmup_ratio: 0.03

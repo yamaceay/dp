@@ -151,9 +151,9 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
     model_name = _require_str(payload, "model_name")
     output_root = _resolve_path(project_root, _require_str(payload, "output_root"))
     training = _get_mapping(payload, "training")
-    learning_rate = training.get("learning_rate", training.get("lr", 5e-5))
-    if not isinstance(learning_rate, (int, float)):
-        raise ValueError("Invalid 'training.learning_rate'")
+    lr = training.get("lr", 5e-5)
+    if not isinstance(lr, (int, float)):
+        raise ValueError("Invalid 'training.lr'")
     scheduler_type = training.get("scheduler_type", "linear")
     if not isinstance(scheduler_type, str):
         raise ValueError("Invalid 'training.scheduler_type'")
@@ -174,7 +174,7 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
         "training": {
             "finetuning_epochs": int(training.get("finetuning_epochs", 15)),
             "batch_size": int(training.get("batch_size", 16)),
-            "learning_rate": float(learning_rate),
+            "lr": float(lr),
             "use_pretraining": bool(training.get("use_pretraining", False)),
             "pretraining_epochs": int(training.get("pretraining_epochs", 3)),
             "early_stop_threshold": _optional_float(training, "early_stop_threshold"),
@@ -245,7 +245,7 @@ def main() -> int:
             raise SystemExit("Invalid training config")
         finetuning_epochs = int(training.get("finetuning_epochs", 15))
         batch_size = int(training.get("batch_size", 16))
-        learning_rate = float(training.get("learning_rate", 5e-5))
+        learning_rate = float(training.get("lr", 5e-5))
         use_pretraining = bool(training.get("use_pretraining", False))
         pretraining_epochs = int(training.get("pretraining_epochs", 3))
         early_stop_threshold = training.get("early_stop_threshold")
