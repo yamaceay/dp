@@ -1,1 +1,8 @@
 utility_reddit_age|python run.py utility --config configs/5_experiments/reddit/utility/age.yaml
+utility_reddit_birth_city_country|python run.py utility --config configs/5_experiments/reddit/utility/birth_city_country.yaml
+utility_reddit_city_country|python run.py utility --config configs/5_experiments/reddit/utility/city_country.yaml
+utility_reddit_education|python run.py utility --config configs/5_experiments/reddit/utility/education.yaml
+utility_reddit_income_level|python run.py utility --config configs/5_experiments/reddit/utility/income_level.yaml
+utility_reddit_occupation|python run.py utility --config configs/5_experiments/reddit/utility/occupation.yaml
+utility_reddit_relationship_status|python run.py utility --config configs/5_experiments/reddit/utility/relationship_status.yaml
+utility_reddit_sex|python run.py utility --config configs/5_experiments/reddit/utility/sex.yaml

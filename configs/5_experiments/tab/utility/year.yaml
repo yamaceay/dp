@@ -29,7 +29,12 @@ head:
   type: bert_ordinal
   params:
     epochs: 2
-    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/tab/_checkpoints
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__lr5e-5/finetuning/checkpoint-2310
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/tab/year
+    primary_metric: macro_mae
+    encoder_lr: 1e-6
+    head_lr: 1e-3
+    early_stop_patience: 3
 output:
   format: jsonl
   file: logs/tab_year_exp.jsonl

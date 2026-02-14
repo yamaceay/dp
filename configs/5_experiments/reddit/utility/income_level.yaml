@@ -12,6 +12,7 @@ target:
     - "income_level: high"
 selection_criteria:
   feature: income_level
+group_by: hardness
 split:
   - train: 0.0
     val: 1.0
@@ -23,17 +24,15 @@ include_confusion_matrix: true
 head:
   type: bert_ordinal
   params:
-    epochs: 5
+    epochs: 40
+    batch_size: 4
     model_name: distilbert-base-uncased
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit_8_16_0.0001/finetuning/checkpoint-297
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/income_level
     primary_metric: macro_mae
-    optimizer_type: adamw
-    scheduler_type: linear
-    weight_decay: 0.01
-    warmup_ratio: 0.1
-    encoder_lr: 5e-6
-    head_lr: 1e-4
-    warmup_steps: 10
-    gradient_clip: 1.0
+    encoder_lr: 1e-6
+    head_lr: 1e-3
+    early_stop_patience: 3
 output:
   format: jsonl
   file: logs/reddit_income_level_exp.jsonl
