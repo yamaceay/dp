@@ -32,7 +32,6 @@ head:
     scheduler_type: linear
     weight_decay: 0.01
     warmup_ratio: 0.1
-    macro_loss_weight: 0.5
     encoder_lr: 5e-6
     head_lr: 1e-4
     warmup_steps: 10

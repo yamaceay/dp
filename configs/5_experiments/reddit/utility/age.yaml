@@ -28,18 +28,12 @@ head:
     epochs: 40
     batch_size: 4
     model_name: distilbert-base-uncased
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit_8_16_0.0001/finetuning/checkpoint-297
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/_checkpoints
     primary_metric: macro_mae
-    early_stop_patience: 12
-    optimizer_type: adamw
-    scheduler_type: linear
-    weight_decay: 0.0
-    warmup_ratio: null
-    macro_loss_weight: 0.0
-    use_pos_weight: true
-    encoder_lr: 2e-6
-    head_lr: 2e-4
-    warmup_steps: 0
-    gradient_clip: 1.0
+    encoder_lr: 1e-6
+    head_lr: 1e-3
+    early_stop_patience: 3
 output:
   format: jsonl
   file: logs/reddit_age_exp.jsonl

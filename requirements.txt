@@ -14,6 +14,7 @@ nervaluate
 scikit-learn
 bert-score
 shap
+coral_pytorch
 
 # Optional dependencies for specific anonymizers
 # SpaCy NER

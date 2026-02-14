@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
@@ -18,6 +19,8 @@ from dp.loaders.derive import DERIVE_REGISTRY
 
 
 DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "experiments"
+_INT_PATTERN = re.compile(r"^[+-]?\d+$")
+_FLOAT_PATTERN = re.compile(r"^[+-]?(?:(?:\d+\.\d*)|(?:\d*\.\d+)|(?:\d+))(?:[eE][+-]?\d+)?$")
 
 
 def ensure_sequence(obj: Any) -> List[Any]:
@@ -26,6 +29,31 @@ def ensure_sequence(obj: Any) -> List[Any]:
     if isinstance(obj, (list, tuple)):
         return list(obj)
     return [obj]
+
+
+def _coerce_numeric_scalars(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _coerce_numeric_scalars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_coerce_numeric_scalars(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_coerce_numeric_scalars(v) for v in value)
+    if not isinstance(value, str):
+        return value
+    s = value.strip()
+    if not s:
+        return value
+    if _INT_PATTERN.fullmatch(s):
+        try:
+            return int(s)
+        except Exception:
+            return value
+    if _FLOAT_PATTERN.fullmatch(s):
+        try:
+            return float(s)
+        except Exception:
+            return value
+    return value
 
 
 def resolve_config_path(value: str) -> Path:
@@ -61,7 +89,7 @@ def parse_component_config(payload: Any) -> Tuple[str, Dict[str, Any]]:
         params = cfg.get("params", {}) if "params" in cfg else cfg
         if not isinstance(params, dict):
             raise ValueError("component params must be a mapping")
-        return name, dict(params)
+        return name, _coerce_numeric_scalars(dict(params))
     raise ValueError("invalid component config")
 
 
@@ -73,7 +101,7 @@ def parse_metric_config(payload: Any) -> Tuple[str, Dict[str, Any]]:
     if isinstance(payload, dict):
         config = dict(payload)
         metric_type = str(config.pop("type", config.pop("name", "")))
-        return metric_type, config
+        return metric_type, _coerce_numeric_scalars(config)
     raise ValueError("metric config must be a string or mapping")
 
 
