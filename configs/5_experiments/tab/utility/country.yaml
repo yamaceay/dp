@@ -24,7 +24,7 @@ head:
     checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/tab/country
     primary_metric: macro_f1
     encoder_lr: 1e-6
-    head_lr: 1e-4
+    head_lr: 5e-4
     early_stop_patience: 2
 output:
   format: jsonl
