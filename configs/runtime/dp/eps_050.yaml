@@ -1,5 +1,5 @@
 runtime: dp
 
-epsilon: 500.0
+epsilon: 50.0
 
 progress: true # slow runtime

@@ -48,7 +48,6 @@ elif [ "$TYPE" = "privacy" ]; then
     if [ "$SKIP_RUN" = false ]; then
         cmds+=("python3 run.py ${TYPE} --config configs/5_experiments/${DATASET}/${TYPE}/${LABEL}.yaml")
     fi
-    result_set+="_${LABEL}"
 elif [ "$TYPE" = "divergence" ]; then
     if [ "$SKIP_RUN" = false ]; then
         cmds+=("python3 run.py ${TYPE} --config configs/5_experiments/${DATASET}/${TYPE}/${METRIC}.yaml")
