@@ -187,6 +187,11 @@ class LogGrouper:
         return list(grouped.values())
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Merge experiment logs into a single JSON file.")
+    parser.add_argument("-o", "--output", type=str, help="Output file for merged logs")
+    args = parser.parse_args()
+
     all_privacy_logs = list(Path("logs").glob("*_priv_exp.jsonl"))
     all_divergence_logs = list(Path("logs").glob("*_div_*_exp.jsonl"))
     all_utility_logs = list(set(Path("logs").glob("*_*_exp.jsonl")) - set(all_privacy_logs) - set(all_divergence_logs))
@@ -217,5 +222,9 @@ if __name__ == "__main__":
     
     grouped_results = LogGrouper.group(all_results)
     
-    with open("merged_logs.json", "w") as f:
-        json.dump(grouped_results, f, indent=2)
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(grouped_results, f, indent=2)
+    else:
+        print(json.dumps(grouped_results, indent=2))
+        
