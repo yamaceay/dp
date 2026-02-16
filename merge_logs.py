@@ -72,9 +72,9 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         "utility": filter_utility_metrics(result["overall_results"]["metrics"], metrics, feature),
                     }
                 )
-                if "group_results" in result:
-                    for group_result in result["group_results"]:
-                        group_name = group_result["group_name"]
+
+                if "grouped_results" in result:
+                    for group_name, group_result in result["grouped_results"].items():
                         results.append(
                             {
                                 "dataset": dataset,
@@ -82,7 +82,7 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                                 "method": method,
                                 "params": params,
                                 "group": group_name,
-                                "utility": filter_utility_metrics(group_result, metrics, feature),
+                                "utility": filter_utility_metrics(group_result["metrics"], metrics, feature),
                             }
                         )
         return results
@@ -172,14 +172,14 @@ class LogGrouper:
             assert any(field in result for field in ["privacy", "utility", "divergence"]), f"Missing privacy/utility/divergence field in result: {result}"
             
             identifiers = {k: result[k] for k in ["dataset", "method", "params"]}
-            key = (identifiers["dataset"], identifiers["method"], frozenset(identifiers["params"].items()))
-
-            feature = maybe_feature(result)
-            if feature:
-                identifiers["feature"] = feature
             group = maybe_group(result)
             if group:
                 identifiers["group"] = group
+            feature = maybe_feature(result)
+            if feature:
+                identifiers["feature"] = feature
+
+            key = (identifiers["dataset"], identifiers["method"], frozenset(identifiers["params"].items()), identifiers.get("group"))
 
             type_of_experiment = experiment_type(result)
             grouped.setdefault(key, identifiers).setdefault(type_of_experiment, {}).update(result[type_of_experiment])
