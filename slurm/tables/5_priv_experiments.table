@@ -1,2 +1,0 @@
-privacy_tab|python run.py privacy --config configs/5_experiments/tab/privacy/exact.yaml
-privacy_db_bio|python run.py privacy --config configs/5_experiments/db_bio/privacy/exact.yaml
