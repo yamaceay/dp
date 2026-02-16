@@ -185,15 +185,12 @@ class LogGrouper:
             group = maybe_group(result)
             if group:
                 identifiers["group"] = group
-            feature = maybe_feature(result)
-            if feature:
-                identifiers["feature"] = feature
 
             key = (identifiers["dataset"], identifiers["method"], frozenset(identifiers["params"].items()), identifiers.get("group"))
 
             type_of_experiment = experiment_type(result)
             metrics = result[type_of_experiment]
-            metrics["_count_" + (feature if feature else "overall")] = result.pop("count")
+            metrics["_count_" + (maybe_feature(result) if maybe_feature(result) else "overall")] = result.pop("count")
             grouped.setdefault(key, identifiers).setdefault(type_of_experiment, {}).update(metrics)
 
         return list(grouped.values())
