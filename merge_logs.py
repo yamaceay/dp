@@ -43,23 +43,28 @@ class ExperimentLogParser:
 class UtilityExperimentLogParser(ExperimentLogParser):
     def parse(log_file: str, dataset: str, feature: str, metrics: List[str]) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
+        experiment_result = None
+        total_count = None
         with Path(log_file).open("r", encoding="utf-8") as f:
             for line in f:
                 result = json.loads(line)
                 record_type = result.get("type")
                 if record_type == "experiment":
-                    results.append(
-                        {
-                            "dataset": dataset,
-                            "feature": feature,
-                            "method": "baseline",
-                            "params": {},
-                            "utility": filter_utility_metrics(result["baseline_overall_metrics"], metrics, feature)
-                        }
-                    )
+                    experiment_result = {
+                        "dataset": dataset,
+                        "feature": feature,
+                        "method": "baseline",
+                        "params": {},
+                        "utility": filter_utility_metrics(result["baseline_overall_metrics"], metrics, feature)
+                    }
                     continue
                 if record_type != "evaluation":
                     continue
+                count = result["overall_results"]["total"]
+                if experiment_result and total_count is None:
+                    total_count = count
+                    experiment_result["count"] = count
+                    results.append(experiment_result)
                 source = str(result.get("source", ""))
                 key = normalize_source_key(source, dataset)
                 method, params = parse_params_from_key(key)
@@ -69,6 +74,7 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         "feature": feature,
                         "method": method,
                         "params": params,
+                        "count": result["overall_results"]["total"],
                         "utility": filter_utility_metrics(result["overall_results"]["metrics"], metrics, feature),
                     }
                 )
@@ -82,6 +88,7 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                                 "method": method,
                                 "params": params,
                                 "group": group_name,
+                                "count": group_result["total"],
                                 "utility": filter_utility_metrics(group_result["metrics"], metrics, feature),
                             }
                         )
@@ -101,6 +108,7 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
                             "dataset": dataset,
                             "method": "baseline",
                             "params": {},
+                            "count": result["original_record_count"],
                             "privacy": {
                                 "mean_reciprocal_rank": score["mean_reciprocal_rank"],
                                 "accuracy": score["accuracy"],
@@ -119,6 +127,7 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
                         "dataset": dataset,
                         "method": method,
                         "params": params,
+                        "count": summary["count"],
                         "privacy": {
                             "mean_reciprocal_rank": summary["mean_reciprocal_rank"],
                             "accuracy": summary["accuracy"],
@@ -145,6 +154,7 @@ class DivergenceExperimentLogParser(ExperimentLogParser):
                         "dataset": dataset,
                         "method": method,
                         "params": params,
+                        "count": divergence["count"],
                         "divergence": {
                             metric: divergence["divergence_mean"],
                         },
@@ -182,7 +192,9 @@ class LogGrouper:
             key = (identifiers["dataset"], identifiers["method"], frozenset(identifiers["params"].items()), identifiers.get("group"))
 
             type_of_experiment = experiment_type(result)
-            grouped.setdefault(key, identifiers).setdefault(type_of_experiment, {}).update(result[type_of_experiment])
+            metrics = result[type_of_experiment]
+            metrics["_count_" + (feature if feature else "overall")] = result.pop("count")
+            grouped.setdefault(key, identifiers).setdefault(type_of_experiment, {}).update(metrics)
 
         return list(grouped.values())
 
