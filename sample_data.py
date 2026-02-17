@@ -17,8 +17,13 @@ def sample_data(data: list[dict[str, Any]], k: int) -> list[dict[str, Any]]:
     return [data[i] for i in indices]
 
 def get_tab_data() -> list[dict[str, Any]]:
-    with open("data/TAB/tab.json", "r", encoding="utf-8") as f:
-        return json.load(f)
+    records = []
+    for split in ["test", "dev", "train"]:
+        path = f"data/tab/echr_{split}.json"
+        with open(path, "r", encoding="utf-8") as f:
+            split_records = json.load(f)
+            records.extend(split_records)
+    return records
 
 def get_db_bio_data() -> list[dict[str, Any]]:
     db_bio_data_nested = [
@@ -46,7 +51,8 @@ if __name__ == "__main__":
         raise ValueError(f"Unsupported dataset: {args.data}")
     all_indices = list(range(len(data)))
 
-    os.makedirs(f"indices/{args.data}/test", exist_ok=True)
+    os.makedirs(f"indices/{args.data}/test/{args.small_size}_eval", exist_ok=True)
+    os.makedirs(f"indices/{args.data}/test/{args.large_size}_random", exist_ok=True)
     os.makedirs(f"indices/{args.data}/train", exist_ok=True)
     os.makedirs(f"indices/{args.data}/val", exist_ok=True)
     for i in range(n_samples):
@@ -57,9 +63,9 @@ if __name__ == "__main__":
         train_indices = sample_data(train_val_indices, train_size)
         val_indices = list(set(train_val_indices) - set(train_indices))
 
-        with open(f"indices/{args.data}/test/{args.small_size}_eval_{i}.txt", "w") as f:
+        with open(f"indices/{args.data}/test/{args.small_size}_eval/{i}.txt", "w") as f:
             f.write("\n".join(str(idx) for idx in small_indices) + "\n")
-        with open(f"indices/{args.data}/test/{args.large_size}_random_{i}.txt", "w") as f:
+        with open(f"indices/{args.data}/test/{args.large_size}_random/{i}.txt", "w") as f:
             f.write("\n".join(str(idx) for idx in large_indices) + "\n")
         with open(f"indices/{args.data}/train/{i}.txt", "w") as f:
             f.write("\n".join(str(idx) for idx in train_indices) + "\n")
