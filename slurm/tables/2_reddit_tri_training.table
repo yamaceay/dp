@@ -1,2 +1,2 @@
-tri_reddit_lr5e-5|python tri_by_bk.py --mode train --training-in configs/2_tri_training/reddit/bk_base.yaml --run-name reddit__lr5e-5 --set training.learning_rate=5e-5 --task_id {task_id}
+tri_reddit_lr5e-5     |python tri_by_bk.py --mode train --training-in configs/2_tri_training/reddit/bk_base.yaml --run-name reddit__lr5e-5 --set training.learning_rate=5e-5 --task_id {task_id}
 tri_reddit_deid_lr5e-5|python tri_by_bk.py --mode train --training-in configs/2_tri_training/reddit/bk_deid.yaml --run-name reddit__deid__lr5e-5 --set training.learning_rate=5e-5 --task_id {task_id}

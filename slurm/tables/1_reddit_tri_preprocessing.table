@@ -1,2 +1,2 @@
 reddit_deid|python data_for_tri.py --config configs/1_tri_preprocessing/reddit/deid.yaml --task_id {task_id}
-reddit_sum|python data_for_tri.py --config configs/1_tri_preprocessing/reddit/sum.yaml --task_id {task_id}
+reddit_sum |python data_for_tri.py --config configs/1_tri_preprocessing/reddit/sum.yaml --task_id {task_id}
