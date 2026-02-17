@@ -1,3 +1,4 @@
 data: tab
-data_in: data/TAB/splitted/test.json
-save_to_jsonl: data/TAB/test_bk_sum.jsonl
+data_in: data/tab
+split: indices/tab/test/50_eval/{task_id}.txt
+save_to_jsonl: data/tab/tri_preprocessing/50_eval_{task_id}.jsonl

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+import glob
 import json
 
 from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations
@@ -16,8 +17,9 @@ class ResultRecord:
 
 
 def load_result_records(path: str) -> List[ResultRecord]:
+    resolved_path = _resolve_result_path(path)
     records: List[ResultRecord] = []
-    with open(path, "r", encoding="utf-8") as reader:
+    with open(resolved_path, "r", encoding="utf-8") as reader:
         for line_num, line in enumerate(reader, start=1):
             entry = line.strip()
             if not entry:
@@ -39,6 +41,18 @@ def load_result_records(path: str) -> List[ResultRecord]:
             annotations = _parse_text_annotations(payload, line_num)
             records.append(ResultRecord(idx=idx, text=text, annotations=annotations, metadata=metadata))
     return records
+
+
+def _resolve_result_path(path: str) -> str:
+    raw = str(path)
+    candidate = raw.replace("{run_timestamp}", "*")
+    if not any(ch in candidate for ch in ("*", "?", "[")):
+        return candidate
+    matches = sorted(glob.glob(candidate))
+    if not matches:
+        raise FileNotFoundError(f"No files match result path pattern: {raw}")
+    latest = matches[-1]
+    return str(latest)
 
 
 def build_dataset_from_results(

@@ -1,1 +1,0 @@
-yelp_shap|python risk.py --config configs/3_tri_risk_precomputation/yelp/shap.yaml

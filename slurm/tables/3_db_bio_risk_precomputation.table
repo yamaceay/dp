@@ -1,1 +1,1 @@
-db_bio_shap|python risk.py --config configs/3_tri_risk_precomputation/db_bio/shap.yaml
+db_bio_shap|python risk.py --config configs/3_tri_risk_precomputation/db_bio/shap.yaml --task_id {task_id}

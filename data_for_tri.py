@@ -8,6 +8,7 @@ from dp.loaders.base import DatasetAdapter, DatasetRecord
 from dp.loaders.results import build_dataset_from_results
 from dp.tri.sensitive_selectors import get_sensitive_selector
 from runtime.config_loader import _read_yaml
+from dp.utils.tasking import resolve_task_id, apply_task_template
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 
@@ -60,6 +61,10 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
     n_train_samples_for_other = params.get('n_train_samples_for_other')
     n_eval_samples_for_selected = params.get('n_eval_samples_for_selected')
     n_eval_samples_for_other = params.get('n_eval_samples_for_other')
+    task_id = params.get('task_id')
+    if task_id is not None:
+        if not isinstance(task_id, int) or task_id < 0:
+            raise ValueError('task_id must be a non-negative integer when provided')
     if sensitive_selector is not None and not isinstance(sensitive_selector, str):
         raise ValueError('sensitive_selector must be a string when provided')
     if not isinstance(sensitive_selector_kwargs, dict):
@@ -91,6 +96,7 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
         'n_train_samples_for_other': n_train_samples_for_other,
         'n_eval_samples_for_selected': n_eval_samples_for_selected,
         'n_eval_samples_for_other': n_eval_samples_for_other,
+        'task_id': task_id,
     }
 
 
@@ -130,11 +136,15 @@ def main() -> None:
     parser.add_argument('--full_record', action='store_true', default=None, help='Print full record details')
     parser.add_argument('--save_to_jsonl', type=str, default=None, help='Path to save processed extensions (JSONL)')
     parser.add_argument('--load_from_jsonl', type=str, default=None, help='Path to load processed extensions (JSONL)')
+    parser.add_argument('--task_id', type=int, default=None, help='Task id for task-aware path templates')
 
     raw = parser.parse_args()
     cfg = _read_yaml(raw.config) if raw.config else {}
     params = _merge_args(cfg, vars(raw))
     resolved = _resolve_params(params)
+    task_id = resolve_task_id(resolved.get('task_id'))
+    for key in ('data_in', 'split', 'result_in', 'save_to_jsonl', 'load_from_jsonl'):
+        resolved[key] = apply_task_template(resolved.get(key), task_id)
 
     if not resolved['data'] or not resolved['data_in']:
         raise ValueError('data and data_in are required (pass via args or --config)')

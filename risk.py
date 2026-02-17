@@ -12,6 +12,7 @@ from dp.loaders.results import build_dataset_from_results, load_result_records
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.utils.token_edits import map_result_offset_to_original
+from dp.utils.tasking import resolve_task_id, apply_task_template
 
 def _load_config(path: Optional[str]) -> Dict[str, Any]:
     if not path:
@@ -30,6 +31,7 @@ def _merge_args(config: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, Any]:
 def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
     dataset = params.get('data') or params.get('dataset')
     data_in = params.get('data_in')
+    split = params.get('split')
     result_in = params.get('result_in')
     explainer_name = params.get('explainer') or 'shap'
     explainer_in = params.get('explainer_in') or params.get('tri_pipeline')
@@ -39,9 +41,13 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
     sort_by = params.get('sort_by') or 'offsets'
     offset_mode = params.get('offset_mode') or 'original'
     p_agg = params.get('p_agg') or 'avg'
+    task_id = params.get('task_id')
+    if task_id is not None and (not isinstance(task_id, int) or task_id < 0):
+        raise ValueError('task_id must be a non-negative integer when provided')
     return {
         'data': dataset,
         'data_in': data_in,
+        'split': split,
         'result_in': result_in,
         'explainer': explainer_name,
         'explainer_in': explainer_in,
@@ -51,6 +57,7 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
         'sort_by': sort_by,
         'offset_mode': offset_mode,
         'p_agg': p_agg,
+        'task_id': task_id,
     }
 
 def main() -> None:
@@ -59,6 +66,7 @@ def main() -> None:
     parser.add_argument('--config', type=str, default=None)
     parser.add_argument('--data', type=str, default=None)
     parser.add_argument('--data_in', type=str, default=None)
+    parser.add_argument('--split', type=str, default=None)
     parser.add_argument('--result_in', type=str, default=None)
     parser.add_argument('--explainer', type=str, choices=['shap', 'shap_permutation'], default=None)
     parser.add_argument('--explainer_in', type=str, default=None)
@@ -68,13 +76,17 @@ def main() -> None:
     parser.add_argument('--starting_index', type=int, default=None)
     parser.add_argument('--sort_by', type=str, choices=['scores', 'offsets'], default=None)
     parser.add_argument('--offset_mode', type=str, choices=['original', 'result'], default=None)
+    parser.add_argument('--task_id', type=int, default=None, help='Task id for task-aware path templates')
     raw = parser.parse_args()
 
     cfg = _load_config(getattr(raw, 'config', None))
     params = _merge_args(cfg, vars(raw))
     resolved = _resolve_params(params)
+    task_id = resolve_task_id(resolved.get('task_id'))
+    for key in ('data_in', 'split', 'result_in', 'explainer_in', 'save_to_jsonl'):
+        resolved[key] = apply_task_template(resolved.get(key), task_id)
 
-    adapter = get_adapter(resolved['data'], data=resolved['data'], data_in=resolved['data_in']) if resolved['data'] and resolved['data_in'] else None
+    adapter = get_adapter(resolved['data'], data=resolved['data'], data_in=resolved['data_in'], split=resolved['split']) if resolved['data'] and resolved['data_in'] else None
     explainer_type = ShapType(resolved['explainer'])
     explainer = ShapExplainer(model_name=resolved['explainer_in'], explainer_type=explainer_type, p_agg=resolved['p_agg'])
     splitter = TextSplitter()
@@ -83,7 +95,7 @@ def main() -> None:
     if resolved['result_in']:
         if not resolved['data'] or not resolved['data_in']:
             raise ValueError('data and data_in are required to load result_in')
-        original_records = list(get_adapter(resolved['data'], data=resolved['data'], data_in=resolved['data_in']).iter_records())
+        original_records = list(get_adapter(resolved['data'], data=resolved['data'], data_in=resolved['data_in'], split=resolved['split']).iter_records())
         records, _ = build_dataset_from_results(resolved['result_in'], original_records)
         result_records = load_result_records(resolved['result_in'])
         result_texts = [rr.text for rr in result_records]
@@ -106,6 +118,10 @@ def main() -> None:
     result_texts = result_texts[start:start + max_records]
 
     mapping, _ = load_tri_label_mapping(explainer)
+    if resolved['save_to_jsonl']:
+        output_path = Path(resolved['save_to_jsonl'])
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text('', encoding='utf-8')
 
     for idx, (record, text) in enumerate(tqdm(zip(records, result_texts), desc='Explaining records', total=len(records))):
         global_idx = start + idx

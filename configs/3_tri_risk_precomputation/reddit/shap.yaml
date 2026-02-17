@@ -1,8 +1,8 @@
 dataset: reddit
 data_in: data/reddit/reddit.jsonl
 explainer: shap
-explainer_in: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit_8_16_0.0001
-result_in: outputs/reddit/presidio/20260210_023708_reddit_presidio.jsonl
-save_to_jsonl: data/reddit/reddit_risk_shap.jsonl
+explainer_in: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/task_{task_id}/reddit__deid__lr5e-5__task_{task_id}
+result_in: outputs/reddit/presidio/task_{task_id}.jsonl
+save_to_jsonl: data/reddit/tri_risk/shap_{task_id}.jsonl
 sort_by: scores
 offset_mode: original

@@ -1,3 +1,4 @@
 data: db_bio
 data_in: data/db_bio
-save_to_jsonl: data/db_bio/db_bio_bk_sum_realistic.jsonl
+split: indices/db_bio/test/500_random/{task_id}.txt
+save_to_jsonl: data/db_bio/tri_preprocessing/500_random_{task_id}.jsonl

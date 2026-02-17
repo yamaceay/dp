@@ -1,4 +1,5 @@
 data: db_bio
-data_in: data/db_bio/test/data-00000-of-00001.arrow
-result_in: outputs/db_bio/presidio/20260205_192847_db_bio_presidio.jsonl
-save_to_jsonl: data/db_bio/db_bio_bk_deid.jsonl
+data_in: data/db_bio
+split: indices/db_bio/test/50_eval/{task_id}.txt
+result_in: outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio_task_{task_id}.jsonl
+save_to_jsonl: data/db_bio/tri_preprocessing/50_eval_deid_{task_id}.jsonl

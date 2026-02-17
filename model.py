@@ -16,6 +16,7 @@ from dp.utils.selector import PIIOnlyUnit, AllUnit, ByRiskUnit, UntilKUnit
 from dp.utils.explainer import UniformExplainer, ShapExplainer, ShapType
 from dp.utils.output import OUTPUT_HANDLER_REGISTRY
 from runtime import load_runtime_bundle
+from dp.utils.tasking import resolve_task_id, apply_task_template
 
 available_models = list(MODEL_REGISTRY.keys())
 available_datasets = list(ADAPTER_REGISTRY.keys())
@@ -108,6 +109,16 @@ def _apply_set_overrides(cfg: Dict[str, Any], overrides: Optional[List[str]]) ->
         if not isinstance(cur, dict):
             raise ValueError(f"Invalid --set path (not a mapping): {key_raw}")
         cur[parts[-1]] = value
+
+
+def _template_strings(value: Any, task_id: Optional[int]) -> Any:
+    if isinstance(value, str):
+        return apply_task_template(value, task_id)
+    if isinstance(value, list):
+        return [_template_strings(item, task_id) for item in value]
+    if isinstance(value, dict):
+        return {k: _template_strings(v, task_id) for k, v in value.items()}
+    return value
 
 
 def _normalize_param_patterns(value: object) -> List[str]:
@@ -471,15 +482,21 @@ if __name__ == "__main__":
         action="append",
         default=None,
     )
+    parser.add_argument("--task_id", type=int, default=None)
     
     args = parser.parse_args()
     data_kwargs = {k: getattr(args, k) for k in data_keys}
     model_kwargs = {k: getattr(args, k) for k in model_keys}
     runtime_kwargs = {k: getattr(args, k) for k in runtime_keys}
+    task_id = resolve_task_id(args.task_id)
+    data_kwargs = _template_strings(data_kwargs, task_id)
+    model_kwargs = _template_strings(model_kwargs, task_id)
+    runtime_kwargs = _template_strings(runtime_kwargs, task_id)
     runtime_bundle = load_runtime_bundle(runtime_kwargs.pop("runtime_in", None))
     
     model_config = load_config(args.model_in)
     _apply_set_overrides(model_config, args.set_overrides)
+    model_config = _template_strings(model_config, task_id)
     precompute_config = extract_precompute_config(model_config)
     if data_kwargs.get("result_in") is None and precompute_config.get("result_in") is not None:
         data_kwargs["result_in"] = precompute_config.get("result_in")

@@ -8,6 +8,7 @@ import yaml
 
 from dp.tri.base import TRIDetector
 from dp.tri.loaders import get_attacker_adapter, ATTACKER_ADAPTER_REGISTRY
+from dp.utils.tasking import resolve_task_id, apply_task_template
 
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
@@ -164,6 +165,7 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
     cfg: dict[str, Any] = {
         "dataset": dataset,
         "data_path": data_path,
+        "split": _optional_str(payload, "split"),
         "attacker_extensions": _optional_str(payload, "attacker_extensions"),
         "model_name": model_name,
         "max_records": _optional_int(payload, "max_records"),
@@ -206,9 +208,11 @@ def main() -> int:
         action="append",
         default=None,
     )
+    parser.add_argument("--task_id", type=int, default=None)
 
     parser.add_argument("--dataset", type=str, default="tab", choices=available_datasets)
     parser.add_argument("--data_path", type=str, default=None)
+    parser.add_argument("--split", type=str, default=None)
     parser.add_argument("--model_name", type=str, default="distilbert-base-uncased")
     parser.add_argument("--max_records", type=int, default=None)
     parser.add_argument("--finetuning_epochs", type=int, default=15)
@@ -229,15 +233,16 @@ def main() -> int:
     parser.add_argument("--p_agg", type=str, default="avg", choices=["avg", "max"], help="Method to aggregate token-level scores into record-level score")
 
     args = parser.parse_args()
+    task_id = resolve_task_id(args.task_id)
 
     if args.training_in is not None:
         cfg = _load_training_config(PROJECT_ROOT, Path(args.training_in))
         _apply_set_overrides(cfg, args.set_overrides)
         dataset = str(cfg["dataset"])
-        data_path = Path(cfg["data_path"])
+        data_path = Path(apply_task_template(str(cfg["data_path"]), task_id))
         model_name = str(cfg["model_name"])
         max_records = cfg.get("max_records")
-        attacker_extensions = cfg.get("attacker_extensions")
+        attacker_extensions = apply_task_template(cfg.get("attacker_extensions"), task_id)
         device = cfg.get("device")
         max_length = int(cfg.get("max_length", 512))
         training = cfg.get("training")
@@ -263,17 +268,21 @@ def main() -> int:
         p_agg = training.get("p_agg", "avg")
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_name = args.run_name or cfg.get("run_name") or timestamp
-        output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(cfg["output_root"]).resolve()
+        run_name = apply_task_template(args.run_name, task_id) or apply_task_template(cfg.get("run_name"), task_id) or timestamp
+        output_root_raw = apply_task_template(args.output_root, task_id) if args.output_root else apply_task_template(str(cfg["output_root"]), task_id)
+        output_root = Path(output_root_raw).expanduser().resolve()
+        split = apply_task_template(cfg.get("split"), task_id)
+        if task_id is not None and f"__task_{task_id}" not in run_name:
+            run_name = f"{run_name}__task_{task_id}"
         model_path: Path = (output_root / str(run_name)).resolve()
     else:
         if args.data_path is None:
             raise SystemExit("--data_path is required unless --training-in is provided")
         dataset = args.dataset
-        data_path = Path(args.data_path)
+        data_path = Path(apply_task_template(args.data_path, task_id))
         model_name = args.model_name
         max_records = args.max_records
-        attacker_extensions = args.attacker_extensions
+        attacker_extensions = apply_task_template(args.attacker_extensions, task_id)
         device = args.device
         max_length = 512
         finetuning_epochs = args.finetuning_epochs
@@ -295,11 +304,22 @@ def main() -> int:
         warmup_ratio = None
         p_agg = args.p_agg
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
-        run_name = args.run_name or timestamp
-        model_path = Path(args.model_path).expanduser().resolve() if args.model_path else (output_root / run_name).resolve()
+        output_root_raw = apply_task_template(args.output_root, task_id) if args.output_root else f"models/tri_pipelines/{dataset}"
+        output_root = Path(output_root_raw).expanduser().resolve()
+        run_name = apply_task_template(args.run_name, task_id) or timestamp
+        split = apply_task_template(args.split, task_id)
+        if task_id is not None and f"__task_{task_id}" not in run_name:
+            run_name = f"{run_name}__task_{task_id}"
+        model_path = Path(apply_task_template(args.model_path, task_id)).expanduser().resolve() if args.model_path else (output_root / run_name).resolve()
 
-    adapter = get_attacker_adapter(dataset, data=dataset, data_in=str(data_path), max_records=max_records)
+    adapter_kwargs: dict[str, Any] = {
+        "data": dataset,
+        "data_in": str(data_path),
+        "max_records": max_records,
+    }
+    if split is not None:
+        adapter_kwargs["split"] = split
+    adapter = get_attacker_adapter(dataset, **adapter_kwargs)
     if attacker_extensions:
         adapter.load_cache_from_jsonl(str(attacker_extensions))
     records = list(adapter.iter_records())
@@ -310,7 +330,7 @@ def main() -> int:
 
     if args.mode == "train":
         if args.model_path:
-            base_path = Path(args.model_path)
+            base_path = Path(apply_task_template(args.model_path, task_id))
             if not base_path.exists():
                 raise ValueError(f"Model path not found: {base_path}")
             tri.load(str(base_path))
@@ -343,7 +363,7 @@ def main() -> int:
 
     if args.model_path is None:
         raise SystemExit("--model_path is required")
-    tri.load(str(Path(args.model_path).expanduser().resolve()))
+    tri.load(str(Path(apply_task_template(args.model_path, task_id)).expanduser().resolve()))
     tri.setup(records=records, exclude_stopwords=exclude_stopwords)
 
     if args.mode == "evaluate":

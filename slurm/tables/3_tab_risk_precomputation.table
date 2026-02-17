@@ -1,1 +1,1 @@
-tab_shap|python risk.py --config configs/3_tri_risk_precomputation/tab/shap.yaml
+tab_shap|python risk.py --config configs/3_tri_risk_precomputation/tab/shap.yaml --task_id {task_id}

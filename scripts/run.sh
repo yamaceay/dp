@@ -44,6 +44,7 @@ fi
 
 FILE_NAME="$(basename "${TABLE_FILE%.*}")"
 TARGET_FILE="slurm/sbatches/${FILE_NAME}.sbatch"
+RUN_TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
 mkdir -p logs slurm/sbatches logs/${FILE_NAME}
 
@@ -123,6 +124,7 @@ ${EXTRA_LINES}
 MAX_TASKS=${MAX_TASKS}
 JOB_IDX=\$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=\$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
+RUN_TIMESTAMP="${RUN_TIMESTAMP}"
 
 INSTALL_FILE="${INSTALL_FILE}"
 
@@ -156,7 +158,7 @@ echo "Job: $JOB_NAME (index $JOB_IDX)"
 echo "Task within job: $TASK_WITHIN_JOB"
 echo "Base command: $CMD"
 
-export TASK_WITHIN_JOB JOB_NAME SLURM_ARRAY_TASK_ID
+export TASK_WITHIN_JOB JOB_NAME SLURM_ARRAY_TASK_ID RUN_TIMESTAMP
 
 srun -K \
     --container-mounts="`pwd`:`pwd`,/netscratch/$USER:/netscratch/$USER" \

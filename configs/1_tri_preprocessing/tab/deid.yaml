@@ -1,4 +1,5 @@
 data: tab
-data_in: data/TAB/splitted/test.json
-result_in: outputs/tab/presidio/20260205_184512_tab_presidio.jsonl
-save_to_jsonl: data/TAB/test_bk_deid.jsonl
+data_in: data/tab
+split: indices/tab/test/50_eval/{task_id}.txt
+result_in: outputs/tab/presidio/{run_timestamp}_tab_presidio_task_{task_id}.jsonl
+save_to_jsonl: data/tab/tri_preprocessing/50_eval_deid_{task_id}.jsonl

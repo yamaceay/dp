@@ -1,4 +1,4 @@
 data: reddit
 data_in: data/reddit/reddit.jsonl
-save_to_jsonl: data/reddit/reddit_bk_deid.jsonl
+save_to_jsonl: data/reddit/tri_preprocessing/deid.jsonl
 deidentify: true

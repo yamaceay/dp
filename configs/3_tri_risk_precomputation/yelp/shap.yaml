@@ -1,8 +1,0 @@
-dataset: yelp
-data_in: data/yelp/all.jsonl
-explainer: shap
-explainer_in: ../../../netscratch/yay/tri_pipelines/yelp/_checkpoints/yelp__deid__lr5e-5
-result_in: ../../../netscratch/yay/_ext_outputs/yelp/presidio/20260210_100853_yelp_presidio.jsonl
-save_to_jsonl: data/yelp/yelp_risk_shap.jsonl
-sort_by: scores
-offset_mode: original

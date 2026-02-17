@@ -1,3 +1,4 @@
 data: db_bio
-data_in: data/db_bio/test/data-00000-of-00001.arrow
-save_to_jsonl: data/db_bio/db_bio_bk_sum.jsonl
+data_in: data/db_bio
+split: indices/db_bio/test/50_eval/{task_id}.txt
+save_to_jsonl: data/db_bio/tri_preprocessing/50_eval_{task_id}.jsonl

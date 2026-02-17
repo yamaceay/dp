@@ -11,17 +11,7 @@ class TabDatasetAdapter(DatasetAdapter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.data_in = Path(self.data_in)
-        if self.data_in.is_dir():
-            self._records = []
-            for file in self.data_in.glob("echr_*.json"):
-                try:
-                    with file.open("r", encoding="utf-8") as handle:
-                        records = json.load(handle)
-                        self._records.extend(records)
-                except Exception as exc:
-                    raise RuntimeError(f"Failed to load TAB dataset from {file}") from exc
-        else:
-            raise ValueError(f"data_in path '{self.data_in}' is not a valid file or directory")
+        self._records = self._load_records(self.data_in)
         self._split_indices = load_split_indices(data_name=self.data, split=self.split)
         if self._split_indices is not None:
             for idx in self._split_indices:
@@ -29,6 +19,35 @@ class TabDatasetAdapter(DatasetAdapter):
                     raise ValueError(
                         f"Split index {idx} out of range for TAB dataset (size={len(self._records)})"
                     )
+
+    def _load_records(self, source: Path) -> List[dict]:
+        if source.is_file():
+            return self._read_json_file(source)
+        if source.is_dir():
+            ordered_names = ["echr_test.json", "echr_dev.json", "echr_train.json"]
+            ordered_files = [source / name for name in ordered_names if (source / name).is_file()]
+            fallback_files = sorted(
+                p for p in source.glob("*.json")
+                if p.name not in {f.name for f in ordered_files}
+            )
+            files = ordered_files + fallback_files
+            if not files:
+                raise ValueError(f"No TAB json files found in directory '{source}'")
+            records: List[dict] = []
+            for file in files:
+                records.extend(self._read_json_file(file))
+            return records
+        raise ValueError(f"data_in path '{source}' is not a valid file or directory")
+
+    def _read_json_file(self, path: Path) -> List[dict]:
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load TAB dataset from {path}") from exc
+        if not isinstance(payload, list):
+            raise ValueError(f"TAB file must contain a JSON array: {path}")
+        return payload
 
     def __len__(self) -> int:
         if self._split_indices is not None:
