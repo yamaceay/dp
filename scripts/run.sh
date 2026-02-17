@@ -43,12 +43,9 @@ if [[ -z "$TABLE_FILE" ]]; then
 fi
 
 FILE_NAME="$(basename "${TABLE_FILE%.*}")"
-
 TARGET_FILE="slurm/sbatches/${FILE_NAME}.sbatch"
 
-[[ -z "$TABLE_FILE" ]] && TABLE_FILE="jobs.table"
-
-mkdir -p logs slurm/sbatches slurm/states slurm/states/${FILE_NAME} logs/${FILE_NAME}
+mkdir -p logs slurm/sbatches logs/${FILE_NAME}
 
 if [[ ! -f "$TABLE_FILE" ]]; then
     echo "Table file not found: $TABLE_FILE" >&2
@@ -72,11 +69,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ ${#parts[@]} -gt 1 ]]; then
         CMD="$(trim_whitespace "${parts[1]}")"
         if [[ -n "$CMD" ]]; then
-            STATE_FILE_NAME="${FILE_NAME}/${NAME}_${idx}"
-            job_names[$idx]="$STATE_FILE_NAME"
+            job_names[$idx]="$NAME"
             job_cmds[$idx]="$CMD"
-            scripts/task.sh --init "$MAX_TASKS" --cmd "$CMD" --state "slurm/states/${STATE_FILE_NAME}.state"
-            echo "Initialized state for ${STATE_FILE_NAME} with ${MAX_TASKS} parallel tasks"
             ((idx++))
         fi
     fi
@@ -88,7 +82,6 @@ if [[ $NUM_JOBS -eq 0 ]]; then
     exit 1
 fi
 
-# Total array size is NUM_JOBS
 TOTAL_TASKS=$((NUM_JOBS * MAX_TASKS))
 MAX_IDX=$((TOTAL_TASKS - 1))
 echo "Found $NUM_JOBS jobs with ${MAX_TASKS} parallel tasks each, creating array job 0-${MAX_IDX}%${MAX_CONCURRENT}" >&2
@@ -127,7 +120,6 @@ cat > "$TARGET_FILE" <<EOF
 #SBATCH --time=900
 ${EXTRA_LINES}
 
-# Map array task ID to job index and parallel task
 MAX_TASKS=${MAX_TASKS}
 JOB_IDX=\$((SLURM_ARRAY_TASK_ID / MAX_TASKS))
 TASK_WITHIN_JOB=\$((SLURM_ARRAY_TASK_ID % MAX_TASKS))
@@ -144,22 +136,33 @@ done
 cat >> "$TARGET_FILE" <<'EOF'
 )
 
+job_cmds=(
+EOF
+
+for cmd in "${job_cmds[@]}"; do
+    escaped_cmd="${cmd//\\/\\\\}"
+    escaped_cmd="${escaped_cmd//\"/\\\"}"
+    echo "  \"$escaped_cmd\"" >> "$TARGET_FILE"
+done
+
+cat >> "$TARGET_FILE" <<'EOF'
+)
+
 JOB_NAME="${job_names[$JOB_IDX]}"
-STATE_FILE="slurm/states/${JOB_NAME}.state"
+CMD="${job_cmds[$JOB_IDX]}"
 
 echo "SLURM_ARRAY_TASK_ID: $SLURM_ARRAY_TASK_ID"
 echo "Job: $JOB_NAME (index $JOB_IDX)"
 echo "Task within job: $TASK_WITHIN_JOB"
-echo "State file: $STATE_FILE"
+echo "Base command: $CMD"
 
-export TASK_WITHIN_JOB JOB_NAME STATE_FILE SLURM_ARRAY_TASK_ID
+export TASK_WITHIN_JOB JOB_NAME SLURM_ARRAY_TASK_ID
 
-# Execute the task using task.sh --incr (it will run the command directly)
 srun -K \
     --container-mounts="`pwd`:`pwd`,/netscratch/$USER:/netscratch/$USER" \
     --container-workdir="`pwd`" \
     --container-image=/netscratch/enroot/nvcr.io_nvidia_pytorch_24.01-py3.sqsh \
-    --task-prolog="`pwd`/${INSTALL_FILE}" scripts/task.sh --incr --state "$STATE_FILE"
+    --task-prolog="`pwd`/${INSTALL_FILE}" scripts/task.sh --cmd "$CMD" --task-id "$TASK_WITHIN_JOB"
 EOF
 
 if [[ $YES -eq 0 ]]; then
