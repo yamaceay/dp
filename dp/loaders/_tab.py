@@ -5,23 +5,41 @@ import re
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
+from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, load_split_indices
 
 class TabDatasetAdapter(DatasetAdapter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.data_in = Path(self.data_in)
-        try:
-            with self.data_in.open("r", encoding="utf-8") as handle:
-                self._records: List[dict] = json.load(handle)
-        except Exception as exc:
-            raise RuntimeError(f"Failed to load TAB dataset from {self.data_in}") from exc
+        if self.data_in.is_dir():
+            self._records = []
+            for file in self.data_in.glob("echr_*.json"):
+                try:
+                    with file.open("r", encoding="utf-8") as handle:
+                        records = json.load(handle)
+                        self._records.extend(records)
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to load TAB dataset from {file}") from exc
+        else:
+            raise ValueError(f"data_in path '{self.data_in}' is not a valid file or directory")
+        self._split_indices = load_split_indices(data_name=self.data, split=self.split)
+        if self._split_indices is not None:
+            for idx in self._split_indices:
+                if idx >= len(self._records):
+                    raise ValueError(
+                        f"Split index {idx} out of range for TAB dataset (size={len(self._records)})"
+                    )
 
     def __len__(self) -> int:
+        if self._split_indices is not None:
+            return len(self._split_indices)
         return len(self._records)
 
     def iter_records(self) -> Iterable[DatasetRecord]:
-        base_iter = ((idx, row) for idx, row in enumerate(self._records))
+        if self._split_indices is None:
+            base_iter = ((idx, row) for idx, row in enumerate(self._records))
+        else:
+            base_iter = ((idx, self._records[idx]) for idx in self._split_indices)
         for idx, row in self._slice_records(base_iter):
             uid = str(row.get("doc_id", idx))
             text = row.get("text", "")

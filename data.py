@@ -24,11 +24,12 @@ def load_data(data_kwargs: Dict[str, object]):
 def add_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
     parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
+    parser.add_argument('--split', type=str, default=None, help='Split file name/path under indices/{dataset}/...')
     parser.add_argument('--start', type=int, default=None, help='Start index for slicing (inclusive, python slicing semantics)')
     parser.add_argument('--end', type=int, default=None, help='End index for slicing (exclusive, python slicing semantics)')
     parser.add_argument('--step', type=int, default=None, help='Step for slicing (python slicing semantics)')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load after slicing')
-    return ['data', 'data_in', 'start', 'end', 'step', 'max_records']
+    return ['data', 'data_in', 'split', 'start', 'end', 'step', 'max_records']
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark Anonymization Tools")

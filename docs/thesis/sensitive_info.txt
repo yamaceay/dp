@@ -1,0 +1,11 @@
+  // personal/subject related stuff
+  author: "Yamaç Eren Ay",
+  title: "Differential Privacy Meets PII Detection - A Comparative Study on LLM-Based Anonymization",
+  supervisor1: "Prof. Dr.-Ing. Sebastian Möller",
+  supervisor2: "Ibrahim Baroud",
+  degree: "Master of Science",
+  program: "Computer Science (Informatik)",
+  university: "TU Berlin",
+  institute: "Quality and Usability",
+  deadline: datetime.today().display("[day].[month].[year]"),
+  city: "Berlin",

@@ -7,7 +7,7 @@ from typing import Dict, Iterable, List, Optional, Union
 
 from datasets import Dataset, DatasetDict, load_dataset
 
-from dp.loaders.base import DatasetAdapter, DatasetRecord
+from dp.loaders.base import DatasetAdapter, DatasetRecord, load_split_indices
 
 class DBBioDatasetAdapter(DatasetAdapter):
     """Adapter for the DB-Bio legal dataset."""
@@ -25,15 +25,28 @@ class DBBioDatasetAdapter(DatasetAdapter):
                 self._dataset = dataset["data"]
         except Exception as exc:  # pragma: no cover
             raise RuntimeError(f"Failed to load DB-Bio dataset from {self.data_in}") from exc
+        self._split_indices = load_split_indices(data_name=self.data, split=self.split)
 
     def __len__(self) -> int:
+        if self._split_indices is not None:
+            return len(self._split_indices)
         if isinstance(self._dataset, DatasetDict):
             return sum(len(split) for split in self._dataset.values())
         return len(self._dataset)
 
     def iter_records(self) -> Iterable[DatasetRecord]:
         all_records = self._iter_all_records()
-        for record in self._slice_records(all_records):
+        if self._split_indices is None:
+            for record in self._slice_records(all_records):
+                yield record
+            return
+        records_list = list(all_records)
+        total = len(records_list)
+        for idx in self._split_indices:
+            if idx >= total:
+                raise ValueError(f"Split index {idx} out of range for DB-Bio dataset (size={total})")
+        split_records = ((idx, records_list[idx]) for idx in self._split_indices)
+        for _, record in self._slice_records(split_records):
             yield record
 
     def _iter_all_records(self) -> Iterable[DatasetRecord]:

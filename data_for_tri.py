@@ -15,12 +15,13 @@ available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 def add_data_args(parser: argparse.ArgumentParser) -> list[str]:
     parser.add_argument('--data', type=str, default=None, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
     parser.add_argument('--data_in', type=str, default=None, help='Path to input data file or directory')
+    parser.add_argument('--split', type=str, default=None, help='Split file name/path under indices/{dataset}/...')
     parser.add_argument('--start', type=int, default=None, help='Start index for slicing (inclusive, python slicing semantics)')
     parser.add_argument('--end', type=int, default=None, help='End index for slicing (exclusive, python slicing semantics)')
     parser.add_argument('--step', type=int, default=None, help='Step for slicing (python slicing semantics)')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load after slicing')
     parser.add_argument('--deidentify', action='store_true', default=None, help='Apply de-identification to train background entries')
-    return ['data', 'data_in', 'start', 'end', 'step', 'max_records']
+    return ['data', 'data_in', 'split', 'start', 'end', 'step', 'max_records']
 
 
 class InMemoryDatasetAdapter(DatasetAdapter):
@@ -46,6 +47,7 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
     start = params.get('start')
     end = params.get('end')
     step = params.get('step')
+    split = params.get('split')
     max_records = params.get('max_records')
     result_in = params.get('result_in')
     full_record = bool(params.get('full_record') or False)
@@ -76,6 +78,7 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
         'start': start,
         'end': end,
         'step': step,
+        'split': split,
         'max_records': max_records,
         'result_in': result_in,
         'full_record': full_record,

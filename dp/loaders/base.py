@@ -86,17 +86,20 @@ class DatasetAdapter:
                  max_records: Optional[int] = None, 
                  start: Optional[int] = None, 
                  end: Optional[int] = None, 
-                 step: Optional[int] = None):
+                 step: Optional[int] = None,
+                 split: Optional[str] = None):
         if data_in is None:
             raise ValueError("data_in must point to a JSONL file")
         data_path = Path(data_in)
         if not data_path.exists():
             raise ValueError(f"data_in path '{data_in}' does not exist or is not a file")
+        self.data = data
         self.data_in = data_in
         self.max_records = max_records
         self.start = start
         self.end = end
         self.step = step
+        self.split = split
 
     def __iter__(self) -> Iterator[DatasetRecord]:
         return iter(self.iter_records())
@@ -121,3 +124,64 @@ def slice_records(iterable: Iterable[Any], start: int, end: int, step: int, max_
     if max_records is not None:
         sliced = itertools.islice(sliced, max_records)
     return sliced
+
+
+def resolve_split_file(data_name: Optional[str], split: Optional[str]) -> Optional[Path]:
+    if split is None:
+        return None
+    split_value = str(split).strip()
+    if not split_value:
+        return None
+    candidate = Path(split_value)
+    if candidate.is_file():
+        return candidate
+    if data_name is None:
+        raise ValueError("data is required when split is provided")
+    dataset = str(data_name).strip()
+    if not dataset:
+        raise ValueError("data is required when split is provided")
+    normalized = split_value
+    if normalized.startswith("/"):
+        normalized = normalized[1:]
+    if normalized.startswith("indices/"):
+        normalized = normalized[len("indices/") :]
+    if normalized.startswith(f"{dataset}/"):
+        normalized = normalized[len(dataset) + 1 :]
+    prefixed = Path("indices") / dataset / normalized
+    candidates = [prefixed]
+    if prefixed.suffix != ".txt":
+        candidates.append(prefixed.with_suffix(".txt"))
+    for path in candidates:
+        if path.is_file():
+            return path
+    split_root = Path("indices") / dataset
+    filename = Path(split_value).name
+    if not filename.endswith(".txt"):
+        filename = f"{filename}.txt"
+    matches = sorted(split_root.glob(f"**/{filename}"))
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        rendered = ", ".join(str(match) for match in matches)
+        raise ValueError(f"Ambiguous split '{split_value}'. Matches: {rendered}")
+    raise ValueError(f"Split file not found for dataset '{dataset}': {split_value}")
+
+
+def load_split_indices(data_name: Optional[str], split: Optional[str]) -> Optional[List[int]]:
+    split_path = resolve_split_file(data_name=data_name, split=split)
+    if split_path is None:
+        return None
+    values: List[int] = []
+    with split_path.open("r", encoding="utf-8") as handle:
+        for line_no, line in enumerate(handle, start=1):
+            raw = line.strip()
+            if not raw:
+                continue
+            try:
+                value = int(raw)
+            except ValueError as exc:
+                raise ValueError(f"Invalid integer in split file {split_path}:{line_no}: {raw!r}") from exc
+            if value < 0:
+                raise ValueError(f"Split index must be non-negative in {split_path}:{line_no}")
+            values.append(value)
+    return values

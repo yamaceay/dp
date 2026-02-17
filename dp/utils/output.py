@@ -40,12 +40,12 @@ class JsonlOutputHandler(OutputHandler):
         self._streams: Dict[str, Any] = {}
         self._paths: Dict[str, Path] = {}
 
-    def output(self, result: AnonymizationResult, dataset: str, model: str, task_id: Optional[int] = None, **kwargs):
+    def output(self, result: AnonymizationResult, dataset: str, model: str, **kwargs):
         idx = kwargs.get("idx", None)
         unique_name = kwargs.get("unique_name")
         hyperparams = kwargs.get("hyperparams")
         variant_key = self._derive_variant_key_from_hyperparams(hyperparams) or self._derive_variant_key(result)
-        stream = self._ensure_stream(dataset, model, variant_key, task_id, unique_name)
+        stream = self._ensure_stream(dataset, model, variant_key, unique_name)
 
         record = {
             "idx": idx,
@@ -87,7 +87,7 @@ class JsonlOutputHandler(OutputHandler):
         path_str = pattern.format(dataset=dataset)
         return Path(path_str)
 
-    def _ensure_stream(self, dataset: str, model: str, variant_key: str, task_id: Optional[int], unique_name: Optional[str]):
+    def _ensure_stream(self, dataset: str, model: str, variant_key: str, unique_name: Optional[str]):
         stream_key = (variant_key, unique_name)
         if stream_key in self._streams:
             return self._streams[stream_key]
@@ -101,8 +101,6 @@ class JsonlOutputHandler(OutputHandler):
             suffix += variant_key if variant_key.startswith("?") else f"_{variant_key}"
         sanitized_suffix = suffix.replace(" ", "_")
         path = output_dir / f"{self.timestamp}{sanitized_suffix}"
-        if task_id is not None:
-            path = path.with_name(f"{path.stem}_{task_id}")
         path = path.with_suffix(".jsonl")
         handle = open(path, 'w', encoding='utf-8')
         self._streams[stream_key] = handle

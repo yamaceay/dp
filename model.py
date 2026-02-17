@@ -19,6 +19,7 @@ from runtime import load_runtime_bundle
 
 available_models = list(MODEL_REGISTRY.keys())
 available_datasets = list(ADAPTER_REGISTRY.keys())
+SPLIT_ENABLED_DATASETS = {"tab", "db_bio"}
 
 
 def add_data_args(parser: argparse.ArgumentParser) -> List[str]:
@@ -29,7 +30,8 @@ def add_data_args(parser: argparse.ArgumentParser) -> List[str]:
     parser.add_argument('--end', type=int, default=None)
     parser.add_argument('--step', type=int, default=None)
     parser.add_argument('--max_records', type=int, default=None)
-    return ['data', 'data_in', 'result_in', 'start', 'end', 'step', 'max_records']
+    parser.add_argument('--split', type=str, default=None)
+    return ['data', 'data_in', 'result_in', 'start', 'end', 'step', 'max_records', 'split']
 
 
 def add_model_args(parser: argparse.ArgumentParser) -> List[str]:
@@ -199,17 +201,18 @@ def load_data(data_kwargs: dict, model_name: str) -> Tuple[List[DatasetRecord], 
     data = data_kwargs.get("data")
     data_in = data_kwargs.get("data_in")
     result_in = data_kwargs.get("result_in")
+    split = data_kwargs.get("split")
     data_source = _data_source_for_model(model_name, bool(result_in))
     if data_source == "original":
         if not data or not data_in:
             raise ValueError("data and data_in are required for original dataset loading")
-        adapter = get_adapter(data, data=data, data_in=data_in)
+        adapter = get_adapter(data, data=data, data_in=data_in, split=split)
         return list(adapter.iter_records()), None
     if not result_in:
         raise ValueError("result_in is required for anonymized dataset loading")
     if not data or not data_in:
         raise ValueError("data and data_in are required to align anonymized results with dataset records")
-    original_records = list(get_adapter(data, data=data, data_in=data_in).iter_records())
+    original_records = list(get_adapter(data, data=data, data_in=data_in, split=split).iter_records())
     records, source_indices = build_dataset_from_results(result_in, original_records)
     return records, source_indices
 
@@ -531,6 +534,15 @@ if __name__ == "__main__":
     
     texts_arg = runtime_kwargs.pop("texts", None)
     indices_arg = runtime_kwargs.pop("indices", None)
+    split_arg = data_kwargs.get("split")
+    split_dataset = str(data_kwargs.get("data") or "").lower()
+    split_is_active = bool(split_arg) and split_dataset in SPLIT_ENABLED_DATASETS
+    if split_arg and split_dataset not in SPLIT_ENABLED_DATASETS:
+        print(f"split is ignored for dataset '{split_dataset}'")
+    if split_is_active:
+        texts_arg = None
+        indices_arg = None
+        print("split is set; ignoring --texts and --indices")
     
     if texts_arg and indices_arg:
         raise ValueError("Cannot specify both --texts and --indices")
