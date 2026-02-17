@@ -1,2 +1,2 @@
-array_template|python3 array.py --label template --config_path configs/array/{task_id}.yaml --output_path outputs/array/template_{task_id}.json
-array_env|python3 array.py --label env --config_path configs/array/\$TASK_WITHIN_JOB.yaml --output_path outputs/array/env_\$TASK_WITHIN_JOB.json
+array_template|python array.py --label template --config_path configs/array/{task_id}.yaml --output_path outputs/array/template_{task_id}.json
+array_env|python array.py --label env --config_path configs/array/\$TASK_WITHIN_JOB.yaml --output_path outputs/array/env_\$TASK_WITHIN_JOB.json
