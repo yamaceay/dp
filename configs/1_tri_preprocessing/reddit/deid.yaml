@@ -1,4 +1,5 @@
 data: reddit
 data_in: data/reddit/reddit.jsonl
-save_to_jsonl: data/reddit/tri_preprocessing/deid.jsonl
+result_in: outputs/reddit/presidio/{run_timestamp}_reddit_presidio_task_{task_id}.jsonl
+save_to_jsonl: data/reddit/tri_preprocessing/deid_{task_id}.jsonl
 deidentify: true
