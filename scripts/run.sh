@@ -93,18 +93,8 @@ if [[ -n "$MAILTO" ]]; then
 #SBATCH --mail-user=${MAILTO}"
 fi
 
-TASK_LINES=""
-if [[ -n "$MAX_TASKS" ]]; then
-    TASK_LINES="#SBATCH --ntasks=${MAX_TASKS}
-"
-fi
-
 EXTRA_LINES=""
-if [[ -n "$TASK_LINES" && -n "$MAIL_LINES" ]]; then
-    EXTRA_LINES="${TASK_LINES}${MAIL_LINES}"
-elif [[ -n "$TASK_LINES" ]]; then
-    EXTRA_LINES="${TASK_LINES}"
-elif [[ -n "$MAIL_LINES" ]]; then
+if [[ -n "$MAIL_LINES" ]]; then
     EXTRA_LINES="${MAIL_LINES}"
 fi
 
@@ -161,6 +151,7 @@ echo "Base command: $CMD"
 export TASK_WITHIN_JOB JOB_NAME SLURM_ARRAY_TASK_ID RUN_TIMESTAMP
 
 srun -K \
+    --ntasks=1 \
     --container-mounts="`pwd`:`pwd`,/netscratch/$USER:/netscratch/$USER" \
     --container-workdir="`pwd`" \
     --container-image=/netscratch/enroot/nvcr.io_nvidia_pytorch_24.01-py3.sqsh \
