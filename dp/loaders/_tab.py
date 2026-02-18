@@ -21,23 +21,16 @@ class TabDatasetAdapter(DatasetAdapter):
                     )
 
     def _load_records(self, source: Path) -> List[dict]:
-        if source.is_file():
-            return self._read_json_file(source)
         if source.is_dir():
             ordered_names = ["echr_test.json", "echr_dev.json", "echr_train.json"]
-            ordered_files = [source / name for name in ordered_names if (source / name).is_file()]
-            fallback_files = sorted(
-                p for p in source.glob("*.json")
-                if p.name not in {f.name for f in ordered_files}
-            )
-            files = ordered_files + fallback_files
+            files = [source / name for name in ordered_names if (source / name).is_file()]
             if not files:
                 raise ValueError(f"No TAB json files found in directory '{source}'")
             records: List[dict] = []
             for file in files:
                 records.extend(self._read_json_file(file))
             return records
-        raise ValueError(f"data_in path '{source}' is not a valid file or directory")
+        raise ValueError(f"data_in path '{source}' is not a valid directory")
 
     def _read_json_file(self, path: Path) -> List[dict]:
         try:
