@@ -1,20 +1,16 @@
 dataset: db_bio
 data_path: data/db_bio
-attacker_extensions: data/db_bio/db_bio_bk_sum_realistic.jsonl
-model_name: roberta-large
-output_root: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints_realistic
+split: indices/db_bio/test/500_random/{task_id}.txt
+attacker_extensions: data/db_bio/tri_preprocessing/500_random_{task_id}.jsonl
+model_name: distilbert-base-uncased
+output_root: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/500_random_{task_id}
 max_records: null
 max_length: 512
 
 training:
-  finetuning_epochs: 100
-  batch_size: 8
+  finetuning_epochs: 30
+  batch_size: 16
   use_pretraining: true
   pretraining_epochs: 1
   per_step: null
-  early_stop_threshold: null
-  lr: 0.0001
-  scheduler_type: cosine
-  optimizer_type: adamw
-  warmup_ratio: 0.03
-  weight_decay: 0.005
+  p_agg: avg

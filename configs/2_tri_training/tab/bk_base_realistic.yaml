@@ -1,20 +1,21 @@
 dataset: tab
-data_path: data/TAB/tab.json
-attacker_extensions: data/TAB/test_bk_sum_realistic.jsonl
-model_name: roberta-large
-output_root: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints_realistic
+data_path: data/tab
+split: indices/tab/test/500_random/{task_id}.txt
+attacker_extensions: data/tab/tri_preprocessing/500_random_{task_id}.jsonl
+model_name: distilbert-base-uncased
+output_root: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/500_random_{task_id}
 max_records: null
 max_length: 512
 
 training:
-  finetuning_epochs: 100
+  finetuning_epochs: 50
   batch_size: 8
   use_pretraining: true
   pretraining_epochs: 1
   per_step: null
   early_stop_threshold: null
-  lr: 0.0001
-  scheduler_type: cosine
-  optimizer_type: adamw
-  warmup_ratio: 0.03
-  weight_decay: 0.005
+  loss_type: focal
+  focal_gamma: 5.0
+  focal_ignore_pt: 0.95
+  exclude_stopwords: true
+  p_agg: avg

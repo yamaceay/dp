@@ -1,1 +1,1 @@
-tri_tab_realistic|python tri_by_bk.py --mode train --training-in configs/2_tri_training/tab/bk_base_realistic.yaml --run-name tab__realistic  --task_id {task_id}
+tri_tab_realistic|python tri_by_bk.py --mode train --training-in configs/2_tri_training/tab/bk_base_realistic.yaml --run-name 500_random_{task_id}  --task_id {task_id}
