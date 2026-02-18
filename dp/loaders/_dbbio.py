@@ -66,10 +66,14 @@ class DBBioDatasetAdapter(DatasetAdapter):
             else:
                 data = dict(row)
             text = data.get("text", "")
-            uid = data.get("wiki_name") or data.get("label") or str(idx)
+            uid = data.get("wiki_name")
             name = data.get("people")
+            label = data.get("label")
+            if uid is None or name is None or label is None:
+                raise ValueError(f"Missing required fields in DB-Bio record at index {idx}")
+            name_unique = f"{name} ({label})"
             metadata = {
-                "label": data.get("label"),
+                "label": label,
                 "l1": data.get("l1"),
                 "l2": data.get("l2"),
                 "l3": data.get("l3"),
@@ -81,7 +85,7 @@ class DBBioDatasetAdapter(DatasetAdapter):
             yield DatasetRecord(
                 text=text,
                 uid=str(uid),
-                name=name,
+                name=name_unique,
                 metadata=metadata,
             )
 
