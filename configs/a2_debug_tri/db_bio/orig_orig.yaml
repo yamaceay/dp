@@ -1,4 +1,0 @@
-data: db_bio
-data_in: data/db_bio/test/data-00000-of-00001.arrow
-pipeline_in: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/db_bio__lr5e-5
-n_first_predictions: 5

@@ -1,5 +1,0 @@
-data: tab
-data_in: data/TAB/splitted/test.json
-result_in: outputs/tab/presidio/20260205_184512_tab_presidio.jsonl
-pipeline_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__deid__lr5e-5
-n_first_predictions: 10

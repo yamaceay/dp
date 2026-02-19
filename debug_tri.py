@@ -7,6 +7,7 @@ import argparse
 from dp.loaders import get_adapter
 from dp.loaders.results import build_dataset_from_results, load_result_records
 from dp.tri.base import TRIDetector
+from dp.utils.tasking import apply_task_template, resolve_task_id
 from runtime.config_loader import _read_yaml
 
 def normalize_config(config: Dict, args: argparse.Namespace) -> argparse.Namespace:
@@ -40,8 +41,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test RiskAnonymizer")
     parser.add_argument('--config', type=str, required=True, help='Path to config file')
     parser.add_argument('--pipeline_in', type=str, default=None, help='Path to anonymization pipeline JSON file')
+    parser.add_argument('--task_id', type=int, default=None, help='Task id for task-aware path templates')
     args = parser.parse_args()
-    args = normalize_config(_read_yaml(args.config), args)
+    task_id = resolve_task_id(args.task_id)
+    config_path = apply_task_template(args.config, task_id)
+    args = normalize_config(_read_yaml(config_path), args)
+    for key in ('data_in', 'result_in', 'pipeline_in', 'risk_in', 'save_to_jsonl'):
+        setattr(args, key, apply_task_template(getattr(args, key, None), task_id))
 
     if not args.data or not args.data_in:
         raise ValueError("data and data_in are required")
