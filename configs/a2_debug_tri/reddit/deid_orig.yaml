@@ -1,4 +1,0 @@
-data: reddit
-data_in: data/reddit/reddit.jsonl
-pipeline_in: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__deid__lr5e-5
-n_first_predictions: 10

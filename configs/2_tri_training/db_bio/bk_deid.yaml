@@ -14,3 +14,4 @@ training:
   pretraining_epochs: 1
   per_step: null
   p_agg: avg
+  early_stop_patience: 3

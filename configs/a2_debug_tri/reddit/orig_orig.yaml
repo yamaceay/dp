@@ -1,4 +1,4 @@
 data: reddit
 data_in: data/reddit/reddit.jsonl
-pipeline_in: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit__lr5e-5
+pipeline_in: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum_{task_id}
 n_first_predictions: 10
