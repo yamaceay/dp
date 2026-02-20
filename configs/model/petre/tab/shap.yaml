@@ -3,10 +3,10 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/task_{task_id}/tab__deid__lr5e-5__task_{task_id}
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}
 
 precomputation:
-  risk_scores: data/TAB/test_risk_shap.jsonl
+  risk_scores: data/tab/tri_risk/shap_{task_id}.jsonl
   result_in: outputs/tab/presidio/{run_timestamp}_tab_presidio_task_{task_id}.jsonl
 
 tri_chunking:

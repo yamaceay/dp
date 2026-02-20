@@ -1,7 +1,7 @@
 dataset: reddit
 data_in: data/reddit/reddit.jsonl
 explainer: shap
-explainer_in: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum_{task_id}/reddit_8_16_0.0001__task_{task_id}/
+explainer_in: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum_{task_id}/reddit_8_16_0.0001__task_{task_id}
 result_in: outputs/reddit/presidio/{run_timestamp}_reddit_presidio_task_{task_id}.jsonl
 save_to_jsonl: data/reddit/tri_risk/shap_{task_id}.jsonl
 sort_by: scores

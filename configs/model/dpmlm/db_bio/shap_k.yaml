@@ -4,11 +4,11 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/task_{task_id}/db_bio__deid__lr5e-5__task_{task_id}
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}
   risk_temperature: 0.1
 
 precomputation:
-  risk_scores: data/db_bio/db_bio_risk_shap.jsonl
+  risk_scores: data/db_bio/tri_risk/shap_{task_id}.jsonl
   result_in: outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio_task_{task_id}.jsonl
 
 tri_chunking:
