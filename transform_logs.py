@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,91 @@ import pandas as pd
 def read_logs(path: str | Path) -> list[dict[str, Any]]:
     with open(path, "r") as f:
         return json.load(f)
+
+
+class TaskResultWeightedAggregator:
+    def __init__(self, data: list[dict[str, Any]]):
+        self.data = data
+
+    def aggregate(self) -> list[dict[str, Any]]:
+        aggregated: list[dict[str, Any]] = []
+        for item in self.data:
+            task_results = item.get("task_results")
+            if not isinstance(task_results, list) or not task_results:
+                aggregated.append(item)
+                continue
+
+            merged_item: dict[str, Any] = {}
+            for key, value in item.items():
+                if key in {"privacy", "utility", "divergence"}:
+                    continue
+                merged_item[key] = value
+
+            for section in ("privacy", "utility", "divergence"):
+                metrics = self._aggregate_section(task_results, section)
+                if metrics:
+                    merged_item[section] = metrics
+
+            aggregated.append(merged_item)
+        return aggregated
+
+    def _aggregate_section(self, task_results: list[dict[str, Any]], section: str) -> dict[str, Any]:
+        weighted_sums: dict[str, float] = {}
+        weight_sums: dict[str, float] = {}
+        count_sums: dict[str, int] = {}
+        tasks = 0
+
+        for task in task_results:
+            section_metrics = task.get(section)
+            if not isinstance(section_metrics, dict):
+                continue
+            tasks += 1
+            feature_counts = self._extract_feature_counts(section_metrics)
+            default_count = feature_counts.get("") or 1
+            for metric_name, metric_value in section_metrics.items():
+                if metric_name.startswith("_"):
+                    count_sums[metric_name] = count_sums.get(metric_name, 0) + int(metric_value)
+                    continue
+                feature_name = self._feature_name(metric_name, feature_counts)
+                metric_count = feature_counts.get(feature_name, default_count)
+                weighted_sums[metric_name] = weighted_sums.get(metric_name, 0.0) + float(metric_value) * float(metric_count)
+                weight_sums[metric_name] = weight_sums.get(metric_name, 0.0) + float(metric_count)
+
+        if tasks == 0:
+            return {}
+
+        aggregated: dict[str, Any] = {}
+        for metric_name, metric_sum in weighted_sums.items():
+            weight = weight_sums.get(metric_name, 0.0)
+            if weight <= 0.0:
+                continue
+            aggregated[metric_name] = metric_sum / weight
+        for metric_name, metric_sum in count_sums.items():
+            aggregated[metric_name] = metric_sum
+        aggregated["_tasks"] = tasks
+        return aggregated
+
+    def _extract_feature_counts(self, section_metrics: dict[str, Any]) -> dict[str, int]:
+        feature_counts: dict[str, int] = {}
+        for metric_name, metric_value in section_metrics.items():
+            if metric_name == "_count":
+                feature_counts[""] = int(metric_value)
+                continue
+            match = re.match(r"^_(.+)_count$", metric_name)
+            if match:
+                feature_counts[match.group(1)] = int(metric_value)
+        return feature_counts
+
+    def _feature_name(self, metric_name: str, feature_counts: dict[str, int]) -> str:
+        candidate_features = sorted(
+            [feature for feature in feature_counts.keys() if feature],
+            key=len,
+            reverse=True,
+        )
+        for feature in candidate_features:
+            if metric_name.startswith(feature + "_"):
+                return feature
+        return ""
 
 class RedditUtilityByHardness:
     def __init__(self, data: list[dict[str, Any]]):
@@ -189,7 +275,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    data = read_logs(args.input)
+    data = TaskResultWeightedAggregator(read_logs(args.input)).aggregate()
 
     if args.mode in {"reddit_utility", "all"}:
         utility = RedditUtilityByHardness(data)

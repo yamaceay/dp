@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import glob
+import re
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Callable, Sequence, Any
 
@@ -71,9 +72,20 @@ def collect_jsonl_sources(*paths: str) -> Dict[str, Path]:
 
     for path in resolved_paths:
         if path.is_file():
-            register(path)
+            if _matches_task_id(path, task_id):
+                register(path)
         elif path.is_dir():
             for file_path in sorted(path.rglob("*.jsonl")):
-                register(file_path)
+                if _matches_task_id(file_path, task_id):
+                    register(file_path)
 
     return {name: entry_path for name, entry_path in entries}
+
+
+def _matches_task_id(path: Path, task_id: Optional[int]) -> bool:
+    if task_id is None:
+        return True
+    match = re.search(r"_task_([0-9]+)\.jsonl$", path.name)
+    if not match:
+        return False
+    return int(match.group(1)) == task_id
