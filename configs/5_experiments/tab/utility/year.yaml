@@ -1,5 +1,6 @@
 dataset: tab
-data_in: data/TAB/splitted/test.json
+data_in: data/tab
+split: indices/tab/test/50_eval/{task_id}.txt
 debug: true
 annotations_in:
   - outputs/tab
@@ -15,13 +16,13 @@ target:
     - 2008-2010
     - 2011-2013
     - 2014-2019
-split:
+source_splits:
   - train: 0.0
     val: 1.0
-  - path: data/TAB/splitted/train.json
+  - split: indices/tab/train/{task_id}.txt
     train: 1.0
     val: 0.0
-  - path: data/TAB/splitted/dev.json
+  - split: indices/tab/val/{task_id}.txt
     train: 0.0
     val: 1.0
 random_state: 42
@@ -29,7 +30,7 @@ head:
   type: bert_ordinal
   params:
     epochs: 8
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/tab__lr5e-5/finetuning/checkpoint-2310
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}/finetuning/{checkpoint}
     checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/tab/year
     primary_metric: macro_mae
     encoder_lr: 2e-6
@@ -37,4 +38,4 @@ head:
     early_stop_patience: 3
 output:
   format: jsonl
-  file: logs/tab_year_exp.jsonl
+  file: logs/tab_year_exp_task_{task_id}.jsonl

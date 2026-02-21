@@ -1,5 +1,6 @@
 dataset: tab
-data_in: data/TAB/splitted/test.json
+data_in: data/tab
+split: indices/tab/test/50_eval/{task_id}.txt
 annotations_in:
   - outputs/tab
 metric:
@@ -9,4 +10,4 @@ metric:
     model_name: sentence-transformers/all-MiniLM-L6-v2
 output:
   format: jsonl
-  file: logs/tab_div_cosine_exp.jsonl
+  file: logs/tab_div_cosine_exp_task_{task_id}.jsonl

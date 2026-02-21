@@ -1,18 +1,19 @@
 dataset: db_bio
-data_in: data/db_bio/test/data-00000-of-00001.arrow
+data_in: data/db_bio
+split: indices/db_bio/test/50_eval/{task_id}.txt
 debug: true
 annotations_in:
   - outputs/db_bio
 target:
   key: label
   type: nominal
-split:
+source_splits:
   - train: 0.0
     val: 1.0
-  - path: data/db_bio/train/data-00000-of-00001.arrow
+  - split: indices/db_bio/train/{task_id}.txt
     train: 1.0
     val: 0.0
-  - path: data/db_bio/validation/data-00000-of-00001.arrow
+  - split: indices/db_bio/val/{task_id}.txt
     train: 0.0
     val: 1.0
 random_state: 42
@@ -20,7 +21,7 @@ head:
   type: bert_classifier
   params:
     epochs: 5
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/db_bio__lr5e-5/finetuning/checkpoint-675
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}/finetuning/{checkpoint}
     checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/db_bio/label
     primary_metric: macro_f1
     encoder_lr: 1e-6
@@ -28,4 +29,4 @@ head:
     early_stop_patience: 2
 output:
   format: jsonl
-  file: logs/db_bio_label_exp.jsonl
+  file: logs/db_bio_label_exp_task_{task_id}.jsonl

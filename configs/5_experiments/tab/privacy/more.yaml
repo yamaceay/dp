@@ -4,10 +4,10 @@ split: indices/tab/test/50_eval/{task_id}.txt
 annotations_in:
   - outputs/tab
 tri:
-  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/500_random_{task_id}/500_random_{task_id}__task_{task_id}
   max_length: 512
 mask_token: "[MASK]"
 output:
   format: jsonl
-  file: logs/tab_priv_exp_task_{task_id}.jsonl
+  file: logs/tab_priv_more_exp_task_{task_id}.jsonl
 progress: false

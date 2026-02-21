@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import glob
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Callable, Sequence, Any
 
 from dp.loaders import DatasetRecord
+from dp.utils.tasking import apply_task_template, resolve_task_id
 
 OutputCallback = Callable[[str], None]
 
@@ -35,7 +37,22 @@ def _first_text(*values: Any) -> str:
     return ""
 
 def collect_jsonl_sources(*paths: str) -> Dict[str, Path]:
-    resolved_paths = [Path(p) for p in paths]
+    task_id = resolve_task_id(None)
+    resolved_paths: List[Path] = []
+    for raw in paths:
+        rendered = apply_task_template(raw, task_id) if isinstance(raw, str) else raw
+        if not isinstance(rendered, str):
+            continue
+        pattern = rendered.replace("{run_timestamp}", "*")
+        if any(ch in pattern for ch in ("*", "?", "[")):
+            matches = sorted(glob.glob(pattern))
+            if "{run_timestamp}" in rendered and matches:
+                resolved_paths.append(Path(matches[-1]))
+                continue
+            for match in matches:
+                resolved_paths.append(Path(match))
+            continue
+        resolved_paths.append(Path(pattern))
     entries: List[Tuple[str, Path]] = []
     counts: Dict[str, int] = {}
     seen: set[Path] = set()

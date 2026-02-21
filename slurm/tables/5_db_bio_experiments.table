@@ -1,5 +1,5 @@
 privacy_db_bio             |python run.py privacy --config configs/5_experiments/db_bio/privacy/exact.yaml
-privacy_db_bio_realistic   |python run.py privacy --config configs/5_experiments/db_bio/privacy/full.yaml
+privacy_db_bio_realistic   |python run.py privacy --config configs/5_experiments/db_bio/privacy/more.yaml
 divergence_db_bio_bertscore|python run.py divergence --config configs/5_experiments/db_bio/divergence/bertscore.yaml
 divergence_db_bio_cosine   |python run.py divergence --config configs/5_experiments/db_bio/divergence/cosine.yaml
 utility_db_bio_label       |python run.py utility --config configs/5_experiments/db_bio/utility/label.yaml

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import glob
 import hashlib
+import re
 from collections import Counter
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
@@ -37,14 +39,17 @@ from dp.experiments.utility.reporting import build_utility_report, create_utilit
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
 from dp.loaders.derive import get_getter
+from dp.utils.tasking import apply_task_template, resolve_task_id
 
 
 ConfigDict = Dict[str, Any]
+_CHECKPOINT_PATTERN = re.compile(r"checkpoint-(\d+)")
 
 
 class UtilityCtx(NamedTuple):
     dataset: str
     data_in: str
+    split: Optional[str]
     annotations: List[str]
     group_by: Optional[str]
     spec: Any
@@ -56,11 +61,14 @@ class UtilityCtx(NamedTuple):
     output_format: str
     output_file: Optional[str]
     identifier: Optional[str]
+    source_splits: List[Dict[str, Any]]
+    task_id: Optional[int]
 
 
 class DivergenceCtx(NamedTuple):
     dataset: str
     data_in: str
+    split: Optional[str]
     annotations: List[str]
     metric_type: str
     metric_params: Dict[str, Any]
@@ -72,6 +80,7 @@ class DivergenceCtx(NamedTuple):
 class PrivacyCtx(NamedTuple):
     dataset: str
     data_in: str
+    split: Optional[str]
     annotations: List[str]
     tri_pipeline: str
     max_records: Optional[int]
@@ -83,9 +92,31 @@ class PrivacyCtx(NamedTuple):
     output_file: Optional[str]
 
 
-def load_records(dataset: str, data_in: Optional[str], max_records: Optional[int]) -> List[DatasetRecord]:
-    adapter = get_adapter(dataset, data=dataset, data_in=data_in, max_records=max_records)
+def load_records(dataset: str, data_in: Optional[str], max_records: Optional[int], split: Optional[str] = None) -> List[DatasetRecord]:
+    adapter = get_adapter(dataset, data=dataset, data_in=data_in, max_records=max_records, split=split)
     return list(adapter.iter_records())
+
+
+def _parse_optional_task_id(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _render_runtime_templates(value: Any, task_id: Optional[int]) -> Any:
+    if isinstance(value, dict):
+        return {k: _render_runtime_templates(v, task_id) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_render_runtime_templates(v, task_id) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_render_runtime_templates(v, task_id) for v in value)
+    if not isinstance(value, str):
+        return value
+    rendered = apply_task_template(value, task_id)
+    return _resolve_checkpoint_template(rendered)
 
 
 def merge_params(config: ConfigDict, args: Any) -> ConfigDict:
@@ -93,6 +124,11 @@ def merge_params(config: ConfigDict, args: Any) -> ConfigDict:
     identifier = getattr(args, "identifier", None)
     if identifier is not None:
         out["identifier"] = identifier
+    explicit_task_id = _parse_optional_task_id(out.get("task_id"))
+    task_id = resolve_task_id(explicit_task_id)
+    out = _render_runtime_templates(out, task_id)
+    if task_id is not None:
+        out["task_id"] = task_id
     return out
 
 
@@ -151,6 +187,47 @@ def _resolve_utility_components(spec: Any, params: ConfigDict) -> Tuple[str | No
     return vec_name, vec_kwargs, head_name, head_kwargs
 
 
+def _resolve_checkpoint_template(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _resolve_checkpoint_template(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_checkpoint_template(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_resolve_checkpoint_template(v) for v in value)
+    if not isinstance(value, str):
+        return value
+    if "{checkpoint}" not in value:
+        return value
+    pattern = value.replace("{checkpoint}", "checkpoint-*")
+    matches = sorted(glob.glob(pattern))
+    if not matches:
+        raise FileNotFoundError(f"no checkpoint matched pattern: {pattern}")
+    best: Optional[Tuple[int, str]] = None
+    for candidate in matches:
+        found = _CHECKPOINT_PATTERN.search(candidate)
+        if not found:
+            continue
+        step = int(found.group(1))
+        if best is None or step > best[0]:
+            best = (step, candidate)
+    if best is None:
+        raise FileNotFoundError(f"no checkpoint-* entry matched pattern: {pattern}")
+    return best[1]
+
+
+def _render_component_paths(value: Any, task_id: Optional[int]) -> Any:
+    if isinstance(value, dict):
+        return {k: _render_component_paths(v, task_id) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_render_component_paths(v, task_id) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_render_component_paths(v, task_id) for v in value)
+    if not isinstance(value, str):
+        return value
+    rendered = apply_task_template(value, task_id)
+    return _resolve_checkpoint_template(rendered)
+
+
 def _debug_print_components(vec_name: str | None, vec_kwargs: Dict[str, Any], head_name: str | None, head_kwargs: Dict[str, Any]) -> None:
     print(f"Vectorizer: name={vec_name or 'auto'} params={vec_kwargs}")
     print(f"Head: name={head_name or 'auto'} params={head_kwargs}")
@@ -173,8 +250,22 @@ def _normalize_target_value(value: Any, mode: Any) -> Optional[Any]:
 def _prepare_utility(params: ConfigDict) -> UtilityCtx:
     annotations = _resolve_utility_annotations(params)
     _require_fields(params, ["dataset", "data_in", "target"])
+    explicit_task_id = params.get("task_id")
+    if explicit_task_id is not None:
+        explicit_task_id = int(explicit_task_id)
+    task_id = resolve_task_id(explicit_task_id)
     dataset = str(params.get("dataset"))
-    data_in = str(params.get("data_in"))
+    data_in = str(apply_task_template(str(params.get("data_in")), task_id))
+    split_value = params.get("split")
+    split: Optional[str]
+    if isinstance(split_value, str):
+        split = apply_task_template(split_value, task_id)
+    else:
+        split = None
+    source_splits = params.get("source_splits")
+    if source_splits is None and isinstance(params.get("split"), list):
+        source_splits = params.get("split")
+    source_splits = source_splits if isinstance(source_splits, list) else []
     group_by = params.get("group_by")
     spec = build_utility_target(params, dataset)
     selection_criteria = params.get("selection_criteria", {}) or {}
@@ -184,28 +275,50 @@ def _prepare_utility(params: ConfigDict) -> UtilityCtx:
     dry_run = bool(params.get("dry_run", False))
     output_format = str(params.get("output_format", "text"))
     output_file = params.get("output_file")
-    split_cfg = params.get("split")
-    if isinstance(split_cfg, list) and split_cfg:
-        main_split = next((s for s in split_cfg if "path" not in s), None)
+    if isinstance(source_splits, list) and source_splits:
+        main_split = next((s for s in source_splits if "path" not in s and "split" not in s), None)
         if isinstance(main_split, dict) and main_split.get("val") is not None:
             try:
                 test_size = float(main_split.get("val"))
             except Exception:
                 pass
     identifier = params.get("identifier")
-    return UtilityCtx(dataset, data_in, annotations, group_by, spec, selection_criteria, debug, test_size, random_state, dry_run, output_format, output_file, identifier)
+    return UtilityCtx(
+        dataset,
+        data_in,
+        split,
+        annotations,
+        group_by,
+        spec,
+        selection_criteria,
+        debug,
+        test_size,
+        random_state,
+        dry_run,
+        output_format,
+        output_file,
+        identifier,
+        source_splits,
+        task_id,
+    )
 
 
 def _prepare_divergence(params: ConfigDict) -> DivergenceCtx:
     annotations = _resolve_annotations(params)
     _require_fields(params, ["dataset", "data_in"])
+    explicit_task_id = params.get("task_id")
+    if explicit_task_id is not None:
+        explicit_task_id = int(explicit_task_id)
+    task_id = resolve_task_id(explicit_task_id)
     dataset = str(params.get("dataset"))
-    data_in = str(params.get("data_in"))
+    data_in = str(apply_task_template(str(params.get("data_in")), task_id))
+    split_value = params.get("split")
+    split = apply_task_template(split_value, task_id) if isinstance(split_value, str) else None
     metric_type, metric_params = parse_metric_config(params.get("metric"))
     max_records = params.get("max_records")
     output_format = str(params.get("output_format", "text"))
     output_file = params.get("output_file")
-    return DivergenceCtx(dataset, data_in, annotations, metric_type, metric_params, max_records, output_format, output_file)
+    return DivergenceCtx(dataset, data_in, split, annotations, metric_type, metric_params, max_records, output_format, output_file)
 
 
 def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
@@ -219,9 +332,15 @@ def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
             params["tri_device"] = tri_cfg["device"]
     annotations = _resolve_annotations(params)
     _require_fields(params, ["dataset", "data_in", "universal_tri_pipeline"])
+    explicit_task_id = params.get("task_id")
+    if explicit_task_id is not None:
+        explicit_task_id = int(explicit_task_id)
+    task_id = resolve_task_id(explicit_task_id)
     dataset = str(params.get("dataset"))
-    data_in = str(params.get("data_in"))
-    tri_pipeline = str(params.get("universal_tri_pipeline"))
+    data_in = str(apply_task_template(str(params.get("data_in")), task_id))
+    split_value = params.get("split")
+    split = apply_task_template(split_value, task_id) if isinstance(split_value, str) else None
+    tri_pipeline = str(apply_task_template(str(params.get("universal_tri_pipeline")), task_id))
     max_records = params.get("max_records")
     mask_token = str(params.get("mask_token", "[MASK]"))
     tri_max_length = int(params.get("tri_max_length", 512))
@@ -234,7 +353,7 @@ def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
         progress = True
     output_format = str(params.get("output_format", "text"))
     output_file = params.get("output_file")
-    return PrivacyCtx(dataset, data_in, annotations, tri_pipeline, max_records, mask_token, tri_max_length, tri_device, bool(progress), output_format, output_file)
+    return PrivacyCtx(dataset, data_in, split, annotations, tri_pipeline, max_records, mask_token, tri_max_length, tri_device, bool(progress), output_format, output_file)
 
 
 def build_divergence_experiment(metric_type: str, metric_params: Dict[str, Any]) -> TextDivergenceExperiment:
@@ -267,7 +386,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     if not ctx.annotations:
         raise ValueError("annotations are required")
     include_cm = bool(params.get("include_confusion_matrix", False))
-    records = load_records(ctx.dataset, ctx.data_in, params.get("max_records"))
+    records = load_records(ctx.dataset, ctx.data_in, params.get("max_records"), split=ctx.split)
     maybe_group_mapping = None
     if ctx.debug:
         _debug_print_target(ctx.spec, params)
@@ -297,6 +416,8 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     if not evaluation_texts:
         raise RuntimeError("no anonymized texts aligned with dataset records")
     vec_name, vec_kwargs, head_name, head_kwargs = _resolve_utility_components(ctx.spec, params)
+    vec_kwargs = _render_component_paths(vec_kwargs, ctx.task_id)
+    head_kwargs = _render_component_paths(head_kwargs, ctx.task_id)
     if ctx.debug:
         _debug_print_components(vec_name, vec_kwargs, head_name, head_kwargs)
     vectorizer, model = ctx.spec.build_components(
@@ -306,7 +427,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         head_kwargs=head_kwargs,
         identifier=ctx.identifier,
     )
-    split_cfg = params.get("split")
+    split_cfg = ctx.source_splits
     train_texts_override: List[str] = []
     train_labels_override: List[Any] = []
     test_texts_override: List[str] = []
@@ -319,6 +440,11 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
             if not isinstance(entry, dict):
                 continue
             source_path = entry.get("path") or ctx.data_in
+            if isinstance(source_path, str):
+                source_path = apply_task_template(source_path, ctx.task_id)
+            source_split = entry.get("split")
+            if isinstance(source_split, str):
+                source_split = apply_task_template(source_split, ctx.task_id)
             train_ratio = float(entry.get("train", 0))
             val_ratio = float(entry.get("val", 0))
             if train_ratio + val_ratio > 1:
@@ -326,7 +452,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
             if train_ratio < 0 or val_ratio < 0:
                 raise ValueError("ratios must be >= 0")
 
-            source_records = load_records(ctx.dataset, source_path, params.get("max_records"))
+            source_records = load_records(ctx.dataset, source_path, params.get("max_records"), split=source_split)
             source_records = select_records(source_records, ctx.selection_criteria)
             if not source_records:
                 continue
@@ -547,7 +673,7 @@ def handle_divergence(args: Any, config: ConfigDict) -> None:
     ctx = _prepare_divergence(params)
     if not ctx.annotations:
         raise ValueError("annotations are required")
-    records = load_records(ctx.dataset, ctx.data_in, ctx.max_records)
+    records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=ctx.split)
     if not records:
         raise RuntimeError("no records loaded")
     sources = collect_jsonl_sources(*ctx.annotations)
@@ -579,7 +705,7 @@ def handle_privacy(args: Any, config: ConfigDict) -> None:
     ctx = _prepare_privacy(params)
     if not ctx.annotations:
         raise ValueError("annotations are required")
-    records = load_records(ctx.dataset, ctx.data_in, ctx.max_records)
+    records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=ctx.split)
     if not records:
         raise RuntimeError("no records loaded")
     sources = collect_jsonl_sources(*ctx.annotations)

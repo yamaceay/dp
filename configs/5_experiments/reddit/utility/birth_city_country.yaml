@@ -9,7 +9,7 @@ target:
 selection_criteria:
   feature: birth_city_country
 group_by: hardness
-split:
+source_splits:
   - train: 0.0
     val: 1.0
   - path: data/reddit/synthetic_dataset.jsonl
@@ -23,7 +23,7 @@ head:
     epochs: 40
     batch_size: 4
     model_name: distilbert-base-uncased
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/reddit_8_16_0.0001/finetuning/checkpoint-297
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum_{task_id}/reddit_8_16_0.0001__task_{task_id}/finetuning/{checkpoint}
     checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/birth_city_country
     primary_metric: macro_f1
     encoder_lr: 1e-6
@@ -31,4 +31,4 @@ head:
     early_stop_patience: 3
 output:
   format: jsonl
-  file: logs/reddit_birth_city_country_exp.jsonl
+  file: logs/reddit_birth_city_country_exp_task_{task_id}.jsonl

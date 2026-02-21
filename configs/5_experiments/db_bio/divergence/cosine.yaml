@@ -1,5 +1,6 @@
 dataset: db_bio
-data_in: data/db_bio/test/data-00000-of-00001.arrow
+data_in: data/db_bio
+split: indices/db_bio/test/50_eval/{task_id}.txt
 annotations_in:
   - outputs/db_bio
 metric:
@@ -9,4 +10,4 @@ metric:
     model_name: sentence-transformers/all-MiniLM-L6-v2
 output:
   format: jsonl
-  file: logs/db_bio_div_cosine_exp.jsonl
+  file: logs/db_bio_div_cosine_exp_task_{task_id}.jsonl
