@@ -1,0 +1,5 @@
+data: db_bio
+data_in: data/db_bio
+split: indices/db_bio/test/50_eval/{task_id}.txt
+pipeline_in: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/50_eval_deid_{task_id}/50_eval_deid_{task_id}__task_{task_id}
+n_first_predictions: 10

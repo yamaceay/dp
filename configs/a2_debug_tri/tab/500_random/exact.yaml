@@ -1,0 +1,5 @@
+data: tab
+data_in: data/tab
+split: indices/tab/test/50_eval/{task_id}.txt
+pipeline_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/500_random_{task_id}/500_random_{task_id}__task_{task_id}
+n_first_predictions: 10

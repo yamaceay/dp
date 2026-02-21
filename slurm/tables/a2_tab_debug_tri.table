@@ -1,4 +1,6 @@
-orig_orig_tab|python debug_tri.py --config configs/a2_debug_tri/tab/orig_orig.yaml
-orig_deid_tab|python debug_tri.py --config configs/a2_debug_tri/tab/orig_deid.yaml
-deid_orig_tab|python debug_tri.py --config configs/a2_debug_tri/tab/deid_orig.yaml
-deid_deid_tab|python debug_tri.py --config configs/a2_debug_tri/tab/deid_deid.yaml
+orig_orig_tab|python debug_tri.py --config configs/a2_debug_tri/tab/50_eval/orig.yaml --task_id {task_id}
+orig_deid_tab|python debug_tri.py --config configs/a2_debug_tri/tab/50_eval/deid.yaml --task_id {task_id}
+deid_orig_tab|python debug_tri.py --config configs/a2_debug_tri/tab/50_eval_deid/orig.yaml --task_id {task_id}
+deid_deid_tab|python debug_tri.py --config configs/a2_debug_tri/tab/50_eval_deid/deid.yaml --task_id {task_id}
+more_exact_tab|python debug_tri.py --config configs/a2_debug_tri/tab/500_random/exact.yaml --task_id {task_id}
+more_more_tab|python debug_tri.py --config configs/a2_debug_tri/tab/500_random/more.yaml --task_id {task_id}

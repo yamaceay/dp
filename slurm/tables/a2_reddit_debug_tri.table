@@ -1,2 +1,2 @@
-orig_orig_reddit|python debug_tri.py --config configs/a2_debug_tri/reddit/orig_orig.yaml
-orig_deid_reddit|python debug_tri.py --config configs/a2_debug_tri/reddit/orig_deid.yaml
+orig_orig_reddit|python debug_tri.py --config configs/a2_debug_tri/reddit/orig_orig.yaml --task_id {task_id}
+orig_deid_reddit|python debug_tri.py --config configs/a2_debug_tri/reddit/orig_deid.yaml --task_id {task_id}

@@ -15,6 +15,7 @@ def normalize_config(config: Dict, args: argparse.Namespace) -> argparse.Namespa
     parser.add_argument('--config', type=str, default=None, help='Path to config file')
     parser.add_argument('--data', type=str, default=None, help='Dataset name')
     parser.add_argument('--data_in', type=str, default=None, help='Path to input data file')
+    parser.add_argument('--split', type=str, default=None, help='Path to split indices file')
     parser.add_argument('--result_in', type=str, default=None, help='Path to anonymization results JSONL file')
     parser.add_argument('--pipeline_in', type=str, default=None, help='Path to anonymization pipeline JSON file')
     parser.add_argument('--risk_in', type=str, default=None, help='Path to anonymization risks JSONL file')
@@ -41,12 +42,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test RiskAnonymizer")
     parser.add_argument('--config', type=str, required=True, help='Path to config file')
     parser.add_argument('--pipeline_in', type=str, default=None, help='Path to anonymization pipeline JSON file')
+    parser.add_argument('--split', type=str, default=None, help='Path to split indices file')
     parser.add_argument('--task_id', type=int, default=None, help='Task id for task-aware path templates')
     args = parser.parse_args()
     task_id = resolve_task_id(args.task_id)
     config_path = apply_task_template(args.config, task_id)
     args = normalize_config(_read_yaml(config_path), args)
-    for key in ('data_in', 'result_in', 'pipeline_in', 'risk_in', 'save_to_jsonl'):
+    for key in ('data_in', 'split', 'result_in', 'pipeline_in', 'risk_in', 'save_to_jsonl'):
         setattr(args, key, apply_task_template(getattr(args, key, None), task_id))
 
     if not args.data or not args.data_in:
@@ -54,6 +56,7 @@ if __name__ == "__main__":
 
     original_records = list(get_adapter(args.data, 
                                         data_in=args.data_in,
+                                        split=args.split,
                                         max_records=args.max_records,
                                         start=args.start,
                                         end=args.end,
@@ -130,6 +133,15 @@ if __name__ == "__main__":
         detector.load(args.pipeline_in)
         predictions = detector.predict(records)
 
+        unknown_names = sorted({record.name for record in records if record.name not in detector.name_to_label})
+        if unknown_names:
+            sample = unknown_names[:10]
+            raise ValueError(
+                f"Found {len(unknown_names)} record names not present in checkpoint label mapping. "
+                f"Sample: {sample}. "
+                "This usually indicates a split/checkpoint mismatch."
+            )
+
         mrr = 0.0
         acc = 0.0
         ranks = []
@@ -147,6 +159,11 @@ if __name__ == "__main__":
                     rank = position
                     break
             ranks.append(rank)
+            if rank is None:
+                raise RuntimeError(
+                    f"Could not find true label '{record.name}' in prediction candidates for uid={record.uid}. "
+                    "This should not happen after label mapping consistency check."
+                )
             mrr += 1.0 / (rank * len(records))
             acc += 1.0 / len(records) if rank == 1 else 0.0
 
