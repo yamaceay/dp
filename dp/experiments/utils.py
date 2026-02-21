@@ -85,7 +85,7 @@ def collect_jsonl_sources(*paths: str) -> Dict[str, Path]:
 def _matches_task_id(path: Path, task_id: Optional[int]) -> bool:
     if task_id is None:
         return True
-    match = re.search(r"_task_([0-9]+)\.jsonl$", path.name)
+    match = re.search(r"_task_([0-9]+)", path.name)
     if not match:
         return False
     return int(match.group(1)) == task_id
