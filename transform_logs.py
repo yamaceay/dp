@@ -33,7 +33,10 @@ class TaskResultWeightedAggregator:
                 metrics = self._aggregate_section(task_results, section)
                 if metrics:
                     if section == "utility":
-                        metrics = self._augment_utility_scores(metrics)
+                        metrics = self._augment_utility_scores(
+                            metrics,
+                            allow_missing_exp_rmae=item.get("group") is not None,
+                        )
                     merged_item[section] = metrics
 
             aggregated.append(merged_item)
@@ -111,7 +114,11 @@ class TaskResultWeightedAggregator:
                 return feature
         return ""
 
-    def _augment_utility_scores(self, utility_metrics: dict[str, Any]) -> dict[str, Any]:
+    def _augment_utility_scores(
+        self,
+        utility_metrics: dict[str, Any],
+        allow_missing_exp_rmae: bool = False,
+    ) -> dict[str, Any]:
         feature_counts = self._extract_feature_counts(utility_metrics)
         feature_num_classes = self._extract_feature_num_classes(utility_metrics)
         weighted_sum = 0.0
@@ -125,6 +132,12 @@ class TaskResultWeightedAggregator:
             acc_key = f"{feature}_acc"
             if mae_key in utility_metrics:
                 if exp_key not in utility_metrics:
+                    if allow_missing_exp_rmae:
+                        continue
+                    print(
+                        f"DEBUG: utility metrics missing expected key '{exp_key}'. "
+                        f"Full utility_metrics={json.dumps(utility_metrics, indent=2, sort_keys=True, default=str)}"
+                    )
                     raise ValueError(
                         f"Missing exp_rmae for ordinal feature '{feature}': expected {exp_key}"
                     )
