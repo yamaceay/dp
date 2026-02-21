@@ -120,9 +120,12 @@ class TaskResultWeightedAggregator:
         allow_missing_exp_rmae: bool = False,
     ) -> dict[str, Any]:
         feature_counts = self._extract_feature_counts(utility_metrics)
-        feature_num_classes = self._extract_feature_num_classes(utility_metrics)
         weighted_sum = 0.0
         weighted_count = 0
+        ordinal_weighted_sum = 0.0
+        ordinal_weighted_count = 0
+        nominal_weighted_sum = 0.0
+        nominal_weighted_count = 0
         for feature, count in feature_counts.items():
             if not feature:
                 continue
@@ -142,8 +145,12 @@ class TaskResultWeightedAggregator:
                         f"Missing exp_rmae for ordinal feature '{feature}': expected {exp_key}"
                     )
                 score = float(utility_metrics[exp_key])
+                ordinal_weighted_sum += score * count
+                ordinal_weighted_count += count
             elif acc_key in utility_metrics:
                 score = float(utility_metrics[acc_key])
+                nominal_weighted_sum += score * count
+                nominal_weighted_count += count
             else:
                 raise ValueError(
                     f"Feature '{feature}' has neither ordinal mae nor nominal acc metric"
@@ -155,7 +162,14 @@ class TaskResultWeightedAggregator:
             weighted_count += count
         if weighted_count > 0:
             utility_metrics["utility_weighted_score"] = weighted_sum / weighted_count
+            utility_metrics["utility_total_score"] = utility_metrics["utility_weighted_score"]
             utility_metrics["_utility_score_count"] = weighted_count
+        if ordinal_weighted_count > 0:
+            utility_metrics["utility_ordinal_weighted_score"] = ordinal_weighted_sum / ordinal_weighted_count
+            utility_metrics["_utility_ordinal_score_count"] = ordinal_weighted_count
+        if nominal_weighted_count > 0:
+            utility_metrics["utility_nominal_weighted_score"] = nominal_weighted_sum / nominal_weighted_count
+            utility_metrics["_utility_nominal_score_count"] = nominal_weighted_count
         return utility_metrics
 
 class RedditUtilityByHardness:
