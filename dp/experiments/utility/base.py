@@ -229,8 +229,8 @@ class TextUtilityExperiment(Experiment):
         x_all_eval = self._vectorizer.transform(all_texts)
         baseline_overall_raw = self._model.evaluate(x_all_eval, all_labels)
         self._median_dummy_mae_overall = self._compute_median_dummy_mae(all_labels)
-        self._baseline_train_metrics = self._with_exp_rmae(baseline_train_raw, self._median_dummy_mae_train)
-        self._baseline_metrics = self._with_exp_rmae(baseline_test_raw, self._median_dummy_mae_test) if baseline_test_raw else {}
+        self._baseline_train_metrics = {k: float(v) for k, v in baseline_train_raw.items()}
+        self._baseline_metrics = {k: float(v) for k, v in baseline_test_raw.items()} if baseline_test_raw else {}
         self._baseline_overall_metrics = self._with_exp_rmae(baseline_overall_raw, self._median_dummy_mae_overall)
         self._label_by_key = {key: self._labels[idx] for idx, key in enumerate(self._keys)}
         self._record_info = {}
@@ -263,8 +263,7 @@ class TextUtilityExperiment(Experiment):
                 group_median_dummy_mae = self._compute_median_dummy_mae(group_labels)
                 if group_median_dummy_mae is not None:
                     self._median_dummy_mae_group[group_key] = group_median_dummy_mae
-                group_metrics = self._with_exp_rmae(group_metrics_raw, group_median_dummy_mae)
-                self._baseline_group_metrics[group_key] = {k: float(v) for k, v in group_metrics.items()}
+                self._baseline_group_metrics[group_key] = {k: float(v) for k, v in group_metrics_raw.items()}
         super().setup(**kwargs)
 
     def run(self, evaluation_texts: Dict[str, Dict[str, str]], **kwargs: Any) -> ExperimentResult:
@@ -322,8 +321,8 @@ class TextUtilityExperiment(Experiment):
                 train_metrics_raw, train_matched, train_cm = _eval_subset(list(self._train_key_set))
                 test_metrics_raw, test_matched, test_cm = _eval_subset(list(self._test_key_set))
                 overall_metrics_raw, overall_matched, overall_cm = _eval_subset(list(self._all_key_set))
-                train_metrics = self._with_exp_rmae(train_metrics_raw, self._median_dummy_mae_train)
-                test_metrics = self._with_exp_rmae(test_metrics_raw, self._median_dummy_mae_test)
+                train_metrics = {k: float(v) for k, v in train_metrics_raw.items()}
+                test_metrics = {k: float(v) for k, v in test_metrics_raw.items()}
                 overall_metrics = self._with_exp_rmae(overall_metrics_raw, self._median_dummy_mae_overall)
 
                 metrics = dict(test_metrics) if test_metrics else dict(overall_metrics)
@@ -380,7 +379,7 @@ class TextUtilityExperiment(Experiment):
                 for group_key, group_keys in sorted(self._group_keys.items(), key=lambda item: item[0]):
                     group_metrics_raw, group_matched, group_cm = _eval_subset(group_keys)
                     baseline_group = self._baseline_group_metrics.get(group_key, {})
-                    group_metrics = self._with_exp_rmae(group_metrics_raw, self._median_dummy_mae_group.get(group_key))
+                    group_metrics = {k: float(v) for k, v in group_metrics_raw.items()}
                     group_drops = {}
                     if group_metrics:
                         group_drops = self._score_difference(baseline_group, group_metrics)
@@ -486,10 +485,10 @@ class TextUtilityExperiment(Experiment):
         if self._target is None or self._target.mode is not UtilityTarget.Mode.ORDINAL:
             return out
         if median_dummy_mae is None:
-            raise ValueError("median dummy mae is required to compute exp_rmae")
+            return out
         baseline_mae = float(median_dummy_mae)
         if baseline_mae <= 0:
-            raise ValueError("median dummy mae must be > 0 to compute exp_rmae")
+            return out
         mae = float(out["mae"])
         out["exp_rmae"] = float(2.0 ** (-mae / baseline_mae))
         return out
@@ -513,5 +512,5 @@ class TextUtilityExperiment(Experiment):
         median_value = float(np.median(values))
         mae = float(np.mean(np.abs(values - median_value)))
         if mae <= 0:
-            raise ValueError("median dummy mae must be > 0 for ordinal targets")
+            return None
         return mae

@@ -140,6 +140,7 @@ ORDINAL_GROUPERS: Dict[str, Tuple[Callable[[str], str], List[str]]] = {
     "income_level": (group_income, ["low", "middle", "high"]),
     "age": (group_age, ["18-29", "30-44", "45-59", "60+"]),
     "education": (group_education, ["secondary", "studying", "bachelor", "master", "doctorate", "other"]),
+    "sex": (group_sex, ["female", "male"]),
 }
 
 NOMINAL_GROUPERS: Dict[str, Callable[[str], str]] = {
@@ -147,7 +148,6 @@ NOMINAL_GROUPERS: Dict[str, Callable[[str], str]] = {
     "city_country": group_region,
     "occupation": group_occupation,
     "relationship_status": group_relationship,
-    "sex": group_sex,
 }
 
 GROUPERS: Dict[str, Callable[[str], str]] = {
