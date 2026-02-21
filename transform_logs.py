@@ -32,6 +32,8 @@ class TaskResultWeightedAggregator:
             for section in ("privacy", "utility", "divergence"):
                 metrics = self._aggregate_section(task_results, section)
                 if metrics:
+                    if section == "utility":
+                        metrics = self._augment_utility_scores(metrics)
                     merged_item[section] = metrics
 
             aggregated.append(merged_item)
@@ -41,6 +43,7 @@ class TaskResultWeightedAggregator:
         weighted_sums: dict[str, float] = {}
         weight_sums: dict[str, float] = {}
         count_sums: dict[str, int] = {}
+        class_max: dict[str, int] = {}
         tasks = 0
 
         for task in task_results:
@@ -52,7 +55,10 @@ class TaskResultWeightedAggregator:
             default_count = feature_counts.get("") or 1
             for metric_name, metric_value in section_metrics.items():
                 if metric_name.startswith("_"):
-                    count_sums[metric_name] = count_sums.get(metric_name, 0) + int(metric_value)
+                    if metric_name.endswith("_num_classes"):
+                        class_max[metric_name] = max(class_max.get(metric_name, 0), int(metric_value))
+                    elif metric_name.endswith("_count"):
+                        count_sums[metric_name] = count_sums.get(metric_name, 0) + int(metric_value)
                     continue
                 feature_name = self._feature_name(metric_name, feature_counts)
                 metric_count = feature_counts.get(feature_name, default_count)
@@ -70,6 +76,8 @@ class TaskResultWeightedAggregator:
             aggregated[metric_name] = metric_sum / weight
         for metric_name, metric_sum in count_sums.items():
             aggregated[metric_name] = metric_sum
+        for metric_name, metric_sum in class_max.items():
+            aggregated[metric_name] = metric_sum
         aggregated["_tasks"] = tasks
         return aggregated
 
@@ -84,6 +92,14 @@ class TaskResultWeightedAggregator:
                 feature_counts[match.group(1)] = int(metric_value)
         return feature_counts
 
+    def _extract_feature_num_classes(self, section_metrics: dict[str, Any]) -> dict[str, int]:
+        feature_num_classes: dict[str, int] = {}
+        for metric_name, metric_value in section_metrics.items():
+            match = re.match(r"^_(.+)_num_classes$", metric_name)
+            if match:
+                feature_num_classes[match.group(1)] = int(metric_value)
+        return feature_num_classes
+
     def _feature_name(self, metric_name: str, feature_counts: dict[str, int]) -> str:
         candidate_features = sorted(
             [feature for feature in feature_counts.keys() if feature],
@@ -94,6 +110,40 @@ class TaskResultWeightedAggregator:
             if metric_name.startswith(feature + "_"):
                 return feature
         return ""
+
+    def _augment_utility_scores(self, utility_metrics: dict[str, Any]) -> dict[str, Any]:
+        feature_counts = self._extract_feature_counts(utility_metrics)
+        feature_num_classes = self._extract_feature_num_classes(utility_metrics)
+        weighted_sum = 0.0
+        weighted_count = 0
+        for feature, count in feature_counts.items():
+            if not feature:
+                continue
+            score: float | None = None
+            mae_key = f"{feature}_mae"
+            exp_key = f"{feature}_exp_rmae"
+            acc_key = f"{feature}_acc"
+            if mae_key in utility_metrics:
+                if exp_key not in utility_metrics:
+                    raise ValueError(
+                        f"Missing exp_rmae for ordinal feature '{feature}': expected {exp_key}"
+                    )
+                score = float(utility_metrics[exp_key])
+            elif acc_key in utility_metrics:
+                score = float(utility_metrics[acc_key])
+            else:
+                raise ValueError(
+                    f"Feature '{feature}' has neither ordinal mae nor nominal acc metric"
+                )
+            if score is None:
+                continue
+            utility_metrics[f"{feature}_score"] = score
+            weighted_sum += score * count
+            weighted_count += count
+        if weighted_count > 0:
+            utility_metrics["utility_weighted_score"] = weighted_sum / weighted_count
+            utility_metrics["_utility_score_count"] = weighted_count
+        return utility_metrics
 
 class RedditUtilityByHardness:
     def __init__(self, data: list[dict[str, Any]]):

@@ -105,6 +105,10 @@ class TextUtilityExperiment(Experiment):
         self._group_by: Optional[str] = None
         self._group_keys: Dict[str, List[str]] = {}
         self._baseline_group_metrics: Dict[str, Dict[str, float]] = {}
+        self._median_dummy_mae_train: Optional[float] = None
+        self._median_dummy_mae_test: Optional[float] = None
+        self._median_dummy_mae_overall: Optional[float] = None
+        self._median_dummy_mae_group: Dict[str, float] = {}
 
     def setup(
         self,
@@ -209,18 +213,25 @@ class TextUtilityExperiment(Experiment):
         else:
             self._model.fit(self._x_train, actual_train_labels)
         
-        self._baseline_train_metrics = self._model.evaluate(self._x_train, actual_train_labels)
-        
+        baseline_train_raw = self._model.evaluate(self._x_train, actual_train_labels)
+        self._median_dummy_mae_train = self._compute_median_dummy_mae(actual_train_labels)
+
         if actual_test_texts:
             x_test = self._vectorizer.transform(actual_test_texts)
-            self._baseline_metrics = self._model.evaluate(x_test, actual_test_labels)
+            baseline_test_raw = self._model.evaluate(x_test, actual_test_labels)
+            self._median_dummy_mae_test = self._compute_median_dummy_mae(actual_test_labels)
         else:
-            self._baseline_metrics = {}
-        
+            baseline_test_raw = {}
+            self._median_dummy_mae_test = None
+
         all_texts = [r.text for r in self._records]
         all_labels = list(self._labels)
         x_all_eval = self._vectorizer.transform(all_texts)
-        self._baseline_overall_metrics = self._model.evaluate(x_all_eval, all_labels)
+        baseline_overall_raw = self._model.evaluate(x_all_eval, all_labels)
+        self._median_dummy_mae_overall = self._compute_median_dummy_mae(all_labels)
+        self._baseline_train_metrics = self._with_exp_rmae(baseline_train_raw, self._median_dummy_mae_train)
+        self._baseline_metrics = self._with_exp_rmae(baseline_test_raw, self._median_dummy_mae_test) if baseline_test_raw else {}
+        self._baseline_overall_metrics = self._with_exp_rmae(baseline_overall_raw, self._median_dummy_mae_overall)
         self._label_by_key = {key: self._labels[idx] for idx, key in enumerate(self._keys)}
         self._record_info = {}
         self._group_keys = {}
@@ -248,7 +259,11 @@ class TextUtilityExperiment(Experiment):
                 group_texts = [self._records[i].text for i in group_indices]
                 group_labels = [self._labels[i] for i in group_indices]
                 x_group = self._vectorizer.transform(group_texts)
-                group_metrics = self._model.evaluate(x_group, group_labels)
+                group_metrics_raw = self._model.evaluate(x_group, group_labels)
+                group_median_dummy_mae = self._compute_median_dummy_mae(group_labels)
+                if group_median_dummy_mae is not None:
+                    self._median_dummy_mae_group[group_key] = group_median_dummy_mae
+                group_metrics = self._with_exp_rmae(group_metrics_raw, group_median_dummy_mae)
                 self._baseline_group_metrics[group_key] = {k: float(v) for k, v in group_metrics.items()}
         super().setup(**kwargs)
 
@@ -277,7 +292,8 @@ class TextUtilityExperiment(Experiment):
                 return metrics, len(subset_keys), cm
 
             if not self._test_keys:
-                overall_metrics, overall_matched, overall_cm = _eval_subset(list(self._all_key_set))
+                overall_metrics_raw, overall_matched, overall_cm = _eval_subset(list(self._all_key_set))
+                overall_metrics = self._with_exp_rmae(overall_metrics_raw, self._median_dummy_mae_overall)
                 metrics = dict(overall_metrics)
                 drops = self._score_difference(self._baseline_overall_metrics or {}, metrics) if metrics else {}
                 overall_res = {
@@ -303,9 +319,12 @@ class TextUtilityExperiment(Experiment):
                     "val_results": {"metrics": {}, "drops": {}, "matched": 0, "total": 0},
                 }
             else:
-                train_metrics, train_matched, train_cm = _eval_subset(list(self._train_key_set))
-                test_metrics, test_matched, test_cm = _eval_subset(list(self._test_key_set))
-                overall_metrics, overall_matched, overall_cm = _eval_subset(list(self._all_key_set))
+                train_metrics_raw, train_matched, train_cm = _eval_subset(list(self._train_key_set))
+                test_metrics_raw, test_matched, test_cm = _eval_subset(list(self._test_key_set))
+                overall_metrics_raw, overall_matched, overall_cm = _eval_subset(list(self._all_key_set))
+                train_metrics = self._with_exp_rmae(train_metrics_raw, self._median_dummy_mae_train)
+                test_metrics = self._with_exp_rmae(test_metrics_raw, self._median_dummy_mae_test)
+                overall_metrics = self._with_exp_rmae(overall_metrics_raw, self._median_dummy_mae_overall)
 
                 metrics = dict(test_metrics) if test_metrics else dict(overall_metrics)
                 drops = self._score_difference(self._baseline_metrics, metrics) if metrics else {}
@@ -359,10 +378,11 @@ class TextUtilityExperiment(Experiment):
             grouped_results: Dict[str, Dict[str, Any]] = {}
             if self._group_keys:
                 for group_key, group_keys in sorted(self._group_keys.items(), key=lambda item: item[0]):
-                    group_metrics, group_matched, group_cm = _eval_subset(group_keys)
+                    group_metrics_raw, group_matched, group_cm = _eval_subset(group_keys)
+                    baseline_group = self._baseline_group_metrics.get(group_key, {})
+                    group_metrics = self._with_exp_rmae(group_metrics_raw, self._median_dummy_mae_group.get(group_key))
                     group_drops = {}
                     if group_metrics:
-                        baseline_group = self._baseline_group_metrics.get(group_key, {})
                         group_drops = self._score_difference(baseline_group, group_metrics)
                     group_payload: Dict[str, Any] = {
                         "metrics": group_metrics,
@@ -390,6 +410,12 @@ class TextUtilityExperiment(Experiment):
                 "train_metrics": self._baseline_train_metrics or {},
                 "test_metrics": baseline_test_metrics,
                 "overall_metrics": self._baseline_overall_metrics or {},
+                "median_dummy_mae": {
+                    "train": self._median_dummy_mae_train,
+                    "test": self._median_dummy_mae_test,
+                    "overall": self._median_dummy_mae_overall,
+                    "group": self._median_dummy_mae_group,
+                },
             },
             "evaluations": evaluations,
             "records": self._record_info,
@@ -422,6 +448,10 @@ class TextUtilityExperiment(Experiment):
         self._group_by = None
         self._group_keys = {}
         self._baseline_group_metrics = {}
+        self._median_dummy_mae_train = None
+        self._median_dummy_mae_test = None
+        self._median_dummy_mae_overall = None
+        self._median_dummy_mae_group = {}
         super().cleanup()
 
     def _clone_vectorizer(self) -> SelfSupervisedFeatureExtractor:
@@ -448,3 +478,40 @@ class TextUtilityExperiment(Experiment):
             if name in current:
                 drops[f"{name}_drop"] = float(value - current[name])
         return drops
+
+    def _with_exp_rmae(self, metrics: Dict[str, float], median_dummy_mae: Optional[float]) -> Dict[str, float]:
+        out = {k: float(v) for k, v in metrics.items()}
+        if "mae" not in out:
+            return out
+        if self._target is None or self._target.mode is not UtilityTarget.Mode.ORDINAL:
+            return out
+        if median_dummy_mae is None:
+            raise ValueError("median dummy mae is required to compute exp_rmae")
+        baseline_mae = float(median_dummy_mae)
+        if baseline_mae <= 0:
+            raise ValueError("median dummy mae must be > 0 to compute exp_rmae")
+        mae = float(out["mae"])
+        out["exp_rmae"] = float(2.0 ** (-mae / baseline_mae))
+        return out
+
+    def _compute_median_dummy_mae(self, labels: Sequence[Any]) -> Optional[float]:
+        if self._target is None or self._target.mode is not UtilityTarget.Mode.ORDINAL:
+            return None
+        if not labels:
+            return None
+        label_order = self._target.label_order
+        if not label_order:
+            raise ValueError("ordinal target requires label_order")
+        label_to_rank = {str(label): index for index, label in enumerate(label_order)}
+        encoded: List[float] = []
+        for label in labels:
+            key = str(label)
+            if key not in label_to_rank:
+                raise ValueError(f"Unknown ordinal label '{key}' not in target enum")
+            encoded.append(float(label_to_rank[key]))
+        values = np.asarray(encoded, dtype=float)
+        median_value = float(np.median(values))
+        mae = float(np.mean(np.abs(values - median_value)))
+        if mae <= 0:
+            raise ValueError("median dummy mae must be > 0 for ordinal targets")
+        return mae

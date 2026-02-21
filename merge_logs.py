@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+
 def parse_params_from_key(key: str) -> tuple[str, Dict[str, Any]]:
     params: Dict[str, Any] = {}
     method = key
@@ -56,6 +57,20 @@ def parse_privacy_profile_from_log_name(log_name: str) -> str | None:
 def filter_utility_metrics(result: Dict[str, Any], metrics: List[str], feature: str) -> Dict[str, Any]:
     return {feature + "_" + k: result[k] for k in metrics if k in result}
 
+
+def extract_num_classes_from_utility_result(overall_results: Dict[str, Any]) -> int | None:
+    confusion_matrix = overall_results.get("confusion_matrix")
+    if not isinstance(confusion_matrix, list) or not confusion_matrix:
+        return None
+    if not isinstance(confusion_matrix[0], list):
+        return None
+    rows = len(confusion_matrix)
+    cols = len(confusion_matrix[0])
+    if rows <= 0 or cols <= 0:
+        return None
+    return rows if rows >= cols else cols
+
+
 class ExperimentLogParser:
     def parse(log_file: str, dataset: str, *args, **kwargs) -> List[Dict[str, Any]]:
         raise NotImplementedError
@@ -71,21 +86,25 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                 result = json.loads(line)
                 record_type = result.get("type")
                 if record_type == "experiment":
+                    baseline_utility = filter_utility_metrics(result["baseline_overall_metrics"], metrics, feature)
                     experiment_result = {
                         "dataset": dataset,
                         "feature": feature,
                         "method": "baseline",
                         "params": {},
                         "task_id": default_task_id,
-                        "utility": filter_utility_metrics(result["baseline_overall_metrics"], metrics, feature)
+                        "utility": baseline_utility,
                     }
                     continue
                 if record_type != "evaluation":
                     continue
                 count = result["overall_results"]["total"]
+                num_classes = extract_num_classes_from_utility_result(result["overall_results"])
                 if experiment_result and total_count is None:
                     total_count = count
                     experiment_result["count"] = count
+                    if num_classes is not None:
+                        experiment_result["utility"][f"_{feature}_num_classes"] = num_classes
                     results.append(experiment_result)
                 source = str(result.get("source", ""))
                 task_id = parse_task_id_from_text(source)
@@ -93,6 +112,7 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                     task_id = default_task_id
                 key = normalize_source_key(source, dataset)
                 method, params = parse_params_from_key(key)
+                utility_metrics = filter_utility_metrics(result["overall_results"]["metrics"], metrics, feature)
                 results.append(
                     {
                         "dataset": dataset,
@@ -101,12 +121,17 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         "params": params,
                         "task_id": task_id,
                         "count": result["overall_results"]["total"],
-                        "utility": filter_utility_metrics(result["overall_results"]["metrics"], metrics, feature),
+                        "utility": {
+                            **utility_metrics,
+                            **({f"_{feature}_num_classes": num_classes} if num_classes is not None else {}),
+                        },
                     }
                 )
 
                 if "grouped_results" in result:
                     for group_name, group_result in result["grouped_results"].items():
+                        grouped_metrics = filter_utility_metrics(group_result["metrics"], metrics, feature)
+                        grouped_num_classes = extract_num_classes_from_utility_result({"confusion_matrix": group_result.get("confusion_matrix")})
                         results.append(
                             {
                                 "dataset": dataset,
@@ -116,7 +141,10 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                                 "task_id": task_id,
                                 "group": group_name,
                                 "count": group_result["total"],
-                                "utility": filter_utility_metrics(group_result["metrics"], metrics, feature),
+                                "utility": {
+                                    **grouped_metrics,
+                                    **({f"_{feature}_num_classes": grouped_num_classes} if grouped_num_classes is not None else {}),
+                                },
                             }
                         )
         return results
@@ -265,6 +293,7 @@ class LogGrouper:
                 numeric_sums: Dict[str, float] = {}
                 numeric_counts: Dict[str, int] = {}
                 count_sums: Dict[str, int] = {}
+                class_max: Dict[str, int] = {}
                 task_count = 0
                 for task in tasks:
                     if experiment_name not in task:
@@ -272,7 +301,10 @@ class LogGrouper:
                     task_count += 1
                     for metric_name, metric_value in task[experiment_name].items():
                         if metric_name.startswith("_"):
-                            count_sums[metric_name] = count_sums.get(metric_name, 0) + int(metric_value)
+                            if metric_name.endswith("_num_classes"):
+                                class_max[metric_name] = max(class_max.get(metric_name, 0), int(metric_value))
+                            elif metric_name.endswith("_count"):
+                                count_sums[metric_name] = count_sums.get(metric_name, 0) + int(metric_value)
                             continue
                         numeric_sums[metric_name] = numeric_sums.get(metric_name, 0.0) + float(metric_value)
                         numeric_counts[metric_name] = numeric_counts.get(metric_name, 0) + 1
@@ -282,6 +314,8 @@ class LogGrouper:
                 for metric_name, metric_sum in numeric_sums.items():
                     mean_metrics[metric_name] = metric_sum / numeric_counts[metric_name]
                 for metric_name, metric_sum in count_sums.items():
+                    mean_metrics[metric_name] = metric_sum
+                for metric_name, metric_sum in class_max.items():
                     mean_metrics[metric_name] = metric_sum
                 mean_metrics["_tasks"] = task_count
                 entry[experiment_name] = mean_metrics
@@ -315,7 +349,7 @@ if __name__ == "__main__":
         (log_file, dataset, divergence_find_metric(log_file, dataset)) for dataset, log_file in [(find_dataset(log_file), log_file) for log_file in all_divergence_logs]
     ]
 
-    utility_metrics = ["acc", "macro_mae", "mae", "macro_f1", "f1"]
+    utility_metrics = ["acc", "macro_mae", "mae", "macro_f1", "f1", "exp_rmae"]
     
     all_results: List[Dict[str, Any]] = []
     for log_file, dataset in privacy_logs:
