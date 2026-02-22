@@ -34,16 +34,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "db_bio_logs_simple_maskers.md",
@@ -80,16 +87,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "db_bio_logs_simple_maskers_with_thresholds.md",
@@ -126,16 +140,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "db_bio_logs_token_level_rewriters.md",
@@ -172,16 +193,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "db_bio_logs_token_level_rewriters_with_thresholds.md",
@@ -218,16 +246,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "reddit_logs_record_level_rewriters.md",
@@ -264,16 +299,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "reddit_logs_simple_maskers.md",
@@ -310,16 +352,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "reddit_logs_simple_maskers_with_thresholds.md",
@@ -356,16 +405,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "reddit_logs_token_level_rewriters.md",
@@ -402,16 +458,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "reddit_logs_token_level_rewriters_with_thresholds.md",
@@ -448,16 +511,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "tab_logs_record_level_rewriters.md",
@@ -494,16 +564,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "tab_logs_simple_maskers.md",
@@ -540,16 +617,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "tab_logs_simple_maskers_with_thresholds.md",
@@ -586,16 +670,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "tab_logs_token_level_rewriters.md",
@@ -632,16 +723,23 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   },
   {
     "file": "tab_logs_token_level_rewriters_with_thresholds.md",
@@ -678,15 +776,22 @@
       {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
-        "best": 1,
-        "worst": 0
+        "best": 0,
+        "worst": 1
       },
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
         "best": 1,
-        "worst": 0
+        "worst": -1
       }
-    ]
+    ],
+    "render_mode": "hierarchical"
   }
 ]

@@ -15,6 +15,7 @@ PARAM_SETS_CONFIG_PATH = Path("configs/visualize/params.yaml")
 PARAMS_MANIFEST_PATH = OUTPUT_DIR / "params_manifest.json"
 TYPST_TABLES_MANIFEST_PATH = OUTPUT_DIR / "tables_manifest.json"
 INCLUDE_GROUPED_ROWS = False
+HIERARCHICAL_SPLIT_TABLES = True
 
 
 def read_logs(path: str | Path) -> list[dict[str, Any]]:
@@ -367,7 +368,53 @@ class MarkdownDatasetLogsWriter:
             raise ValueError(f"Missing required columns for dataset '{dataset}' projection: {missing_required}")
 
         projected = frame[columns].copy()
-        return projected.rename(columns=rename_map)
+        projected = projected.rename(columns=rename_map)
+        return self._add_gain_column(projected)
+
+    def _add_gain_column(self, frame: pd.DataFrame) -> pd.DataFrame:
+        utility_columns = [column for column in ("U_nominal", "U_ordinal") if column in frame.columns]
+        privacy_columns = [column for column in ("P_exact", "P_more") if column in frame.columns]
+        if not utility_columns or not privacy_columns:
+            return frame
+        if "method" not in frame.columns:
+            return frame
+
+        baseline_rows = frame[frame["method"] == "baseline"]
+        if baseline_rows.empty:
+            return frame
+        baseline_row = baseline_rows.iloc[0]
+
+        utility_baseline = self._safe_sum_numeric(baseline_row, utility_columns)
+        privacy_baseline = self._safe_sum_numeric(baseline_row, privacy_columns)
+        if utility_baseline is None or privacy_baseline is None:
+            return frame
+        if utility_baseline == 0.0 or privacy_baseline == 0.0:
+            return frame
+
+        gain_values: list[float | None] = []
+        for _, row in frame.iterrows():
+            utility_value = self._safe_sum_numeric(row, utility_columns)
+            privacy_value = self._safe_sum_numeric(row, privacy_columns)
+            if utility_value is None or privacy_value is None:
+                gain_values.append(None)
+                continue
+            gain = (utility_value / utility_baseline) - (privacy_value / privacy_baseline)
+            gain_values.append(gain)
+
+        gain_position = len(frame.columns)
+        if "D_cosine" in frame.columns:
+            gain_position = list(frame.columns).index("D_cosine") + 1
+        frame.insert(gain_position, "relative_gain", gain_values)
+        return frame
+
+    def _safe_sum_numeric(self, row: pd.Series, columns: list[str]) -> float | None:
+        total = 0.0
+        for column in columns:
+            value = row[column]
+            if pd.isna(value):
+                return None
+            total += float(value)
+        return total
 
     def write_dataset_tables(self) -> list[Path]:
         written: list[Path] = []
@@ -409,8 +456,42 @@ class MarkdownDatasetLogsWriter:
         if not isinstance(params, dict):
             return False
 
-        expected_param_keys = set(method_spec.get("params", [])) | set(method_spec.get("params_one_run", []))
-        return set(params.keys()) == expected_param_keys
+        params_one_run = method_spec.get("params_one_run", [])
+        params_one_run_keys = self._params_one_run_keys(params_one_run)
+        expected_param_keys = set(method_spec.get("params", [])) | params_one_run_keys
+        if set(params.keys()) != expected_param_keys:
+            return False
+
+        return self._matches_params_one_run_values(params, params_one_run)
+
+    def _params_one_run_keys(self, params_one_run: Any) -> set[str]:
+        if isinstance(params_one_run, dict):
+            return set(params_one_run.keys())
+        if isinstance(params_one_run, list):
+            return set(params_one_run)
+        raise ValueError(f"Unsupported params_one_run format: {type(params_one_run)}")
+
+    def _matches_params_one_run_values(self, params: dict[str, Any], params_one_run: Any) -> bool:
+        if isinstance(params_one_run, list):
+            return True
+        if not isinstance(params_one_run, dict):
+            raise ValueError(f"Unsupported params_one_run format: {type(params_one_run)}")
+
+        for param_name, allowed_values in params_one_run.items():
+            if param_name not in params:
+                return False
+            if not isinstance(allowed_values, list):
+                raise ValueError(
+                    f"params_one_run values must be lists. Got {param_name}={type(allowed_values)}"
+                )
+            if not any(self._values_equal(params[param_name], allowed_value) for allowed_value in allowed_values):
+                return False
+        return True
+
+    def _values_equal(self, left: Any, right: Any) -> bool:
+        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            return float(left) == float(right)
+        return left == right
 
 
 def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
@@ -434,6 +515,19 @@ def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
                     "worst": score.get("worst"),
                 }
             )
+        json_path = output_dir / json_file
+        if json_path.exists():
+            with open(json_path, "r") as f:
+                table_json = json.load(f)
+            if "relative_gain" in table_json.get("columns", []):
+                heatmap_columns.append(
+                    {
+                        "name": "relative_gain",
+                        "source_name": "relative_gain",
+                        "best": 1,
+                        "worst": -1,
+                    }
+                )
         entries.append(
             {
                 "file": path.name,
@@ -443,6 +537,7 @@ def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
                 "section": section,
                 "title": typst_table_title(dataset, section),
                 "heatmap_columns": heatmap_columns,
+                "render_mode": "hierarchical" if HIERARCHICAL_SPLIT_TABLES else "flat",
             }
         )
     return entries
