@@ -1,0 +1,54 @@
+{
+  "columns": [
+    "method",
+    "params",
+    "P_exact",
+    "P_more",
+    "U_nominal",
+    "U_ordinal",
+    "D_bertscore",
+    "D_cosine"
+  ],
+  "rows": [
+    {
+      "method": "baseline",
+      "params": {},
+      "P_exact": 0.9746666666666668,
+      "P_more": 0.9893333333333334,
+      "U_nominal": 0.884,
+      "U_ordinal": 0.49070941454516637,
+      "D_bertscore": 0.0,
+      "D_cosine": 0.0
+    },
+    {
+      "method": "presidio",
+      "params": {},
+      "P_exact": 0.9531666666666667,
+      "P_more": 0.9713333333333334,
+      "U_nominal": 0.856,
+      "U_ordinal": 0.488414940306966,
+      "D_bertscore": 0.06041009545326233,
+      "D_cosine": 0.0859566113948822
+    },
+    {
+      "method": "spacy",
+      "params": {},
+      "P_exact": 0.6143547853783745,
+      "P_more": 0.7202336686641788,
+      "U_nominal": 0.316,
+      "U_ordinal": 0.5083446530481484,
+      "D_bertscore": 0.10167422819137573,
+      "D_cosine": 0.21184011387825014
+    },
+    {
+      "method": "manual",
+      "params": {},
+      "P_exact": 0.5570316568527113,
+      "P_more": 0.6608335782049265,
+      "U_nominal": 0.252,
+      "U_ordinal": 0.43028340965490725,
+      "D_bertscore": 0.0814580385684967,
+      "D_cosine": 0.1867223753929138
+    }
+  ]
+}

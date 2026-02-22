@@ -1,0 +1,180 @@
+{
+  "columns": [
+    "method",
+    "params",
+    "P_exact",
+    "P_more",
+    "U_nominal",
+    "U_ordinal",
+    "D_bertscore",
+    "D_cosine"
+  ],
+  "rows": [
+    {
+      "method": "baseline",
+      "params": {},
+      "P_exact": 0.9746666666666668,
+      "P_more": 0.9893333333333334,
+      "U_nominal": 0.884,
+      "U_ordinal": 0.49070941454516637,
+      "D_bertscore": 0.0,
+      "D_cosine": 0.0
+    },
+    {
+      "method": "baroud",
+      "params": {
+        "lambda": 0.95
+      },
+      "P_exact": 0.9285027046783052,
+      "P_more": 0.9542132275132276,
+      "U_nominal": 0.74,
+      "U_ordinal": 0.47863819328172974,
+      "D_bertscore": 0.065337406873703,
+      "D_cosine": 0.09838049268722535
+    },
+    {
+      "method": "baroud",
+      "params": {
+        "lambda": 0.9
+      },
+      "P_exact": 0.9164622167487686,
+      "P_more": 0.9439082648430475,
+      "U_nominal": 0.644,
+      "U_ordinal": 0.48040183342157333,
+      "D_bertscore": 0.07031667399406433,
+      "D_cosine": 0.118035888671875
+    },
+    {
+      "method": "baroud",
+      "params": {
+        "lambda": 0.8
+      },
+      "P_exact": 0.912816756991037,
+      "P_more": 0.9346421894550208,
+      "U_nominal": 0.576,
+      "U_ordinal": 0.4730705578857102,
+      "D_bertscore": 0.07421677255630493,
+      "D_cosine": 0.13407128596305848
+    },
+    {
+      "method": "baroud",
+      "params": {
+        "lambda": 0.7
+      },
+      "P_exact": 0.9068078059420859,
+      "P_more": 0.9306096792920759,
+      "U_nominal": 0.528,
+      "U_ordinal": 0.46626172451304426,
+      "D_bertscore": 0.07595281147956848,
+      "D_cosine": 0.14269898414611817
+    },
+    {
+      "method": "baroud",
+      "params": {
+        "lambda": 0.5
+      },
+      "P_exact": 0.9005865129660561,
+      "P_more": 0.9256158331382298,
+      "U_nominal": 0.464,
+      "U_ordinal": 0.45864979530881056,
+      "D_bertscore": 0.07880439376831054,
+      "D_cosine": 0.15453545355796813
+    },
+    {
+      "method": "petre_shap",
+      "params": {
+        "k": 2
+      },
+      "P_exact": 0.42738893594328364,
+      "P_more": 0.7231282321526507,
+      "U_nominal": 0.732,
+      "U_ordinal": 0.4380233514230637,
+      "D_bertscore": 0.1555625011920929,
+      "D_cosine": 0.5348189755566418
+    },
+    {
+      "method": "petre_shap",
+      "params": {
+        "k": 3
+      },
+      "P_exact": 0.2912170429240224,
+      "P_more": 0.601523356421089,
+      "U_nominal": 0.7,
+      "U_ordinal": 0.4129122463435944,
+      "D_bertscore": 0.1735085997581482,
+      "D_cosine": 0.6253259982280434
+    },
+    {
+      "method": "petre_shap",
+      "params": {
+        "k": 5
+      },
+      "P_exact": 0.1891759042333993,
+      "P_more": 0.4634277780990566,
+      "U_nominal": 0.616,
+      "U_ordinal": 0.3956449808283244,
+      "D_bertscore": 0.1962351565361023,
+      "D_cosine": 0.7163002567663789
+    },
+    {
+      "method": "petre_shap",
+      "params": {
+        "k": 7
+      },
+      "P_exact": 0.15609356807738323,
+      "P_more": 0.3912061128540751,
+      "U_nominal": 0.56,
+      "U_ordinal": 0.3933332913297197,
+      "D_bertscore": 0.21083611154556275,
+      "D_cosine": 0.7668989696763456
+    },
+    {
+      "method": "petre_shap",
+      "params": {
+        "k": 10
+      },
+      "P_exact": 0.13154832602587926,
+      "P_more": 0.31398442781191555,
+      "U_nominal": 0.492,
+      "U_ordinal": 0.37447884414867416,
+      "D_bertscore": 0.22238388872146606,
+      "D_cosine": 0.8069831465426832
+    },
+    {
+      "method": "risk_shap",
+      "params": {
+        "rho": 0.9
+      },
+      "P_exact": 0.8679615252363535,
+      "P_more": 0.9181372734248896,
+      "U_nominal": 0.832,
+      "U_ordinal": 0.4550285890908841,
+      "D_bertscore": 0.09047089338302612,
+      "D_cosine": 0.2970937432050705
+    },
+    {
+      "method": "risk_shap",
+      "params": {
+        "rho": 0.8
+      },
+      "P_exact": 0.8032871385727429,
+      "P_more": 0.8537293724759243,
+      "U_nominal": 0.788,
+      "U_ordinal": 0.4598961816782432,
+      "D_bertscore": 0.11479929184913636,
+      "D_cosine": 0.40796578192710875
+    },
+    {
+      "method": "risk_shap",
+      "params": {
+        "rho": 0.7
+      },
+      "P_exact": 0.7457473040062078,
+      "P_more": 0.8204858813613423,
+      "U_nominal": 0.716,
+      "U_ordinal": 0.4675901683234371,
+      "D_bertscore": 0.13319139814376832,
+      "D_cosine": 0.4856870539188385
+    }
+  ]
+}

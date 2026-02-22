@@ -1,0 +1,71 @@
+method_sets:
+  - name: "simple_maskers"
+    print_as: "Baseline methods with static results"
+    methods:
+      - method: "baseline"
+        print_as: "Original data"
+      - method: "presidio"
+        print_as: "Presidio"
+      - method: "spacy"
+        print_as: "SpaCy"
+      - method: "manual"
+        print_as: "Manual"
+  - name: "simple_maskers_with_thresholds"
+    print_as: "Non-DP methods with limiting hyperparameters"
+    methods:
+      - method: "baseline"
+        print_as: "Original data"
+      - method: "baroud"
+        print_as: "Baroud et al."
+        params_one_run: ["lambda"]
+      - method: "risk_shap"
+        print_as: "Cumulative risk-based masking"
+        params_one_run: ["rho"]
+      - method: "petre_shap"
+        print_as: "PETRE with Presidio-deid"
+        params_one_run: ["k"]
+  - name: "record_level_rewriters"
+    print_as: "DP: Record-level rewriting methods with varying epsilon"
+    methods:
+      - method: "baseline"
+        print_as: "Original data"
+      - method: "dpbart"
+        print_as: "DP-BART"
+        params: ["epsilon"]
+      - method: "dpparaphrase"
+        print_as: "DP-Paraphrase"
+        params: ["epsilon"]
+      - method: "dpprompt"
+        print_as: "DP-Prompt"
+        params: ["epsilon"]
+  - name: "token_level_rewriters"
+    print_as: "DP: Token-level rewriting methods with varying epsilon"
+    methods:
+      - method: "baseline"
+        print_as: "Original data"
+      - method: "dpmlm_uniform"
+        print_as: "DPMLM"
+        params: ["epsilon"]
+      - method: "dpmlm_shap"
+        print_as: "Risk-aware DPMLM"
+        params: ["epsilon"]
+      - method: "dpmlm_shap_masked"
+        print_as: "Risk-aware DPMLM with Presidio-deid"
+        params: ["epsilon"]
+  - name: "token_level_rewriters_with_thresholds"
+    print_as: "DP: Token-level rewriting methods with varying epsilon and limiting hyperparameters"
+    methods:
+      - method: "baseline"
+        print_as: "Original data"
+      - method: "dpmlm_shap"
+        print_as: "Risk-aware k-DPMLM with Presidio-deid sorted by risk"
+        params: ["epsilon"]
+        params_one_run: ["k"]
+      - method: "dpmlm_shap"
+        print_as: "Risk-aware rho-DPMLM with Presidio-deid sorted by risk"
+        params: ["epsilon"]
+        params_one_run: ["rho"]
+      - method: "dpmlm_shap"
+        print_as: "Risk-aware lambda-DPMLM with Presidio-deid sorted by risk"
+        params: ["epsilon"]
+        params_one_run: ["lambda"]

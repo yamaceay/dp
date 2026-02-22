@@ -4,6 +4,17 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import yaml
+
+INPUT_LOGS_PATH = Path("merged_logs.json")
+OUTPUT_DIR = Path("mds")
+REDDIT_UTILITY_OUTPUT_PATH = OUTPUT_DIR / "reddit_utility.json"
+METHOD_SETS_CONFIG_PATH = Path("configs/visualize/methods.yaml")
+DATASET_SETS_CONFIG_PATH = Path("configs/visualize/datasets.yaml")
+PARAM_SETS_CONFIG_PATH = Path("configs/visualize/params.yaml")
+PARAMS_MANIFEST_PATH = OUTPUT_DIR / "params_manifest.json"
+TYPST_TABLES_MANIFEST_PATH = OUTPUT_DIR / "tables_manifest.json"
+INCLUDE_GROUPED_ROWS = False
 
 
 def read_logs(path: str | Path) -> list[dict[str, Any]]:
@@ -223,14 +234,20 @@ class FlatDatasetLogs:
     def flatten(self) -> list[dict[str, Any]]:
         flattened: list[dict[str, Any]] = []
         for item in self.filtered_data:
+            params = item["params"] or {}
+            if not isinstance(params, dict):
+                params = {}
             flat_item: dict[str, Any] = {
                 "dataset": item["dataset"],
                 "method": item["method"],
-                "params": item["params"],
+                "params": order_params_dict(params),
             }
             for section in ("privacy", "utility", "divergence"):
                 for metric, value in item.get(section, {}).items():
                     flat_item[f"{section}_{metric}"] = value
+            if item["method"] == "baseline":
+                flat_item.setdefault("divergence_bertscore", 0.0)
+                flat_item.setdefault("divergence_cosine", 0.0)
             flattened.append(flat_item)
         sorted_flattened = self.sort_by_method_order(flattened)
         return sorted_flattened
@@ -242,6 +259,13 @@ class FlatDatasetLogs:
         return grouped
     
     def sort_by_method_order(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        param_specs = read_param_specs_config(PARAM_SETS_CONFIG_PATH)
+        param_order = [spec["name"] for spec in param_specs]
+        param_order_index = {name: index for index, name in enumerate(param_order)}
+        param_print_order = {
+            spec["name"]: spec.get("print_order", "low_to_high")
+            for spec in param_specs
+        }
         method_order = [
             "baseline",
             "presidio",
@@ -256,35 +280,33 @@ class FlatDatasetLogs:
             "dpmlm_uniform",
             "dpmlm_shap"
         ]
-        param_order = [
-            "epsilon",
-            "k",
-            "rho",
-            "lambda",
-        ]
         for item in items:
             method = item["method"]
             params = item["params"] or {}
             method_index = method_order.index(method) if method in method_order else len(method_order)
-            
-            param_indices = [param_order.index(k) if k in param_order else len(param_order) for k in params.keys()]
-            
-            param_values: list[int | float] = []
+
+            ordered_param_keys = sorted(
+                params.keys(),
+                key=lambda key: (param_order_index.get(key, len(param_order)), key),
+            )
+            param_indices = [param_order_index.get(k, len(param_order)) for k in ordered_param_keys]
+
+            param_values: list[int | float | str] = []
             for param in param_order:
                 if param in params:
-                    if param == "k" or param == "epsilon":
-                        param_values.append(int(params[param]))
-                    else:
-                        param_values.append(float(params[param]))
+                    param_value = sortable_param_value(params[param])
+                    if isinstance(param_value, (int, float)):
+                        if param_print_order.get(param) == "high_to_low":
+                            param_value = -param_value
+                    param_values.append(param_value)
                 else:
-                    param_values.append(0)
+                    param_values.append(0 if param_print_order.get(param) != "high_to_low" else 0)
             item["_sort_key"] = (method_index, param_indices, tuple(param_values))
         
         sorted_items = sorted(items, key=lambda x: x["_sort_key"])
         for item in sorted_items:
             del item["_sort_key"]
         return sorted_items
-
 
 
 class MarkdownDatasetLogsWriter:
@@ -297,72 +319,199 @@ class MarkdownDatasetLogsWriter:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.flat_logs = FlatDatasetLogs(data, include_grouped=include_grouped)
+        self.dataset_projection_config = self._read_dataset_projection_config(DATASET_SETS_CONFIG_PATH)
 
-    def render(self) -> dict[str, str]:
-        tables: dict[str, str] = {}
-        grouped = self.flat_logs.by_dataset()
-        for dataset, logs in grouped.items():
-            frame = pd.DataFrame(logs)
-            tables[dataset] = frame.to_markdown(index=False)
-        return tables
+    def _read_dataset_projection_config(self, path: str | Path) -> dict[str, list[dict[str, Any]]]:
+        return read_dataset_projection_config(path)
 
-    def write(self) -> list[Path]:
+    def _dataset_frames(self) -> dict[str, pd.DataFrame]:
+        frames: dict[str, pd.DataFrame] = {}
+        for dataset, logs in self.flat_logs.by_dataset().items():
+            frames[dataset] = pd.DataFrame(logs)
+        return frames
+
+    def _write_frame(self, frame: pd.DataFrame, base_path: Path) -> list[Path]:
+        markdown_path = base_path.with_suffix(".md")
+        csv_path = base_path.with_suffix(".csv")
+        json_path = base_path.with_suffix(".json")
+        with open(markdown_path, "w") as f:
+            f.write(frame.to_markdown(index=False) + "\n")
+        frame.to_csv(csv_path, index=False)
+        with open(json_path, "w") as f:
+            json.dump(
+                {
+                    "columns": list(frame.columns),
+                    "rows": frame.to_dict(orient="records"),
+                },
+                f,
+                indent=2,
+            )
+        return [markdown_path, csv_path, json_path]
+
+    def _project_method_set_frame(self, dataset: str, frame: pd.DataFrame) -> pd.DataFrame:
+        scores = self.dataset_projection_config.get(dataset)
+        if not scores:
+            return frame
+
+        required_columns = ["method", "params"]
+        columns: list[str] = list(required_columns)
+        rename_map: dict[str, str] = {}
+        for score in scores:
+            score_name = score["name"]
+            if score_name in frame.columns:
+                columns.append(score_name)
+                rename_map[score_name] = score.get("rename_as", score.get("print_as", score_name))
+
+        missing_required = [column for column in required_columns if column not in frame.columns]
+        if missing_required:
+            raise ValueError(f"Missing required columns for dataset '{dataset}' projection: {missing_required}")
+
+        projected = frame[columns].copy()
+        return projected.rename(columns=rename_map)
+
+    def write_dataset_tables(self) -> list[Path]:
         written: list[Path] = []
-        tables = self.render()
-        for dataset, table_markdown in tables.items():
-            output_path = self.output_dir / f"{dataset}_logs.md"
-            with open(output_path, "w") as f:
-                f.write(table_markdown + "\n")
-            written.append(output_path)
+        for dataset, frame in self._dataset_frames().items():
+            written.extend(self._write_frame(frame, self.output_dir / f"{dataset}_logs"))
         return written
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Process merged logs.")
-    parser.add_argument(
-        "--input",
-        "-i",
-        type=str,
-        default="merged_logs.json",
-        help="Path to input merged logs JSON",
-    )
-    parser.add_argument(
-        "--mode",
-        choices=["reddit_utility", "markdown", "all"],
-        default="all",
-        help="What to generate",
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        default="reddit_utility.json",
-        help="Output path for reddit utility JSON",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default=".",
-        help="Output directory for per-dataset markdown tables",
-    )
-    parser.add_argument(
-        "--include-grouped",
-        action="store_true",
-        help="Include records that contain `group` (default: only non-grouped rows)",
-    )
-    args = parser.parse_args()
+    def write_method_set_tables(self, method_sets_file: str | Path) -> list[Path]:
+        with open(method_sets_file, "r") as f:
+            config = yaml.safe_load(f)
+        method_sets = config.get("method_sets", [])
 
-    data = TaskResultWeightedAggregator(read_logs(args.input)).aggregate()
+        written: list[Path] = []
+        for dataset, logs in self.flat_logs.by_dataset().items():
+            for method_set in method_sets:
+                set_name = method_set["name"]
+                methods = method_set.get("methods", [])
+                filtered_logs = [item for item in logs if self._matches_any_method_spec(item, methods)]
+                if not filtered_logs:
+                    continue
+                frame = pd.DataFrame(filtered_logs)
+                frame = self._project_method_set_frame(dataset, frame)
+                written.extend(self._write_frame(frame, self.output_dir / f"{dataset}_logs_{set_name}"))
+        return written
 
-    if args.mode in {"reddit_utility", "all"}:
-        utility = RedditUtilityByHardness(data)
-        with open(args.output, "w") as f:
-            json.dump(utility.grouped_data, f, indent=4)
+    def _matches_any_method_spec(
+        self,
+        item: dict[str, Any],
+        method_specs: list[dict[str, Any]],
+    ) -> bool:
+        return any(self._matches_method_spec(item, method_spec) for method_spec in method_specs)
 
-    if args.mode in {"markdown", "all"}:
-        writer = MarkdownDatasetLogsWriter(
-            data,
-            output_dir=args.output_dir,
-            include_grouped=args.include_grouped,
+    def _matches_method_spec(self, item: dict[str, Any], method_spec: dict[str, Any]) -> bool:
+        expected_method = method_spec["method"]
+        if item["method"] != expected_method:
+            return False
+
+        params = item["params"] or {}
+        if not isinstance(params, dict):
+            return False
+
+        expected_param_keys = set(method_spec.get("params", [])) | set(method_spec.get("params_one_run", []))
+        return set(params.keys()) == expected_param_keys
+
+
+def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
+    dataset_projection_config = read_dataset_projection_config(DATASET_SETS_CONFIG_PATH)
+    entries: list[dict[str, str]] = []
+    for path in sorted(output_dir.glob("*.md")):
+        stem = path.stem
+        dataset, section_suffix = stem.split("_logs", 1)
+        section = "all" if not section_suffix else section_suffix.lstrip("_")
+        if section == "all":
+            continue
+        csv_file = path.with_suffix(".csv").name
+        json_file = path.with_suffix(".json").name
+        heatmap_columns = []
+        for score in dataset_projection_config.get(dataset, []):
+            heatmap_columns.append(
+                {
+                    "name": score.get("rename_as", score.get("print_as", score["name"])),
+                    "source_name": score["name"],
+                    "best": score.get("best"),
+                    "worst": score.get("worst"),
+                }
+            )
+        entries.append(
+            {
+                "file": path.name,
+                "csv_file": csv_file,
+                "json_file": json_file,
+                "dataset": dataset,
+                "section": section,
+                "title": typst_table_title(dataset, section),
+                "heatmap_columns": heatmap_columns,
+            }
         )
-        writer.write()
+    return entries
+
+
+def typst_table_title(dataset: str, section: str) -> str:
+    dataset_label = dataset.replace("_", "-").upper()
+    if section == "all":
+        return f"{dataset_label} results (all methods)"
+    return f"{dataset_label} results ({section.replace('_', ' ')})"
+
+
+def read_dataset_projection_config(path: str | Path) -> dict[str, list[dict[str, Any]]]:
+    with open(path, "r") as f:
+        config = yaml.safe_load(f)
+    projections: dict[str, list[dict[str, Any]]] = {}
+    for dataset_set in config.get("dataset_sets", []):
+        dataset_names = dataset_set.get("names")
+        if dataset_names is None:
+            dataset_names = [dataset_set["name"]]
+        for dataset_name in dataset_names:
+            projections[dataset_name] = dataset_set.get("scores", [])
+    return projections
+
+
+def read_param_specs_config(path: str | Path) -> list[dict[str, Any]]:
+    with open(path, "r") as f:
+        config = yaml.safe_load(f)
+    return config.get("param_sets", [])
+
+
+def order_params_dict(params: dict[str, Any]) -> dict[str, Any]:
+    param_specs = read_param_specs_config(PARAM_SETS_CONFIG_PATH)
+    order_index = {spec["name"]: index for index, spec in enumerate(param_specs)}
+    ordered_keys = sorted(params.keys(), key=lambda key: (order_index.get(key, len(order_index)), key))
+    return {key: params[key] for key in ordered_keys}
+
+
+def sortable_param_value(value: Any) -> int | float | str:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int | float):
+        return value
+    try:
+        if "." in str(value):
+            return float(value)
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return str(value)
+
+if __name__ == "__main__":
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    data = TaskResultWeightedAggregator(read_logs(INPUT_LOGS_PATH)).aggregate()
+
+    utility = RedditUtilityByHardness(data)
+    with open(REDDIT_UTILITY_OUTPUT_PATH, "w") as f:
+        json.dump(utility.grouped_data, f, indent=4)
+
+    writer = MarkdownDatasetLogsWriter(
+        data,
+        output_dir=OUTPUT_DIR,
+        include_grouped=INCLUDE_GROUPED_ROWS,
+    )
+    writer.write_dataset_tables()
+    writer.write_method_set_tables(METHOD_SETS_CONFIG_PATH)
+    with open(PARAMS_MANIFEST_PATH, "w") as f:
+        json.dump(read_param_specs_config(PARAM_SETS_CONFIG_PATH), f, indent=2)
+    with open(TYPST_TABLES_MANIFEST_PATH, "w") as f:
+        json.dump(build_typst_tables_manifest(OUTPUT_DIR), f, indent=2)

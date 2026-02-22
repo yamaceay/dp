@@ -1,0 +1,187 @@
+{
+  "columns": [
+    "method",
+    "params",
+    "P_exact",
+    "P_more",
+    "U_nominal",
+    "D_bertscore",
+    "D_cosine"
+  ],
+  "rows": [
+    {
+      "method": "baseline",
+      "params": {},
+      "P_exact": 0.9739999999999999,
+      "P_more": 1.0,
+      "U_nominal": 0.94,
+      "D_bertscore": 0.0,
+      "D_cosine": 0.0
+    },
+    {
+      "method": "dpmlm_uniform",
+      "params": {
+        "epsilon": 10
+      },
+      "P_exact": 0.14470680573014807,
+      "P_more": 0.163168079832886,
+      "U_nominal": 0.112,
+      "D_bertscore": 0.27224308586120605,
+      "D_cosine": 0.5925147993564606
+    },
+    {
+      "method": "dpmlm_uniform",
+      "params": {
+        "epsilon": 25
+      },
+      "P_exact": 0.46468491791216493,
+      "P_more": 0.5883946976875857,
+      "U_nominal": 0.744,
+      "D_bertscore": 0.2034851393699646,
+      "D_cosine": 0.3483888949155807
+    },
+    {
+      "method": "dpmlm_uniform",
+      "params": {
+        "epsilon": 50
+      },
+      "P_exact": 0.854819191919192,
+      "P_more": 0.9253571428571429,
+      "U_nominal": 0.844,
+      "D_bertscore": 0.15381438732147218,
+      "D_cosine": 0.24559025633335113
+    },
+    {
+      "method": "dpmlm_uniform",
+      "params": {
+        "epsilon": 100
+      },
+      "P_exact": 0.8485431457431457,
+      "P_more": 0.9676666666666668,
+      "U_nominal": 0.86,
+      "D_bertscore": 0.14284095239639283,
+      "D_cosine": 0.23071934020519255
+    },
+    {
+      "method": "dpmlm_uniform",
+      "params": {
+        "epsilon": 250
+      },
+      "P_exact": 0.8684252969252968,
+      "P_more": 0.9538067226890757,
+      "U_nominal": 0.88,
+      "D_bertscore": 0.13834757947921753,
+      "D_cosine": 0.22567465281486512
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10
+      },
+      "P_exact": 0.1675545464150046,
+      "P_more": 0.16429253290126036,
+      "U_nominal": 0.18,
+      "D_bertscore": 0.2729669137001038,
+      "D_cosine": 0.6650241788774729
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25
+      },
+      "P_exact": 0.21076243309841267,
+      "P_more": 0.24479908368486572,
+      "U_nominal": 0.524,
+      "D_bertscore": 0.24505351662635802,
+      "D_cosine": 0.5598098430931568
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50
+      },
+      "P_exact": 0.3338461945026362,
+      "P_more": 0.39103340385481333,
+      "U_nominal": 0.704,
+      "D_bertscore": 0.2201831033229828,
+      "D_cosine": 0.486319221585989
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100
+      },
+      "P_exact": 0.43339849422015264,
+      "P_more": 0.5213994937214632,
+      "U_nominal": 0.788,
+      "D_bertscore": 0.20676346254348754,
+      "D_cosine": 0.44065224832296374
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250
+      },
+      "P_exact": 0.5252694226489243,
+      "P_more": 0.615867130181831,
+      "U_nominal": 0.796,
+      "D_bertscore": 0.19515488839149475,
+      "D_cosine": 0.40313060909509657
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "params": {
+        "epsilon": 10
+      },
+      "P_exact": 0.1657786000597703,
+      "P_more": 0.16190539898366887,
+      "U_nominal": 0.196,
+      "D_bertscore": 0.2730473983287811,
+      "D_cosine": 0.6659592907428742
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "params": {
+        "epsilon": 25
+      },
+      "P_exact": 0.20930428418264005,
+      "P_more": 0.2439039641703119,
+      "U_nominal": 0.488,
+      "D_bertscore": 0.24502634978294371,
+      "D_cosine": 0.5535078051686287
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "params": {
+        "epsilon": 50
+      },
+      "P_exact": 0.3235909691616865,
+      "P_more": 0.4081915660824777,
+      "U_nominal": 0.672,
+      "D_bertscore": 0.2208515226840973,
+      "D_cosine": 0.4840279651582241
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "params": {
+        "epsilon": 100
+      },
+      "P_exact": 0.4350586753271532,
+      "P_more": 0.5096198619137464,
+      "U_nominal": 0.812,
+      "D_bertscore": 0.20710152196884155,
+      "D_cosine": 0.44138902801275254
+    },
+    {
+      "method": "dpmlm_shap_masked",
+      "params": {
+        "epsilon": 250
+      },
+      "P_exact": 0.5342820785937409,
+      "P_more": 0.6055914645086917,
+      "U_nominal": 0.84,
+      "D_bertscore": 0.19433965444564819,
+      "D_cosine": 0.4008846025466919
+    }
+  ]
+}

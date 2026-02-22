@@ -1,0 +1,40 @@
+{
+  "columns": [
+    "method",
+    "params",
+    "P_exact",
+    "P_more",
+    "U_nominal",
+    "D_bertscore",
+    "D_cosine"
+  ],
+  "rows": [
+    {
+      "method": "baseline",
+      "params": {},
+      "P_exact": 0.9739999999999999,
+      "P_more": 1.0,
+      "U_nominal": 0.94,
+      "D_bertscore": 0.0,
+      "D_cosine": 0.0
+    },
+    {
+      "method": "presidio",
+      "params": {},
+      "P_exact": 0.9053492063492063,
+      "P_more": 0.9606969696969697,
+      "U_nominal": 0.94,
+      "D_bertscore": 0.10157830739021301,
+      "D_cosine": 0.2514679484367371
+    },
+    {
+      "method": "spacy",
+      "params": {},
+      "P_exact": 0.7532171377641966,
+      "P_more": 0.786027866458817,
+      "U_nominal": 0.932,
+      "D_bertscore": 0.13906461119651795,
+      "D_cosine": 0.3451705205440521
+    }
+  ]
+}
