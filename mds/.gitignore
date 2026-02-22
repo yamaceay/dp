@@ -1,3 +1,6 @@
 tab_logs.*
 db_bio_logs.*
 reddit_logs.*
+tab_logs*.json
+db_bio_logs*.json
+reddit_logs*.json
