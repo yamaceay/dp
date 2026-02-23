@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Union
+from tqdm import tqdm
 
 from dp.loaders.base import DatasetRecord
 from dp.loaders._tab import TabDatasetAdapter
@@ -57,55 +58,18 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
             )
         self.n_train_samples = n_train_samples
         self.n_eval_samples = n_eval_samples
-        self.section_headers = ["PROCEDURE", "THE FACTS", "THE LAW", "AS TO THE FACTS", "COMPLAINTS"]
-
-    def extract_section(self, text: str, section_name: str) -> str:
-        lines = text.split('\n')
-        in_section = False
-        section_content = []
-        
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            
-            if stripped == section_name:
-                in_section = True
-                continue
-            
-            if in_section and stripped in self.section_headers and stripped != section_name:
-                break
-            
-            if in_section:
-                section_content.append(line)
-        
-        return '\n'.join(section_content).strip()
 
     def prepare_eval_texts(self, record: DatasetRecord) -> List[str]:
         return [self.rewriter.rewrite(text=record.text, **self.rewriter_kwargs) for _ in range(self.n_eval_samples)]
 
     def prepare_train_texts(self, record: DatasetRecord) -> List[str]:
-        background = []
-        
-        for section_name in self.section_headers:
-            section_text = self.extract_section(record.text, section_name)
-            if not section_text:
-                continue
-            
-            key = section_name.lower().replace(" ", "_")
-            chunks = self.chunker.chunk(section_text)
-            
-            if len(chunks) == 1:
-                background.append(section_text)
-            else:
-                for chunk in chunks:
-                    background.append(chunk.text)
-
-        if self.rewrite_background:
-            background = [self.rewriter.rewrite(bk, **self.rewriter_kwargs) for bk in background for _ in range(self.n_train_samples)]
-
-        return background
+        return [self.rewriter.rewrite(text=record.text, **self.rewriter_kwargs) for _ in range(self.n_train_samples)]
 
     def iter_records(self, progress: bool = False) -> List[AttackerDatasetRecord]:
-        for record in self.adapter.iter_records():
+        iterator = list(self.adapter.iter_records())
+        if progress:
+            iterator = tqdm(iterator, desc="Preparing attacker dataset records")
+        for record in iterator:
             if self._cache_map is not None and record.name in self._cache_map:
                 ext = self._cache_map.get(record.name, {})
                 train_texts = _normalize_texts(ext.get("train_texts", []))
