@@ -430,6 +430,8 @@ class MarkdownDatasetLogsWriter:
         written: list[Path] = []
         for dataset, logs in self.flat_logs.by_dataset().items():
             for method_set in method_sets:
+                if not self._dataset_enabled_for_method_set(dataset, method_set):
+                    continue
                 set_name = method_set["name"]
                 methods = method_set.get("methods", [])
                 filtered_logs = [item for item in logs if self._matches_any_method_spec(item, methods)]
@@ -447,7 +449,22 @@ class MarkdownDatasetLogsWriter:
     ) -> bool:
         return any(self._matches_method_spec(item, method_spec) for method_spec in method_specs)
 
+    def _dataset_enabled_for_method_set(self, dataset: str, method_set: dict[str, Any]) -> bool:
+        return self._dataset_matches_scope(dataset, method_set.get("datasets"))
+
+    def _dataset_enabled_for_method_spec(self, dataset: str, method_spec: dict[str, Any]) -> bool:
+        return self._dataset_matches_scope(dataset, method_spec.get("datasets"))
+
+    def _dataset_matches_scope(self, dataset: str, datasets_scope: Any) -> bool:
+        if datasets_scope is None:
+            return True
+        if isinstance(datasets_scope, list):
+            return dataset in datasets_scope
+        raise ValueError(f"Unsupported datasets scope format: {type(datasets_scope)}")
+
     def _matches_method_spec(self, item: dict[str, Any], method_spec: dict[str, Any]) -> bool:
+        if not self._dataset_enabled_for_method_spec(item["dataset"], method_spec):
+            return False
         expected_method = method_spec["method"]
         if item["method"] != expected_method:
             return False

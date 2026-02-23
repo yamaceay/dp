@@ -212,12 +212,65 @@
     "render_mode": "hierarchical"
   },
   {
-    "file": "db_bio_logs_token_level_rewriters_with_thresholds.md",
-    "csv_file": "db_bio_logs_token_level_rewriters_with_thresholds.csv",
-    "json_file": "db_bio_logs_token_level_rewriters_with_thresholds.json",
+    "file": "db_bio_logs_token_level_rewriters_with_threshold_k.md",
+    "csv_file": "db_bio_logs_token_level_rewriters_with_threshold_k.csv",
+    "json_file": "db_bio_logs_token_level_rewriters_with_threshold_k.json",
     "dataset": "db_bio",
-    "section": "token_level_rewriters_with_thresholds",
-    "title": "DB-BIO results (token level rewriters with thresholds)",
+    "section": "token_level_rewriters_with_threshold_k",
+    "title": "DB-BIO results (token level rewriters with threshold k)",
+    "heatmap_columns": [
+      {
+        "name": "P_exact",
+        "source_name": "privacy_exact_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "P_more",
+        "source_name": "privacy_more_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "U_nominal",
+        "source_name": "utility_utility_nominal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal",
+        "source_name": "utility_utility_ordinal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "D_bertscore",
+        "source_name": "divergence_bertscore",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_cosine",
+        "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
+        "best": 1,
+        "worst": -1
+      }
+    ],
+    "render_mode": "hierarchical"
+  },
+  {
+    "file": "db_bio_logs_token_level_rewriters_with_threshold_rho.md",
+    "csv_file": "db_bio_logs_token_level_rewriters_with_threshold_rho.csv",
+    "json_file": "db_bio_logs_token_level_rewriters_with_threshold_rho.json",
+    "dataset": "db_bio",
+    "section": "token_level_rewriters_with_threshold_rho",
+    "title": "DB-BIO results (token level rewriters with threshold rho)",
     "heatmap_columns": [
       {
         "name": "P_exact",
@@ -477,12 +530,65 @@
     "render_mode": "hierarchical"
   },
   {
-    "file": "reddit_logs_token_level_rewriters_with_thresholds.md",
-    "csv_file": "reddit_logs_token_level_rewriters_with_thresholds.csv",
-    "json_file": "reddit_logs_token_level_rewriters_with_thresholds.json",
+    "file": "reddit_logs_token_level_rewriters_with_threshold_k.md",
+    "csv_file": "reddit_logs_token_level_rewriters_with_threshold_k.csv",
+    "json_file": "reddit_logs_token_level_rewriters_with_threshold_k.json",
     "dataset": "reddit",
-    "section": "token_level_rewriters_with_thresholds",
-    "title": "REDDIT results (token level rewriters with thresholds)",
+    "section": "token_level_rewriters_with_threshold_k",
+    "title": "REDDIT results (token level rewriters with threshold k)",
+    "heatmap_columns": [
+      {
+        "name": "P_exact",
+        "source_name": "privacy_exact_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "P_more",
+        "source_name": "privacy_more_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "U_nominal",
+        "source_name": "utility_utility_nominal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal",
+        "source_name": "utility_utility_ordinal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "D_bertscore",
+        "source_name": "divergence_bertscore",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_cosine",
+        "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
+        "best": 1,
+        "worst": -1
+      }
+    ],
+    "render_mode": "hierarchical"
+  },
+  {
+    "file": "reddit_logs_token_level_rewriters_with_threshold_rho.md",
+    "csv_file": "reddit_logs_token_level_rewriters_with_threshold_rho.csv",
+    "json_file": "reddit_logs_token_level_rewriters_with_threshold_rho.json",
+    "dataset": "reddit",
+    "section": "token_level_rewriters_with_threshold_rho",
+    "title": "REDDIT results (token level rewriters with threshold rho)",
     "heatmap_columns": [
       {
         "name": "P_exact",
@@ -742,12 +848,118 @@
     "render_mode": "hierarchical"
   },
   {
-    "file": "tab_logs_token_level_rewriters_with_thresholds.md",
-    "csv_file": "tab_logs_token_level_rewriters_with_thresholds.csv",
-    "json_file": "tab_logs_token_level_rewriters_with_thresholds.json",
+    "file": "tab_logs_token_level_rewriters_with_threshold_k.md",
+    "csv_file": "tab_logs_token_level_rewriters_with_threshold_k.csv",
+    "json_file": "tab_logs_token_level_rewriters_with_threshold_k.json",
     "dataset": "tab",
-    "section": "token_level_rewriters_with_thresholds",
-    "title": "TAB results (token level rewriters with thresholds)",
+    "section": "token_level_rewriters_with_threshold_k",
+    "title": "TAB results (token level rewriters with threshold k)",
+    "heatmap_columns": [
+      {
+        "name": "P_exact",
+        "source_name": "privacy_exact_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "P_more",
+        "source_name": "privacy_more_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "U_nominal",
+        "source_name": "utility_utility_nominal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal",
+        "source_name": "utility_utility_ordinal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "D_bertscore",
+        "source_name": "divergence_bertscore",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_cosine",
+        "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
+        "best": 1,
+        "worst": -1
+      }
+    ],
+    "render_mode": "hierarchical"
+  },
+  {
+    "file": "tab_logs_token_level_rewriters_with_threshold_lambda.md",
+    "csv_file": "tab_logs_token_level_rewriters_with_threshold_lambda.csv",
+    "json_file": "tab_logs_token_level_rewriters_with_threshold_lambda.json",
+    "dataset": "tab",
+    "section": "token_level_rewriters_with_threshold_lambda",
+    "title": "TAB results (token level rewriters with threshold lambda)",
+    "heatmap_columns": [
+      {
+        "name": "P_exact",
+        "source_name": "privacy_exact_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "P_more",
+        "source_name": "privacy_more_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "U_nominal",
+        "source_name": "utility_utility_nominal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal",
+        "source_name": "utility_utility_ordinal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "D_bertscore",
+        "source_name": "divergence_bertscore",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_cosine",
+        "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "relative_gain",
+        "source_name": "relative_gain",
+        "best": 1,
+        "worst": -1
+      }
+    ],
+    "render_mode": "hierarchical"
+  },
+  {
+    "file": "tab_logs_token_level_rewriters_with_threshold_rho.md",
+    "csv_file": "tab_logs_token_level_rewriters_with_threshold_rho.csv",
+    "json_file": "tab_logs_token_level_rewriters_with_threshold_rho.json",
+    "dataset": "tab",
+    "section": "token_level_rewriters_with_threshold_rho",
+    "title": "TAB results (token level rewriters with threshold rho)",
     "heatmap_columns": [
       {
         "name": "P_exact",
