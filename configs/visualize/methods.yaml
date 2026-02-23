@@ -17,13 +17,13 @@ method_sets:
         print_as: "Original data"
       - method: "baroud"
         print_as: "Baroud et al."
-        params_one_run: ["lambda"]
+        params_one_run: {"lambda": [0.5, 0.9]}
       - method: "risk_shap"
         print_as: "Cumulative risk-based masking"
-        params_one_run: ["rho"]
+        params_one_run: {"rho": [0.7, 0.8, 0.9]}
       - method: "petre_shap"
         print_as: "PETRE with Presidio-deid"
-        params_one_run: ["k"]
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
   - name: "record_level_rewriters"
     print_as: "DP: Record-level rewriting methods with varying epsilon"
     methods:
@@ -60,12 +60,12 @@ method_sets:
       - method: "dpmlm_shap"
         print_as: "Risk-aware k-DPMLM with Presidio-deid sorted by risk"
         params: ["epsilon"]
-        params_one_run: ["k"]
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
       - method: "dpmlm_shap"
         print_as: "Risk-aware rho-DPMLM with Presidio-deid sorted by risk"
         params: ["epsilon"]
-        params_one_run: ["rho"]
+        params_one_run: {"rho": [0.7, 0.8, 0.9]}
       - method: "dpmlm_shap"
         print_as: "Risk-aware lambda-DPMLM with Presidio-deid sorted by risk"
         params: ["epsilon"]
-        params_one_run: ["lambda"]
+        params_one_run: {"lambda": [0.5, 0.9]}

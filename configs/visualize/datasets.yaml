@@ -19,9 +19,9 @@ dataset_sets:
         worst: 0
       - name: divergence_bertscore
         rename_as: D_bertscore
-        best: 1
-        worst: 0
+        best: 0
+        worst: 1
       - name: divergence_cosine
         rename_as: D_cosine
-        best: 1
-        worst: 0
+        best: 0
+        worst: 1
