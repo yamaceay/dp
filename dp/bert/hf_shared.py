@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import torch
-from transformers import AutoModel, AutoTokenizer, Trainer, TrainingArguments
+from transformers import AutoModel, AutoTokenizer, Trainer, TrainingArguments, TrainerCallback
 
 from dp.bert.common import (
     EarlyStoppingCallback,
@@ -132,6 +132,8 @@ class BertHFPlumbing:
         warmup_ratio: Optional[float],
         early_stop_patience: int,
         early_stop_threshold: Optional[float],
+        early_stopping_callback: Optional[TrainerCallback] = None,
+        extra_callbacks: Optional[Sequence[TrainerCallback]] = None,
     ) -> Tuple[Trainer, EarlyStoppingCallback]:
         training_args = TrainingArguments(
             output_dir=checkpoint_dir,
@@ -166,12 +168,17 @@ class BertHFPlumbing:
             num_training_steps=num_training_steps,
         )
 
-        early_stopping = EarlyStoppingCallback(
-            early_stopping_patience=early_stop_patience,
-            early_stopping_threshold=early_stop_threshold,
-            metric_name=spec.metric_name,
-            minimize=spec.minimize_metric,
-        )
+        early_stopping = early_stopping_callback
+        if early_stopping is None:
+            early_stopping = EarlyStoppingCallback(
+                early_stopping_patience=early_stop_patience,
+                early_stopping_threshold=early_stop_threshold,
+                metric_name=spec.metric_name,
+                minimize=spec.minimize_metric,
+            )
+        callbacks = [early_stopping]
+        if extra_callbacks:
+            callbacks.extend(list(extra_callbacks))
 
         trainer = Trainer(
             model=model,
@@ -179,7 +186,7 @@ class BertHFPlumbing:
             train_dataset=train_dataset,
             eval_dataset=val_dataset,
             compute_metrics=spec.compute_metrics,
-            callbacks=[early_stopping],
+            callbacks=callbacks,
             optimizers=(optimizer, scheduler),
         )
         return trainer, early_stopping

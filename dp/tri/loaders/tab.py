@@ -74,11 +74,16 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
                 ext = self._cache_map.get(record.name, {})
                 train_texts = _normalize_texts(ext.get("train_texts", []))
                 eval_texts = _normalize_texts(ext.get("eval_texts", []))
+                test_texts = _normalize_texts(ext.get("test_texts", []))
             else:
                 train_texts = self.prepare_train_texts(record)
                 eval_texts = self.prepare_eval_texts(record)
+                test_texts = []
+            if not test_texts:
+                test_texts = [record.text]
             yield AttackerDatasetRecord(
                 name=record.name,
                 train_texts=train_texts,
                 eval_texts=eval_texts,
+                test_texts=test_texts,
             )

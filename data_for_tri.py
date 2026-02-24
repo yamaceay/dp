@@ -205,6 +205,7 @@ def main() -> None:
                     'name': record.name,
                     'train_texts': train_texts,
                     'eval_texts': eval_texts,
+                    'test_texts': list(record.test_texts or []),
                 }
                 f.write(json.dumps(json_record) + '\n')
         unique_names.add(record.name)

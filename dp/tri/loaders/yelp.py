@@ -208,6 +208,7 @@ class YelpAttackerDatasetAdapter(AttackerDatasetAdapter):
     def iter_records(self, progress: bool = False) -> Iterable[AttackerDatasetRecord]:
         grouped_train: Dict[str, List[str]] = {}
         grouped_eval: Dict[str, List[str]] = {}
+        grouped_test: Dict[str, List[str]] = {}
         base_iter = list(self.adapter.iter_records())
         for idx, record in enumerate(base_iter):
             name = record.name
@@ -223,6 +224,7 @@ class YelpAttackerDatasetAdapter(AttackerDatasetAdapter):
             user_summary = self._user_summary(user, variant="eval")
             grouped_train.setdefault(name, []).append(background_entry)
             grouped_eval.setdefault(name, []).append(user_summary)
-        return merge_records(grouped_train, grouped_eval)
+            grouped_test.setdefault(name, []).append(record.text)
+        return merge_records(grouped_train, grouped_eval, grouped_test)
 
 __all__ = ["YelpAttackerDatasetAdapter"]

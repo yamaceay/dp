@@ -191,6 +191,7 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
             "optimizer_type": optimizer_type,
             "warmup_steps": int(training.get("warmup_steps", 10)),
             "warmup_ratio": _optional_float(training, "warmup_ratio"),
+            "debug_tri": bool(training.get("debug_tri", False)),
             },
     }
     return cfg
@@ -231,6 +232,7 @@ def main() -> int:
     parser.add_argument("--focal_ignore_pt", type=float, default=None)
     parser.add_argument("--exclude_stopwords", action="store_true")
     parser.add_argument("--p_agg", type=str, default="avg", choices=["avg", "max"], help="Method to aggregate token-level scores into record-level score")
+    parser.add_argument("--debug_tri", action="store_true")
 
     args = parser.parse_args()
     task_id = resolve_task_id(args.task_id)
@@ -266,6 +268,7 @@ def main() -> int:
         warmup_steps = int(training.get("warmup_steps", 10))
         warmup_ratio = training.get("warmup_ratio")
         p_agg = training.get("p_agg", "avg")
+        debug_tri = bool(training.get("debug_tri", False))
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = apply_task_template(args.run_name, task_id) or apply_task_template(cfg.get("run_name"), task_id) or timestamp
@@ -303,6 +306,7 @@ def main() -> int:
         warmup_steps = 10
         warmup_ratio = None
         p_agg = args.p_agg
+        debug_tri = bool(args.debug_tri)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root_raw = apply_task_template(args.output_root, task_id) if args.output_root else f"models/tri_pipelines/{dataset}"
         output_root = Path(output_root_raw).expanduser().resolve()
@@ -357,6 +361,7 @@ def main() -> int:
             optimizer_type=optimizer_type,
             warmup_steps=warmup_steps,
             warmup_ratio=warmup_ratio,
+            debug_tri=debug_tri,
         )
         print(str(model_path))
         return 0

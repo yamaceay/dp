@@ -260,6 +260,7 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
     def iter_records(self, progress: bool = False) -> Iterable[AttackerDatasetRecord]:
         grouped_train_texts: Dict[str, List[str]] = {}
         grouped_eval_texts: Dict[str, List[str]] = {}
+        grouped_test_texts: Dict[str, List[str]] = {}
         for idx, record in enumerate(self.adapter.iter_records()):
             metadata = dict(record.metadata or {})
             persona = {key[len("persona_"):]: value for key, value in metadata.items() if key.startswith("persona_")}
@@ -275,8 +276,9 @@ class RedditAttackerDatasetAdapter(AttackerDatasetAdapter):
 
             grouped_train_texts.setdefault(record.name, []).append(background_entry)
             grouped_eval_texts.setdefault(record.name, []).append(persona_text)
+            grouped_test_texts.setdefault(record.name, []).append(record.text)
 
-        iterator = merge_records(grouped_train_texts, grouped_eval_texts)
+        iterator = merge_records(grouped_train_texts, grouped_eval_texts, grouped_test_texts)
         if progress:
             iterator = tqdm(iterator, desc="Processing attacker records", total=len(iterator))
         for record in iterator:

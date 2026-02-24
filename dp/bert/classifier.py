@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
@@ -17,6 +17,7 @@ from dp.bert.hf_shared import (
     HFTrainSpec,
     load_backbone_with_optional_checkpoint,
 )
+from dp.bert.common import ExternalEvalEarlyStoppingCallback
 from dp.bert.losses import compute_focal_loss
 
 
@@ -209,7 +210,17 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         model = ClassifierModel(base_model, hidden_size, num_labels)
         return model
 
-    def fit(self, x_train: Any, y_train: Sequence[Any], x_val: Any, y_val: Sequence[Any]) -> None:
+    def fit(
+        self,
+        x_train: Any,
+        y_train: Sequence[Any],
+        x_val: Any,
+        y_val: Sequence[Any],
+        stop_evaluator: Optional[Callable[[], Dict[str, float]]] = None,
+        stop_metric_name: Optional[str] = None,
+        stop_metric_minimize: bool = False,
+        stop_label: str = "test",
+    ) -> None:
         from collections import Counter
 
         train_texts = list(x_train)
@@ -285,6 +296,18 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             weight_decay_effective=self.weight_decay,
             compute_metrics=compute_metrics,
         )
+        custom_early_stopping = None
+        if stop_evaluator is not None:
+            metric_name_for_stop = stop_metric_name or spec.metric_name
+            custom_early_stopping = ExternalEvalEarlyStoppingCallback(
+                early_stopping_patience=self.early_stop_patience,
+                early_stopping_threshold=self.early_stop_threshold,
+                metric_name=metric_name_for_stop,
+                minimize=bool(stop_metric_minimize),
+                evaluator=stop_evaluator,
+                label=stop_label,
+            )
+
         self._trainer, early_stopping = self._make_trainer(
             model=self._model,
             train_dataset=train_dataset,
@@ -303,6 +326,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             warmup_ratio=self.warmup_ratio,
             early_stop_patience=self.early_stop_patience,
             early_stop_threshold=self.early_stop_threshold,
+            early_stopping_callback=custom_early_stopping,
         )
         self._trainer.train()
         print(f"Restored best model with macro_f1: {early_stopping.best_metric:.4f}")

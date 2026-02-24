@@ -40,6 +40,7 @@ class TRIDetector:
         self.chunker: Optional[TokenAwareChunker] = None
         self.train_records: Optional[List[DatasetRecord]] = None
         self.eval_records: Optional[List[DatasetRecord]] = None
+        self.test_records: Optional[List[DatasetRecord]] = None
 
     def setup(
         self,
@@ -69,6 +70,7 @@ class TRIDetector:
         warmup_steps: int = 10,
         warmup_ratio: Optional[float] = None,
         init_checkpoint: Optional[str] = None,
+        debug_tri: bool = False,
     ) -> None:
         if not self.train_records:
             raise ValueError("No training data set. Call setup() first")
@@ -135,7 +137,26 @@ class TRIDetector:
         train_labels = [record.name for record in self.train_records]
         eval_texts = [record.text for record in self.eval_records]
         eval_labels = [record.name for record in self.eval_records]
-        self.classifier.fit(train_texts, train_labels, eval_texts, eval_labels)
+        stop_evaluator = None
+        if debug_tri and self.test_records:
+            def stop_evaluator_fn() -> Dict[str, float]:
+                self._sync_chunker_from_classifier()
+                metrics = self.evaluate_ranking(self.test_records)
+                return {
+                    "mrr": float(metrics["mrr"]),
+                    "acc": float(metrics["acc"]),
+                }
+            stop_evaluator = stop_evaluator_fn
+        self.classifier.fit(
+            train_texts,
+            train_labels,
+            eval_texts,
+            eval_labels,
+            stop_evaluator=stop_evaluator,
+            stop_metric_name=("mrr" if stop_evaluator is not None else None),
+            stop_metric_minimize=False,
+            stop_label=("test" if stop_evaluator is not None else "eval"),
+        )
         self.classifier.save(resolved_output_dir)
         if self.classifier._label_to_id is None:
             raise ValueError("BertClassifierHead did not produce label mapping")
@@ -143,6 +164,14 @@ class TRIDetector:
         self.label_to_name = {v: k for k, v in self.name_to_label.items()}
         self.num_labels = len(self.name_to_label)
         self._sync_chunker_from_classifier()
+        if debug_tri and self.test_records:
+            final_test_metrics = self.evaluate_ranking(self.test_records)
+            print(
+                "TRI test debug "
+                f"mrr={float(final_test_metrics['mrr']):.6f} "
+                f"acc={float(final_test_metrics['acc']):.6f} "
+                f"total={int(final_test_metrics['total'])}"
+            )
         label_mapping_path = Path(resolved_output_dir) / "label_mapping.json"
         with label_mapping_path.open("w", encoding="utf-8") as f:
             json.dump(self.name_to_label, f, indent=2)
@@ -247,6 +276,36 @@ class TRIDetector:
         accuracy = correct / total if total else 0.0
         return {"accuracy": accuracy, "correct": correct, "total": total}
 
+    def evaluate_ranking(self, records: List[DatasetRecord]) -> Dict[str, Any]:
+        if not records:
+            raise ValueError("records cannot be empty")
+        predictions = self.predict(records)
+        mrr = 0.0
+        acc = 0.0
+        total = 0
+        for idx, record in enumerate(records):
+            if not record.name or record.name not in self.name_to_label:
+                continue
+            key = record.uid or str(idx)
+            scores = predictions.get(key, {})
+            if not scores:
+                continue
+            ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+            rank: Optional[int] = None
+            for position, (candidate, _) in enumerate(ordered, start=1):
+                if candidate == record.name:
+                    rank = position
+                    break
+            if rank is None:
+                continue
+            total += 1
+            mrr += 1.0 / rank
+            if rank == 1:
+                acc += 1.0
+        if total == 0:
+            return {"mrr": 0.0, "acc": 0.0, "total": 0}
+        return {"mrr": mrr / total, "acc": acc / total, "total": total}
+
     def build_label_mappings(self) -> None:
         if not self.train_records:
             return
@@ -277,19 +336,25 @@ class TRIDetector:
             raise ValueError("Training records cannot be empty")
         self.train_records = []
         self.eval_records = []
+        self.test_records = []
         for record in records:
             name_raw = str(record.name).strip()
             train_texts = list(record.train_texts)
             eval_texts = list(record.eval_texts)
+            test_texts = list(getattr(record, "test_texts", []))
             if exclude_stopwords:
                 train_texts = [strip_stopwords(text) for text in train_texts]
                 eval_texts = [strip_stopwords(text) for text in eval_texts]
+                test_texts = [strip_stopwords(text) for text in test_texts]
             self.train_records.extend(DatasetRecord(text=text, name=name_raw) for text in train_texts)
             self.eval_records.extend(DatasetRecord(text=text, name=name_raw) for text in eval_texts)
+            self.test_records.extend(DatasetRecord(text=text, name=name_raw) for text in test_texts)
         if not self.train_records:
             raise ValueError("No training records built from attacker records")
         if not self.eval_records:
             raise ValueError("No evaluation records built from attacker records")
+        if not self.test_records:
+            self.test_records = None
 
     def _sync_chunker_from_classifier(self) -> None:
         if not self.use_chunking or self.classifier is None:

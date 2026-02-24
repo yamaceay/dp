@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Set, Tuple
+from typing import Callable, Dict, Optional, Sequence, Set, Tuple
 
 import torch
 from torch.utils.data import Dataset
@@ -47,6 +47,62 @@ class EarlyStoppingCallback(TrainerCallback):
             self.best_metric = current
             self.wait = 0
             control.should_save = True
+        else:
+            self.wait += 1
+            if self.wait >= self.patience:
+                control.should_training_stop = True
+
+
+class ExternalEvalEarlyStoppingCallback(TrainerCallback):
+    def __init__(
+        self,
+        *,
+        early_stopping_patience: int,
+        early_stopping_threshold: float | None,
+        metric_name: str,
+        minimize: bool,
+        evaluator: Callable[[], Dict[str, float]],
+        label: str = "test",
+    ):
+        self.patience = early_stopping_patience
+        self.threshold = early_stopping_threshold
+        self.metric_name = metric_name
+        self.minimize = minimize
+        self.evaluator = evaluator
+        self.label = label
+        self.best_metric = float("inf") if minimize else -float("inf")
+        self.wait = 0
+        self.stopped_epoch = 0
+        self.last_metrics: Dict[str, float] = {}
+
+    def on_evaluate(self, args, state, control, metrics, **kwargs):
+        values = self.evaluator()
+        normalized: Dict[str, float] = {}
+        for key, value in values.items():
+            normalized[str(key)] = float(value)
+        self.last_metrics = normalized
+        current = normalized.get(self.metric_name)
+        if current is None:
+            raise ValueError(f"External evaluator did not return metric '{self.metric_name}'")
+        payload = ", ".join(f"{k}={v:.6f}" for k, v in sorted(normalized.items()))
+        print(f"{self.label} monitor: {payload}")
+        if self.threshold is None:
+            improved = (current < self.best_metric) if self.minimize else (current > self.best_metric)
+            if improved:
+                self.best_metric = current
+                self.wait = 0
+            else:
+                self.wait += 1
+                if self.wait >= self.patience:
+                    control.should_training_stop = True
+            return
+        if (self.minimize and current <= self.threshold) or (not self.minimize and current >= self.threshold):
+            control.should_training_stop = True
+            return
+        improved = (current < self.best_metric) if self.minimize else (current > self.best_metric)
+        if improved:
+            self.best_metric = current
+            self.wait = 0
         else:
             self.wait += 1
             if self.wait >= self.patience:

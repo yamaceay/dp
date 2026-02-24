@@ -64,12 +64,17 @@ class DBBioAttackerDatasetAdapter(AttackerDatasetAdapter):
                 ext = self._cache_map.get(modified_record.name, {})
                 train_texts = _normalize_texts(ext.get("train_texts", []))
                 eval_texts = _normalize_texts(ext.get("eval_texts", []))
+                test_texts = _normalize_texts(ext.get("test_texts", []))
             else:
                 train_texts = [self.rewriter.rewrite(text=modified_record.text, **self.rewriter_kwargs) for _ in range(self.n_train_samples)]
                 eval_texts = [self.rewriter.rewrite(text=modified_record.text, **self.rewriter_kwargs) for _ in range(self.n_eval_samples)]
+                test_texts = []
+            if not test_texts:
+                test_texts = [modified_record.text]
             yield AttackerDatasetRecord(
                 name=modified_record.name,
                 train_texts=train_texts,
                 eval_texts=eval_texts,
+                test_texts=test_texts,
             )
 __all__ = ["DBBioAttackerDatasetAdapter"]

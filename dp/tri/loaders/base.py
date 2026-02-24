@@ -16,6 +16,7 @@ class AttackerDatasetRecord:
     name: str
     train_texts: List[str] = field(default_factory=list)
     eval_texts: List[str] = field(default_factory=list)
+    test_texts: List[str] = field(default_factory=list)
 
 class AttackerDatasetAdapter:
     def __init__(
@@ -58,6 +59,7 @@ class AttackerDatasetAdapter:
                 r.name: {
                     "train_texts": r.train_texts,
                     "eval_texts": r.eval_texts,
+                    "test_texts": r.test_texts,
                 }
                 for r in cache
             }
@@ -68,17 +70,23 @@ class AttackerDatasetAdapter:
         mapping = load_attacker_extensions_jsonl(path)
         self.set_cache(cache_map=mapping)
 
-def merge_records(grouped_train_texts: Dict[str, List[str]], grouped_eval_texts: Dict[str, List[str]]) -> Iterable[DatasetRecord]:
+def merge_records(
+    grouped_train_texts: Dict[str, List[str]],
+    grouped_eval_texts: Dict[str, List[str]],
+    grouped_test_texts: Optional[Dict[str, List[str]]] = None,
+) -> Iterable[DatasetRecord]:
     common_names = set(grouped_train_texts.keys()).intersection(set(grouped_eval_texts.keys()))
     attacker_records: List[AttackerDatasetRecord] = []
     for name in common_names:
         train_texts = grouped_train_texts.get(name, [])
         eval_texts = grouped_eval_texts.get(name, [])
+        test_texts = [] if grouped_test_texts is None else grouped_test_texts.get(name, [])
         attacker_records.append(
             AttackerDatasetRecord(
                 name=name,
                 train_texts=train_texts,
                 eval_texts=eval_texts,
+                test_texts=test_texts,
             )
         )
     return attacker_records
@@ -92,6 +100,7 @@ def save_attacker_extensions_jsonl(path: str, records: Iterable[AttackerDatasetR
                 "name": r.name,
                 "train_texts": list(r.train_texts or []),
                 "eval_texts": list(r.eval_texts or []),
+                "test_texts": list(r.test_texts or []),
             }
             f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
@@ -111,6 +120,7 @@ def load_attacker_extensions_jsonl(path: str) -> Dict[str, Dict[str, Any]]:
             mapping[name] = {
                 "train_texts": _normalize_texts(obj.get("train_texts")),
                 "eval_texts": _normalize_texts(obj.get("eval_texts")),
+                "test_texts": _normalize_texts(obj.get("test_texts")),
             }
     return mapping
 
