@@ -1,0 +1,8 @@
+utility_internal_reddit_age                |python run.py utility --config configs/5_experiments/reddit/utility/internal_age.yaml
+utility_internal_reddit_birth_city_country |python run.py utility --config configs/5_experiments/reddit/utility/internal_birth_city_country.yaml
+utility_internal_reddit_city_country       |python run.py utility --config configs/5_experiments/reddit/utility/internal_city_country.yaml
+utility_internal_reddit_education          |python run.py utility --config configs/5_experiments/reddit/utility/internal_education.yaml
+utility_internal_reddit_income_level       |python run.py utility --config configs/5_experiments/reddit/utility/internal_income_level.yaml
+utility_internal_reddit_occupation         |python run.py utility --config configs/5_experiments/reddit/utility/internal_occupation.yaml
+utility_internal_reddit_relationship_status|python run.py utility --config configs/5_experiments/reddit/utility/internal_relationship_status.yaml
+utility_internal_reddit_sex                |python run.py utility --config configs/5_experiments/reddit/utility/internal_sex.yaml

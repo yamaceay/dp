@@ -35,6 +35,7 @@ from dp.experiments.privacy.io import (
 from dp.experiments.privacy.reporting import build_privacy_report, create_privacy_outputter
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
 from dp.experiments.utility.base import TextUtilityExperiment
+from dp.experiments.utility.internal_utility import InternalUtilityConfig, run_internal_utility
 from dp.experiments.utility.reporting import build_utility_report, create_utility_outputter
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
@@ -427,6 +428,43 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         head_kwargs=head_kwargs,
         identifier=ctx.identifier,
     )
+    protocol = str(params.get("protocol", "utility")).strip().lower() or "utility"
+    resolved_model_name = str(getattr(model, "name", head_name or ctx.spec.default_head))
+    resolved_primary_metric = str(getattr(model, "primary_metric", head_kwargs.get("primary_metric", "")))
+    if protocol == "internal_utility":
+        model.cleanup()
+        vectorizer.cleanup()
+        internal_cfg_raw = params.get("internal_utility", {}) or {}
+        if not isinstance(internal_cfg_raw, dict):
+            raise ValueError("internal_utility config must be a mapping")
+        internal_cfg = InternalUtilityConfig(
+            n_folds=int(internal_cfg_raw.get("n_folds", 50)),
+            eval_fold_offset=int(internal_cfg_raw.get("eval_fold_offset", 1)),
+            random_state=int(internal_cfg_raw.get("random_state", ctx.random_state)),
+            max_rounds=(
+                int(internal_cfg_raw["max_rounds"])
+                if internal_cfg_raw.get("max_rounds") is not None
+                else None
+            ),
+        )
+        result = run_internal_utility(
+            spec=ctx.spec,
+            records=records,
+            evaluation_texts=evaluation_texts,
+            vectorizer_name=vec_name or None,
+            vectorizer_kwargs=vec_kwargs,
+            head_name=head_name or None,
+            head_kwargs=head_kwargs,
+            identifier=ctx.identifier,
+            config=internal_cfg,
+            model_name=resolved_model_name,
+            primary_metric=resolved_primary_metric,
+        )
+        report = build_utility_report(result, sources)
+        sink = build_output_sink(ctx.output_file)
+        outputter = create_utility_outputter(ctx.output_format, sink)
+        outputter.output(report)
+        return
     split_cfg = ctx.source_splits
     train_texts_override: List[str] = []
     train_labels_override: List[Any] = []

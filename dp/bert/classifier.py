@@ -38,6 +38,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         early_stop_patience: int = 2,
         init_checkpoint: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
+        save_checkpoints: bool = True,
         pretraining_output_dir: Optional[str] = None,
         mask_stopwords: bool = False,
         macro_loss_weight: float = 0.0,
@@ -95,6 +96,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir
+        self.save_checkpoints = bool(save_checkpoints)
         self.pretraining_output_dir = pretraining_output_dir or self.checkpoint_dir
         self.mask_stopwords = bool(mask_stopwords)
         self.macro_loss_weight = float(macro_loss_weight)
@@ -326,10 +328,14 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             warmup_ratio=self.warmup_ratio,
             early_stop_patience=self.early_stop_patience,
             early_stop_threshold=self.early_stop_threshold,
+            save_checkpoints=self.save_checkpoints,
             early_stopping_callback=custom_early_stopping,
         )
         self._trainer.train()
-        print(f"Restored best model with macro_f1: {early_stopping.best_metric:.4f}")
+        if self.save_checkpoints and early_stopping.best_metric is not None:
+            print(f"Restored best model with macro_f1: {early_stopping.best_metric:.4f}")
+        elif early_stopping.best_metric is not None:
+            print(f"Best observed macro_f1: {early_stopping.best_metric:.4f}")
 
     def predict(self, x: Any) -> Sequence[Any]:
         if self._model is None or self._tokenizer is None:

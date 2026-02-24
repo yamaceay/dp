@@ -31,6 +31,7 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         early_stop_patience: int = 2,
         init_checkpoint: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
+        save_checkpoints: bool = True,
         mask_stopwords: bool = False,
         optimizer_type: str = "adamw",
         scheduler_type: str = "linear",
@@ -73,6 +74,7 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        self.save_checkpoints = bool(save_checkpoints)
         self.mask_stopwords = bool(mask_stopwords)
         self.optimizer_type = str(optimizer_type)
         self.scheduler_type = str(scheduler_type)
@@ -216,9 +218,13 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
             warmup_ratio=self.warmup_ratio,
             early_stop_patience=self.early_stop_patience,
             early_stop_threshold=self.early_stop_threshold,
+            save_checkpoints=self.save_checkpoints,
         )
         self._trainer.train()
-        print(f"Restored best model with macro_mae: {early_stopping.best_metric:.4f}")
+        if self.save_checkpoints and early_stopping.best_metric is not None:
+            print(f"Restored best model with macro_mae: {early_stopping.best_metric:.4f}")
+        elif early_stopping.best_metric is not None:
+            print(f"Best observed macro_mae: {early_stopping.best_metric:.4f}")
 
     def predict(self, x: Any) -> Sequence[Any]:
         if self._model is None or self._tokenizer is None:

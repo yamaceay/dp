@@ -1,0 +1,2 @@
+backfill_internal_utility_tab_country|python backfill_internal_utility_baseline.py --config configs/5_experiments/tab/utility/internal_country.yaml --task-id {task_id} --log logs/internal_utility/tab_country_task_{task_id}.jsonl
+backfill_internal_utility_tab_year   |python backfill_internal_utility_baseline.py --config configs/5_experiments/tab/utility/internal_year.yaml --task-id {task_id} --log logs/internal_utility/tab_year_task_{task_id}.jsonl

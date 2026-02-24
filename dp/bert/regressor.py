@@ -31,6 +31,7 @@ class BertRegressorHead(SupervisedDownstreamHead, BertHFPlumbing):
         early_stop_patience: int = 2,
         init_checkpoint: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
+        save_checkpoints: bool = True,
         normalize_targets: bool = True,
         use_pretraining: bool = False,
         pretraining_epochs: int = 1,
@@ -71,6 +72,7 @@ class BertRegressorHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        self.save_checkpoints = bool(save_checkpoints)
         self.normalize_targets = normalize_targets
         self.use_pretraining = bool(use_pretraining)
         self.pretraining_epochs = int(pretraining_epochs)
@@ -192,9 +194,13 @@ class BertRegressorHead(SupervisedDownstreamHead, BertHFPlumbing):
             warmup_ratio=self.warmup_ratio,
             early_stop_patience=self.early_stop_patience,
             early_stop_threshold=self.early_stop_threshold,
+            save_checkpoints=self.save_checkpoints,
         )
         self._trainer.train()
-        print(f"Restored best model with r2: {early_stopping.best_metric:.4f}")
+        if self.save_checkpoints and early_stopping.best_metric is not None:
+            print(f"Restored best model with r2: {early_stopping.best_metric:.4f}")
+        elif early_stopping.best_metric is not None:
+            print(f"Best observed r2: {early_stopping.best_metric:.4f}")
 
     def predict(self, x: Any) -> Sequence[float]:
         if self._model is None or self._tokenizer is None:
