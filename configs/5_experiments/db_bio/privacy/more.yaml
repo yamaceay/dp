@@ -8,6 +8,7 @@ tri:
   max_length: 512
 mask_token: "[MASK]"
 output:
+output:
   format: jsonl
-  file: logs/db_bio_priv_more_exp_task_{task_id}.jsonl
+  file: logs/privacy/db_bio/more_task_{task_id}.jsonl
 progress: false

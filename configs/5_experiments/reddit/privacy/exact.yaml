@@ -7,6 +7,7 @@ tri:
   max_length: 512
 mask_token: "[MASK]"
 output:
+output:
   format: jsonl
-  file: logs/reddit_priv_exp_task_{task_id}.jsonl
+  file: logs/privacy/reddit/exact_task_{task_id}.jsonl
 progress: false

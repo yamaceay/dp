@@ -1,0 +1,41 @@
+dataset: reddit
+data_in: data/reddit/reddit.jsonl
+debug: true
+annotations_in:
+  - outputs/reddit
+target:
+  key: feature_label
+  type: ordinal
+  enum:
+    - "education: secondary"
+    - "education: studying"
+    - "education: bachelor"
+    - "education: master"
+    - "education: doctorate"
+selection_criteria:
+  feature: education
+group_by: hardness
+source_splits:
+  - train: 0.0
+    val: 1.0
+  - path: data/reddit/synthetic_dataset.jsonl
+    train: 1.0
+    val: 0.0
+random_state: 42
+include_confusion_matrix: true
+head:
+  type: bert_ordinal
+  params:
+    epochs: 40
+    batch_size: 4
+    model_name: distilbert-base-uncased
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum_{task_id}/reddit_8_16_0.0001__task_{task_id}/finetuning/{checkpoint}
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/education
+    primary_metric: macro_mae
+    encoder_lr: 1e-6
+    head_lr: 1e-3
+    early_stop_patience: 3
+output:
+output:
+  format: jsonl
+  file: logs/supervised_divergence/reddit/education_task_{task_id}.jsonl

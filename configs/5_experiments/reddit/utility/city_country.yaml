@@ -2,33 +2,34 @@ dataset: reddit
 data_in: data/reddit/reddit.jsonl
 debug: true
 annotations_in:
-  - outputs/reddit
+- outputs/reddit
 target:
   key: feature_label
   type: nominal
 selection_criteria:
   feature: city_country
 group_by: hardness
-source_splits:
-  - train: 0.0
-    val: 1.0
-  - path: data/reddit/synthetic_dataset.jsonl
-    train: 1.0
-    val: 0.0
 random_state: 42
 include_confusion_matrix: true
 head:
-  type: bert_classifier
+  type: logistic_classifier
   params:
-    epochs: 40
-    batch_size: 4
-    model_name: distilbert-base-uncased
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum_{task_id}/reddit_8_16_0.0001__task_{task_id}/finetuning/{checkpoint}
-    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/city_country
-    primary_metric: macro_f1
-    encoder_lr: 1e-6
-    head_lr: 1e-3
-    early_stop_patience: 3
+    max_iter: 500
+    class_weight: balanced
+    n_jobs: -1
+    primary_metric: f1
+output:
 output:
   format: jsonl
-  file: logs/reddit_city_country_exp_task_{task_id}.jsonl
+  file: logs/utility/reddit/city_country_task_{task_id}.jsonl
+protocol: internal_utility
+internal_utility:
+  n_folds: 50
+vectorizer:
+  type: tfidf
+  params:
+    ngram_range:
+    - 1
+    - 2
+    max_features: 10000
+    min_df: 2

@@ -7,5 +7,6 @@ metric:
   model_type: roberta-large
   batch_size: 8
 output:
+output:
   format: jsonl
-  file: logs/reddit_div_bertscore_exp_task_{task_id}.jsonl
+  file: logs/divergence/reddit/bertscore_task_{task_id}.jsonl

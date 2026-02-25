@@ -3,30 +3,32 @@ data_in: data/db_bio
 split: indices/db_bio/test/50_eval/{task_id}.txt
 debug: true
 annotations_in:
-  - outputs/db_bio
+- outputs/db_bio
 target:
   key: label
   type: nominal
-source_splits:
-  - train: 0.0
-    val: 1.0
-  - split: indices/db_bio/train/{task_id}.txt
-    train: 1.0
-    val: 0.0
-  - split: indices/db_bio/val/{task_id}.txt
-    train: 0.0
-    val: 1.0
 random_state: 42
 head:
-  type: bert_classifier
+  type: logistic_classifier
   params:
-    epochs: 5
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}/finetuning/{checkpoint}
-    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/db_bio/label
-    primary_metric: macro_f1
-    encoder_lr: 1e-6
-    head_lr: 1e-4
-    early_stop_patience: 2
+    max_iter: 500
+    class_weight: balanced
+    n_jobs: -1
+    primary_metric: f1
+output:
 output:
   format: jsonl
-  file: logs/db_bio_label_exp_task_{task_id}.jsonl
+  file: logs/utility/db_bio/label_task_{task_id}.jsonl
+protocol: internal_utility
+internal_utility:
+  n_folds: 50
+  random_state: '{task_id}'
+vectorizer:
+  type: tfidf
+  params:
+    ngram_range:
+    - 1
+    - 2
+    max_features: 10000
+    min_df: 2
+task_id: '{task_id}'
