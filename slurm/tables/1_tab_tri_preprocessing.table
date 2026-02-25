@@ -1,2 +1,3 @@
-tab_deid|python data_for_tri.py --config configs/1_tri_preprocessing/tab/more_deid.yaml --task_id {task_id}
-tab_sum |python data_for_tri.py --config configs/1_tri_preprocessing/tab/sum.yaml --task_id {task_id}
+tab_more_deid|python data_for_tri.py --config configs/1_tri_preprocessing/tab/more_deid.yaml --task_id {task_id}
+tab_more     |python data_for_tri.py --config configs/1_tri_preprocessing/tab/more.yaml --task_id {task_id}
+tab_exact    |python data_for_tri.py --config configs/1_tri_preprocessing/tab/exact.yaml --task_id {task_id}
