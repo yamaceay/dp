@@ -42,15 +42,15 @@ def parse_task_id_from_text(value: str) -> int | None:
     return int(match.group(1))
 
 def parse_task_id_from_log_name(log_name: str) -> int | None:
-    match = re.search(r"_exp_task_([0-9]+)\.jsonl$", log_name)
+    match = re.search(r"_task_([0-9]+)\.jsonl$", log_name)
     if not match:
         return None
     return int(match.group(1))
 
 def parse_privacy_profile_from_log_name(log_name: str) -> str | None:
-    if re.search(r"_priv_more_exp_task_[0-9]+\.jsonl$", log_name):
+    if re.search(r"^more_task_[0-9]+\.jsonl$", log_name):
         return "more"
-    if re.search(r"_priv_exp_task_[0-9]+\.jsonl$", log_name):
+    if re.search(r"^exact_task_[0-9]+\.jsonl$", log_name):
         return "exact"
     return None
 
@@ -76,7 +76,13 @@ class ExperimentLogParser:
         raise NotImplementedError
 
 class UtilityExperimentLogParser(ExperimentLogParser):
-    def parse(log_file: str, dataset: str, feature: str, metrics: List[str]) -> List[Dict[str, Any]]:
+    def parse(
+        log_file: str,
+        dataset: str,
+        feature: str,
+        metrics: List[str],
+        section_name: str = "utility",
+    ) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
         experiment_result = None
         total_count = None
@@ -93,7 +99,7 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         "method": "baseline",
                         "params": {},
                         "task_id": default_task_id,
-                        "utility": baseline_utility,
+                        section_name: baseline_utility,
                     }
                     continue
                 if record_type != "evaluation":
@@ -104,7 +110,7 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                     total_count = count
                     experiment_result["count"] = count
                     if num_classes is not None:
-                        experiment_result["utility"][f"_{feature}_num_classes"] = num_classes
+                        experiment_result[section_name][f"_{feature}_num_classes"] = num_classes
                     results.append(experiment_result)
                 source = str(result.get("source", ""))
                 task_id = parse_task_id_from_text(source)
@@ -121,7 +127,7 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         "params": params,
                         "task_id": task_id,
                         "count": result["overall_results"]["total"],
-                        "utility": {
+                        section_name: {
                             **utility_metrics,
                             **({f"_{feature}_num_classes": num_classes} if num_classes is not None else {}),
                         },
@@ -141,7 +147,7 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                                 "task_id": task_id,
                                 "group": group_name,
                                 "count": group_result["total"],
-                                "utility": {
+                                section_name: {
                                     **grouped_metrics,
                                     **({f"_{feature}_num_classes": grouped_num_classes} if grouped_num_classes is not None else {}),
                                 },
@@ -239,7 +245,7 @@ def maybe_group(result: Dict[str, Any]) -> str | None:
     return result.get("group")
 
 def experiment_type(result: Dict[str, Any]) -> str:
-    for field in ["privacy", "utility", "divergence"]:
+    for field in ["privacy", "utility", "supervised_divergence", "divergence"]:
         if field in result:
             return field
     raise ValueError(f"Could not determine experiment type for result: {result}")
@@ -249,7 +255,7 @@ class LogGrouper:
         grouped: Dict[Tuple[str, str, frozenset, str | None], Dict[str, Any]] = {}
         for result in results:
             assert all(field in result for field in ["dataset", "method", "params"]), f"Missing required fields in result: {result}"
-            assert any(field in result for field in ["privacy", "utility", "divergence"]), f"Missing privacy/utility/divergence field in result: {result}"
+            assert any(field in result for field in ["privacy", "utility", "supervised_divergence", "divergence"]), f"Missing privacy/utility/divergence field in result: {result}"
             
             identifiers = {k: result[k] for k in ["dataset", "method", "params"]}
             group = maybe_group(result)
@@ -289,7 +295,7 @@ class LogGrouper:
         for entry in grouped.values():
             task_results = entry.pop("task_results")
             tasks = sorted(task_results, key=lambda task: int(task.get("task_id", -1)))
-            for experiment_name in ["privacy", "utility", "divergence"]:
+            for experiment_name in ["privacy", "utility", "supervised_divergence", "divergence"]:
                 numeric_sums: Dict[str, float] = {}
                 numeric_counts: Dict[str, int] = {}
                 count_sums: Dict[str, int] = {}
@@ -330,23 +336,36 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", type=str, help="Output file for merged logs")
     args = parser.parse_args()
 
-    all_logs = list(Path("logs").glob("*_exp_task_*.jsonl"))
-    all_privacy_logs = [log for log in all_logs if re.search(r"_priv(?:_[a-z_]+)?_exp_task_[0-9]+\.jsonl$", log.name)]
-    all_divergence_logs = [log for log in all_logs if re.search(r"_div_[a-z0-9_]+_exp_task_[0-9]+\.jsonl$", log.name)]
-    all_utility_logs = list(set(all_logs) - set(all_privacy_logs) - set(all_divergence_logs))
+    def iter_type_dataset_logs(type_name: str) -> List[tuple[Path, str]]:
+        root = Path("logs") / type_name
+        if not root.exists():
+            return []
+        rows: List[tuple[Path, str]] = []
+        for dataset_dir in sorted([p for p in root.iterdir() if p.is_dir()]):
+            dataset = dataset_dir.name
+            for log_file in sorted(dataset_dir.glob("*.jsonl")):
+                rows.append((log_file, dataset))
+        return rows
 
-    find_dataset = lambda log_file: re.match(r"(db_bio|reddit|tab)_(.*?).jsonl", log_file.name).group(1)
-    divergence_find_metric = lambda log_file, dataset: re.search(rf"{re.escape(dataset)}_div_(.*?)_exp_task_[0-9]+\.jsonl", log_file.name).group(1)
-    utility_find_feature = lambda log_file, dataset: re.search(rf"{re.escape(dataset)}_(.*?)_exp_task_[0-9]+\.jsonl", log_file.name).group(1)
+    def feature_from_log_name(log_name: str) -> str:
+        match = re.match(r"(.+?)_task_[0-9]+\.jsonl$", log_name)
+        if not match:
+            raise ValueError(f"Could not parse feature from utility log name: {log_name}")
+        return match.group(1)
 
-    privacy_logs = [
-        (log_file, dataset) for dataset, log_file in [(find_dataset(log_file), log_file) for log_file in all_privacy_logs]
-    ]
-    utility_logs = [
-        (log_file, dataset, utility_find_feature(log_file, dataset)) for dataset, log_file in [(find_dataset(log_file), log_file) for log_file in all_utility_logs]
+    def divergence_metric_from_log_name(log_name: str) -> str:
+        match = re.match(r"([a-z0-9_]+)_task_[0-9]+\.jsonl$", log_name)
+        if not match:
+            raise ValueError(f"Could not parse divergence metric from log name: {log_name}")
+        return match.group(1)
+
+    privacy_logs = iter_type_dataset_logs("privacy")
+    utility_logs = [(log_file, dataset, feature_from_log_name(log_file.name)) for log_file, dataset in iter_type_dataset_logs("utility")]
+    supervised_divergence_logs = [
+        (log_file, dataset, feature_from_log_name(log_file.name)) for log_file, dataset in iter_type_dataset_logs("supervised_divergence")
     ]
     divergence_logs = [
-        (log_file, dataset, divergence_find_metric(log_file, dataset)) for dataset, log_file in [(find_dataset(log_file), log_file) for log_file in all_divergence_logs]
+        (log_file, dataset, divergence_metric_from_log_name(log_file.name)) for log_file, dataset in iter_type_dataset_logs("divergence")
     ]
 
     utility_metrics = ["acc", "macro_mae", "mae", "macro_f1", "f1", "exp_rmae"]
@@ -355,7 +374,9 @@ if __name__ == "__main__":
     for log_file, dataset in privacy_logs:
         all_results.extend(PrivacyExperimentLogParser.parse(log_file, dataset))
     for log_file, dataset, feature in utility_logs:
-        all_results.extend(UtilityExperimentLogParser.parse(log_file, dataset, feature, utility_metrics))
+        all_results.extend(UtilityExperimentLogParser.parse(log_file, dataset, feature, utility_metrics, section_name="utility"))
+    for log_file, dataset, feature in supervised_divergence_logs:
+        all_results.extend(UtilityExperimentLogParser.parse(log_file, dataset, feature, utility_metrics, section_name="supervised_divergence"))
     for log_file, dataset, metric in divergence_logs:
         all_results.extend(DivergenceExperimentLogParser.parse(log_file, dataset, metric))
     
