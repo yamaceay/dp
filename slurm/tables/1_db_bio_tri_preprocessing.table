@@ -1,2 +1,2 @@
-db_bio_deid|python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/deid.yaml --task_id {task_id}
+db_bio_deid|python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/more_deid.yaml --task_id {task_id}
 db_bio_sum |python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/sum.yaml --task_id {task_id}

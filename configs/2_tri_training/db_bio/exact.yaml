@@ -8,7 +8,7 @@ max_records: null
 max_length: 512
 
 training:
-  finetuning_epochs: 5
+  finetuning_epochs: 10
   batch_size: 16
   use_pretraining: true
   pretraining_epochs: 1

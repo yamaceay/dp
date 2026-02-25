@@ -3,7 +3,7 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/500_random_{task_id}/500_random_{task_id}__task_{task_id}
 
 precomputation:
   risk_scores: data/tab/tri_risk/shap_{task_id}.jsonl

@@ -1,8 +1,8 @@
 dataset: db_bio
 data_in: data/db_bio
-split: indices/db_bio/test/50_eval/{task_id}.txt
+split: indices/db_bio/test/500_random/{task_id}.txt
 explainer: shap
-explainer_in: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/50_eval_deid_{task_id}/50_eval_deid_{task_id}__task_{task_id}
+explainer_in: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/500_random_deid_{task_id}/500_random_deid_{task_id}__task_{task_id}
 result_in: outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio_task_{task_id}.jsonl
 save_to_jsonl: data/db_bio/tri_risk/shap_{task_id}.jsonl
 sort_by: scores
