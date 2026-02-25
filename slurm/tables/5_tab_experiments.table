@@ -1,6 +1,8 @@
-privacy_tab             |python run.py privacy --config configs/5_experiments/tab/privacy/exact.yaml
-privacy_tab_realistic   |python run.py privacy --config configs/5_experiments/tab/privacy/more.yaml
-divergence_tab_bertscore|python run.py divergence --config configs/5_experiments/tab/divergence/bertscore.yaml
-divergence_tab_cosine   |python run.py divergence --config configs/5_experiments/tab/divergence/cosine.yaml
-utility_tab_country     |python run.py utility --config configs/5_experiments/tab/utility/country.yaml
-utility_tab_year        |python run.py utility --config configs/5_experiments/tab/utility/year.yaml
+privacy_tab                      |python run.py privacy --config configs/5_experiments/tab/privacy/exact.yaml
+privacy_tab_realistic            |python run.py privacy --config configs/5_experiments/tab/privacy/more.yaml
+divergence_tab_bertscore         |python run.py divergence --config configs/5_experiments/tab/divergence/bertscore.yaml
+divergence_tab_cosine            |python run.py divergence --config configs/5_experiments/tab/divergence/cosine.yaml
+supervised_divergence_tab_country|python run.py utility --config configs/5_experiments/tab/supervised_divergence/country.yaml
+supervised_divergence_tab_year   |python run.py utility --config configs/5_experiments/tab/supervised_divergence/year.yaml
+utility_tab_country              |python run.py utility --config configs/5_experiments/tab/utility/country.yaml
+utility_tab_year                 |python run.py utility --config configs/5_experiments/tab/utility/year.yaml

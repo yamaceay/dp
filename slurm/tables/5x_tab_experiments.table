@@ -1,2 +1,0 @@
-utility_internal_tab_country|python run.py utility --config configs/5_experiments/tab/utility/internal_country.yaml
-utility_internal_tab_year   |python run.py utility --config configs/5_experiments/tab/utility/internal_year.yaml
