@@ -9,13 +9,16 @@ target:
   type: nominal
 random_state: 42
 head:
-  type: logistic_classifier
+  type: bert_classifier
   params:
-    max_iter: 500
-    class_weight: balanced
-    n_jobs: -1
-    primary_metric: f1
-output:
+    epochs: 5
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/500_random_{task_id}/500_random_{task_id}__task_{task_id}/finetuning/{checkpoint}
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/db_bio/label_internal_utility
+    primary_metric: macro_f1
+    encoder_lr: 1e-6
+    head_lr: 1e-4
+    early_stop_patience: 2
+    save_checkpoints: false
 output:
   format: jsonl
   file: logs/utility/db_bio/label_task_{task_id}.jsonl
@@ -24,11 +27,5 @@ internal_utility:
   n_folds: 50
   random_state: '{task_id}'
 vectorizer:
-  type: tfidf
-  params:
-    ngram_range:
-    - 1
-    - 2
-    max_features: 10000
-    min_df: 2
+  type: text
 task_id: '{task_id}'
