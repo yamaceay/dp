@@ -1,6 +1,6 @@
 dataset: reddit
 data_in: data/reddit/reddit.jsonl
-debug: true
+debug: false
 annotations_in:
 - outputs/reddit
 target:
@@ -18,23 +18,22 @@ group_by: hardness
 random_state: 42
 include_confusion_matrix: true
 head:
-  type: bert_ordinal
+  type: linear_ordinal_regressor
   params:
-    epochs: 40
-    batch_size: 4
-    model_name: distilbert-base-uncased
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum_{task_id}/reddit_8_16_0.0001__task_{task_id}/finetuning/{checkpoint}
-    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/education_internal_utility
     primary_metric: macro_mae
-    encoder_lr: 1e-6
-    head_lr: 1e-3
-    early_stop_patience: 3
-    save_checkpoints: false
 output:
   format: jsonl
   file: logs/utility/reddit/education_task_{task_id}.jsonl
 protocol: internal_utility
 internal_utility:
-  n_folds: 50
+  n_folds: 5
+  max_rounds: 5
 vectorizer:
-  type: text
+  type: tfidf
+  params:
+    max_features: 20000
+    ngram_range:
+    - 1
+    - 3
+    min_df: 1
+    sublinear_tf: true

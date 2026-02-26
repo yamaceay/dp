@@ -550,6 +550,21 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
                 test_labels_override.append(nv)
                 test_uids.append(rec.uid or f"record_{idx}")
 
+    if train_uids and test_uids:
+        test_uid_set = set(test_uids)
+        filtered_train_texts: List[str] = []
+        filtered_train_labels: List[Any] = []
+        filtered_train_uids: List[str] = []
+        for text, label, uid in zip(train_texts_override, train_labels_override, train_uids):
+            if uid in test_uid_set:
+                continue
+            filtered_train_texts.append(text)
+            filtered_train_labels.append(label)
+            filtered_train_uids.append(uid)
+        train_texts_override = filtered_train_texts
+        train_labels_override = filtered_train_labels
+        train_uids = filtered_train_uids
+
     if ctx.debug:
         original_uids = [rec.uid or f"record_{i + 1}" for i, rec in enumerate(records)]
         print("\n=== Dataset Loading Summary ===")

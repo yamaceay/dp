@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+from sklearn.metrics import f1_score, mean_squared_error, r2_score
 from sklearn.model_selection import StratifiedShuffleSplit
 from tqdm import tqdm
 
@@ -109,6 +110,10 @@ class TextUtilityExperiment(Experiment):
         self._median_dummy_mae_test: Optional[float] = None
         self._median_dummy_mae_overall: Optional[float] = None
         self._median_dummy_mae_group: Dict[str, float] = {}
+        self._dummy_baseline_train_metrics: Dict[str, float] = {}
+        self._dummy_baseline_test_metrics: Dict[str, float] = {}
+        self._dummy_baseline_overall_metrics: Dict[str, float] = {}
+        self._dummy_baseline_group_metrics: Dict[str, Dict[str, float]] = {}
 
     def setup(
         self,
@@ -232,6 +237,9 @@ class TextUtilityExperiment(Experiment):
         self._baseline_train_metrics = {k: float(v) for k, v in baseline_train_raw.items()}
         self._baseline_metrics = {k: float(v) for k, v in baseline_test_raw.items()} if baseline_test_raw else {}
         self._baseline_overall_metrics = self._with_exp_rmae(baseline_overall_raw, self._median_dummy_mae_overall)
+        self._dummy_baseline_train_metrics = self._compute_dummy_metrics(actual_train_labels, actual_train_labels)
+        self._dummy_baseline_test_metrics = self._compute_dummy_metrics(actual_train_labels, actual_test_labels) if actual_test_labels else {}
+        self._dummy_baseline_overall_metrics = self._compute_dummy_metrics(actual_train_labels, all_labels)
         self._label_by_key = {key: self._labels[idx] for idx, key in enumerate(self._keys)}
         self._record_info = {}
         self._group_keys = {}
@@ -264,6 +272,7 @@ class TextUtilityExperiment(Experiment):
                 if group_median_dummy_mae is not None:
                     self._median_dummy_mae_group[group_key] = group_median_dummy_mae
                 self._baseline_group_metrics[group_key] = {k: float(v) for k, v in group_metrics_raw.items()}
+                self._dummy_baseline_group_metrics[group_key] = self._compute_dummy_metrics(group_labels, group_labels)
         super().setup(**kwargs)
 
     def run(self, evaluation_texts: Dict[str, Dict[str, str]], **kwargs: Any) -> ExperimentResult:
@@ -409,6 +418,13 @@ class TextUtilityExperiment(Experiment):
                 "train_metrics": self._baseline_train_metrics or {},
                 "test_metrics": baseline_test_metrics,
                 "overall_metrics": self._baseline_overall_metrics or {},
+                "dummy": {
+                    "strategy": self._dummy_strategy_name(),
+                    "train_metrics": self._dummy_baseline_train_metrics,
+                    "test_metrics": self._dummy_baseline_test_metrics,
+                    "overall_metrics": self._dummy_baseline_overall_metrics,
+                    "group_metrics": self._dummy_baseline_group_metrics,
+                },
                 "median_dummy_mae": {
                     "train": self._median_dummy_mae_train,
                     "test": self._median_dummy_mae_test,
@@ -451,6 +467,10 @@ class TextUtilityExperiment(Experiment):
         self._median_dummy_mae_test = None
         self._median_dummy_mae_overall = None
         self._median_dummy_mae_group = {}
+        self._dummy_baseline_train_metrics = {}
+        self._dummy_baseline_test_metrics = {}
+        self._dummy_baseline_overall_metrics = {}
+        self._dummy_baseline_group_metrics = {}
         super().cleanup()
 
     def _clone_vectorizer(self) -> SelfSupervisedFeatureExtractor:
@@ -479,19 +499,7 @@ class TextUtilityExperiment(Experiment):
         return drops
 
     def _with_exp_rmae(self, metrics: Dict[str, float], median_dummy_mae: Optional[float]) -> Dict[str, float]:
-        out = {k: float(v) for k, v in metrics.items()}
-        if "mae" not in out:
-            return out
-        if self._target is None or self._target.mode is not UtilityTarget.Mode.ORDINAL:
-            return out
-        if median_dummy_mae is None:
-            return out
-        baseline_mae = float(median_dummy_mae)
-        if baseline_mae <= 0:
-            return out
-        mae = float(out["mae"])
-        out["exp_rmae"] = float(2.0 ** (-mae / baseline_mae))
-        return out
+        return {k: float(v) for k, v in metrics.items()}
 
     def _compute_median_dummy_mae(self, labels: Sequence[Any]) -> Optional[float]:
         if self._target is None or self._target.mode is not UtilityTarget.Mode.ORDINAL:
@@ -514,3 +522,95 @@ class TextUtilityExperiment(Experiment):
         if mae <= 0:
             return None
         return mae
+
+    def _dummy_strategy_name(self) -> str:
+        if self._target is None:
+            return "unknown"
+        if self._target.mode in {UtilityTarget.Mode.BINARY, UtilityTarget.Mode.NOMINAL}:
+            return "mode"
+        if self._target.mode is UtilityTarget.Mode.ORDINAL:
+            return "median"
+        if self._target.mode is UtilityTarget.Mode.CARDINAL:
+            return "mean"
+        return "unknown"
+
+    def _compute_dummy_metrics(self, fit_labels: Sequence[Any], eval_labels: Sequence[Any]) -> Dict[str, float]:
+        if self._target is None:
+            return {}
+        if not fit_labels or not eval_labels:
+            return {}
+        mode = self._target.mode
+        if mode in {UtilityTarget.Mode.BINARY, UtilityTarget.Mode.NOMINAL}:
+            fit_values = [str(v) for v in fit_labels]
+            eval_values = [str(v) for v in eval_labels]
+            counts: Dict[str, int] = {}
+            first_seen: Dict[str, int] = {}
+            for idx, value in enumerate(fit_values):
+                counts[value] = counts.get(value, 0) + 1
+                if value not in first_seen:
+                    first_seen[value] = idx
+            best_label = min(counts.keys(), key=lambda key: (-counts[key], first_seen[key]))
+            preds = [best_label] * len(eval_values)
+            unique_eval = sorted(set(eval_values))
+            macro_f1 = float(f1_score(eval_values, preds, average="macro", zero_division=0))
+            acc = float(np.mean(np.asarray(eval_values, dtype=object) == np.asarray(preds, dtype=object)))
+            per_class_recalls: List[float] = []
+            for label in unique_eval:
+                mask = np.asarray([v == label for v in eval_values], dtype=bool)
+                if int(mask.sum()) <= 0:
+                    continue
+                pred_arr = np.asarray(preds, dtype=object)
+                eval_arr = np.asarray(eval_values, dtype=object)
+                per_class_recalls.append(float((pred_arr[mask] == eval_arr[mask]).mean()))
+            balanced_acc = float(np.mean(per_class_recalls)) if per_class_recalls else 0.0
+            return {
+                "macro_f1": macro_f1,
+                "f1": macro_f1,
+                "acc": acc,
+                "balanced_acc": balanced_acc,
+            }
+        if mode is UtilityTarget.Mode.ORDINAL:
+            label_order = self._target.label_order or []
+            if not label_order:
+                raise ValueError("ordinal target requires label_order")
+            label_to_rank = {str(label): index for index, label in enumerate(label_order)}
+            fit_encoded = np.asarray([label_to_rank[str(v)] for v in fit_labels], dtype=float)
+            eval_encoded = np.asarray([label_to_rank[str(v)] for v in eval_labels], dtype=int)
+            median_rank = int(np.rint(float(np.median(fit_encoded))))
+            median_rank = max(0, min(median_rank, len(label_order) - 1))
+            preds = np.full(eval_encoded.shape, median_rank, dtype=int)
+            unique_classes = sorted(set(eval_encoded.tolist()))
+            per_class_mae: List[float] = []
+            per_class_recall: List[float] = []
+            per_class_within1: List[float] = []
+            for cls in unique_classes:
+                mask = eval_encoded == cls
+                if int(mask.sum()) <= 0:
+                    continue
+                abs_err = np.abs(eval_encoded[mask] - preds[mask])
+                per_class_mae.append(float(abs_err.mean()))
+                per_class_recall.append(float((eval_encoded[mask] == preds[mask]).mean()))
+                per_class_within1.append(float((abs_err <= 1).mean()))
+            abs_err_all = np.abs(eval_encoded - preds)
+            return {
+                "macro_mae": float(np.mean(per_class_mae)) if per_class_mae else float("inf"),
+                "macro_within1": float(np.mean(per_class_within1)) if per_class_within1 else 0.0,
+                "worst_recall": float(np.min(per_class_recall)) if per_class_recall else 0.0,
+                "mae": float(abs_err_all.mean()),
+                "acc": float((eval_encoded == preds).mean()),
+                "within1": float((abs_err_all <= 1).mean()),
+            }
+        fit_vals = np.asarray([float(v) for v in fit_labels], dtype=float)
+        eval_vals = np.asarray([float(v) for v in eval_labels], dtype=float)
+        pred_value = float(np.mean(fit_vals))
+        preds = np.full(eval_vals.shape, pred_value, dtype=float)
+        mse = float(mean_squared_error(eval_vals, preds))
+        try:
+            r2 = float(r2_score(eval_vals, preds))
+        except Exception:
+            r2 = 0.0
+        return {
+            "rmse": float(np.sqrt(mse)),
+            "r2": r2,
+            "mae": float(np.mean(np.abs(eval_vals - preds))),
+        }

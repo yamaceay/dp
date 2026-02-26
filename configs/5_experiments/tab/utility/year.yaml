@@ -1,7 +1,7 @@
 dataset: tab
 data_in: data/tab
-split: indices/tab/test/50_eval/{task_id}.txt
-debug: true
+split: indices/tab/test/500_random/{task_id}.txt
+debug: false
 annotations_in:
 - outputs/tab
 target:
@@ -18,23 +18,25 @@ target:
   - 2014-2019
 random_state: 42
 head:
-  type: bert_ordinal
+  type: linear_ordinal_regressor
   params:
-    epochs: 8
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/500_random_{task_id}/500_random_{task_id}__task_{task_id}/finetuning/{checkpoint}
-    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/tab/year_internal_utility
     primary_metric: macro_mae
-    encoder_lr: 2e-6
-    head_lr: 2e-4
-    early_stop_patience: 3
-    save_checkpoints: false
 output:
   format: jsonl
   file: logs/utility/tab/year_task_{task_id}.jsonl
-protocol: internal_utility
-internal_utility:
-  n_folds: 50
-  random_state: '{task_id}'
+protocol: utility
+source_splits:
+- split: indices/tab/test/500_random/{task_id}.txt
+  train: 1.0
+- split: indices/tab/test/50_eval/{task_id}.txt
+  val: 1.0
 vectorizer:
-  type: text
+  type: tfidf
+  params:
+    max_features: 20000
+    ngram_range:
+    - 1
+    - 3
+    min_df: 1
+    sublinear_tf: true
 task_id: '{task_id}'
