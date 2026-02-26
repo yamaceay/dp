@@ -8,7 +8,7 @@ explainer:
 
 precomputation:
   risk_scores: data/db_bio/tri_risk/shap_{task_id}.jsonl
-  result_in: outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio_task_{task_id}.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio_task_{task_id}.jsonl
 
 tri_chunking:
   enabled: true
