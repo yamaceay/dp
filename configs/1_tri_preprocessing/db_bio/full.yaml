@@ -1,0 +1,3 @@
+data: db_bio
+data_in: data/db_bio
+save_to_jsonl: data/db_bio/tri_preprocessing/full_{task_id}.jsonl
