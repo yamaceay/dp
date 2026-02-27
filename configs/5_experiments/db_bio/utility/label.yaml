@@ -1,6 +1,6 @@
 dataset: db_bio
 data_in: data/db_bio
-split: indices/db_bio/test/500_random/{task_id}.txt
+split: indices/db_bio/test.txt
 debug: false
 annotations_in:
   - ../../../netscratch/yay/_ext_outputs/db_bio
@@ -20,9 +20,9 @@ output:
   file: logs/utility/db_bio/label_task_{task_id}.jsonl
 protocol: utility
 source_splits:
-- split: indices/db_bio/test/500_random/{task_id}.txt
+- split: indices/db_bio/train.txt
   train: 1.0
-- split: indices/db_bio/test/50_eval/{task_id}.txt
+- split: indices/db_bio/val.txt
   val: 1.0
 vectorizer:
   type: tfidf

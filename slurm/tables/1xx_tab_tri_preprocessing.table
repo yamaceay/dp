@@ -1,0 +1,2 @@
+tab_full_deid|python data_for_tri.py --config configs/1_tri_preprocessing/tab/full_deid.yaml
+tab_exact    |python data_for_tri.py --config configs/1_tri_preprocessing/tab/exact.yaml

@@ -1,1 +1,2 @@
-db_bio_full_deid|python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/full_deid.yaml  --task_id {task_id}
+db_bio_full_deid|python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/full_deid.yaml
+db_bio_exact    |python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/exact.yaml

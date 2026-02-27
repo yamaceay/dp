@@ -1,0 +1,4 @@
+data: tab
+data_in: data/tab
+result_in: ../../../netscratch/yay/_ext_outputs/tab/presidio/{run_timestamp}_tab_presidio.jsonl
+save_to_jsonl: data/tab/tri_preprocessing/full_deid.jsonl

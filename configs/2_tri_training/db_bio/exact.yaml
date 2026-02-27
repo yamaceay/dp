@@ -1,17 +1,17 @@
 dataset: db_bio
 data_path: data/db_bio
-split: indices/db_bio/test/50_eval/{task_id}.txt
-attacker_extensions: data/db_bio/tri_preprocessing/50_eval_{task_id}.jsonl
+split: indices/db_bio/test.txt
+attacker_extensions: data/db_bio/tri_preprocessing/exact.jsonl
 model_name: distilbert-base-uncased
-output_root: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/50_eval_{task_id}
+output_root: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/exact
 max_records: null
 max_length: 512
 
 training:
-  finetuning_epochs: 10
+  finetuning_epochs: 20
   batch_size: 16
   use_pretraining: true
   pretraining_epochs: 1
   per_step: null
   p_agg: avg
-  early_stop_patience: 3
+  early_stop_threshold: 0.95

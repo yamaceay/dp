@@ -1,6 +1,6 @@
 dataset: tab
 data_in: data/tab
-split: indices/tab/test/500_random/{task_id}.txt
+split: indices/tab/test.txt
 debug: false
 annotations_in:
 - outputs/tab
@@ -20,9 +20,9 @@ output:
   file: logs/utility/tab/country_task_{task_id}.jsonl
 protocol: utility
 source_splits:
-- split: indices/tab/test/500_random/{task_id}.txt
+- split: indices/tab/train.txt
   train: 1.0
-- split: indices/tab/test/50_eval/{task_id}.txt
+- split: indices/tab/val.txt
   val: 1.0
 vectorizer:
   type: tfidf

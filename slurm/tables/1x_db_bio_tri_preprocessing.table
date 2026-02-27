@@ -1,1 +1,1 @@
-db_bio_full|python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/full.yaml  --task_id {task_id}
+db_bio_full|python data_for_tri.py --config configs/1_tri_preprocessing/db_bio/full.yaml

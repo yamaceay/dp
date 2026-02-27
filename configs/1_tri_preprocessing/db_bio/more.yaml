@@ -1,4 +1,0 @@
-data: db_bio
-data_in: data/db_bio
-split: indices/db_bio/test/500_random/{task_id}.txt
-save_to_jsonl: data/db_bio/tri_preprocessing/500_random_{task_id}.jsonl

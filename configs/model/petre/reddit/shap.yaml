@@ -3,7 +3,7 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum_{task_id}/reddit_8_16_0.0001__task_{task_id}
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum/reddit_8_16_0.0001
 
 precomputation:
   risk_scores: data/reddit/tri_risk/shap_{task_id}.jsonl

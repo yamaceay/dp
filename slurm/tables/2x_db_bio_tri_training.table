@@ -1,1 +1,1 @@
-tri_db_bio_full     |python tri_by_bk.py --mode train --training-in configs/2_tri_training/db_bio/full.yaml --run-name full_{task_id} --set training.lr=5e-5 --set training.debug_tri=true --task_id {task_id}
+tri_db_bio_full     |python tri_by_bk.py --mode train --training-in configs/2_tri_training/db_bio/full.yaml --run-name full_{task_id} --set training.lr=5e-5 --set training.debug_tri=true 
