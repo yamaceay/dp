@@ -3,7 +3,7 @@ data_in: data/tab
 split: indices/tab/test/50_eval/{task_id}.txt
 debug: true
 annotations_in:
-  - outputs/tab
+  - ../../../netscratch/yay/_ext_outputs/tab
 target:
   key: country_group
   type: nominal

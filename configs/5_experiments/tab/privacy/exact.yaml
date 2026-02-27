@@ -2,7 +2,7 @@ dataset: tab
 data_in: data/tab
 split: indices/tab/test/50_eval/{task_id}.txt
 annotations_in:
-  - outputs/tab
+  - ../../../netscratch/yay/_ext_outputs/tab
 tri:
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}
   max_length: 512

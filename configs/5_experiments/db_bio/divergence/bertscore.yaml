@@ -2,7 +2,7 @@ dataset: db_bio
 data_in: data/db_bio
 split: indices/db_bio/test/50_eval/{task_id}.txt
 annotations_in:
-  - outputs/db_bio
+  - ../../../netscratch/yay/_ext_outputs/db_bio
 metric:
   type: bertscore
   model_type: roberta-large

@@ -2,7 +2,7 @@ dataset: tab
 data_in: data/tab
 split: indices/tab/test/50_eval/{task_id}.txt
 annotations_in:
-  - outputs/tab
+  - ../../../netscratch/yay/_ext_outputs/tab
 metric:
   type: cosine
   vectorizer:
