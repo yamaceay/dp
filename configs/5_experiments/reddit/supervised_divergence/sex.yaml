@@ -26,7 +26,7 @@ head:
     epochs: 40
     batch_size: 4
     model_name: distilbert-base-uncased
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum_{task_id}/reddit_8_16_0.0001__task_{task_id}/finetuning/{checkpoint}
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/exact/reddit_8_16_0.0001/finetuning/{checkpoint}
     checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/sex
     primary_metric: macro_mae
     encoder_lr: 1e-6
@@ -35,4 +35,4 @@ head:
 output:
 output:
   format: jsonl
-  file: logs/supervised_divergence/reddit/sex_task_{task_id}.jsonl
+  file: logs/supervised_divergence/reddit/sex.jsonl

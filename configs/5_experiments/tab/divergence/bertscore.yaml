@@ -1,8 +1,8 @@
 dataset: tab
 data_in: data/tab
-split: indices/tab/test/50_eval/{task_id}.txt
+split: indices/tab/test.txt
 annotations_in:
-  - outputs/tab
+  - ../../../netscratch/yay/_ext_outputs/tab
 metric:
   type: bertscore
   model_type: roberta-large
@@ -10,4 +10,4 @@ metric:
 output:
 output:
   format: jsonl
-  file: logs/divergence/tab/bertscore_task_{task_id}.jsonl
+  file: logs/divergence/tab/bertscore_task.jsonl

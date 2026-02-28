@@ -46,37 +46,22 @@ def _build_internal_config(dataset: str, label: str, base: Dict[str, Any]) -> Di
     out.pop("source_splits", None)
     if dataset not in {"db_bio", "tab"}:
         out.pop("split", None)
-    target = out.get("target") or {}
-    target_type = "nominal"
-    if isinstance(target, dict):
-        target_type = str(target.get("type", "nominal")).strip().lower() or "nominal"
-    elif isinstance(target, str):
-        target_type = "nominal"
-    out["vectorizer"] = {
-        "type": "tfidf",
-        "params": {
-            "ngram_range": [1, 2],
-            "max_features": 10000,
-            "min_df": 2,
-        },
-    }
-    if target_type == "cardinal":
-        out["head"] = {
-            "type": "linear_regressor",
-            "params": {
-                "primary_metric": "r2",
-            },
-        }
-    else:
-        out["head"] = {
-            "type": "logistic_classifier",
-            "params": {
-                "max_iter": 500,
-                "class_weight": "balanced",
-                "n_jobs": -1,
-                "primary_metric": "f1",
-            },
-        }
+    # Reuse supervised-divergence BERT settings from the base config for symmetry.
+    out["vectorizer"] = {"type": "text"}
+    head = dict(out.get("head") or {})
+    params = dict(head.get("params") or {})
+    params["save_checkpoints"] = False
+    if dataset in {"db_bio", "tab"} and isinstance(params.get("init_checkpoint"), str):
+        params["init_checkpoint"] = params["init_checkpoint"].replace(
+            "/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}/",
+            "/_checkpoints/500_random_{task_id}/500_random_{task_id}__task_{task_id}/",
+        )
+    if isinstance(params.get("checkpoint_dir"), str):
+        checkpoint_dir = params["checkpoint_dir"].rstrip("/")
+        if not checkpoint_dir.endswith("_internal_utility"):
+            params["checkpoint_dir"] = checkpoint_dir + "_internal_utility"
+    head["params"] = params
+    out["head"] = head
     output = dict(out.get("output") or {})
     output["format"] = "jsonl"
     output["file"] = _internal_output_file(dataset, label)

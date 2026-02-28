@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 import numpy as np
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import f1_score, mean_squared_error, r2_score
@@ -60,7 +60,7 @@ class LogisticClassifier(SupervisedDownstreamHead):
         average = "binary" if label_count == 2 and _is_numeric(y) else "macro"
         f1 = float(f1_score(y, predictions, average=average, zero_division=0))
         accuracy = float(np.mean(np.array(y) == np.array(predictions)))
-        return {"f1": f1, "acc": accuracy}
+        return {"macro_f1": f1, "f1": f1, "acc": accuracy}
 
     def cleanup(self) -> None:
         self._estimator = None
@@ -91,6 +91,88 @@ class LinearRegressor(SupervisedDownstreamHead):
 
     def cleanup(self) -> None:
         self._estimator = None
+
+
+class LinearOrdinalRegressor(SupervisedDownstreamHead):
+    def __init__(self, primary_metric: str = "macro_mae"):
+        super().__init__(name="linear_ordinal_regressor", primary_metric=primary_metric)
+        self._estimator: Optional[LinearRegression] = None
+        self._label_order: List[str] = []
+        self._label_to_index: Dict[str, int] = {}
+        self._index_to_label: Dict[int, str] = {}
+
+    def set_label_order(self, label_order: List[str]) -> None:
+        self._label_order = [str(label) for label in label_order]
+
+    def setup(self) -> None:
+        self._estimator = LinearRegression()
+        self._label_to_index = {label: index for index, label in enumerate(self._label_order)}
+        self._index_to_label = {index: label for label, index in self._label_to_index.items()}
+
+    def _encode_labels(self, y: Sequence[Any]) -> np.ndarray:
+        if not self._label_order:
+            raise ValueError("linear_ordinal_regressor requires label_order")
+        encoded: List[int] = []
+        for value in y:
+            key = str(value)
+            if key not in self._label_to_index:
+                raise ValueError(f"Unknown ordinal label '{key}' not in label_order")
+            encoded.append(self._label_to_index[key])
+        return np.asarray(encoded, dtype=float)
+
+    def fit(self, x: Any, y: Sequence[Any]) -> None:
+        self.setup()
+        if self._estimator is None:
+            raise RuntimeError("linear ordinal regressor not initialized")
+        self._estimator.fit(x, self._encode_labels(y))
+
+    def _predict_indices(self, x: Any) -> np.ndarray:
+        if self._estimator is None:
+            raise RuntimeError("linear ordinal regressor not fitted")
+        if not self._label_order:
+            raise ValueError("linear_ordinal_regressor requires label_order")
+        raw = np.asarray(self._estimator.predict(x), dtype=float)
+        rounded = np.rint(raw).astype(int)
+        return np.clip(rounded, 0, len(self._label_order) - 1)
+
+    def predict(self, x: Any) -> Sequence[Any]:
+        indices = self._predict_indices(x)
+        return [self._index_to_label[int(idx)] for idx in indices.tolist()]
+
+    def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
+        if not self._label_order:
+            raise ValueError("linear_ordinal_regressor requires label_order")
+        pred_encoded = self._predict_indices(x)
+        y_encoded = self._encode_labels(y).astype(int)
+        unique_classes = sorted({int(v) for v in y_encoded.tolist()})
+        per_class_mae: List[float] = []
+        per_class_recall: List[float] = []
+        per_class_within1: List[float] = []
+        for cls in unique_classes:
+            mask = y_encoded == cls
+            if int(mask.sum()) <= 0:
+                continue
+            abs_err = np.abs(y_encoded[mask] - pred_encoded[mask])
+            per_class_mae.append(float(abs_err.mean()))
+            per_class_recall.append(float((y_encoded[mask] == pred_encoded[mask]).mean()))
+            per_class_within1.append(float((abs_err <= 1).mean()))
+        macro_mae = float(np.mean(per_class_mae)) if per_class_mae else float("inf")
+        macro_within1 = float(np.mean(per_class_within1)) if per_class_within1 else 0.0
+        worst_recall = float(np.min(per_class_recall)) if per_class_recall else 0.0
+        abs_err_all = np.abs(y_encoded - pred_encoded)
+        return {
+            "macro_mae": macro_mae,
+            "macro_within1": macro_within1,
+            "worst_recall": worst_recall,
+            "mae": float(abs_err_all.mean()),
+            "acc": float((y_encoded == pred_encoded).mean()),
+            "within1": float((abs_err_all <= 1).mean()),
+        }
+
+    def cleanup(self) -> None:
+        self._estimator = None
+        self._label_to_index = {}
+        self._index_to_label = {}
 
 class FeedForwardClassifier(SupervisedDownstreamHead):
     def __init__(self, mlp_params: Optional[Dict[str, Any]] = None, primary_metric: str = "f1"):
@@ -172,6 +254,7 @@ DOWNSTREAM_CLASSIFIER_HEAD_REGISTRY: Dict[str, type[SupervisedDownstreamHead]] =
     "feedforward_classifier": FeedForwardClassifier,
     "bert_classifier": BertClassifierHead,
     "bert_ordinal": BertOrdinalHead,
+    "linear_ordinal_regressor": LinearOrdinalRegressor,
 }
 
 DOWNSTREAM_REGRESSOR_HEAD_REGISTRY: Dict[str, type[SupervisedDownstreamHead]] = {

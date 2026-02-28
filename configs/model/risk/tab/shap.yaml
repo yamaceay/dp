@@ -3,12 +3,12 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/full/full
   risk_temperature: 0.1
 
 precomputation:
-  risk_scores: data/tab/tri_risk/shap_{task_id}.jsonl
-  result_in: outputs/tab/presidio/{run_timestamp}_tab_presidio_task_{task_id}.jsonl
+  risk_scores: data/tab/tri_risk/shap.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs/tab/presidio/{run_timestamp}_tab_presidio.jsonl
 
 token_selection:
   name: by_risk

@@ -1,0 +1,3 @@
+data: tab
+data_in: data/tab
+save_to_jsonl: data/tab/tri_preprocessing/full.jsonl

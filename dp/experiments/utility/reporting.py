@@ -38,6 +38,7 @@ class UtilityExperimentReport:
     baseline_train_metrics: Dict[str, float]
     baseline_test_metrics: Dict[str, float]
     baseline_overall_metrics: Dict[str, float]
+    baseline_dummy: Dict[str, Any]
     baseline_median_dummy_mae: Dict[str, Any]
     evaluations: List[UtilityEvaluationReport]
 
@@ -63,6 +64,7 @@ class JsonLinesUtilityReportOutputter(UtilityReportOutputter):
                 "baseline_train_metrics": report.baseline_train_metrics,
                 "baseline_test_metrics": report.baseline_test_metrics,
                 "baseline_overall_metrics": report.baseline_overall_metrics,
+                "baseline_dummy": report.baseline_dummy,
                 "baseline_median_dummy_mae": report.baseline_median_dummy_mae,
             }
         ]
@@ -103,6 +105,9 @@ def build_utility_report(result: ExperimentResult, sources: Dict[str, Path]) -> 
     baseline_train_metrics = {key: float(value) for key, value in (baseline_payload.get("train_metrics", {}) or {}).items()}
     baseline_test_metrics = {key: float(value) for key, value in (baseline_payload.get("test_metrics", {}) or {}).items()}
     baseline_overall_metrics = {key: float(value) for key, value in (baseline_payload.get("overall_metrics", {}) or {}).items()}
+    baseline_dummy = baseline_payload.get("dummy", {}) or {}
+    if not isinstance(baseline_dummy, dict):
+        raise ValueError("baseline.dummy must be a mapping")
     baseline_median_dummy_mae = baseline_payload.get("median_dummy_mae", {}) or {}
     if not isinstance(baseline_median_dummy_mae, dict):
         raise ValueError("baseline.median_dummy_mae must be a mapping")
@@ -145,6 +150,7 @@ def build_utility_report(result: ExperimentResult, sources: Dict[str, Path]) -> 
         baseline_train_metrics=baseline_train_metrics,
         baseline_test_metrics=baseline_test_metrics,
         baseline_overall_metrics=baseline_overall_metrics,
+        baseline_dummy=baseline_dummy,
         baseline_median_dummy_mae=baseline_median_dummy_mae,
         evaluations=evaluations,
     )

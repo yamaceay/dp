@@ -1,6 +1,0 @@
-orig_orig_db_bio|python debug_tri.py --config configs/a2_debug_tri/db_bio/50_eval/orig.yaml --task_id {task_id}
-orig_deid_db_bio|python debug_tri.py --config configs/a2_debug_tri/db_bio/50_eval/deid.yaml --task_id {task_id}
-deid_orig_db_bio|python debug_tri.py --config configs/a2_debug_tri/db_bio/50_eval_deid/orig.yaml --task_id {task_id}
-deid_deid_db_bio|python debug_tri.py --config configs/a2_debug_tri/db_bio/50_eval_deid/deid.yaml --task_id {task_id}
-more_exact_db_bio|python debug_tri.py --config configs/a2_debug_tri/db_bio/500_random/exact.yaml --task_id {task_id}
-more_more_db_bio|python debug_tri.py --config configs/a2_debug_tri/db_bio/500_random/more.yaml --task_id {task_id}

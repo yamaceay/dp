@@ -1,0 +1,4 @@
+data: tab
+data_in: data/tab
+split: indices/tab/test.txt
+save_to_jsonl: data/tab/tri_preprocessing/exact.jsonl

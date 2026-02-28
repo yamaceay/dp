@@ -1,8 +1,8 @@
 dataset: db_bio
 data_in: data/db_bio
-split: indices/db_bio/test/50_eval/{task_id}.txt
+split: indices/db_bio/test.txt
 annotations_in:
-  - outputs/db_bio
+  - ../../../netscratch/yay/_ext_outputs/db_bio
 tri:
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}
   max_length: 512
@@ -10,5 +10,5 @@ mask_token: "[MASK]"
 output:
 output:
   format: jsonl
-  file: logs/privacy/db_bio/exact_task_{task_id}.jsonl
+  file: logs/privacy/db_bio/exact_task.jsonl
 progress: false

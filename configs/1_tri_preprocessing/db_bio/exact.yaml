@@ -1,0 +1,4 @@
+data: db_bio
+data_in: data/db_bio
+split: indices/db_bio/test.txt
+save_to_jsonl: data/db_bio/tri_preprocessing/exact.jsonl

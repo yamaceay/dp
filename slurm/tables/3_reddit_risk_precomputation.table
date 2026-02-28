@@ -1,1 +1,1 @@
-reddit_shap|python risk.py --config configs/3_tri_risk_precomputation/reddit/shap.yaml --task_id {task_id}
+reddit_shap|python risk.py --config configs/3_tri_risk_precomputation/reddit/shap.yaml 

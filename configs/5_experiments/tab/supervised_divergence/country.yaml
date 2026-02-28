@@ -1,9 +1,9 @@
 dataset: tab
 data_in: data/tab
-split: indices/tab/test/50_eval/{task_id}.txt
+split: indices/tab/test.txt
 debug: true
 annotations_in:
-  - outputs/tab
+  - ../../../netscratch/yay/_ext_outputs/tab
 target:
   key: country_group
   type: nominal
@@ -21,7 +21,7 @@ head:
   type: bert_classifier
   params:
     epochs: 2
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}/finetuning/{checkpoint}
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/exact/exact/finetuning/{checkpoint}
     checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/tab/country
     primary_metric: macro_f1
     encoder_lr: 1e-6
@@ -30,4 +30,4 @@ head:
 output:
 output:
   format: jsonl
-  file: logs/supervised_divergence/tab/country_task_{task_id}.jsonl
+  file: logs/supervised_divergence/tab/country_task.jsonl

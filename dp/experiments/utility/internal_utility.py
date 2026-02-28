@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+from sklearn.metrics import f1_score, mean_squared_error, r2_score
 
 from dp.experiments import ExperimentResult
 from dp.experiments.utility.base import UtilityTarget
@@ -49,6 +50,98 @@ def _aggregate_metrics(values: Sequence[Dict[str, float]]) -> Dict[str, Any]:
         "mean": mean,
         "std": std,
         "values": [{k: float(v) for k, v in row.items()} for row in values],
+    }
+
+
+def _dummy_strategy_name(mode: UtilityTarget.Mode) -> str:
+    if mode in {UtilityTarget.Mode.BINARY, UtilityTarget.Mode.NOMINAL}:
+        return "mode"
+    if mode is UtilityTarget.Mode.ORDINAL:
+        return "median"
+    if mode is UtilityTarget.Mode.CARDINAL:
+        return "mean"
+    return "unknown"
+
+
+def _compute_dummy_metrics(
+    *,
+    fit_labels: Sequence[Any],
+    eval_labels: Sequence[Any],
+    mode: UtilityTarget.Mode,
+    label_order: Optional[Sequence[str]],
+) -> Dict[str, float]:
+    if not fit_labels or not eval_labels:
+        return {}
+    if mode in {UtilityTarget.Mode.BINARY, UtilityTarget.Mode.NOMINAL}:
+        fit_values = [str(v) for v in fit_labels]
+        eval_values = [str(v) for v in eval_labels]
+        counts: Dict[str, int] = {}
+        first_seen: Dict[str, int] = {}
+        for idx, value in enumerate(fit_values):
+            counts[value] = counts.get(value, 0) + 1
+            if value not in first_seen:
+                first_seen[value] = idx
+        best_label = min(counts.keys(), key=lambda key: (-counts[key], first_seen[key]))
+        preds = [best_label] * len(eval_values)
+        macro_f1 = float(f1_score(eval_values, preds, average="macro", zero_division=0))
+        eval_arr = np.asarray(eval_values, dtype=object)
+        pred_arr = np.asarray(preds, dtype=object)
+        unique_eval = sorted(set(eval_values))
+        per_class_recalls: List[float] = []
+        for label in unique_eval:
+            mask = np.asarray([v == label for v in eval_values], dtype=bool)
+            if int(mask.sum()) <= 0:
+                continue
+            per_class_recalls.append(float((pred_arr[mask] == eval_arr[mask]).mean()))
+        return {
+            "macro_f1": macro_f1,
+            "f1": macro_f1,
+            "acc": float(np.mean(pred_arr == eval_arr)),
+            "balanced_acc": float(np.mean(per_class_recalls)) if per_class_recalls else 0.0,
+        }
+    if mode is UtilityTarget.Mode.ORDINAL:
+        if not label_order:
+            raise ValueError("ordinal target requires label_order")
+        label_to_rank = {str(label): idx for idx, label in enumerate(label_order)}
+        fit_encoded = np.asarray([label_to_rank[str(v)] for v in fit_labels], dtype=float)
+        eval_encoded = np.asarray([label_to_rank[str(v)] for v in eval_labels], dtype=int)
+        pred_rank = int(np.rint(float(np.median(fit_encoded))))
+        pred_rank = max(0, min(pred_rank, len(label_order) - 1))
+        preds = np.full(eval_encoded.shape, pred_rank, dtype=int)
+        unique_classes = sorted(set(eval_encoded.tolist()))
+        per_class_mae: List[float] = []
+        per_class_recall: List[float] = []
+        per_class_within1: List[float] = []
+        for cls in unique_classes:
+            mask = eval_encoded == cls
+            if int(mask.sum()) <= 0:
+                continue
+            abs_err = np.abs(eval_encoded[mask] - preds[mask])
+            per_class_mae.append(float(abs_err.mean()))
+            per_class_recall.append(float((eval_encoded[mask] == preds[mask]).mean()))
+            per_class_within1.append(float((abs_err <= 1).mean()))
+        abs_err_all = np.abs(eval_encoded - preds)
+        return {
+            "macro_mae": float(np.mean(per_class_mae)) if per_class_mae else float("inf"),
+            "macro_within1": float(np.mean(per_class_within1)) if per_class_within1 else 0.0,
+            "worst_recall": float(np.min(per_class_recall)) if per_class_recall else 0.0,
+            "mae": float(abs_err_all.mean()),
+            "acc": float((eval_encoded == preds).mean()),
+            "within1": float((abs_err_all <= 1).mean()),
+        }
+    fit_vals = np.asarray([float(v) for v in fit_labels], dtype=float)
+    eval_vals = np.asarray([float(v) for v in eval_labels], dtype=float)
+    pred_value = float(np.mean(fit_vals))
+    preds = np.full(eval_vals.shape, pred_value, dtype=float)
+    mse = float(mean_squared_error(eval_vals, preds))
+    try:
+        r2 = float(r2_score(eval_vals, preds))
+    except Exception:
+        r2 = 0.0
+    return {
+        "rmse": float(np.sqrt(mse)),
+        "r2": r2,
+        "mae": float(np.mean(np.abs(eval_vals - preds))),
     }
 
 
@@ -183,6 +276,9 @@ def _evaluate_cv_arrays(
     train_metrics_rows: List[Dict[str, float]] = []
     test_metrics_rows: List[Dict[str, float]] = []
     overall_metrics_rows: List[Dict[str, float]] = []
+    dummy_train_rows: List[Dict[str, float]] = []
+    dummy_test_rows: List[Dict[str, float]] = []
+    dummy_overall_rows: List[Dict[str, float]] = []
     train_sizes: List[int] = []
     test_sizes: List[int] = []
     texts_list = list(texts)
@@ -201,6 +297,24 @@ def _evaluate_cv_arrays(
         test_texts = [texts_list[i] for i in test_idx]
         train_labels = [labels_list[i] for i in train_idx]
         test_labels = [labels_list[i] for i in test_idx]
+        dummy_train_metrics = _compute_dummy_metrics(
+            fit_labels=train_labels,
+            eval_labels=train_labels,
+            mode=spec.target.mode,
+            label_order=spec.target.label_order,
+        )
+        dummy_test_metrics = _compute_dummy_metrics(
+            fit_labels=train_labels,
+            eval_labels=test_labels,
+            mode=spec.target.mode,
+            label_order=spec.target.label_order,
+        )
+        dummy_overall_metrics = _compute_dummy_metrics(
+            fit_labels=train_labels,
+            eval_labels=labels_list,
+            mode=spec.target.mode,
+            label_order=spec.target.label_order,
+        )
         vectorizer, model = spec.build_components(
             vectorizer_name=vectorizer_name,
             vectorizer_kwargs=vectorizer_kwargs,
@@ -228,6 +342,9 @@ def _evaluate_cv_arrays(
         train_metrics_rows.append(train_metrics)
         test_metrics_rows.append(test_metrics)
         overall_metrics_rows.append(overall_metrics)
+        dummy_train_rows.append(dummy_train_metrics)
+        dummy_test_rows.append(dummy_test_metrics)
+        dummy_overall_rows.append(dummy_overall_metrics)
         train_sizes.append(len(train_idx))
         test_sizes.append(len(test_idx))
         fold_rows.append(
@@ -244,12 +361,18 @@ def _evaluate_cv_arrays(
                     "train": train_metrics,
                     "test": test_metrics,
                     "overall": overall_metrics,
+                    "dummy_train": dummy_train_metrics,
+                    "dummy_test": dummy_test_metrics,
+                    "dummy_overall": dummy_overall_metrics,
                 },
             }
         )
     train_agg = _aggregate_metrics(train_metrics_rows)
     test_agg = _aggregate_metrics(test_metrics_rows)
     overall_agg = _aggregate_metrics(overall_metrics_rows)
+    dummy_train_agg = _aggregate_metrics(dummy_train_rows)
+    dummy_test_agg = _aggregate_metrics(dummy_test_rows)
+    dummy_overall_agg = _aggregate_metrics(dummy_overall_rows)
     valid_rounds = len(test_metrics_rows)
     mean_train = int(round(float(np.mean(train_sizes)))) if train_sizes else 0
     mean_test = int(round(float(np.mean(test_sizes)))) if test_sizes else 0
@@ -260,6 +383,9 @@ def _evaluate_cv_arrays(
             "metrics": train_agg["mean"],
             "std": train_agg["std"],
             "fold_metrics": train_agg["values"],
+            "dummy_metrics": dummy_train_agg["mean"],
+            "dummy_std": dummy_train_agg["std"],
+            "dummy_fold_metrics": dummy_train_agg["values"],
             "matched": mean_train,
             "total": mean_train,
         },
@@ -267,6 +393,9 @@ def _evaluate_cv_arrays(
             "metrics": test_agg["mean"],
             "std": test_agg["std"],
             "fold_metrics": test_agg["values"],
+            "dummy_metrics": dummy_test_agg["mean"],
+            "dummy_std": dummy_test_agg["std"],
+            "dummy_fold_metrics": dummy_test_agg["values"],
             "matched": mean_test,
             "total": mean_test,
         },
@@ -274,6 +403,9 @@ def _evaluate_cv_arrays(
             "metrics": overall_agg["mean"],
             "std": overall_agg["std"],
             "fold_metrics": overall_agg["values"],
+            "dummy_metrics": dummy_overall_agg["mean"],
+            "dummy_std": dummy_overall_agg["std"],
+            "dummy_fold_metrics": dummy_overall_agg["values"],
             "matched": len(texts_list),
             "total": len(texts_list),
         },
@@ -289,6 +421,15 @@ def _evaluate_cv_arrays(
             "rounds_completed": int(valid_rounds),
             "rounds_skipped": int(skipped_rounds + max(0, len(rounds) - valid_rounds)),
             "folds": fold_rows,
+        },
+        "dummy_baseline": {
+            "strategy": _dummy_strategy_name(spec.target.mode),
+            "train_metrics": dummy_train_agg["mean"],
+            "test_metrics": dummy_test_agg["mean"],
+            "overall_metrics": dummy_overall_agg["mean"],
+            "train_std": dummy_train_agg["std"],
+            "test_std": dummy_test_agg["std"],
+            "overall_std": dummy_overall_agg["std"],
         },
     }
 
@@ -470,6 +611,7 @@ def run_internal_utility(
             "train_metrics": dict((global_baseline.get("train_results", {}) or {}).get("metrics", {}) or {}),
             "test_metrics": dict((global_baseline.get("test_results", {}) or {}).get("metrics", {}) or {}),
             "overall_metrics": dict((global_baseline.get("overall_results", {}) or {}).get("metrics", {}) or {}),
+            "dummy": dict(global_baseline.get("dummy_baseline", {}) or {}),
             "median_dummy_mae": {},
         },
         "evaluations": evaluations,
