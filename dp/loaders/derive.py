@@ -208,7 +208,7 @@ def tab_articles(record: DatasetRecord) -> Optional[List[str]]:
 
 def tab_year_groups(record: DatasetRecord, year_groups: List[str] | None = None) -> str:
     groups = year_groups or [
-        "1975-1995","1996-1998","1999-2001","2002-2004","2005-2007","2008-2010","2011-2013","2014-2019"
+        "1975-2003", "2004-2007", "2008-2009", "2010-2017"
     ]
     year = record.metadata.get("year")
     bounds = [(int(g.split("-")[0]), int(g.split("-")[1])) for g in groups]
@@ -219,7 +219,14 @@ def tab_year_groups(record: DatasetRecord, year_groups: List[str] | None = None)
 
 
 def tab_country_groups(record: DatasetRecord, region_groups: List[str] | None = None) -> str:
-    groups = region_groups or ["GBR-IRL", "SWE-NOR-DNK"]
+    groups = region_groups or [
+        "TUR",
+        "POL",
+        "GBR-IRL-ROU;GBR",
+        "AUT-DEU-CHE-LIE-AUT;SVN",
+        "SWE-NOR-DNK",
+        "FRA-ESP-BEL-SMR",
+    ]
     region = record.metadata.get("country")
     mapping = {c: g for g in groups for c in g.split("-")}
     return mapping.get(region, region)

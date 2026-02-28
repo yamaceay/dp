@@ -1,7 +1,8 @@
-from typing import Dict, List
+from typing import Callable, Dict, List, Optional
 from dp.loaders import ADAPTER_REGISTRY
 from dp.loaders.derive import DERIVE_REGISTRY
 import argparse
+import re
 
 available_datasets = list(ADAPTER_REGISTRY.keys())
 
@@ -21,6 +22,32 @@ def load_data(data_kwargs: Dict[str, object]):
     dataset = adapter(**data_kwargs)
     return dataset
 
+
+def evaluate_where(
+    record: object,
+    value_getters: Dict[str, Callable[[object], object]],
+    where: Optional[str],
+) -> bool:
+    if where is None or where.strip() == "":
+        return True
+    scope: Dict[str, object] = {}
+    for key, getter in value_getters.items():
+        scope[key] = getter(record)
+
+    def re_search(pattern: str, value: object) -> bool:
+        return re.search(pattern, str(value)) is not None
+
+    def re_match(pattern: str, value: object) -> bool:
+        return re.match(pattern, str(value)) is not None
+
+    def re_fullmatch(pattern: str, value: object) -> bool:
+        return re.fullmatch(pattern, str(value)) is not None
+
+    try:
+        return bool(eval(where, {"__builtins__": {}, "re_search": re_search, "re_match": re_match, "re_fullmatch": re_fullmatch}, scope))
+    except Exception as exc:
+        raise ValueError(f"Invalid --where expression: {where}") from exc
+
 def add_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument('--data', type=str, required=True, choices=available_datasets, help='Dataset name ({})'.format(", ".join(available_datasets)))
     parser.add_argument('--data_in', type=str, required=True, help='Path to input data file or directory')
@@ -28,8 +55,22 @@ def add_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument('--start', type=int, default=None, help='Start index for slicing (inclusive, python slicing semantics)')
     parser.add_argument('--end', type=int, default=None, help='End index for slicing (exclusive, python slicing semantics)')
     parser.add_argument('--step', type=int, default=None, help='Step for slicing (python slicing semantics)')
+    parser.add_argument('--where', type=str, default=None, help='Filter condition over value_getter keys, e.g. "split == \'train\'" or "re_search(\'^ab\', name)"')
+    parser.add_argument('--select', type=str, default=None, help='Comma-separated list of value_getter keys to include in output (default: all)')
     parser.add_argument('--max_records', type=int, default=None, help='Maximum number of records to load after slicing')
     return ['data', 'data_in', 'split', 'start', 'end', 'step', 'max_records']
+
+
+def parse_selected_getters(select_arg: Optional[str], value_getters: Dict[str, Callable[[object], object]]) -> Dict[str, Callable[[object], object]]:
+    if select_arg is None or select_arg.strip() == "":
+        return value_getters
+    selected_keys = [key.strip() for key in select_arg.split(",") if key.strip() != ""]
+    invalid_keys = [key for key in selected_keys if key not in value_getters]
+    if invalid_keys:
+        valid_keys = ", ".join(sorted(value_getters.keys()))
+        invalid_keys_str = ", ".join(invalid_keys)
+        raise ValueError(f"Invalid --select keys: {invalid_keys_str}. Available keys: {valid_keys}")
+    return {key: value_getters[key] for key in selected_keys}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark Anonymization Tools")
@@ -40,29 +81,45 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     data_kwargs = {k: getattr(args, k) for k in data_keys}
+    has_where = args.where is not None and args.where.strip() != ""
+    if has_where:
+        data_kwargs['start'] = None
+        data_kwargs['end'] = None
+        data_kwargs['step'] = None
+        data_kwargs['max_records'] = None
 
     dataset = load_data(data_kwargs)
 
     value_getters = {
         'name': lambda r: r.name,
         'key': lambda r: list(r.metadata.keys()),
+        'split': lambda r: r.metadata.get("split"),
     }
 
     special_value_getters = DERIVE_REGISTRY.get(args.data, {})
     for key, target in special_value_getters.items():
         value_getters[key] = target
+    selected_value_getters = parse_selected_getters(args.select, value_getters)
 
     unique_values: Dict[str, Dict[object, int]] = {}
     sum_text_length = 0
     max_text_length = 0
     all_text_lengths = []
 
-    for record in dataset.iter_records():
+    if has_where:
+        filtered_records = [record for record in dataset.iter_records() if evaluate_where(record, value_getters, args.where)]
+        records_to_process = filtered_records[slice(args.start, args.end, args.step)]
+        if args.max_records is not None:
+            records_to_process = records_to_process[:args.max_records]
+    else:
+        records_to_process = dataset.iter_records()
+
+    for record in records_to_process:
         if args.full_record:
             print(record)
         all_text_lengths.append(len(record.text))
 
-        for key, getter in value_getters.items():
+        for key, getter in selected_value_getters.items():
             value = getter(record)
             if value is None:
                 continue
@@ -94,7 +151,12 @@ if __name__ == "__main__":
 
     if args.functional:
         from dp.loaders.func import FunctionalAnalysis
-        func_analysis = FunctionalAnalysis(list(dataset.iter_records()), value_getters, exclude_keys=["key"])
+        if has_where:
+            functional_records = records_to_process
+        else:
+            functional_records = list(dataset.iter_records())
+        exclude_keys = ["key"] if "key" in selected_value_getters else []
+        func_analysis = FunctionalAnalysis(functional_records, selected_value_getters, exclude_keys=exclude_keys)
         func_analysis.analyze()
         functionals = func_analysis.dag()
         print("Functional mappings found:")
