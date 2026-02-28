@@ -17,7 +17,7 @@ head:
     primary_metric: macro_f1
 output:
   format: jsonl
-  file: logs/utility/db_bio/label_task_{task_id}.jsonl
+  file: logs/utility/db_bio/label_task.jsonl
 protocol: utility
 source_splits:
 - split: indices/db_bio/train.txt

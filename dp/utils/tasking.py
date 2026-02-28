@@ -17,7 +17,7 @@ def resolve_task_id(explicit: Optional[int] = None) -> Optional[int]:
         if value.isdigit():
             return int(value)
         raise ValueError(f"Environment variable {key} must be an integer, got: {raw!r}")
-    return 0
+    return None
 
 
 def apply_task_template(value: Optional[str], task_id: Optional[int]) -> Optional[str]:

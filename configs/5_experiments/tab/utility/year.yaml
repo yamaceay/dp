@@ -23,7 +23,7 @@ head:
     primary_metric: macro_mae
 output:
   format: jsonl
-  file: logs/utility/tab/year_task_{task_id}.jsonl
+  file: logs/utility/tab/year_task.jsonl
 protocol: utility
 source_splits:
 - split: indices/tab/train.txt

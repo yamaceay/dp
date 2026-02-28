@@ -10,4 +10,4 @@ metric:
 output:
 output:
   format: jsonl
-  file: logs/divergence/reddit/cosine_task_{task_id}.jsonl
+  file: logs/divergence/reddit/cosine.jsonl

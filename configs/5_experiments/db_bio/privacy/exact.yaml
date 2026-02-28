@@ -10,5 +10,5 @@ mask_token: "[MASK]"
 output:
 output:
   format: jsonl
-  file: logs/privacy/db_bio/exact_task_{task_id}.jsonl
+  file: logs/privacy/db_bio/exact_task.jsonl
 progress: false

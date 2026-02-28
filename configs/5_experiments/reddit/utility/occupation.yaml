@@ -20,7 +20,7 @@ head:
     primary_metric: macro_f1
 output:
   format: jsonl
-  file: logs/utility/reddit/occupation_task_{task_id}.jsonl
+  file: logs/utility/reddit/occupation.jsonl
 protocol: internal_utility
 internal_utility:
   n_folds: 5

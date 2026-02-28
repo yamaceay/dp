@@ -3,12 +3,12 @@ params:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/sum/reddit_8_16_0.0001
+  : ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/exact/reddit_8_16_0.0001
   risk_temperature: 0.1
 
 precomputation:
   risk_scores: data/reddit/tri_risk/shap.jsonl
-  result_in: outputs/reddit/presidio/{run_timestamp}_reddit_presidio_task_{task_id}.jsonl
+  result_in: outputs/reddit/presidio/{run_timestamp}_reddit_presidio_task.jsonl
 
 tri_chunking:
   enabled: true

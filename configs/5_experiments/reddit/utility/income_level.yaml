@@ -21,7 +21,7 @@ head:
     primary_metric: macro_mae
 output:
   format: jsonl
-  file: logs/utility/reddit/income_level_task_{task_id}.jsonl
+  file: logs/utility/reddit/income_level.jsonl
 protocol: internal_utility
 internal_utility:
   n_folds: 5

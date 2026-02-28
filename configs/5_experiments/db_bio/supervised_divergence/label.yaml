@@ -21,7 +21,7 @@ head:
   type: bert_classifier
   params:
     epochs: 5
-    init_checkpoint: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/50_eval_{task_id}/50_eval_{task_id}__task_{task_id}/finetuning/{checkpoint}
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/exact/exact/finetuning/{checkpoint}
     checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/db_bio/label
     primary_metric: macro_f1
     encoder_lr: 1e-6
@@ -29,4 +29,4 @@ head:
     early_stop_patience: 2
 output:
   format: jsonl
-  file: logs/supervised_divergence/db_bio/label_task_{task_id}.jsonl
+  file: logs/supervised_divergence/db_bio/label_task.jsonl

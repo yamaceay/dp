@@ -22,7 +22,7 @@ head:
     primary_metric: macro_mae
 output:
   format: jsonl
-  file: logs/utility/reddit/age_task_{task_id}.jsonl
+  file: logs/utility/reddit/age.jsonl
 protocol: internal_utility
 internal_utility:
   n_folds: 5
