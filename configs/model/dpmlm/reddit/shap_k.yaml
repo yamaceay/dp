@@ -8,7 +8,7 @@ explainer:
   risk_temperature: 0.1
 
 precomputation:
-  risk_scores: data/reddit/tri_risk/shap_{task_id}.jsonl
+  risk_scores: data/reddit/tri_risk/shap.jsonl
   result_in: outputs/reddit/presidio/{run_timestamp}_reddit_presidio_task_{task_id}.jsonl
 
 tri_chunking:
