@@ -1,0 +1,2 @@
+tri_tab_full_deid|python tri_by_bk.py --mode train --training-in configs/2_tri_training/tab/full.yaml --run-name full_deid --set training.lr=5e-5 --set training.debug_tri=true 
+tri_tab_exact|python tri_by_bk.py --mode train --training-in configs/2_tri_training/tab/full.yaml --run-name exact --set training.lr=5e-5 --set training.debug_tri=true 
