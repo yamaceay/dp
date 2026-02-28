@@ -1,2 +1,0 @@
-tri_db_bio_full_deid|python tri_by_bk.py --mode train --training-in configs/2_tri_training/db_bio/full_deid.yaml --run-name full_deid --set training.lr=5e-5 --set training.debug_tri=true 
-tri_db_bio_exact    |python tri_by_bk.py --mode train --training-in configs/2_tri_training/db_bio/exact.yaml --run-name exact --set training.lr=5e-5 --set training.debug_tri=true 
