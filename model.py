@@ -274,10 +274,6 @@ def extract_selector_config(model_config: dict) -> Dict[str, Any]:
     return model_config.get("token_selection", {})
 
 
-def extract_chunking_config(model_config: dict, kind: str) -> Dict[str, Any]:
-    return model_config.get(f"{kind}_chunking", {})
-
-
 def build_selector(selector_config: dict, runtime_bundle=None):
     selector_type = selector_config.get("name")
     
@@ -320,12 +316,10 @@ def build_explainer(explainer_config: dict, model_config: dict, capabilities, mo
     tri_pipeline = explainer_config.get("tri_pipeline")
     if not tri_pipeline:
         raise ValueError(f"{model_name} requires tri_pipeline path")
-    
-    tri_chunking = extract_chunking_config(model_config, "tri").get("enabled", False)
-    
+
     explainer_type = ShapType(explainer_name)
 
-    return ShapExplainer(model_name=tri_pipeline, use_chunking=tri_chunking, explainer_type=explainer_type)
+    return ShapExplainer(model_name=tri_pipeline, explainer_type=explainer_type)
 
 def configure_model(model: Anonymizer, model_config: dict, explainer_config: dict, selector_config: dict, runtime_bundle, capabilities, model_name: str, records: List[DatasetRecord]):
     if explainer_config.get("risk_temperature") is not None:

@@ -40,7 +40,6 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
     starting_index = int(params.get('starting_index', 0))
     sort_by = params.get('sort_by') or 'offsets'
     offset_mode = params.get('offset_mode') or 'original'
-    p_agg = params.get('p_agg') or 'avg'
     task_id = params.get('task_id')
     if task_id is not None and (not isinstance(task_id, int) or task_id < 0):
         raise ValueError('task_id must be a non-negative integer when provided')
@@ -56,7 +55,6 @@ def _resolve_params(params: Dict[str, Any]) -> Dict[str, Any]:
         'starting_index': starting_index,
         'sort_by': sort_by,
         'offset_mode': offset_mode,
-        'p_agg': p_agg,
         'task_id': task_id,
     }
 
@@ -70,7 +68,6 @@ def main() -> None:
     parser.add_argument('--result_in', type=str, default=None)
     parser.add_argument('--explainer', type=str, choices=['shap', 'shap_permutation'], default=None)
     parser.add_argument('--explainer_in', type=str, default=None)
-    parser.add_argument('--p_agg', type=str, choices=['max', 'avg'], default=None)
     parser.add_argument('--max_records', type=int, default=None)
     parser.add_argument('--save_to_jsonl', type=str, default=None)
     parser.add_argument('--starting_index', type=int, default=None)
@@ -88,7 +85,10 @@ def main() -> None:
 
     adapter = get_adapter(resolved['data'], data=resolved['data'], data_in=resolved['data_in'], split=resolved['split']) if resolved['data'] and resolved['data_in'] else None
     explainer_type = ShapType(resolved['explainer'])
-    explainer = ShapExplainer(model_name=resolved['explainer_in'], explainer_type=explainer_type, p_agg=resolved['p_agg'])
+    explainer = ShapExplainer(
+        model_name=resolved['explainer_in'],
+        explainer_type=explainer_type,
+    )
     splitter = TextSplitter()
 
     token_edits_by_idx: Dict[int, List[Dict[str, Any]]] = {}

@@ -231,7 +231,6 @@ def main() -> int:
     parser.add_argument("--focal_alpha", type=float, default=None)
     parser.add_argument("--focal_ignore_pt", type=float, default=None)
     parser.add_argument("--exclude_stopwords", action="store_true")
-    parser.add_argument("--p_agg", type=str, default="avg", choices=["avg", "max"], help="Method to aggregate token-level scores into record-level score")
     parser.add_argument("--debug_tri", action="store_true")
 
     args = parser.parse_args()
@@ -267,7 +266,6 @@ def main() -> int:
         optimizer_type = str(training.get("optimizer_type", "adamw"))
         warmup_steps = int(training.get("warmup_steps", 10))
         warmup_ratio = training.get("warmup_ratio")
-        p_agg = training.get("p_agg", "avg")
         debug_tri = bool(training.get("debug_tri", False))
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -305,7 +303,6 @@ def main() -> int:
         optimizer_type = "adamw"
         warmup_steps = 10
         warmup_ratio = None
-        p_agg = args.p_agg
         debug_tri = bool(args.debug_tri)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root_raw = apply_task_template(args.output_root, task_id) if args.output_root else f"models/tri_pipelines/{dataset}"
@@ -330,7 +327,7 @@ def main() -> int:
     if not records:
         raise SystemExit("No records loaded")
 
-    tri = TRIDetector(dataset_name=dataset, model_name=model_name, max_length=max_length, device=device, p_agg=p_agg)
+    tri = TRIDetector(dataset_name=dataset, model_name=model_name, max_length=max_length, device=device)
 
     if args.mode == "train":
         if args.model_path:
