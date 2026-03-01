@@ -17,18 +17,30 @@ class RedditDatasetAdapter(DatasetAdapter):
     def _read_records(self) -> Iterable[Dict]:
         if isinstance(self.data_in, str):
             self.data_in = Path(self.data_in)
+        if self.data_in.is_dir():
+            train_file = self.data_in / "train.jsonl"
+            test_file = self.data_in / "test.jsonl"
+            files = [train_file, test_file]
+            for file in files:
+                assert file.exists(), f"Expected file not found: {file}"
+                yield from self._read_record(file)
+            return
+
         with self.data_in.open("r", encoding="utf-8") as handle:
+            yield from self._read_record(self.data_in)
+    def __len__(self) -> int:
+        return len(self._records)
+
+    def _read_record(self, file: Path) -> Iterable[Dict]:
+        with file.open("r", encoding="utf-8") as handle:
             for raw_idx, line in enumerate(handle):
                 if not line.strip():
                     continue
                 try:
                     item = json.loads(line)
                 except json.JSONDecodeError as exc:
-                    raise ValueError(f"Invalid JSON on line {raw_idx + 1} in {self.data_in}") from exc
+                    raise ValueError(f"Invalid JSON on line {raw_idx + 1} in {file}") from exc
                 yield item
-
-    def __len__(self) -> int:
-        return len(self._records)
 
     def iter_records(self) -> Iterable[DatasetRecord]:
         base_iter = ((idx, row) for idx, row in enumerate(self._records))

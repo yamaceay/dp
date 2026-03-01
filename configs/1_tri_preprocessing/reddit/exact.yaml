@@ -1,3 +1,3 @@
 data: reddit
-data_in: data/reddit/reddit.jsonl
+data_in: data/reddit
 save_to_jsonl: data/reddit/tri_preprocessing/sum.jsonl

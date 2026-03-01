@@ -1,21 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-declare -Ar DATASET_ROWS=(
-  [db-bio]=2420
-  [db_bio]=2420
-  [tab]=1268
-  [reddit]=525
-)
-
 max_rows=""
-dataset=""
 declare -a files=()
 
 usage() {
   printf "Usage:\n"
   printf "  %s --max <rows> <file1> [file2 ...]\n" "$0"
-  printf "  %s --dataset <db-bio|tab|reddit> <file1> [file2 ...]\n" "$0"
   printf "  wc -l <files...> | %s --max <rows>\n" "$0"
   printf "  wc -l <files...> | %s --dataset <db-bio|tab|reddit>\n" "$0"
 }
@@ -26,11 +17,6 @@ while (($# > 0)); do
       shift
       [[ $# -gt 0 ]] || { usage; exit 1; }
       max_rows="$1"
-      ;;
-    --dataset)
-      shift
-      [[ $# -gt 0 ]] || { usage; exit 1; }
-      dataset="$1"
       ;;
     -h|--help)
       usage
@@ -43,12 +29,7 @@ while (($# > 0)); do
   shift
 done
 
-if [[ -n "$dataset" && -z "$max_rows" ]]; then
-  [[ -v "DATASET_ROWS[$dataset]" ]] || { printf "Unknown dataset: %s\n" "$dataset" >&2; exit 1; }
-  max_rows="${DATASET_ROWS[$dataset]}"
-fi
-
-[[ -n "$max_rows" ]] || { printf "Missing --max or --dataset\n" >&2; usage; exit 1; }
+[[ -n "$max_rows" ]] || { printf "Missing --max\n" >&2; usage; exit 1; }
 [[ "$max_rows" =~ ^[0-9]+$ ]] || { printf "--max must be a positive integer\n" >&2; exit 1; }
 (( max_rows > 0 )) || { printf "--max must be > 0\n" >&2; exit 1; }
 

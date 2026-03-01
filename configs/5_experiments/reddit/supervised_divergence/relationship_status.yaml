@@ -1,5 +1,5 @@
 dataset: reddit
-data_in: data/reddit/reddit.jsonl
+data_in: data/reddit
 debug: true
 annotations_in:
   - outputs/reddit

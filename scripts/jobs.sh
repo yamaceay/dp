@@ -71,7 +71,7 @@ function all_methods() {
 
 function all_datasets() {
   printf 'tab,data/TAB/splitted/test.json\n'
-  printf 'reddit,data/reddit/reddit.jsonl\n'
+  printf 'reddit,data/reddit\n'
   # printf 'db_bio,data/db_bio/train/data-00000-of-00001.arrow\n'
 }
 

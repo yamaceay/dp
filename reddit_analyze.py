@@ -68,7 +68,7 @@ if __name__ == "__main__":
     all_predictions = get_all_predictions(text)
 
     getter = get_getter("reddit", "feature_label")
-    records = list(get_adapter("reddit", data_in="data/reddit/reddit.jsonl").iter_records())
+    records = list(get_adapter("reddit", data_in="data/reddit").iter_records())
 
     all_persona_votes = get_all_persona_votes(records, getter, all_predictions, args.only_feature)
 

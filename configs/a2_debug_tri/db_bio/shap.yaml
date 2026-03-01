@@ -1,0 +1,9 @@
+data: db_bio
+data_in: data/db_bio
+risk_in: data/db_bio/tri_risk/shap.jsonl
+result_in: ../../../netscratch/yay/_ext_outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio.jsonl
+offset_mode: original
+start: 0
+max_records: 3
+full_record: true
+abs: true

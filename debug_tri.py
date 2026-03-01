@@ -7,8 +7,117 @@ import argparse
 from dp.loaders import get_adapter
 from dp.loaders.results import build_dataset_from_results, load_result_records
 from dp.tri.base import TRIDetector
+from dp.utils.splitter import TextSplitter
 from dp.utils.tasking import apply_task_template, resolve_task_id
 from runtime.config_loader import _read_yaml
+
+from dp.utils.token_edits import map_original_offset_to_result, map_result_offset_to_original
+
+
+def _normalize_offsets(offsets):
+    normalized = []
+    for span in offsets:
+        if not isinstance(span, (list, tuple)) or len(span) < 2:
+            raise ValueError(f"Invalid offset span: {span}")
+        start = int(span[0])
+        end = int(span[1])
+        if start < 0 or end < start:
+            raise ValueError(f"Invalid offset span: ({start}, {end})")
+        normalized.append((start, end))
+    return normalized
+
+
+def _token_span_set(text: str, splitter: TextSplitter):
+    return {(s, e) for s, e, _ in splitter.tokenize_with_spans(text)}
+
+
+def _all_in_set(offsets, span_set):
+    return all((s, e) in span_set for s, e in offsets)
+
+
+def _map_result_to_original_all(offsets, edits):
+    mapped = []
+    for start, end in offsets:
+        mapped_start, mapped_end = map_result_offset_to_original(start, end, edits)
+        mapped.append((int(mapped_start), int(mapped_end)))
+    return mapped
+
+
+def _map_original_to_result_all(offsets, edits):
+    mapped = []
+    for start, end in offsets:
+        mapped_span = map_original_offset_to_result(start, end, edits)
+        if mapped_span is None:
+            raise ValueError(f"Offset ({start}, {end}) overlaps an edited/deleted region")
+        mapped_start, mapped_end = mapped_span
+        mapped.append((int(mapped_start), int(mapped_end)))
+    return mapped
+
+
+def _align_offsets(
+    uid: str,
+    offsets,
+    target_mode: str,
+    original_text: str,
+    result_text: str,
+    token_edits,
+    splitter: TextSplitter,
+):
+    normalized_offsets = _normalize_offsets(offsets)
+    original_spans = _token_span_set(original_text, splitter)
+    result_spans = _token_span_set(result_text, splitter)
+
+    fits_original = _all_in_set(normalized_offsets, original_spans)
+    fits_result = _all_in_set(normalized_offsets, result_spans)
+
+    source_mode = None
+    if fits_original and not fits_result:
+        source_mode = "original"
+    elif fits_result and not fits_original:
+        source_mode = "result"
+    elif fits_original and fits_result:
+        source_mode = target_mode
+
+    if source_mode is None:
+        if not token_edits:
+            raise ValueError(
+                f"UID={uid}: offsets do not match token spans in either original or result text and no token_edits are available"
+            )
+
+        mapped_to_original = _map_result_to_original_all(normalized_offsets, token_edits)
+        mapped_to_result = _map_original_to_result_all(normalized_offsets, token_edits)
+
+        mapped_result_is_original = _all_in_set(mapped_to_original, original_spans)
+        mapped_original_is_result = _all_in_set(mapped_to_result, result_spans)
+
+        if mapped_result_is_original and not mapped_original_is_result:
+            source_mode = "result"
+        elif mapped_original_is_result and not mapped_result_is_original:
+            source_mode = "original"
+        else:
+            raise ValueError(
+                f"UID={uid}: unable to infer offset coordinate space unambiguously"
+            )
+
+    if source_mode == target_mode:
+        aligned_offsets = normalized_offsets
+    elif source_mode == "result" and target_mode == "original":
+        if not token_edits:
+            raise ValueError(f"UID={uid}: cannot map result offsets to original without token_edits")
+        aligned_offsets = _map_result_to_original_all(normalized_offsets, token_edits)
+    elif source_mode == "original" and target_mode == "result":
+        if not token_edits:
+            raise ValueError(f"UID={uid}: cannot map original offsets to result without token_edits")
+        aligned_offsets = _map_original_to_result_all(normalized_offsets, token_edits)
+    else:
+        raise ValueError(f"UID={uid}: unsupported mode conversion {source_mode} -> {target_mode}")
+
+    target_spans = original_spans if target_mode == "original" else result_spans
+    if not _all_in_set(aligned_offsets, target_spans):
+        raise ValueError(f"UID={uid}: aligned offsets do not match token spans in target text ({target_mode})")
+
+    return aligned_offsets
+
 
 def normalize_config(config: Dict, args: argparse.Namespace) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -54,24 +163,30 @@ if __name__ == "__main__":
     if not args.data or not args.data_in:
         raise ValueError("data and data_in are required")
 
+    splitter = TextSplitter()
+
     original_records = list(get_adapter(args.data, 
                                         data_in=args.data_in,
-                                        split=args.split,
-                                        max_records=args.max_records,
-                                        start=args.start,
-                                        end=args.end,
-                                        step=args.step).iter_records())
+                                        split=args.split).iter_records())
     original_text_by_uid = {r.uid: r.text for r in original_records}
-    args.end = args.end or len(original_records)
+    args.end = args.end if args.end is not None else len(original_records)
 
     if args.result_in is not None:
         records, indices = build_dataset_from_results(args.result_in, original_records)
         result_records = load_result_records(args.result_in)
         result_text_by_uid = {original_records[rr.idx].uid: rr.text for rr in result_records if rr.idx is not None}
+        token_edits_by_uid = {
+            original_records[rr.idx].uid: [te.to_dict() for te in rr.annotations.token_edits]
+            for rr in result_records
+            if rr.idx is not None
+        }
     else:
         records = original_records
         result_records = original_records
         result_text_by_uid = {r.uid: r.text for r in result_records}
+        token_edits_by_uid = {}
+
+    args.end = min(args.end, len(records))
 
     if args.risk_in is not None:
         risk_by_uid = {}
@@ -87,23 +202,33 @@ if __name__ == "__main__":
             entry = risk_by_uid.get(record.uid)
             if entry is None:
                 raise ValueError(f"No risk entry found for UID={record.uid}")
+            original_text = original_text_by_uid.get(record.uid)
+            if original_text is None:
+                raise ValueError(f"No original text found for UID={record.uid}")
+            result_text = result_text_by_uid.get(record.uid)
+            if result_text is None:
+                raise ValueError(f"No result text found for UID={record.uid}")
+            token_edits = token_edits_by_uid.get(record.uid, [])
+
+            offsets_record = _align_offsets(
+                uid=str(record.uid),
+                offsets=entry['offsets'],
+                target_mode=str(args.offset_mode),
+                original_text=original_text,
+                result_text=result_text,
+                token_edits=token_edits,
+                splitter=splitter,
+            )
+
             if args.offset_mode == 'result':
-                text_for_lookup = result_text_by_uid.get(record.uid)
-                if text_for_lookup is None:
-                    raise ValueError(f"No result text found for UID={record.uid}")
+                text_for_lookup = result_text
             else:
-                text_for_lookup = original_text_by_uid.get(record.uid)
-                if text_for_lookup is None:
-                    raise ValueError(f"No original text found for UID={record.uid}")
+                text_for_lookup = original_text
             scores_record = entry['scores']
-            offsets_record = entry['offsets']
+
             tokens_record = []
-            for s, e in entry['offsets']:
-                if s < 0 or e > len(text_for_lookup):
-                    print(f"WARNING: Offset ({s}, {e}) out of bounds for text length {len(text_for_lookup)} (uid={record.uid})", file=sys.stderr)
-                    tokens_record.append("<OOB>")
-                else:
-                    tokens_record.append(text_for_lookup[s:e])
+            for s, e in offsets_record:
+                tokens_record.append(text_for_lookup[s:e])
             
             if args.abs:
                 scores_idx = np.argsort(np.abs(scores_record))[::-1]
@@ -180,7 +305,7 @@ if __name__ == "__main__":
         if not args.save_to_jsonl:
             if args.pipeline_in:
                 print(f"Record UID: {records[j].uid} | Evaluated Rank: {ranks[j]}")
-            if args.full_record and args.risk_in and args.result_in:
+            if args.full_record and args.risk_in:
                 for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
                     print(f"Token: '{token}' | Offset: {offset} | Score: {score}")
             if args.n_first_predictions > 0 and first_preds is not None:
@@ -188,7 +313,7 @@ if __name__ == "__main__":
         else:
             if args.pipeline_in:
                 f.write(json.dumps({"uid": records[j].uid, "rank": ranks[j]}) + '\n')
-            if args.risk_in and args.result_in:
+            if args.risk_in:
                 for token, offset, score in zip(tokens[j], offsets[j], scores[j]):
                     f.write(json.dumps({"uid": records[j].uid, "token": token, "offset": offset, "score": score}) + '\n')
             if args.n_first_predictions > 0 and first_preds is not None:

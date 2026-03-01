@@ -429,7 +429,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--feature", type=str, required=True)
     parser.add_argument("--train_in", type=str, default="data/reddit/synthetic_dataset.jsonl")
-    parser.add_argument("--eval_in", type=str, default="data/reddit/reddit.jsonl")
+    parser.add_argument("--eval_in", type=str, default="data/reddit")
     parser.add_argument("--model_name", type=str, default="distilbert-base-uncased")
     parser.add_argument("--checkpoint_dir", type=str, default="tmp_hf_checkpoint")
     parser.add_argument("--device", type=str, default=None)

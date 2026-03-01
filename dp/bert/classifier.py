@@ -344,6 +344,8 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             raise RuntimeError("Label mapping is not initialized")
         texts = list(x)
         logits = self._predict_logits_with_split_aggregation(texts)
+        if isinstance(logits, np.ndarray):
+            logits = torch.from_numpy(logits)
         preds = torch.argmax(logits, dim=1).cpu().numpy()
         all_preds = [self._id_to_label[int(p)] for p in preds]
         return np.array(all_preds)
@@ -355,6 +357,8 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             raise RuntimeError("Label mapping is not initialized")
         texts = list(x)
         logits = self._predict_logits_with_split_aggregation(texts)
+        if isinstance(logits, np.ndarray):
+            logits = torch.from_numpy(logits)
         probs = torch.nn.functional.softmax(logits, dim=1).cpu().numpy()
         all_scores: List[Dict[str, float]] = []
         for row in probs:
@@ -364,37 +368,74 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             all_scores.append(row_map)
         return all_scores
 
-    def _predict_logits_with_split_aggregation(self, texts: Sequence[str]) -> torch.Tensor:
-        if self._model is None or self._tokenizer is None:
-            raise RuntimeError("Model not fitted")
-        model = self._model
-        tokenizer = self._tokenizer
+    def _predict_logits_with_split_aggregation(self, texts: list[str]) -> np.ndarray:
+        trainer = getattr(self, "_trainer", None)
+        trainer_tokenizer = getattr(trainer, "tokenizer", None) if trainer is not None else None
+        tokenizer = trainer_tokenizer or self._tokenizer
+        if tokenizer is None:
+            raise RuntimeError("Tokenizer is not initialized")
+        trainer_model = getattr(trainer, "model", None) if trainer is not None else None
+        model = trainer_model or self._model
+        if model is None:
+            raise RuntimeError("Model is not initialized")
+        device = next(model.parameters()).device
         model.eval()
 
-        max_length = tokenizer.model_max_length
-        if not isinstance(max_length, int) or max_length <= 0 or max_length > 4096:
-            max_length = 512
-        stride = max(1, max_length // 2)
+        split_tokens_value = getattr(self, "split_tokens", None)
+        if split_tokens_value is None:
+            model_max_length = getattr(tokenizer, "model_max_length", 512)
+            if isinstance(model_max_length, int) and 0 < model_max_length < 100000:
+                window_tokens: int = model_max_length
+            else:
+                window_tokens = 512
+        else:
+            window_tokens = int(split_tokens_value)
 
-        aggregated_logits: List[torch.Tensor] = []
-        with torch.no_grad():
-            for text in texts:
-                enc = tokenizer(
-                    text,
-                    truncation=True,
-                    max_length=max_length,
-                    stride=stride,
-                    return_overflowing_tokens=True,
-                    return_tensors="pt",
-                )
-                model_inputs = {k: v for k, v in enc.items() if k in {"input_ids", "attention_mask"}}
-                model_inputs = {k: v.to(self._model_device(model)) for k, v in model_inputs.items()}
-                out = model(**model_inputs)
-                logits = out["logits"]
-                aggregated = logits.sum(dim=0)
-                aggregated_logits.append(aggregated)
+        split_overlap_value = getattr(self, "split_overlap_tokens", getattr(self, "split_overlap", 0))
+        overlap_tokens: int = int(split_overlap_value)
 
-        return torch.stack(aggregated_logits, dim=0)
+        trainer_args = getattr(trainer, "args", None) if trainer is not None else None
+        eval_batch_size_value = getattr(
+            self,
+            "eval_batch_size",
+            getattr(trainer_args, "per_device_eval_batch_size", self.batch_size),
+        )
+        eval_batch_size: int = int(eval_batch_size_value)
+
+        enc = tokenizer(
+            texts,
+            truncation=True,
+            max_length=window_tokens,
+            stride=overlap_tokens,
+            return_overflowing_tokens=True,
+            padding="max_length",
+            return_tensors="pt",
+        )
+
+        sample_map = enc.pop("overflow_to_sample_mapping").to(torch.long)
+        chunk_count = int(sample_map.shape[0])
+
+        logits_parts: list[torch.Tensor] = []
+        map_parts: list[torch.Tensor] = []
+
+        for start in range(0, chunk_count, eval_batch_size):
+            end = min(start + eval_batch_size, chunk_count)
+            batch = {k: v[start:end].to(device) for k, v in enc.items()}
+            with torch.no_grad():
+                out = model(**batch)
+            if isinstance(out, dict):
+                chunk_logits = out["logits"]
+            else:
+                chunk_logits = out.logits
+            logits_parts.append(chunk_logits.detach().cpu())
+            map_parts.append(sample_map[start:end].cpu())
+
+        chunk_logits = torch.cat(logits_parts, dim=0)
+        chunk_to_doc = torch.cat(map_parts, dim=0)
+
+        doc_logits = torch.zeros((len(texts), chunk_logits.shape[1]), dtype=chunk_logits.dtype)
+        doc_logits.index_add_(0, chunk_to_doc, chunk_logits)
+        return doc_logits.numpy()
 
     def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
         from sklearn.metrics import precision_recall_fscore_support

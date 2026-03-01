@@ -33,6 +33,7 @@ class DPMlmAnonymizer(Anonymizer):
         delete_probability: float = 0.0,
         risk_temperature: Optional[float] = None,
         max_retry_rounds: int = 1,
+        verbose: bool = False,
         **kwargs
     ):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
@@ -47,6 +48,7 @@ class DPMlmAnonymizer(Anonymizer):
         self.delete_probability = delete_probability
         self.risk_temperature = risk_temperature
         self.max_retry_rounds = max_retry_rounds
+        self.verbose = bool(verbose)
 
         self._unit: Optional[AnonymizerUnit] = None
         self._explainer = None
@@ -487,6 +489,29 @@ class DPMlmAnonymizer(Anonymizer):
 
         raise NotImplementedError("DPMlmAnonymizer requires precomputed risk scores for each record.")
 
+    def _print_verbose_risk_tokens(
+        self,
+        text: str,
+        offsets: Sequence[Tuple[int, int]],
+        risk_scores: np.ndarray,
+        record_uid: Optional[str],
+        record_name: Optional[str],
+    ) -> None:
+        if not self.verbose:
+            return
+        if risk_scores.size == 0 or len(risk_scores) != len(offsets):
+            return
+        record_ref = record_uid or record_name or "<unknown>"
+        ranked = sorted(
+            enumerate(zip(offsets, risk_scores)),
+            key=lambda item: float(item[1][1]),
+            reverse=True,
+        )
+        print(f"[dpmlm][verbose] record={record_ref} risky tokens:")
+        for token_idx, ((start, end), score) in ranked:
+            token = text[int(start):int(end)]
+            print(f"Token nr. {token_idx}: {token} ({float(score):.3f})")
+
     def _is_token_masked(
         self,
         token_start: int,
@@ -566,6 +591,13 @@ class DPMlmAnonymizer(Anonymizer):
                 risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name, record_uid=record_uid)
                 if risk_scores.size and len(risk_scores) == len(offsets):
                     self._unit.set_risk_scores(risk_scores)
+                self._print_verbose_risk_tokens(
+                    text=text,
+                    offsets=offsets,
+                    risk_scores=risk_scores,
+                    record_uid=record_uid,
+                    record_name=record_name,
+                )
 
                 token_epsilons: Optional[np.ndarray] = None
                 if risk_scores.size and len(risk_scores) == len(offsets):

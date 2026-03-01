@@ -77,11 +77,11 @@ Constraints:
 
 if __name__ == "__main__":
     getter = get_getter("reddit", "feature_label")
-    adapter = get_adapter("reddit", data_in="data/reddit/reddit.jsonl")
+    adapter = get_adapter("reddit", data_in="data/reddit")
     records = list(adapter.iter_records())
 
     possible_values = all_possible_values(records, getter)
-    with open("data/reddit/reddit.jsonl", "r", encoding="utf-8") as f:
+    with open("data/reddit", "r", encoding="utf-8") as f:
         data = [json.loads(line) for line in f]
 
     with open(f"logs/reddit_utility.jsonl", "w", encoding="utf-8") as f:
