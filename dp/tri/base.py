@@ -10,7 +10,6 @@ import numpy as np
 from dp.bert.classifier import BertClassifierHead
 from dp.loaders.base import DatasetRecord
 from dp.tri.loaders.base import AttackerDatasetRecord
-from dp.utils.chunking import ProbabilityAggregator, TokenAwareChunker, process_with_chunking
 from dp.utils.device import resolve_device
 from dp.utils.stopwords import strip_stopwords
 
@@ -22,8 +21,6 @@ class TRIDetector:
         model_name: str = "distilbert-base-uncased",
         max_length: int = 512,
         device: Optional[Union[str, int]] = None,
-        use_chunking: bool = True,
-        p_agg: str = "avg",
     ):
         if max_length <= 0:
             raise ValueError(f"max_length must be positive, got {max_length}")
@@ -31,13 +28,10 @@ class TRIDetector:
         self.model_name = model_name
         self.max_length = int(max_length)
         self.device = torch.device(resolve_device(device))
-        self.use_chunking = bool(use_chunking)
-        self.p_agg = p_agg
         self.label_to_name: Dict[int, str] = {}
         self.name_to_label: Dict[str, int] = {}
         self.num_labels = 0
         self.classifier: Optional[BertClassifierHead] = None
-        self.chunker: Optional[TokenAwareChunker] = None
         self.train_records: Optional[List[DatasetRecord]] = None
         self.eval_records: Optional[List[DatasetRecord]] = None
         self.test_records: Optional[List[DatasetRecord]] = None
@@ -140,7 +134,6 @@ class TRIDetector:
         stop_evaluator = None
         if debug_tri and self.test_records:
             def stop_evaluator_fn() -> Dict[str, float]:
-                self._sync_chunker_from_classifier()
                 metrics = self.evaluate_ranking(self.test_records)
                 return {
                     "mrr": float(metrics["mrr"]),
@@ -163,7 +156,6 @@ class TRIDetector:
         self.name_to_label = dict(self.classifier._label_to_id)
         self.label_to_name = {v: k for k, v in self.name_to_label.items()}
         self.num_labels = len(self.name_to_label)
-        self._sync_chunker_from_classifier()
         if debug_tri and self.test_records:
             final_test_metrics = self.evaluate_ranking(self.test_records)
             print(
@@ -205,24 +197,12 @@ class TRIDetector:
             self.name_to_label = json.load(f)
         self.label_to_name = {v: k for k, v in self.name_to_label.items()}
         self.num_labels = len(self.name_to_label)
-        self._sync_chunker_from_classifier()
 
     def predict(self, records: List[DatasetRecord]) -> Dict[str, Dict[str, float]]:
         if not records:
             return {}
         if self.classifier is None:
             raise ValueError("Model not initialized. Train or load a model first.")
-        if self.use_chunking and self.chunker is not None:
-            aggregator = ProbabilityAggregator(self.p_agg)
-
-            def classify(text: str) -> Dict[str, float]:
-                return self.classifier.predict_proba([text])[0]
-
-            predictions: Dict[str, Dict[str, float]] = {}
-            for idx, record in enumerate(records):
-                key = record.uid or str(idx)
-                predictions[key] = process_with_chunking(record.text, self.chunker, classify, aggregator)
-            return predictions
         probabilities = self.classifier.predict_proba([record.text for record in records])
         return {
             (record.uid or str(idx)): scores
@@ -238,13 +218,6 @@ class TRIDetector:
         if self.classifier is None:
             raise ValueError("Model not initialized. Train or load a model first.")
         batch = [str(t) for t in texts]
-        if self.use_chunking and self.chunker is not None:
-            aggregator = ProbabilityAggregator(self.p_agg)
-
-            def classify(text: str) -> Dict[str, float]:
-                return self.classifier.predict_proba([text])[0]
-
-            return [process_with_chunking(text, self.chunker, classify, aggregator) for text in batch]
         return self.classifier.predict_proba(batch)
 
     def predict_proba_matrix(self, texts: Sequence[str]) -> np.ndarray:
@@ -355,14 +328,3 @@ class TRIDetector:
             raise ValueError("No evaluation records built from attacker records")
         if not self.test_records:
             self.test_records = None
-
-    def _sync_chunker_from_classifier(self) -> None:
-        if not self.use_chunking or self.classifier is None:
-            self.chunker = None
-            return
-        tokenizer = self.classifier._tokenizer
-        if tokenizer is None:
-            self.chunker = None
-            return
-        max_tokens = self.max_length - 2 if self.max_length > 2 else 1
-        self.chunker = TokenAwareChunker(tokenizer, max_tokens)

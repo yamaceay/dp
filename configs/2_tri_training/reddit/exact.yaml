@@ -12,5 +12,4 @@ training:
   use_pretraining: true
   pretraining_epochs: 1
   per_step: null
-  p_agg: max
   early_stop_patience: 3

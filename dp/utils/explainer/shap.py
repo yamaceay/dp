@@ -71,14 +71,14 @@ class ShapType(Enum):
     PERMUTATION = "shap_permutation"
 
 class ShapExplainer(TokenExplainer):
-    def __init__(self, model_name: str = None, device: Optional[Union[str, int]] = None, use_chunking: bool = False, explainer_type: Optional[ShapType] = None, p_agg: str = "avg", **kwargs):
+    def __init__(self, model_name: str = None, device: Optional[Union[str, int]] = None, explainer_type: Optional[ShapType] = None, **kwargs):
         super().__init__(**kwargs)
         if model_name is None:
             raise ValueError("ShapExplainer requires model_name")
         self.model_name = model_name
         self.device = resolve_device(device)
         self.pipeline = None
-        self.tri_detector = TRIDetector(model_name=model_name, device=self.device, use_chunking=use_chunking, p_agg=p_agg)
+        self.tri_detector = TRIDetector(model_name=model_name, device=self.device)
         self._tri_mapping_attempted = False
         self.id_to_label: Dict[int, str] = {}
         self.label_to_id: Dict[str, int] = {}

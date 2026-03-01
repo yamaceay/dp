@@ -340,18 +340,12 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
     def predict(self, x: Any) -> Sequence[Any]:
         if self._model is None or self._tokenizer is None:
             raise RuntimeError("Model not fitted")
+        if self._id_to_label is None:
+            raise RuntimeError("Label mapping is not initialized")
         texts = list(x)
-        outs = self._predict_in_batches(
-            model=self._model,
-            texts=texts,
-            batch_size=self.batch_size,
-            mask_stopwords=self.mask_stopwords,
-        )
-        all_preds = []
-        for out in outs:
-            logits = out["logits"]
-            preds = torch.argmax(logits, dim=1).cpu().numpy()
-            all_preds.extend([self._id_to_label[int(p)] for p in preds])
+        logits = self._predict_logits_with_split_aggregation(texts)
+        preds = torch.argmax(logits, dim=1).cpu().numpy()
+        all_preds = [self._id_to_label[int(p)] for p in preds]
         return np.array(all_preds)
 
     def predict_proba(self, x: Any) -> List[Dict[str, float]]:
@@ -360,21 +354,47 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         if self._id_to_label is None:
             raise RuntimeError("Label mapping is not initialized")
         texts = list(x)
-        outs = self._predict_in_batches(
-            model=self._model,
-            texts=texts,
-            batch_size=self.batch_size,
-            mask_stopwords=self.mask_stopwords,
-        )
+        logits = self._predict_logits_with_split_aggregation(texts)
+        probs = torch.nn.functional.softmax(logits, dim=1).cpu().numpy()
         all_scores: List[Dict[str, float]] = []
-        for out in outs:
-            probs = torch.nn.functional.softmax(out["logits"], dim=1).cpu().numpy()
-            for row in probs:
-                row_map: Dict[str, float] = {}
-                for idx, value in enumerate(row.tolist()):
-                    row_map[self._id_to_label[idx]] = float(value)
-                all_scores.append(row_map)
+        for row in probs:
+            row_map: Dict[str, float] = {}
+            for idx, value in enumerate(row.tolist()):
+                row_map[self._id_to_label[idx]] = float(value)
+            all_scores.append(row_map)
         return all_scores
+
+    def _predict_logits_with_split_aggregation(self, texts: Sequence[str]) -> torch.Tensor:
+        if self._model is None or self._tokenizer is None:
+            raise RuntimeError("Model not fitted")
+        model = self._model
+        tokenizer = self._tokenizer
+        model.eval()
+
+        max_length = tokenizer.model_max_length
+        if not isinstance(max_length, int) or max_length <= 0 or max_length > 4096:
+            max_length = 512
+        stride = max(1, max_length // 2)
+
+        aggregated_logits: List[torch.Tensor] = []
+        with torch.no_grad():
+            for text in texts:
+                enc = tokenizer(
+                    text,
+                    truncation=True,
+                    max_length=max_length,
+                    stride=stride,
+                    return_overflowing_tokens=True,
+                    return_tensors="pt",
+                )
+                model_inputs = {k: v for k, v in enc.items() if k in {"input_ids", "attention_mask"}}
+                model_inputs = {k: v.to(self._model_device(model)) for k, v in model_inputs.items()}
+                out = model(**model_inputs)
+                logits = out["logits"]
+                aggregated = logits.sum(dim=0)
+                aggregated_logits.append(aggregated)
+
+        return torch.stack(aggregated_logits, dim=0)
 
     def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
         from sklearn.metrics import precision_recall_fscore_support

@@ -131,29 +131,6 @@ class SpanMergeAggregator(ChunkAggregator[List[dict]]):
         return merged
 
 
-class ProbabilityAggregator(ChunkAggregator[dict]):
-    def __init__(self, p_agg: str):
-        if p_agg not in {"avg", "max"}:
-            raise ValueError(f"Invalid p_agg value: {p_agg}. Must be 'avg' or 'max'.")
-        self.p_agg = p_agg
-
-    def aggregate(self, results: List[dict], chunks: List[Chunk], ) -> dict:
-        if not results:
-            return {}
-        
-        label_probs = {}
-        for result in results:
-            for label, prob in result.items():
-                if label not in label_probs:
-                    label_probs[label] = []
-                label_probs[label].append(prob)
-        
-        if self.p_agg == "avg":
-            return {label: sum(probs) / len(probs) for label, probs in label_probs.items()}
-        else:
-            return {label: max(probs) for label, probs in label_probs.items()}
-
-
 def process_with_chunking(
     text: str,
     chunker: Any,

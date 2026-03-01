@@ -12,7 +12,6 @@ training:
   use_pretraining: true
   pretraining_epochs: 1
   per_step: null
-  p_agg: avg
   early_stop_threshold: 0.95
 
   # finetuning_epochs: 30
@@ -24,5 +23,4 @@ training:
   # focal_gamma: 5.0
   # focal_ignore_pt: 0.95
   # exclude_stopwords: true
-  # p_agg: avg
   # early_stop_threshold: 0.95
