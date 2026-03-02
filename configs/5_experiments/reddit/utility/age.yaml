@@ -10,24 +10,22 @@ selection_criteria:
   feature: age
 group_by: hardness
 random_state: 42
-include_confusion_matrix: true
+source_splits:
+  - split: indices/reddit/train.txt
+    train: 1.0
+  - split: indices/reddit/test.txt
+    val: 1.0
 head:
-  type: linear_ordinal_regressor
+  type: bert_ordinal
   params:
+    epochs: 2
+    batch_size: 4
+    model_name: distilbert-base-uncased
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/exact/reddit_8_16_0.0001/finetuning/{checkpoint}
     primary_metric: macro_mae
+    encoder_lr: 1e-6
+    head_lr: 1e-3
+protocol: utility
 output:
   format: jsonl
   file: logs/utility/reddit/age.jsonl
-protocol: internal_utility
-internal_utility:
-  n_folds: 5
-  max_rounds: 5
-vectorizer:
-  type: tfidf
-  params:
-    max_features: 20000
-    ngram_range:
-    - 1
-    - 3
-    min_df: 1
-    sublinear_tf: true

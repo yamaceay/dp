@@ -71,7 +71,7 @@ class BertRegressorHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
-        self.checkpoint_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        self.checkpoint_dir = checkpoint_dir
         self.save_checkpoints = bool(save_checkpoints)
         self.normalize_targets = normalize_targets
         self.use_pretraining = bool(use_pretraining)

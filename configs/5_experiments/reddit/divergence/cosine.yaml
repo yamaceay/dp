@@ -8,6 +8,5 @@ metric:
     type: sentence
     model_name: sentence-transformers/all-MiniLM-L6-v2
 output:
-output:
   format: jsonl
   file: logs/divergence/reddit/cosine.jsonl

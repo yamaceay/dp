@@ -7,30 +7,22 @@ annotations_in:
 target:
   key: label
   type: nominal
-random_state: 42
-head:
-  type: logistic_classifier
-  params:
-    max_iter: 1000
-    C: 2.0
-    class_weight: balanced
-    primary_metric: macro_f1
-output:
-  format: jsonl
-  file: logs/utility/db_bio/label_task.jsonl
-protocol: utility
 source_splits:
 - split: indices/db_bio/train.txt
   train: 1.0
 - split: indices/db_bio/val.txt
   val: 1.0
-vectorizer:
-  type: tfidf
+random_state: 42
+head:
+  type: bert_classifier
   params:
-    max_features: 20000
-    ngram_range:
-    - 1
-    - 3
-    min_df: 1
-    sublinear_tf: true
-task_id: '{task_id}'
+    epochs: 5
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/exact/exact/finetuning/{checkpoint}
+    primary_metric: macro_f1
+    encoder_lr: 1e-6
+    head_lr: 1e-4
+    early_stop_patience: 2
+output:
+  format: jsonl
+  file: logs/utility/db_bio/label.jsonl
+protocol: utility

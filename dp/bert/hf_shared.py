@@ -136,7 +136,7 @@ class BertHFPlumbing:
         early_stopping_callback: Optional[TrainerCallback] = None,
         extra_callbacks: Optional[Sequence[TrainerCallback]] = None,
     ) -> Tuple[Trainer, EarlyStoppingCallback]:
-        output_dir = checkpoint_dir or "tmp_hf_checkpoint"
+        output_dir = checkpoint_dir
         training_args = TrainingArguments(
             output_dir=output_dir,
             num_train_epochs=epochs,

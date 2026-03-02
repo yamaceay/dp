@@ -10,26 +10,21 @@ selection_criteria:
   feature: sex
 group_by: hardness
 source_splits:
-  - train: 0.0
-    val: 1.0
-  - path: data/reddit/synthetic_dataset.jsonl
+  - split: indices/reddit/train.txt
     train: 1.0
-    val: 0.0
+  - split: indices/reddit/test.txt
+    val: 1.0
 random_state: 42
-include_confusion_matrix: true
 head:
   type: bert_ordinal
   params:
-    epochs: 40
+    epochs: 2
     batch_size: 4
     model_name: distilbert-base-uncased
     init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/exact/reddit_8_16_0.0001/finetuning/{checkpoint}
-    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/sex
     primary_metric: macro_mae
     encoder_lr: 1e-6
     head_lr: 1e-3
-    early_stop_patience: 3
-output:
 output:
   format: jsonl
   file: logs/supervised_divergence/reddit/sex.jsonl

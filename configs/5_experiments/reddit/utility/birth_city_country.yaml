@@ -10,7 +10,6 @@ selection_criteria:
   feature: birth_city_country
 group_by: hardness
 random_state: 42
-include_confusion_matrix: true
 head:
   type: logistic_classifier
   params:
@@ -21,10 +20,7 @@ head:
 output:
   format: jsonl
   file: logs/utility/reddit/birth_city_country.jsonl
-protocol: internal_utility
-internal_utility:
-  n_folds: 5
-  max_rounds: 5
+protocol: utility
 vectorizer:
   type: tfidf
   params:

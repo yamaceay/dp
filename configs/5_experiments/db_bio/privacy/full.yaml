@@ -1,6 +1,5 @@
 dataset: db_bio
 data_in: data/db_bio
-split: indices/db_bio/test.txt
 annotations_in:
   - ../../../netscratch/yay/_ext_outputs/db_bio
 tri:
@@ -9,5 +8,5 @@ tri:
 mask_token: "[MASK]"
 output:
   format: jsonl
-  file: logs/privacy/db_bio/more.jsonl
+  file: logs/privacy/db_bio/full.jsonl
 progress: false

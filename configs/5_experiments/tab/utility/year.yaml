@@ -8,26 +8,20 @@ target:
   key: year_group
   type: ordinal
 random_state: 42
-head:
-  type: linear_ordinal_regressor
-  params:
-    primary_metric: macro_mae
-output:
-  format: jsonl
-  file: logs/utility/tab/year_task.jsonl
 protocol: utility
 source_splits:
 - split: indices/tab/train.txt
   train: 1.0
 - split: indices/tab/val.txt
   val: 1.0
-vectorizer:
-  type: tfidf
+head:
+  type: bert_ordinal
   params:
-    max_features: 20000
-    ngram_range:
-    - 1
-    - 3
-    min_df: 1
-    sublinear_tf: true
-task_id: '{task_id}'
+    epochs: 2
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/exact/exact/finetuning/{checkpoint}
+    primary_metric: macro_mae
+    encoder_lr: 1e-6
+    head_lr: 5e-4
+output:
+  format: jsonl
+  file: logs/utility/tab/year.jsonl

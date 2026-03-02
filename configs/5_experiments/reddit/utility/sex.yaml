@@ -10,7 +10,6 @@ selection_criteria:
   feature: sex
 group_by: hardness
 random_state: 42
-include_confusion_matrix: true
 head:
   type: linear_ordinal_regressor
   params:
@@ -18,10 +17,7 @@ head:
 output:
   format: jsonl
   file: logs/utility/reddit/sex.jsonl
-protocol: internal_utility
-internal_utility:
-  n_folds: 5
-  max_rounds: 5
+protocol: utility
 vectorizer:
   type: tfidf
   params:

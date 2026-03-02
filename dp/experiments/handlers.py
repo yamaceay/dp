@@ -4,7 +4,7 @@ import glob
 import hashlib
 import re
 from collections import Counter
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 import numpy as np
 from sklearn.metrics import confusion_matrix
@@ -35,7 +35,7 @@ from dp.experiments.privacy.io import (
 from dp.experiments.privacy.reporting import build_privacy_report, create_privacy_outputter
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
 from dp.experiments.utility.base import TextUtilityExperiment
-from dp.experiments.utility.internal_utility import InternalUtilityConfig, run_internal_utility
+from dp.experiments.utility.utility_runtime import UtilityConfig, run_utility_experiment
 from dp.experiments.utility.reporting import build_utility_report, create_utility_outputter
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
@@ -380,6 +380,79 @@ def map_record_key_to_group_label(records: List[DatasetRecord], dataset: str, gr
     return mapping
 
 
+def _record_key(record: DatasetRecord, index: int) -> str:
+    if record.uid:
+        return str(record.uid)
+    if record.name:
+        return str(record.name)
+    return f"record_{index + 1}"
+
+
+def _dedupe_records(records: Sequence[DatasetRecord]) -> List[DatasetRecord]:
+    seen: Set[str] = set()
+    out: List[DatasetRecord] = []
+    for idx, record in enumerate(records):
+        key = _record_key(record, idx)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(record)
+    return out
+
+
+def _resolve_split_keys(ctx: UtilityCtx, params: ConfigDict) -> Tuple[Dict[str, List[str]], List[DatasetRecord]]:
+    split_cfg = ctx.source_splits if isinstance(ctx.source_splits, list) else []
+    role_records: Dict[str, List[DatasetRecord]] = {"train": [], "val": [], "test": []}
+    loaded_union: List[DatasetRecord] = []
+
+    for entry in split_cfg:
+        if not isinstance(entry, dict):
+            continue
+        source_path = entry.get("path") or ctx.data_in
+        if isinstance(source_path, str):
+            source_path = apply_task_template(source_path, ctx.task_id)
+        source_split = entry.get("split")
+        if isinstance(source_split, str):
+            source_split = apply_task_template(source_split, ctx.task_id)
+        weights = {
+            "train": float(entry.get("train", 0.0) or 0.0),
+            "val": float(entry.get("val", 0.0) or 0.0),
+            "test": float(entry.get("test", 0.0) or 0.0),
+        }
+        active = [role for role, weight in weights.items() if weight > 0.0]
+        if not active:
+            continue
+        role = max(active, key=lambda name: weights[name])
+        source_records = load_records(ctx.dataset, source_path, params.get("max_records"), split=source_split)
+        source_records = select_records(source_records, ctx.selection_criteria)
+        if not source_records:
+            continue
+        role_records[role].extend(source_records)
+        loaded_union.extend(source_records)
+
+    if not role_records["test"] and ctx.split:
+        test_records = load_records(ctx.dataset, ctx.data_in, params.get("max_records"), split=ctx.split)
+        test_records = select_records(test_records, ctx.selection_criteria)
+        role_records["test"].extend(test_records)
+        loaded_union.extend(test_records)
+
+    if not role_records["test"] and role_records["val"]:
+        role_records["test"] = list(role_records["val"])
+
+    deduped_union = _dedupe_records(loaded_union)
+    if not deduped_union:
+        fallback = load_records(ctx.dataset, ctx.data_in, params.get("max_records"), split=ctx.split)
+        fallback = select_records(fallback, ctx.selection_criteria)
+        deduped_union = _dedupe_records(fallback)
+
+    role_keys: Dict[str, List[str]] = {"train": [], "val": [], "test": []}
+    for role in ("train", "val", "test"):
+        deduped = _dedupe_records(role_records[role])
+        keys = [_record_key(record, idx) for idx, record in enumerate(deduped)]
+        role_keys[role] = keys
+    return role_keys, deduped_union
+
+
 def handle_utility(args: Any, config: ConfigDict) -> None:
     params = merge_params(config, args)
     normalize_output_settings(params)
@@ -406,6 +479,8 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     sources = collect_jsonl_sources(*ctx.annotations)
     if not sources:
         raise RuntimeError("no anonymized output files discovered")
+    split_keys, split_records = _resolve_split_keys(ctx, params)
+    records = split_records or records
     evaluation_texts = align_evaluation_texts(records, sources)
     if ctx.debug:
         print("Evaluation sources:")
@@ -431,23 +506,27 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     protocol = str(params.get("protocol", "utility")).strip().lower() or "utility"
     resolved_model_name = str(getattr(model, "name", head_name or ctx.spec.default_head))
     resolved_primary_metric = str(getattr(model, "primary_metric", head_kwargs.get("primary_metric", "")))
-    if protocol == "internal_utility":
+    if protocol in {"utility", "supervised_divergence"}:
         model.cleanup()
         vectorizer.cleanup()
-        internal_cfg_raw = params.get("internal_utility", {}) or {}
-        if not isinstance(internal_cfg_raw, dict):
-            raise ValueError("internal_utility config must be a mapping")
-        internal_cfg = InternalUtilityConfig(
-            n_folds=int(internal_cfg_raw.get("n_folds", 50)),
-            eval_fold_offset=int(internal_cfg_raw.get("eval_fold_offset", 1)),
-            random_state=int(internal_cfg_raw.get("random_state", ctx.random_state)),
-            max_rounds=(
-                int(internal_cfg_raw["max_rounds"])
-                if internal_cfg_raw.get("max_rounds") is not None
-                else None
-            ),
+        utility_cfg_raw = params.get("utility", {}) or {}
+        if not isinstance(utility_cfg_raw, dict):
+            raise ValueError("utility config must be a mapping")
+        tune_cfg = utility_cfg_raw.get("tune", {}) or {}
+        if not isinstance(tune_cfg, dict):
+            raise ValueError("utility.tune must be a mapping")
+        tune_key_value = tune_cfg.get("key")
+        tune_values_raw = tune_cfg.get("values")
+        tune_values = ensure_sequence(tune_values_raw)
+        tune_key = str(tune_key_value).strip() if tune_key_value is not None else None
+        if tune_key == "":
+            tune_key = None
+        utility_cfg = UtilityConfig(
+            random_state=int(utility_cfg_raw.get("random_state", ctx.random_state)),
+            tune_param=tune_key,
+            tune_values=tune_values,
         )
-        result = run_internal_utility(
+        result = run_utility_experiment(
             spec=ctx.spec,
             records=records,
             evaluation_texts=evaluation_texts,
@@ -456,9 +535,11 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
             head_name=head_name or None,
             head_kwargs=head_kwargs,
             identifier=ctx.identifier,
-            config=internal_cfg,
+            config=utility_cfg,
             model_name=resolved_model_name,
             primary_metric=resolved_primary_metric,
+            split_keys=split_keys,
+            protocol=protocol,
         )
         report = build_utility_report(result, sources)
         sink = build_output_sink(ctx.output_file)
