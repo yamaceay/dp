@@ -29,6 +29,7 @@ class TextPrivacyExperiment(Experiment):
         self.original_ranks: Dict[str, int] = {}
         self.record_keys: List[str] = []
         self.record_info: Dict[str, Dict[str, Any]] = {}
+        self.target_candidate_names: set[str] = set()
 
     def setup(
         self,
@@ -58,6 +59,7 @@ class TextPrivacyExperiment(Experiment):
         )
         self.detector.load(self.tri_pipeline)
         self.record_keys = self._build_record_keys(self.original_dataset)
+        self.target_candidate_names = self._candidate_names(self.original_dataset)
         self.original_ranks = self._compute_ranks(
             self.original_dataset,
             keys=self.record_keys,
@@ -120,6 +122,7 @@ class TextPrivacyExperiment(Experiment):
         self.original_candidates = {}
         self.record_keys = []
         self.record_info = {}
+        self.target_candidate_names = set()
         super().cleanup()
 
     def _build_record_keys(self, records: List[DatasetRecord]) -> List[str]:
@@ -147,7 +150,7 @@ class TextPrivacyExperiment(Experiment):
     ) -> Dict[str, int]:
         if not self.detector:
             raise RuntimeError("detector is not initialized")
-        candidate_names = self._candidate_names(records)
+        candidate_names = self.target_candidate_names
         ranks: Dict[str, int] = {}
         iterator = zip(keys, records)
         if progress:
