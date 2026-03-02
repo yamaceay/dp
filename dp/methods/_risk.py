@@ -90,13 +90,6 @@ class RiskAnonymizer(Anonymizer):
             self._risk_offsets_by_uid[uid] = entry.ordered_offsets
             self._risk_scores_ordered_by_uid[uid] = entry.ordered_scores
 
-    def _starting_replacements_for_indices(
-        self,
-        uid: Optional[str],
-        offsets: List[Tuple[int, int]],
-    ) -> Tuple[Dict[int, str], Dict[int, str]]:
-        return self._starting_replacements_and_labels_for_indices(uid, offsets)
-
     def _make_apply_fn(
         self,
         spans: List[Tuple[int, int]],

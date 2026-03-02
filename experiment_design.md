@@ -18,8 +18,35 @@ We have different types of experiments:
 
 Reddit case
 
-- Original dataset
-- Extra dataset
-- Anonymized dataset
+- Dataset (train / test splits)
+- Anonymized dataset (train / test splits)
+- Extra dataset (synthetic dataset)
+
+Reddit supervised divergence:
+- Train a model on the original train split, then test it on the original / anonymized test splits.
+
+Reddit privacy:
+- Run privacy evaluation on the whole train / test split
+
+Reddit divergence:
+- Run divergence evaluation on the whole train / test split
+
+Reddit utility:
+- First, train a model on the original train split and test on the test split, and get a baseline score. Then, fine-tune the same model on the anonymized train split, and test it on the anonymized test split.
 
 TAB / DB-Bio case
+
+- Dataset (train / val / test splits)
+- Anonymized dataset (train / val / test splits)
+
+Tab supervised divergence:
+- Train a model on the original train split, select the best model on val split, then test it on the original / anonymized test splits.
+
+Tab privacy:
+- Run privacy evaluation on the whole train / val / test splits
+
+Tab divergence:
+- Run divergence evaluation on the whole train / val / test splits
+
+Tab utility:
+- First, train a model on the original train split, select the best model on val split, then test on the test split, and get a baseline score. Then, fine-tune the same model on the anonymized train split, select the best model on the anonymized val split, and test it on the anonymized test split.

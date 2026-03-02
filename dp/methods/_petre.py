@@ -144,20 +144,6 @@ class PetreAnonymizer(Anonymizer):
 
         return rank_evaluator
 
-    def _replace_token(self, text: str, replacement: str, offset: Tuple[int, int]) -> str:
-        start, end = offset
-        return text[:start] + replacement + text[end:]
-
-    def _weights_to_probs(self, weights: np.ndarray, temperature: float) -> np.ndarray:
-        if temperature is None:
-            temperature = 1.0
-        scores = np.asarray(weights, dtype=float)
-        if scores.size == 0:
-            return scores
-        positive_scores = np.exp(scores / temperature)
-        probs = positive_scores / positive_scores.sum()
-        return probs
-
     def _lookup_precomputed_scores(
         self,
         text: str,
