@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from hashlib import sha256
 
 import numpy as np
@@ -13,6 +13,8 @@ from dp.utils.selector.base import AnonymizerUnit, ApplyFn
 from dp.utils.selector.by_risk_selector import ByRiskUnit
 from dp.utils.explainer.base import TokenExplainer
 from dp.utils.stopwords import build_terms_to_ignore
+from dp.utils.precomputed_risk import align_precomputed_risk_scores
+from dp.loaders import DatasetRecord
 
 
 class RiskAnonymizer(Anonymizer):
@@ -33,6 +35,7 @@ class RiskAnonymizer(Anonymizer):
         self._starting_indices_cache: Dict[str, List[int]] = {}
         self._prior_edits_cache: Dict[str, List[Dict[str, object]]] = {}
         self._terms_to_ignore = build_terms_to_ignore(self._mask_text)
+        self.dataset_records: List[DatasetRecord] = []
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
@@ -53,7 +56,7 @@ class RiskAnonymizer(Anonymizer):
         prior_edits_list = kwargs.get("prior_edits_list")
         
         if risk_scores is not None:
-            self.set_risk_scores(risk_scores)
+            self.set_risk_scores(risk_scores, records=self.dataset_records or None)
         
         for idx, (name, text) in enumerate(zip(record_names, texts_or_indices)):
             precomputed = self._precomputed_scores_and_spans(name)
@@ -70,36 +73,22 @@ class RiskAnonymizer(Anonymizer):
                 if edits:
                     self._prior_edits_cache[text_hash] = edits
 
-    def set_risk_scores(self, risk_scores: Dict[str, Dict[str, object]]) -> None:
+    def add_dataset_records(self, dataset_records: Sequence[DatasetRecord]) -> None:
+        self.dataset_records = list(dataset_records)
+
+    def set_risk_scores(
+        self,
+        risk_scores: Dict[str, Dict[str, object]],
+        records: Optional[Sequence[DatasetRecord]] = None,
+    ) -> None:
         self._risk_scores_by_uid = {}
         self._risk_offsets_by_uid = {}
         self._risk_scores_ordered_by_uid = {}
-        
-        for uid, payload in risk_scores.items():
-            offsets = payload.get("offsets")
-            scores = payload.get("scores")
-            if offsets is None or scores is None:
-                continue
-            
-            span_map: Dict[Tuple[int, int], float] = {}
-            raw_spans: List[Tuple[int, int]] = []
-            raw_scores: List[float] = []
-            for span, value in zip(offsets, scores):
-                if len(span) < 2:
-                    continue
-                span_tuple = (int(span[0]), int(span[1]))
-                score_value = float(value)
-                span_map[span_tuple] = score_value
-                raw_spans.append(span_tuple)
-                raw_scores.append(score_value)
-            
-            if span_map:
-                order = sorted(range(len(raw_spans)), key=lambda i: (raw_spans[i][0], raw_spans[i][1]))
-                ordered_spans = [raw_spans[i] for i in order]
-                ordered_scores = [raw_scores[i] for i in order]
-                self._risk_scores_by_uid[uid] = span_map
-                self._risk_offsets_by_uid[uid] = ordered_spans
-                self._risk_scores_ordered_by_uid[uid] = np.asarray(ordered_scores, dtype=float)
+        resolved = align_precomputed_risk_scores(risk_scores, records=records)
+        for uid, entry in resolved.items():
+            self._risk_scores_by_uid[uid] = entry.span_scores
+            self._risk_offsets_by_uid[uid] = entry.ordered_offsets
+            self._risk_scores_ordered_by_uid[uid] = entry.ordered_scores
 
     def _starting_replacements_for_indices(
         self,

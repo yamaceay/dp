@@ -199,10 +199,7 @@ def validate_runtime_params(model_config: dict, runtime_bundle: object) -> None:
 
 
 def _data_source_for_model(model_name: str, has_result_in: bool) -> str:
-    requires_anonymized = {"petre", "risk"}
-    supports_anonymized = {"dpmlm"}
-    if model_name in requires_anonymized:
-        return "anonymized"
+    supports_anonymized = {"dpmlm", "petre", "risk"}
     if model_name in supports_anonymized and has_result_in:
         return "anonymized"
     return "original"
@@ -516,8 +513,9 @@ if __name__ == "__main__":
     
     model_cls = MODEL_REGISTRY[model_kwargs.pop("model")]
     model = model_cls(**model_config, **model_kwargs, **data_kwargs)
+    risk_has_result_in = args.model == "risk" and bool(data_kwargs.get("result_in"))
     
-    if capabilities.must_use_dataset or dpmlm_requires_dataset:
+    if capabilities.must_use_dataset or dpmlm_requires_dataset or risk_has_result_in:
         if not hasattr(model, "add_dataset_records"):
             raise ValueError(f"{args.model} requires dataset records for this configuration")
         model.add_dataset_records(records)

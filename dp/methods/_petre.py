@@ -9,10 +9,10 @@ from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.utils.token_ledger import TokenLedger
 from dp.utils.stopwords import build_terms_to_ignore
-from dp.utils.token_edits import map_offsets_to_result
 from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 from dp.utils.explainer.base import load_tri_label_mapping
 from dp.utils.selector.base import AnonymizerUnit, ApplyFn
+from dp.utils.precomputed_risk import align_precomputed_risk_scores
 
 
 class PetreAnonymizer(Anonymizer):   
@@ -60,28 +60,10 @@ class PetreAnonymizer(Anonymizer):
     ) -> None:
         self._risk_scores_by_uid = {}
         self._risk_offsets_by_uid = {}
-        if not risk_scores:
-            return
-        for uid, payload in risk_scores.items():
-            if not isinstance(payload, dict):
-                continue
-            offsets = payload.get("offsets")
-            scores = payload.get("scores")
-            if offsets is None or scores is None:
-                continue
-            span_map: Dict[Tuple[int, int], float] = {}
-            for span, value in zip(offsets, scores):
-                if not isinstance(span, (list, tuple)) or len(span) < 2:
-                    continue
-                try:
-                    key = (int(span[0]), int(span[1]))
-                    span_map[key] = float(value)
-                except (TypeError, ValueError):
-                    continue
-            if span_map:
-                ordered_spans = sorted(span_map.keys(), key=lambda s: (s[0], s[1]))
-                self._risk_scores_by_uid[uid] = span_map
-                self._risk_offsets_by_uid[uid] = ordered_spans
+        resolved = align_precomputed_risk_scores(risk_scores, records=records)
+        for uid, entry in resolved.items():
+            self._risk_scores_by_uid[uid] = entry.span_scores
+            self._risk_offsets_by_uid[uid] = entry.ordered_offsets
 
     def add_dataset_records(self, dataset_records: Sequence[DatasetRecord]) -> None:
         self.dataset_records = list(dataset_records)
