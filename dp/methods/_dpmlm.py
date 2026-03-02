@@ -12,8 +12,8 @@ from dp.methods.constants import Buckets, EpsilonParam, BucketDict, buckets_to_d
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.utils.token_ledger import TokenLedger
-from dp.utils.token_edits import map_offsets_to_result
 from dp.utils.risk import _scores_to_inverse_probs
+from dp.utils.precomputed_risk import align_precomputed_risk_scores
 from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 from dp.utils.explainer.base import TokenExplainer, load_tri_label_mapping
 from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
@@ -94,67 +94,14 @@ class DPMlmAnonymizer(Anonymizer):
     ) -> None:
         self._risk_scores_by_uid = {}
         self._risk_offsets_by_uid = {}
-        if not risk_scores:
-            return
-        record_state_by_key: Dict[str, Tuple[str, List[Dict[str, object]]]] = {}
-        if records:
-            for idx, record in enumerate(records):
-                prior_edits: List[Dict[str, object]] = []
-                if isinstance(record.metadata, dict):
-                    prior_edits = record.metadata.get("prior_token_edits", [])
-                    if not isinstance(prior_edits, list):
-                        prior_edits = []
-                if record.uid:
-                    record_state_by_key[str(record.uid)] = (record.text or "", prior_edits)
-                if record.name:
-                    record_state_by_key[str(record.name)] = (record.text or "", prior_edits)
-                if not record.uid and not record.name:
-                    record_state_by_key[f"record_{idx}"] = (record.text or "", prior_edits)
-        for uid, payload in risk_scores.items():
-            if not isinstance(payload, dict):
-                continue
-            offsets = payload.get("offsets")
-            scores = payload.get("scores")
-            if offsets is None or scores is None:
-                continue
-            span_map: Dict[Tuple[int, int], float] = {}
-            raw_spans: List[Tuple[int, int]] = []
-            for span, value in zip(offsets, scores):
-                if not isinstance(span, (list, tuple)) or len(span) < 2:
-                    continue
-                try:
-                    span_key = (int(span[0]), int(span[1]))
-                    score_val = float(value)
-                    span_map[span_key] = abs(score_val) if absolute_risk else score_val
-                    raw_spans.append(span_key)
-                except (TypeError, ValueError):
-                    continue
-            if span_map:
-                order = sorted(range(len(raw_spans)), key=lambda i: (raw_spans[i][0], raw_spans[i][1]))
-                ordered_spans = [raw_spans[i] for i in order]
-                state = record_state_by_key.get(str(uid))
-                if state:
-                    text, prior_edits = state
-                    splitter_spans = [(start, end) for start, end, _ in self.splitter.tokenize_with_spans(text)]
-                    if set(ordered_spans).issubset(set(splitter_spans)):
-                        self._risk_scores_by_uid[uid] = span_map
-                        self._risk_offsets_by_uid[uid] = ordered_spans
-                    else:
-                        if not prior_edits:
-                            raise ValueError(f"Risk offsets for uid {uid!r} do not align with record text")
-                        mapped_spans = map_offsets_to_result(ordered_spans, prior_edits)
-                        mapped_pairs = list(zip(mapped_spans, ordered_spans))
-                        mapped_scores: Dict[Tuple[int, int], float] = {}
-                        for mapped_span, original_span in mapped_pairs:
-                            if mapped_span in mapped_scores:
-                                raise ValueError(f"Duplicate mapped span {mapped_span} for uid {uid!r}")
-                            mapped_scores[mapped_span] = span_map[original_span]
-                        mapped_offsets = sorted(mapped_scores.keys(), key=lambda span: (span[0], span[1]))
-                        self._risk_scores_by_uid[uid] = mapped_scores
-                        self._risk_offsets_by_uid[uid] = mapped_offsets
-                else:
-                    self._risk_scores_by_uid[uid] = span_map
-                    self._risk_offsets_by_uid[uid] = ordered_spans
+        resolved = align_precomputed_risk_scores(
+            risk_scores,
+            records=records,
+            absolute_risk=absolute_risk,
+        )
+        for uid, entry in resolved.items():
+            self._risk_scores_by_uid[uid] = entry.span_scores
+            self._risk_offsets_by_uid[uid] = entry.ordered_offsets
 
     def add_dataset_records(self, dataset_records: Sequence[DatasetRecord]) -> None:
         self.dataset_records = list(dataset_records)
