@@ -19,6 +19,7 @@ head:
   params:
     epochs: 2
     init_checkpoint: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/exact/exact/finetuning/{checkpoint}
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/tab/year_anonymized
     primary_metric: macro_mae
     encoder_lr: 1e-6
     head_lr: 5e-4
