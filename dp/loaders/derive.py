@@ -143,6 +143,27 @@ ORDINAL_GROUPERS: Dict[str, Tuple[Callable[[str], str], List[str]]] = {
     "sex": (group_sex, ["female", "male"]),
 }
 
+TAB_YEAR_GROUP_ORDER: List[str] = [
+    "1975-2003",
+    "2004-2007",
+    "2008-2009",
+    "2010-2017",
+]
+
+TAB_COUNTRY_GROUP_ORDER: List[str] = [
+    "TUR",
+    "POL",
+    "GBR-IRL-ROU;GBR",
+    "AUT-DEU-CHE-LIE-AUT;SVN",
+    "SWE-NOR-DNK",
+    "FRA-ESP-BEL-SMR",
+]
+
+ORDINAL_LABEL_ORDERS: Dict[str, Dict[str, List[str]]] = {
+    "reddit": {feature: list(order) for feature, (_, order) in ORDINAL_GROUPERS.items()},
+    "tab": {"year_group": list(TAB_YEAR_GROUP_ORDER)},
+}
+
 NOMINAL_GROUPERS: Dict[str, Callable[[str], str]] = {
     "birth_city_country": group_region,
     "city_country": group_region,
@@ -207,9 +228,7 @@ def tab_articles(record: DatasetRecord) -> Optional[List[str]]:
     raise ValueError("Articles metadata is not a list.")
 
 def tab_year_groups(record: DatasetRecord, year_groups: List[str] | None = None) -> str:
-    groups = year_groups or [
-        "1975-2003", "2004-2007", "2008-2009", "2010-2017"
-    ]
+    groups = year_groups or TAB_YEAR_GROUP_ORDER
     year = record.metadata.get("year")
     bounds = [(int(g.split("-")[0]), int(g.split("-")[1])) for g in groups]
     mapping = {c: g for g, (start, end) in zip(groups, bounds) for c in range(start, end + 1)}
@@ -219,14 +238,7 @@ def tab_year_groups(record: DatasetRecord, year_groups: List[str] | None = None)
 
 
 def tab_country_groups(record: DatasetRecord, region_groups: List[str] | None = None) -> str:
-    groups = region_groups or [
-        "TUR",
-        "POL",
-        "GBR-IRL-ROU;GBR",
-        "AUT-DEU-CHE-LIE-AUT;SVN",
-        "SWE-NOR-DNK",
-        "FRA-ESP-BEL-SMR",
-    ]
+    groups = region_groups or TAB_COUNTRY_GROUP_ORDER
     region = record.metadata.get("country")
     mapping = {c: g for g in groups for c in g.split("-")}
     return mapping.get(region, region)
@@ -281,3 +293,19 @@ def get_getter(dataset: str, key: str) -> Callable[[DatasetRecord], Any]:
     if key not in DERIVE_REGISTRY[dataset]:
         raise ValueError(f"Unknown key '{key}' for dataset '{dataset}' in derive getters.")
     return DERIVE_REGISTRY[dataset][key]
+
+
+def get_ordinal_label_order(dataset: str, key: str, feature: Optional[str] = None) -> Optional[List[str]]:
+    if dataset == "reddit" and key == "feature_label" and feature:
+        pair = ORDINAL_GROUPERS.get(feature)
+        if pair is None:
+            return None
+        _, order = pair
+        return [f"{feature}: {label}" for label in order]
+    by_dataset = ORDINAL_LABEL_ORDERS.get(dataset)
+    if by_dataset is None:
+        return None
+    order = by_dataset.get(key)
+    if order is None:
+        return None
+    return list(order)

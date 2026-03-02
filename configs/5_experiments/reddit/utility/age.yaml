@@ -6,11 +6,6 @@ annotations_in:
 target:
   key: feature_label
   type: ordinal
-  enum:
-  - 'age: 18-29'
-  - 'age: 30-44'
-  - 'age: 45-59'
-  - 'age: 60+'
 selection_criteria:
   feature: age
 group_by: hardness

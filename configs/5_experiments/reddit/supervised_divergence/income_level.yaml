@@ -6,10 +6,6 @@ annotations_in:
 target:
   key: feature_label
   type: ordinal
-  enum:
-    - "income_level: low"
-    - "income_level: middle"
-    - "income_level: high"
 selection_criteria:
   feature: income_level
 group_by: hardness

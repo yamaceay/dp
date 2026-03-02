@@ -7,15 +7,6 @@ annotations_in:
 target:
   key: year_group
   type: ordinal
-  enum:
-    - 1975-1995
-    - 1996-1998
-    - 1999-2001
-    - 2002-2004
-    - 2005-2007
-    - 2008-2010
-    - 2011-2013
-    - 2014-2019
 source_splits:
   - train: 0.0
     val: 1.0

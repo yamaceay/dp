@@ -6,12 +6,6 @@ annotations_in:
 target:
   key: feature_label
   type: ordinal
-  enum:
-  - 'education: secondary'
-  - 'education: studying'
-  - 'education: bachelor'
-  - 'education: master'
-  - 'education: doctorate'
 selection_criteria:
   feature: education
 group_by: hardness

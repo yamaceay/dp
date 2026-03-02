@@ -3,19 +3,10 @@ data_in: data/tab
 split: indices/tab/test.txt
 debug: false
 annotations_in:
-- outputs/tab
+- /netscratch/yay/_ext_outputs/tab
 target:
   key: year_group
   type: ordinal
-  enum:
-  - 1975-1995
-  - 1996-1998
-  - 1999-2001
-  - 2002-2004
-  - 2005-2007
-  - 2008-2010
-  - 2011-2013
-  - 2014-2019
 random_state: 42
 head:
   type: linear_ordinal_regressor

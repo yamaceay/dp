@@ -6,9 +6,6 @@ annotations_in:
 target:
   key: feature_label
   type: ordinal
-  enum:
-    - "sex: female"
-    - "sex: male"
 selection_criteria:
   feature: sex
 group_by: hardness
