@@ -40,7 +40,7 @@ from dp.experiments.utility.reporting import build_utility_report, create_utilit
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
 from dp.loaders.derive import get_getter
-from dp.utils.tasking import apply_task_template, resolve_task_id
+from dp.utils.tasking import apply_task_template
 
 
 ConfigDict = Dict[str, Any]
@@ -76,6 +76,7 @@ class DivergenceCtx(NamedTuple):
     max_records: Optional[int]
     output_format: str
     output_file: Optional[str]
+    task_id: Optional[int]
 
 
 class PrivacyCtx(NamedTuple):
@@ -91,6 +92,7 @@ class PrivacyCtx(NamedTuple):
     progress: bool
     output_format: str
     output_file: Optional[str]
+    task_id: Optional[int]
 
 
 def load_records(dataset: str, data_in: Optional[str], max_records: Optional[int], split: Optional[str] = None) -> List[DatasetRecord]:
@@ -125,8 +127,7 @@ def merge_params(config: ConfigDict, args: Any) -> ConfigDict:
     identifier = getattr(args, "identifier", None)
     if identifier is not None:
         out["identifier"] = identifier
-    explicit_task_id = _parse_optional_task_id(out.get("task_id"))
-    task_id = resolve_task_id(explicit_task_id)
+    task_id = _parse_optional_task_id(out.get("task_id"))
     out = _render_runtime_templates(out, task_id)
     if task_id is not None:
         out["task_id"] = task_id
@@ -251,10 +252,7 @@ def _normalize_target_value(value: Any, mode: Any) -> Optional[Any]:
 def _prepare_utility(params: ConfigDict) -> UtilityCtx:
     annotations = _resolve_utility_annotations(params)
     _require_fields(params, ["dataset", "data_in", "target"])
-    explicit_task_id = params.get("task_id")
-    if explicit_task_id is not None:
-        explicit_task_id = int(explicit_task_id)
-    task_id = resolve_task_id(explicit_task_id)
+    task_id = _parse_optional_task_id(params.get("task_id"))
     dataset = str(params.get("dataset"))
     data_in = str(apply_task_template(str(params.get("data_in")), task_id))
     split_value = params.get("split")
@@ -307,10 +305,7 @@ def _prepare_utility(params: ConfigDict) -> UtilityCtx:
 def _prepare_divergence(params: ConfigDict) -> DivergenceCtx:
     annotations = _resolve_annotations(params)
     _require_fields(params, ["dataset", "data_in"])
-    explicit_task_id = params.get("task_id")
-    if explicit_task_id is not None:
-        explicit_task_id = int(explicit_task_id)
-    task_id = resolve_task_id(explicit_task_id)
+    task_id = _parse_optional_task_id(params.get("task_id"))
     dataset = str(params.get("dataset"))
     data_in = str(apply_task_template(str(params.get("data_in")), task_id))
     split_value = params.get("split")
@@ -319,7 +314,7 @@ def _prepare_divergence(params: ConfigDict) -> DivergenceCtx:
     max_records = params.get("max_records")
     output_format = str(params.get("output_format", "text"))
     output_file = params.get("output_file")
-    return DivergenceCtx(dataset, data_in, split, annotations, metric_type, metric_params, max_records, output_format, output_file)
+    return DivergenceCtx(dataset, data_in, split, annotations, metric_type, metric_params, max_records, output_format, output_file, task_id)
 
 
 def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
@@ -333,10 +328,7 @@ def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
             params["tri_device"] = tri_cfg["device"]
     annotations = _resolve_annotations(params)
     _require_fields(params, ["dataset", "data_in", "universal_tri_pipeline"])
-    explicit_task_id = params.get("task_id")
-    if explicit_task_id is not None:
-        explicit_task_id = int(explicit_task_id)
-    task_id = resolve_task_id(explicit_task_id)
+    task_id = _parse_optional_task_id(params.get("task_id"))
     dataset = str(params.get("dataset"))
     data_in = str(apply_task_template(str(params.get("data_in")), task_id))
     split_value = params.get("split")
@@ -354,7 +346,7 @@ def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
         progress = True
     output_format = str(params.get("output_format", "text"))
     output_file = params.get("output_file")
-    return PrivacyCtx(dataset, data_in, split, annotations, tri_pipeline, max_records, mask_token, tri_max_length, tri_device, bool(progress), output_format, output_file)
+    return PrivacyCtx(dataset, data_in, split, annotations, tri_pipeline, max_records, mask_token, tri_max_length, tri_device, bool(progress), output_format, output_file, task_id)
 
 
 def build_divergence_experiment(metric_type: str, metric_params: Dict[str, Any]) -> TextDivergenceExperiment:
@@ -476,7 +468,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         print(f"Records loaded: {len(records)}")
         print(f"Target coverage: {coverage}")
         return
-    sources = collect_jsonl_sources(*ctx.annotations)
+    sources = collect_jsonl_sources(*ctx.annotations, task_id=ctx.task_id)
     if not sources:
         raise RuntimeError("no anonymized output files discovered")
     split_keys, split_records = _resolve_split_keys(ctx, params)
@@ -810,7 +802,7 @@ def handle_divergence(args: Any, config: ConfigDict) -> None:
     records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=ctx.split)
     if not records:
         raise RuntimeError("no records loaded")
-    sources = collect_jsonl_sources(*ctx.annotations)
+    sources = collect_jsonl_sources(*ctx.annotations, task_id=ctx.task_id)
     if not sources:
         raise RuntimeError("no anonymized output files discovered")
     evaluation_inputs = build_divergence_evaluation_inputs(records, sources)
@@ -842,7 +834,7 @@ def handle_privacy(args: Any, config: ConfigDict) -> None:
     records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=ctx.split)
     if not records:
         raise RuntimeError("no records loaded")
-    sources = collect_jsonl_sources(*ctx.annotations)
+    sources = collect_jsonl_sources(*ctx.annotations, task_id=ctx.task_id)
     if not sources:
         raise RuntimeError("no annotation files discovered")
     evaluation_datasets: Dict[str, List[DatasetRecord]] = {}

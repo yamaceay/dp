@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Callable, Sequence, Any
 
 from dp.loaders import DatasetRecord
-from dp.utils.tasking import apply_task_template, resolve_task_id
+from dp.utils.tasking import apply_task_template
 
 OutputCallback = Callable[[str], None]
 
@@ -37,8 +37,7 @@ def _first_text(*values: Any) -> str:
                 return text
     return ""
 
-def collect_jsonl_sources(*paths: str) -> Dict[str, Path]:
-    task_id = resolve_task_id(None)
+def collect_jsonl_sources(*paths: str, task_id: Optional[int] = None) -> Dict[str, Path]:
     resolved_paths: List[Path] = []
     for raw in paths:
         rendered = apply_task_template(raw, task_id) if isinstance(raw, str) else raw
@@ -78,8 +77,8 @@ def collect_jsonl_sources(*paths: str) -> Dict[str, Path]:
             for file_path in sorted(path.rglob("*.jsonl")):
                 if _matches_task_id(file_path, task_id):
                     register(file_path)
-
-    return {name: entry_path for name, entry_path in entries}
+    result = {name: entry_path for name, entry_path in entries}
+    return result
 
 
 def _matches_task_id(path: Path, task_id: Optional[int]) -> bool:

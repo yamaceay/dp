@@ -8,7 +8,7 @@ import yaml
 
 from dp.tri.base import TRIDetector
 from dp.tri.loaders import get_attacker_adapter, ATTACKER_ADAPTER_REGISTRY
-from dp.utils.tasking import resolve_task_id, apply_task_template
+from dp.utils.tasking import apply_task_template
 
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
@@ -234,7 +234,7 @@ def main() -> int:
     parser.add_argument("--debug_tri", action="store_true")
 
     args = parser.parse_args()
-    task_id = resolve_task_id(args.task_id)
+    task_id = int(args.task_id) if args.task_id is not None else None
 
     if args.training_in is not None:
         cfg = _load_training_config(PROJECT_ROOT, Path(args.training_in))
