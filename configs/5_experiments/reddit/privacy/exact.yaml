@@ -3,7 +3,7 @@ data_in: data/reddit
 annotations_in:
   - outputs/reddit
 tri:
-  universal_: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/exact/reddit_8_16_0.0001
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/exact/reddit_8_16_0.0001
   max_length: 512
 mask_token: "[MASK]"
 output:

@@ -108,7 +108,7 @@ cat > "$TARGET_FILE" <<EOF
 #SBATCH --partition=${PARTITION}
 #SBATCH --gpus=1
 #SBATCH --mem=40GB
-#SBATCH --time=900
+#SBATCH --time=1440
 ${EXTRA_LINES}
 
 MAX_TASKS=${MAX_TASKS}

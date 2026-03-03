@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from dp.experiments import ExperimentResult
 from dp.experiments.utility.base import UtilityTarget
+from dp.experiments.utility.io import iter_utility_evaluation_texts
 from dp.experiments.utility.models import UtilitySpec
 from dp.loaders.base import DatasetRecord
 
@@ -219,7 +221,9 @@ def run_utility_experiment(
     *,
     spec: UtilitySpec,
     records: Sequence[DatasetRecord],
-    evaluation_texts: Dict[str, Dict[str, str]],
+    evaluation_texts: Optional[Dict[str, Dict[str, str]]],
+    evaluation_sources: Optional[Dict[str, Path]],
+    index_to_key: Optional[Dict[int, str]],
     vectorizer_name: Optional[str],
     vectorizer_kwargs: Dict[str, Any],
     head_name: Optional[str],
@@ -283,123 +287,166 @@ def run_utility_experiment(
     baseline_test_metrics = dict(baseline_eval.get("test", {}))
     baseline_overall_metrics = dict(baseline_eval.get("overall", {}))
 
+    if evaluation_texts is None and (evaluation_sources is None or index_to_key is None):
+        raise ValueError("evaluation input is required")
+
     evaluations: Dict[str, Dict[str, Any]] = {}
     primary_scores: List[float] = []
+    shared_train_metrics: Dict[str, float] = {}
+    shared_val_metrics: Dict[str, float] = {}
+    shared_vectorizer: Optional[Any] = None
+    shared_model: Optional[Any] = None
 
-    for name in sorted(evaluation_texts.keys()):
-        mapping = evaluation_texts[name]
-        train_keys_a, anon_train_texts, anon_train_labels = _subset_by_keys(train_keys, mapping, label_by_key)
-        val_keys_a, anon_val_texts, anon_val_labels = _subset_by_keys(val_keys, mapping, label_by_key)
-        test_keys_a, anon_test_texts, anon_test_labels = _subset_by_keys(test_keys, mapping, label_by_key)
-        all_keys_a = [key for key in (train_keys_a + val_keys_a + test_keys_a) if key in mapping and key in label_by_key]
-        anon_all_texts = [mapping[key] for key in all_keys_a]
-        anon_all_labels = [label_by_key[key] for key in all_keys_a]
+    selected_keys = set(label_by_key.keys())
 
-        if protocol == "supervised_divergence":
-            eval_result = _fit_and_eval_single(
-                spec=spec,
-                vectorizer_name=vectorizer_name,
-                vectorizer_kwargs=vectorizer_kwargs,
-                head_name=head_name,
-                head_kwargs=selected_head_kwargs,
-                identifier=identifier,
-                train_texts=original_train_texts,
-                train_labels=original_train_labels,
-                val_texts=original_val_texts,
-                val_labels=original_val_labels,
-                test_texts=anon_test_texts,
-                test_labels=anon_test_labels,
-                overall_texts=anon_all_texts,
-                overall_labels=anon_all_labels,
-            )
-            train_metrics = dict(eval_result.get("train", {}))
-            val_metrics = dict(eval_result.get("val", {}))
-            test_metrics = dict(eval_result.get("test", {}))
-            overall_metrics = dict(eval_result.get("overall", {}))
-        else:
-            if not anon_train_texts or not anon_test_texts:
-                evaluations[name] = {
-                    "metrics": {},
-                    "drops": {},
-                    "train_matched": len(anon_train_texts),
-                    "train_total": len(train_keys),
-                    "test_matched": len(anon_test_texts),
-                    "test_total": len(test_keys),
-                    "available": len(anon_all_texts),
-                    "valid": False,
-                    "train_results": {"metrics": {}, "drops": {}, "matched": len(anon_train_texts), "total": len(train_keys)},
-                    "val_results": {"metrics": {}, "drops": {}, "matched": len(anon_val_texts), "total": len(val_keys)},
-                    "test_results": {"metrics": {}, "drops": {}, "matched": len(anon_test_texts), "total": len(test_keys)},
-                    "overall_results": {"metrics": {}, "drops": {}, "matched": len(anon_all_texts), "total": len(all_keys_order)},
-                    "grouped_results": {},
-                    "utility": {"error": "missing_anonymized_split_records"},
-                }
-                continue
-            eval_result = _fit_and_eval_single(
-                spec=spec,
-                vectorizer_name=vectorizer_name,
-                vectorizer_kwargs=vectorizer_kwargs,
-                head_name=head_name,
-                head_kwargs=selected_head_kwargs,
-                identifier=identifier,
-                train_texts=anon_train_texts,
-                train_labels=anon_train_labels,
-                val_texts=anon_val_texts if anon_val_texts else original_val_texts,
-                val_labels=anon_val_labels if anon_val_labels else original_val_labels,
-                test_texts=anon_test_texts,
-                test_labels=anon_test_labels,
-                overall_texts=anon_all_texts,
-                overall_labels=anon_all_labels,
-            )
-            train_metrics = dict(eval_result.get("train", {}))
-            val_metrics = dict(eval_result.get("val", {}))
-            test_metrics = dict(eval_result.get("test", {}))
-            overall_metrics = dict(eval_result.get("overall", {}))
+    def _iter_evaluations() -> Iterator[Tuple[str, Dict[str, str]]]:
+        if evaluation_texts is not None:
+            for dataset_name in sorted(evaluation_texts.keys()):
+                yield dataset_name, evaluation_texts[dataset_name]
+            return
+        if evaluation_sources is None or index_to_key is None:
+            return
+        yield from iter_utility_evaluation_texts(index_to_key, evaluation_sources, selected_keys=selected_keys)
 
-        metrics_primary = dict(test_metrics)
-        drops_primary = _score_difference(baseline_test_metrics, metrics_primary) if metrics_primary else {}
-        if primary_metric and primary_metric in metrics_primary:
-            primary_scores.append(float(metrics_primary[primary_metric]))
+    if protocol == "supervised_divergence":
+        shared_vectorizer, shared_model = spec.build_components(
+            vectorizer_name=vectorizer_name,
+            vectorizer_kwargs=vectorizer_kwargs,
+            head_name=head_name,
+            head_kwargs=selected_head_kwargs,
+            identifier=identifier,
+        )
+        if hasattr(shared_model, "set_label_order") and spec.target.label_order:
+            shared_model.set_label_order(spec.target.label_order)
+        shared_model.setup()
+        shared_vectorizer.fit(list(original_train_texts))
+        shared_x_train = shared_vectorizer.transform(list(original_train_texts))
+        shared_x_val = shared_vectorizer.transform(list(original_val_texts)) if original_val_texts else shared_x_train
+        shared_y_val = list(original_val_labels) if original_val_labels else list(original_train_labels)
+        _fit_model(shared_model, shared_x_train, list(original_train_labels), shared_x_val, shared_y_val)
+        shared_train_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_train, list(original_train_labels)).items()}
+        shared_val_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_val, shared_y_val).items()}
 
-        evaluations[name] = {
-            "metrics": metrics_primary,
-            "drops": drops_primary,
-            "train_matched": len(anon_train_texts),
-            "train_total": len(train_keys),
-            "test_matched": len(anon_test_texts),
-            "test_total": len(test_keys),
-            "available": len(anon_all_texts),
-            "valid": bool(metrics_primary),
-            "train_results": {
-                "metrics": train_metrics,
-                "drops": _score_difference(baseline_train_metrics, train_metrics),
-                "matched": len(anon_train_texts),
-                "total": len(train_keys),
-            },
-            "val_results": {
-                "metrics": val_metrics,
-                "drops": _score_difference(baseline_val_metrics, val_metrics),
-                "matched": len(anon_val_texts),
-                "total": len(val_keys),
-            },
-            "test_results": {
-                "metrics": test_metrics,
-                "drops": _score_difference(baseline_test_metrics, test_metrics),
-                "matched": len(anon_test_texts),
-                "total": len(test_keys),
-            },
-            "overall_results": {
-                "metrics": overall_metrics,
-                "drops": _score_difference(baseline_overall_metrics, overall_metrics),
-                "matched": len(anon_all_texts),
-                "total": len(all_keys_order),
-            },
-            "grouped_results": {},
-            "utility": {
-                "protocol": str(protocol),
-                "split_mode": "fixed_train_val_test",
-            },
-        }
+    try:
+        for name, mapping in _iter_evaluations():
+            train_keys_a, anon_train_texts, anon_train_labels = _subset_by_keys(train_keys, mapping, label_by_key)
+            val_keys_a, anon_val_texts, anon_val_labels = _subset_by_keys(val_keys, mapping, label_by_key)
+            test_keys_a, anon_test_texts, anon_test_labels = _subset_by_keys(test_keys, mapping, label_by_key)
+            all_keys_a = [key for key in (train_keys_a + val_keys_a + test_keys_a) if key in mapping and key in label_by_key]
+            anon_all_texts = [mapping[key] for key in all_keys_a]
+            anon_all_labels = [label_by_key[key] for key in all_keys_a]
+
+            if protocol == "supervised_divergence":
+                if shared_vectorizer is None or shared_model is None:
+                    raise RuntimeError("supervised_divergence model is not initialized")
+                train_metrics = dict(shared_train_metrics)
+                val_metrics = dict(shared_val_metrics)
+                if anon_test_texts:
+                    x_test = shared_vectorizer.transform(list(anon_test_texts))
+                    test_metrics = {k: float(v) for k, v in shared_model.evaluate(x_test, list(anon_test_labels)).items()}
+                else:
+                    test_metrics = {}
+                if anon_all_texts:
+                    x_overall = shared_vectorizer.transform(list(anon_all_texts))
+                    overall_metrics = {k: float(v) for k, v in shared_model.evaluate(x_overall, list(anon_all_labels)).items()}
+                else:
+                    overall_metrics = {}
+            else:
+                if not anon_train_texts or not anon_test_texts:
+                    evaluations[name] = {
+                        "metrics": {},
+                        "drops": {},
+                        "train_matched": len(anon_train_texts),
+                        "train_total": len(train_keys),
+                        "test_matched": len(anon_test_texts),
+                        "test_total": len(test_keys),
+                        "available": len(anon_all_texts),
+                        "valid": False,
+                        "train_results": {"metrics": {}, "drops": {}, "matched": len(anon_train_texts), "total": len(train_keys)},
+                        "val_results": {"metrics": {}, "drops": {}, "matched": len(anon_val_texts), "total": len(val_keys)},
+                        "test_results": {"metrics": {}, "drops": {}, "matched": len(anon_test_texts), "total": len(test_keys)},
+                        "overall_results": {"metrics": {}, "drops": {}, "matched": len(anon_all_texts), "total": len(all_keys_order)},
+                        "grouped_results": {},
+                        "utility": {"error": "missing_anonymized_split_records"},
+                    }
+                    continue
+                eval_result = _fit_and_eval_single(
+                    spec=spec,
+                    vectorizer_name=vectorizer_name,
+                    vectorizer_kwargs=vectorizer_kwargs,
+                    head_name=head_name,
+                    head_kwargs=selected_head_kwargs,
+                    identifier=identifier,
+                    train_texts=anon_train_texts,
+                    train_labels=anon_train_labels,
+                    val_texts=anon_val_texts if anon_val_texts else original_val_texts,
+                    val_labels=anon_val_labels if anon_val_labels else original_val_labels,
+                    test_texts=anon_test_texts,
+                    test_labels=anon_test_labels,
+                    overall_texts=anon_all_texts,
+                    overall_labels=anon_all_labels,
+                )
+                train_metrics = dict(eval_result.get("train", {}))
+                val_metrics = dict(eval_result.get("val", {}))
+                test_metrics = dict(eval_result.get("test", {}))
+                overall_metrics = dict(eval_result.get("overall", {}))
+
+            metrics_primary = dict(test_metrics)
+            drops_primary = _score_difference(baseline_test_metrics, metrics_primary) if metrics_primary else {}
+            if primary_metric and primary_metric in metrics_primary:
+                primary_scores.append(float(metrics_primary[primary_metric]))
+
+            evaluations[name] = {
+                "metrics": metrics_primary,
+                "drops": drops_primary,
+                "train_matched": len(train_keys) if protocol == "supervised_divergence" else len(anon_train_texts),
+                "train_total": len(train_keys),
+                "test_matched": len(anon_test_texts),
+                "test_total": len(test_keys),
+                "available": len(anon_all_texts),
+                "valid": bool(metrics_primary),
+                "train_results": {
+                    "metrics": train_metrics,
+                    "drops": _score_difference(baseline_train_metrics, train_metrics),
+                    "matched": len(train_keys) if protocol == "supervised_divergence" else len(anon_train_texts),
+                    "total": len(train_keys),
+                },
+                "val_results": {
+                    "metrics": val_metrics,
+                    "drops": _score_difference(baseline_val_metrics, val_metrics),
+                    "matched": len(val_keys) if protocol == "supervised_divergence" else len(anon_val_texts),
+                    "total": len(val_keys),
+                },
+                "test_results": {
+                    "metrics": test_metrics,
+                    "drops": _score_difference(baseline_test_metrics, test_metrics),
+                    "matched": len(anon_test_texts),
+                    "total": len(test_keys),
+                },
+                "overall_results": {
+                    "metrics": overall_metrics,
+                    "drops": _score_difference(baseline_overall_metrics, overall_metrics),
+                    "matched": len(anon_all_texts),
+                    "total": len(all_keys_order),
+                },
+                "grouped_results": {},
+                "utility": {
+                    "protocol": str(protocol),
+                    "split_mode": "fixed_train_val_test",
+                },
+            }
+    finally:
+        if shared_model is not None:
+            try:
+                shared_model.cleanup()
+            finally:
+                if shared_vectorizer is not None:
+                    shared_vectorizer.cleanup()
+        elif shared_vectorizer is not None:
+            shared_vectorizer.cleanup()
+
+    if not evaluations:
+        raise ValueError("no anonymized texts aligned with dataset records")
 
     metrics_payload: Dict[str, Any] = {
         "model": str(model_name),

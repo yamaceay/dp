@@ -473,15 +473,22 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         raise RuntimeError("no anonymized output files discovered")
     split_keys, split_records = _resolve_split_keys(ctx, params)
     records = split_records or records
-    evaluation_texts = align_evaluation_texts(records, sources)
+    protocol = str(params.get("protocol", "utility")).strip().lower() or "utility"
+    evaluation_texts = None
+    if protocol not in {"utility", "supervised_divergence"}:
+        evaluation_texts = align_evaluation_texts(records, sources)
     if ctx.debug:
         print("Evaluation sources:")
-        for name, mapping in evaluation_texts.items():
-            count = len(mapping)
-            sample = next(iter(mapping.values()), "")
-            sig = hashlib.sha1(sample.encode("utf-8")).hexdigest()[:16] if sample else ""
-            print(f"- {name}: count={count} sample_sig={sig}")
-    if not evaluation_texts:
+        if evaluation_texts is None:
+            for name, path in sorted(sources.items(), key=lambda item: item[0]):
+                print(f"- {name}: path={path}")
+        else:
+            for name, mapping in evaluation_texts.items():
+                count = len(mapping)
+                sample = next(iter(mapping.values()), "")
+                sig = hashlib.sha1(sample.encode("utf-8")).hexdigest()[:16] if sample else ""
+                print(f"- {name}: count={count} sample_sig={sig}")
+    if evaluation_texts is not None and not evaluation_texts:
         raise RuntimeError("no anonymized texts aligned with dataset records")
     vec_name, vec_kwargs, head_name, head_kwargs = _resolve_utility_components(ctx.spec, params)
     vec_kwargs = _render_component_paths(vec_kwargs, ctx.task_id)
@@ -495,7 +502,6 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         head_kwargs=head_kwargs,
         identifier=ctx.identifier,
     )
-    protocol = str(params.get("protocol", "utility")).strip().lower() or "utility"
     resolved_model_name = str(getattr(model, "name", head_name or ctx.spec.default_head))
     resolved_primary_metric = str(getattr(model, "primary_metric", head_kwargs.get("primary_metric", "")))
     if protocol in {"utility", "supervised_divergence"}:
@@ -522,6 +528,8 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
             spec=ctx.spec,
             records=records,
             evaluation_texts=evaluation_texts,
+            evaluation_sources=sources,
+            index_to_key={idx: str(record.uid) for idx, record in enumerate(records)},
             vectorizer_name=vec_name or None,
             vectorizer_kwargs=vec_kwargs,
             head_name=head_name or None,
