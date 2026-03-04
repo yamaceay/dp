@@ -29,8 +29,8 @@ from dp.experiments.divergence.io import (
 )
 from dp.experiments.divergence.reporting import build_divergence_report, create_divergence_outputter
 from dp.experiments.privacy.io import (
-    build_privacy_evaluation_dataset_from_texts,
-    read_texts_from_jsonl,
+    build_privacy_evaluation_dataset_from_indexed_texts,
+    read_indexed_texts_from_jsonl,
 )
 from dp.experiments.privacy.reporting import build_privacy_report, create_privacy_outputter
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
@@ -848,8 +848,8 @@ def handle_privacy(args: Any, config: ConfigDict) -> None:
     evaluation_datasets: Dict[str, List[DatasetRecord]] = {}
     evaluation_counts: Dict[str, int] = {}
     for name, path in sources.items():
-        texts = read_texts_from_jsonl(path)
-        dataset_records = build_privacy_evaluation_dataset_from_texts(records, texts)
+        indexed_texts = read_indexed_texts_from_jsonl(path)
+        dataset_records = build_privacy_evaluation_dataset_from_indexed_texts(records, indexed_texts)
         evaluation_datasets[name] = dataset_records
         evaluation_counts[name] = len(dataset_records)
     experiment = TextPrivacyExperiment(

@@ -7,23 +7,12 @@ import ast
 import yaml
 
 privacy_columns = ["P_exact"]
-utility_columns = ["U_nominal"]
-method_columns = ["method", "params"]
+utility_columns = ["U_overall", "utility_utility_total_score", "U_nominal"]
+method_columns = ["method", "params", "P_exact", "U_overall", "utility_utility_total_score", "U_nominal"]
 
 dataset_names = [
     "db_bio",
     "tab",
-    "reddit",
-]
-
-method_names = [
-    "simple_maskers",
-    "simple_maskers_with_thresholds",
-    "record_level_rewriters",
-    "token_level_rewriters",
-    "token_level_rewriters_with_threshold_k",
-    "token_level_rewriters_with_threshold_rho",
-    "token_level_rewriters_with_threshold_lambda",
 ]
 PARAMS_CONFIG_PATH = Path("configs/visualize/params.yaml")
 OUTPUT_DIR = Path("images")
@@ -60,11 +49,34 @@ def read_param_specs() -> dict[str, dict[str, object]]:
 
 def read_csv_file(path: Path) -> Optional[pd.DataFrame]:
     try:
-        df = pd.read_csv(path, usecols=method_columns + privacy_columns + utility_columns)
-        return df
+        df = pd.read_csv(path)
+        if "P_exact" not in df.columns:
+            print(f"Skipping file without P_exact: {path}")
+            return None
+        utility_column = next((col for col in utility_columns if col in df.columns), None)
+        if utility_column is None:
+            print(f"Skipping file without utility score column: {path}")
+            return None
+        selected_cols = ["method", "params", "P_exact", utility_column]
+        filtered = df[selected_cols].copy()
+        filtered = filtered.rename(columns={utility_column: "U_plot"})
+        return filtered
     except Exception as e:
         print(f"Error reading CSV file {path}")
         return None
+
+
+def discover_method_names(dataset_name: str) -> list[str]:
+    prefix = f"{dataset_name}_logs_"
+    suffix = ".csv"
+    methods: list[str] = []
+    for path in sorted(Path("mds").glob(f"{dataset_name}_logs_*.csv")):
+        name = path.name
+        if not name.startswith(prefix) or not name.endswith(suffix):
+            continue
+        method_name = name[len(prefix):-len(suffix)]
+        methods.append(method_name)
+    return methods
 
 
 def parse_params(params_value: object) -> dict[str, object]:
@@ -182,6 +194,7 @@ if __name__ == "__main__":
     param_specs = read_param_specs()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for dataset_name in dataset_names:
+        method_names = discover_method_names(dataset_name)
         for method_name in method_names:
             file_name = f"mds/{dataset_name}_logs_{method_name}.csv"
             file_path = Path(file_name)
@@ -208,7 +221,7 @@ if __name__ == "__main__":
             baseline_point: tuple[float, float] | None = None
             if not baseline_df.empty:
                 baseline_row = baseline_df.iloc[0]
-                baseline_point = (float(baseline_row["P_exact"]), float(baseline_row["U_nominal"]))
+                baseline_point = (float(baseline_row["P_exact"]), float(baseline_row["U_plot"]))
 
             shade_level_map: dict[str, dict[object, float]] = {}
             for base_group, group_df in df.groupby("base_color_group", sort=False):
@@ -250,7 +263,7 @@ if __name__ == "__main__":
                 if has_line:
                     ax.plot(
                         ordered_rows["P_exact"],
-                        ordered_rows["U_nominal"],
+                        ordered_rows["U_plot"],
                         color=base_color,
                         linewidth=1.8,
                         alpha=0.9,
@@ -261,7 +274,7 @@ if __name__ == "__main__":
                     endpoint = endpoint_row_for_baseline_extension(ordered_rows, shade_param, param_specs)
                     ax.plot(
                         [float(endpoint["P_exact"]), baseline_point[0]],
-                        [float(endpoint["U_nominal"]), baseline_point[1]],
+                        [float(endpoint["U_plot"]), baseline_point[1]],
                         color=base_color,
                         linewidth=1.4,
                         alpha=0.8,
@@ -279,7 +292,7 @@ if __name__ == "__main__":
 
                     ax.scatter(
                         row["P_exact"],
-                        row["U_nominal"],
+                        row["U_plot"],
                         color=point_color,
                         edgecolor=base_color,
                         linewidth=0.8,
@@ -289,7 +302,7 @@ if __name__ == "__main__":
                     )
 
             ax.set_xlabel("Privacy (P_exact)")
-            ax.set_ylabel("Utility (U_nominal)")
+            ax.set_ylabel("Utility")
             ax.set_title(f"Privacy vs Utility for {dataset_name} - {method_name}")
             ax.grid()
             

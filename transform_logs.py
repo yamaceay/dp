@@ -1,4 +1,5 @@
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ PARAMS_MANIFEST_PATH = OUTPUT_DIR / "params_manifest.json"
 TYPST_TABLES_MANIFEST_PATH = OUTPUT_DIR / "tables_manifest.json"
 INCLUDE_GROUPED_ROWS = False
 HIERARCHICAL_SPLIT_TABLES = True
+ENABLED_DATASETS = {"db_bio", "tab"}
 
 
 def read_logs(path: str | Path) -> list[dict[str, Any]]:
@@ -23,78 +25,24 @@ def read_logs(path: str | Path) -> list[dict[str, Any]]:
         return json.load(f)
 
 
-class TaskResultWeightedAggregator:
+class LogMetricsEnricher:
     def __init__(self, data: list[dict[str, Any]]):
         self.data = data
 
     def aggregate(self) -> list[dict[str, Any]]:
-        aggregated: list[dict[str, Any]] = []
+        enriched: list[dict[str, Any]] = []
         for item in self.data:
-            task_results = item.get("task_results")
-            if not isinstance(task_results, list) or not task_results:
-                aggregated.append(item)
-                continue
-
-            merged_item: dict[str, Any] = {}
-            for key, value in item.items():
-                if key in {"privacy", "utility", "divergence"}:
+            item_copy = dict(item)
+            for section in ("utility", "supervised_divergence"):
+                section_metrics = item_copy.get(section)
+                if not isinstance(section_metrics, dict):
                     continue
-                merged_item[key] = value
-
-            for section in ("privacy", "utility", "divergence"):
-                metrics = self._aggregate_section(task_results, section)
-                if metrics:
-                    if section == "utility":
-                        metrics = self._augment_utility_scores(
-                            metrics,
-                            allow_missing_exp_rmae=item.get("group") is not None,
-                        )
-                    merged_item[section] = metrics
-
-            aggregated.append(merged_item)
-        return aggregated
-
-    def _aggregate_section(self, task_results: list[dict[str, Any]], section: str) -> dict[str, Any]:
-        weighted_sums: dict[str, float] = {}
-        weight_sums: dict[str, float] = {}
-        count_sums: dict[str, int] = {}
-        class_max: dict[str, int] = {}
-        tasks = 0
-
-        for task in task_results:
-            section_metrics = task.get(section)
-            if not isinstance(section_metrics, dict):
-                continue
-            tasks += 1
-            feature_counts = self._extract_feature_counts(section_metrics)
-            default_count = feature_counts.get("") or 1
-            for metric_name, metric_value in section_metrics.items():
-                if metric_name.startswith("_"):
-                    if metric_name.endswith("_num_classes"):
-                        class_max[metric_name] = max(class_max.get(metric_name, 0), int(metric_value))
-                    elif metric_name.endswith("_count"):
-                        count_sums[metric_name] = count_sums.get(metric_name, 0) + int(metric_value)
-                    continue
-                feature_name = self._feature_name(metric_name, feature_counts)
-                metric_count = feature_counts.get(feature_name, default_count)
-                weighted_sums[metric_name] = weighted_sums.get(metric_name, 0.0) + float(metric_value) * float(metric_count)
-                weight_sums[metric_name] = weight_sums.get(metric_name, 0.0) + float(metric_count)
-
-        if tasks == 0:
-            return {}
-
-        aggregated: dict[str, Any] = {}
-        for metric_name, metric_sum in weighted_sums.items():
-            weight = weight_sums.get(metric_name, 0.0)
-            if weight <= 0.0:
-                continue
-            aggregated[metric_name] = metric_sum / weight
-        for metric_name, metric_sum in count_sums.items():
-            aggregated[metric_name] = metric_sum
-        for metric_name, metric_sum in class_max.items():
-            aggregated[metric_name] = metric_sum
-        aggregated["_tasks"] = tasks
-        return aggregated
+                item_copy[section] = self._augment_utility_scores(
+                    dict(section_metrics),
+                    allow_missing_exp_rmae=False,
+                )
+            enriched.append(item_copy)
+        return enriched
 
     def _extract_feature_counts(self, section_metrics: dict[str, Any]) -> dict[str, int]:
         feature_counts: dict[str, int] = {}
@@ -106,25 +54,6 @@ class TaskResultWeightedAggregator:
             if match:
                 feature_counts[match.group(1)] = int(metric_value)
         return feature_counts
-
-    def _extract_feature_num_classes(self, section_metrics: dict[str, Any]) -> dict[str, int]:
-        feature_num_classes: dict[str, int] = {}
-        for metric_name, metric_value in section_metrics.items():
-            match = re.match(r"^_(.+)_num_classes$", metric_name)
-            if match:
-                feature_num_classes[match.group(1)] = int(metric_value)
-        return feature_num_classes
-
-    def _feature_name(self, metric_name: str, feature_counts: dict[str, int]) -> str:
-        candidate_features = sorted(
-            [feature for feature in feature_counts.keys() if feature],
-            key=len,
-            reverse=True,
-        )
-        for feature in candidate_features:
-            if metric_name.startswith(feature + "_"):
-                return feature
-        return ""
 
     def _augment_utility_scores(
         self,
@@ -146,17 +75,11 @@ class TaskResultWeightedAggregator:
             exp_key = f"{feature}_exp_rmae"
             acc_key = f"{feature}_acc"
             if mae_key in utility_metrics:
-                if exp_key not in utility_metrics:
-                    if allow_missing_exp_rmae:
-                        continue
-                    print(
-                        f"DEBUG: utility metrics missing expected key '{exp_key}'. "
-                        f"Full utility_metrics={json.dumps(utility_metrics, indent=2, sort_keys=True, default=str)}"
-                    )
-                    raise ValueError(
-                        f"Missing exp_rmae for ordinal feature '{feature}': expected {exp_key}"
-                    )
-                score = float(utility_metrics[exp_key])
+                if exp_key in utility_metrics:
+                    score = float(utility_metrics[exp_key])
+                else:
+                    mae_value = float(utility_metrics[mae_key])
+                    score = math.exp(-mae_value)
                 ordinal_weighted_sum += score * count
                 ordinal_weighted_count += count
             elif acc_key in utility_metrics:
@@ -227,6 +150,8 @@ class FlatDatasetLogs:
     def filter(self) -> list[dict[str, Any]]:
         filtered_data: list[dict[str, Any]] = []
         for item in self.data:
+            if item.get("dataset") not in ENABLED_DATASETS:
+                continue
             has_group = "group" in item
             if self.include_grouped or not has_group:
                 filtered_data.append(item)
@@ -243,7 +168,7 @@ class FlatDatasetLogs:
                 "method": item["method"],
                 "params": order_params_dict(params),
             }
-            for section in ("privacy", "utility", "divergence"):
+            for section in ("privacy", "utility", "supervised_divergence", "divergence"):
                 for metric, value in item.get(section, {}).items():
                     flat_item[f"{section}_{metric}"] = value
             if item["method"] == "baseline":
@@ -351,17 +276,27 @@ class MarkdownDatasetLogsWriter:
 
     def _project_method_set_frame(self, dataset: str, frame: pd.DataFrame) -> pd.DataFrame:
         scores = self.dataset_projection_config.get(dataset)
-        if not scores:
-            return frame
-
         required_columns = ["method", "params"]
         columns: list[str] = list(required_columns)
         rename_map: dict[str, str] = {}
-        for score in scores:
+        for score in scores or []:
             score_name = score["name"]
-            if score_name in frame.columns:
-                columns.append(score_name)
-                rename_map[score_name] = score.get("rename_as", score.get("print_as", score_name))
+            if score_name not in frame.columns:
+                frame[score_name] = None
+            columns.append(score_name)
+            rename_map[score_name] = score.get("rename_as", score.get("print_as", score_name))
+
+        section_prefixes = (
+            "privacy_",
+            "utility_",
+            "supervised_divergence_",
+            "divergence_",
+        )
+        for column_name in sorted(frame.columns):
+            if column_name in columns:
+                continue
+            if any(column_name.startswith(prefix) for prefix in section_prefixes):
+                columns.append(column_name)
 
         missing_required = [column for column in required_columns if column not in frame.columns]
         if missing_required:
@@ -517,6 +452,8 @@ def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
     for path in sorted(output_dir.glob("*.md")):
         stem = path.stem
         dataset, section_suffix = stem.split("_logs", 1)
+        if dataset not in ENABLED_DATASETS:
+            continue
         section = "all" if not section_suffix else section_suffix.lstrip("_")
         if section == "all":
             continue
@@ -610,11 +547,8 @@ def sortable_param_value(value: Any) -> int | float | str:
 
 if __name__ == "__main__":
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    data = TaskResultWeightedAggregator(read_logs(INPUT_LOGS_PATH)).aggregate()
-
-    utility = RedditUtilityByHardness(data)
-    with open(REDDIT_UTILITY_OUTPUT_PATH, "w") as f:
-        json.dump(utility.grouped_data, f, indent=4)
+    data = LogMetricsEnricher(read_logs(INPUT_LOGS_PATH)).aggregate()
+    data = [item for item in data if item.get("dataset") in ENABLED_DATASETS]
 
     writer = MarkdownDatasetLogsWriter(
         data,
