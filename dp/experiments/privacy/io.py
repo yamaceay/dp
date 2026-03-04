@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Sequence
+from typing import Dict, List, Sequence
 from pathlib import Path
 import json
 
@@ -53,15 +53,63 @@ def build_privacy_evaluation_dataset_from_texts(
 def build_privacy_evaluation_dataset_from_indexed_texts(
     records: Sequence[DatasetRecord],
     indexed_texts: Sequence[tuple[int | None, str]],
+    reference_records: Sequence[DatasetRecord] | None = None,
 ) -> List[DatasetRecord]:
     indexed_rows = sorted(
         [(index, text) for index, text in indexed_texts],
         key=lambda item: int(item[0]),
     )
-    if len(indexed_rows) != len(records):
+    target_records = list(records)
+    if not target_records:
+        raise ValueError("Target records for privacy evaluation must not be empty")
+
+    if len(indexed_rows) == len(target_records):
+        return _build_dataset_from_direct_indices(target_records, indexed_rows)
+
+    if reference_records is None:
         raise ValueError(
-            f"Indexed privacy texts count mismatch: got {len(indexed_rows)} rows, expected {len(records)}"
+            "Indexed privacy texts count does not match target split and no reference dataset was provided: "
+            f"got {len(indexed_rows)} rows, expected {len(target_records)}"
         )
+
+    reference = list(reference_records)
+    if len(indexed_rows) != len(reference):
+        raise ValueError(
+            "Indexed privacy texts count mismatch for reference dataset: "
+            f"got {len(indexed_rows)} rows, expected {len(reference)}"
+        )
+
+    _validate_unique_uids(target_records, "target records")
+    _validate_unique_uids(reference, "reference records")
+    indexed_dataset = _build_dataset_from_direct_indices(reference, indexed_rows)
+    text_by_uid: Dict[str, str] = {}
+    for record in indexed_dataset:
+        if not record.uid:
+            raise ValueError("Reference record has empty uid during indexed privacy alignment")
+        text_by_uid[record.uid] = record.text
+
+    dataset: List[DatasetRecord] = []
+    for record in target_records:
+        if not record.uid:
+            raise ValueError("Target split record has empty uid during indexed privacy alignment")
+        if record.uid not in text_by_uid:
+            raise ValueError(f"Missing anonymized text for target uid={record.uid}")
+        dataset.append(
+            DatasetRecord(
+                text=text_by_uid[record.uid],
+                uid=record.uid,
+                name=record.name,
+                spans=record.spans,
+                metadata=dict(record.metadata),
+            )
+        )
+    return dataset
+
+
+def _build_dataset_from_direct_indices(
+    records: Sequence[DatasetRecord],
+    indexed_rows: Sequence[tuple[int | None, str]],
+) -> List[DatasetRecord]:
     dataset: List[DatasetRecord] = []
     for expected_index, (maybe_index, text) in enumerate(indexed_rows):
         index = int(maybe_index)
@@ -81,6 +129,16 @@ def build_privacy_evaluation_dataset_from_indexed_texts(
             )
         )
     return dataset
+
+
+def _validate_unique_uids(records: Sequence[DatasetRecord], context: str) -> None:
+    seen: set[str] = set()
+    for record in records:
+        if not record.uid:
+            raise ValueError(f"Record with empty uid found in {context}")
+        if record.uid in seen:
+            raise ValueError(f"Duplicate uid={record.uid} found in {context}")
+        seen.add(record.uid)
 
 
 def read_texts_from_jsonl(path: Path) -> List[str]:

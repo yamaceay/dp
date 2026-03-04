@@ -842,6 +842,9 @@ def handle_privacy(args: Any, config: ConfigDict) -> None:
     records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=ctx.split)
     if not records:
         raise RuntimeError("no records loaded")
+    reference_records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=None)
+    if not reference_records:
+        raise RuntimeError("no reference records loaded")
     sources = collect_jsonl_sources(*ctx.annotations, task_id=ctx.task_id)
     if not sources:
         raise RuntimeError("no annotation files discovered")
@@ -849,7 +852,22 @@ def handle_privacy(args: Any, config: ConfigDict) -> None:
     evaluation_counts: Dict[str, int] = {}
     for name, path in sources.items():
         indexed_texts = read_indexed_texts_from_jsonl(path)
-        dataset_records = build_privacy_evaluation_dataset_from_indexed_texts(records, indexed_texts)
+        if len(indexed_texts) == len(records):
+            alignment_mode = "direct"
+        elif len(indexed_texts) == len(reference_records):
+            alignment_mode = "projected-from-full"
+        else:
+            alignment_mode = "invalid"
+        print(
+            "Privacy alignment "
+            f"source={name} mode={alignment_mode} "
+            f"rows={len(indexed_texts)} split_records={len(records)} full_records={len(reference_records)}"
+        )
+        dataset_records = build_privacy_evaluation_dataset_from_indexed_texts(
+            records,
+            indexed_texts,
+            reference_records=reference_records,
+        )
         evaluation_datasets[name] = dataset_records
         evaluation_counts[name] = len(dataset_records)
     experiment = TextPrivacyExperiment(
