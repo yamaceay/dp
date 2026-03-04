@@ -410,31 +410,49 @@ def run_utility_experiment(
     if not original_train_texts or not original_test_texts:
         raise ValueError("not enough labeled records in fixed train/test splits")
 
-    selected_head_kwargs, selected_val_metrics, baseline_eval, tuning_trials = _pick_tuned_head_kwargs(
-        base_head_kwargs=head_kwargs,
-        tune_param=config.tune_param,
-        tune_values=config.tune_values,
-        spec=spec,
-        vectorizer_name=vectorizer_name,
-        vectorizer_kwargs=vectorizer_kwargs,
-        head_name=head_name,
-        identifier=identifier,
-        primary_metric=primary_metric,
-        train_texts=original_train_texts,
-        train_labels=original_train_labels,
-        val_texts=original_val_texts,
-        val_labels=original_val_labels,
-        test_texts=original_test_texts,
-        test_labels=original_test_labels,
-        overall_texts=all_texts,
-        overall_labels=all_labels,
-        random_state=config.random_state,
-    )
+    has_tuning = bool(config.tune_param and config.tune_values)
+    selected_head_kwargs: Dict[str, Any]
+    selected_val_metrics: Dict[str, float]
+    tuning_trials: List[Dict[str, Any]]
+    baseline_train_metrics: Dict[str, float]
+    baseline_val_metrics: Dict[str, float]
+    baseline_test_metrics: Dict[str, float]
+    baseline_overall_metrics: Dict[str, float]
 
-    baseline_train_metrics = dict(baseline_eval.get("train", {}))
-    baseline_val_metrics = dict(baseline_eval.get("val", {}))
-    baseline_test_metrics = dict(baseline_eval.get("test", {}))
-    baseline_overall_metrics = dict(baseline_eval.get("overall", {}))
+    if protocol == "supervised_divergence" and not has_tuning:
+        selected_head_kwargs = dict(head_kwargs)
+        selected_val_metrics = {}
+        tuning_trials = []
+        baseline_train_metrics = {}
+        baseline_val_metrics = {}
+        baseline_test_metrics = {}
+        baseline_overall_metrics = {}
+    else:
+        selected_head_kwargs, selected_val_metrics, baseline_eval, tuning_trials = _pick_tuned_head_kwargs(
+            base_head_kwargs=head_kwargs,
+            tune_param=config.tune_param,
+            tune_values=config.tune_values,
+            spec=spec,
+            vectorizer_name=vectorizer_name,
+            vectorizer_kwargs=vectorizer_kwargs,
+            head_name=head_name,
+            identifier=identifier,
+            primary_metric=primary_metric,
+            train_texts=original_train_texts,
+            train_labels=original_train_labels,
+            val_texts=original_val_texts,
+            val_labels=original_val_labels,
+            test_texts=original_test_texts,
+            test_labels=original_test_labels,
+            overall_texts=all_texts,
+            overall_labels=all_labels,
+            random_state=config.random_state,
+        )
+
+        baseline_train_metrics = dict(baseline_eval.get("train", {}))
+        baseline_val_metrics = dict(baseline_eval.get("val", {}))
+        baseline_test_metrics = dict(baseline_eval.get("test", {}))
+        baseline_overall_metrics = dict(baseline_eval.get("overall", {}))
 
     if evaluation_texts is None and (evaluation_sources is None or index_to_key is None):
         raise ValueError("evaluation input is required")
@@ -476,6 +494,14 @@ def run_utility_experiment(
         _fit_model(shared_model, shared_x_train, list(original_train_labels), shared_x_val, shared_y_val)
         shared_train_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_train, list(original_train_labels)).items()}
         shared_val_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_val, shared_y_val).items()}
+        shared_x_test = shared_vectorizer.transform(list(original_test_texts))
+        baseline_test_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_test, list(original_test_labels)).items()}
+        shared_x_overall = shared_vectorizer.transform(list(all_texts))
+        baseline_overall_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_overall, list(all_labels)).items()}
+        if not baseline_train_metrics:
+            baseline_train_metrics = dict(shared_train_metrics)
+        if not baseline_val_metrics:
+            baseline_val_metrics = dict(shared_val_metrics)
 
     try:
         for name, mapping in _iter_evaluations():
