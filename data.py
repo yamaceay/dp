@@ -25,14 +25,15 @@ def load_data(data_kwargs: Dict[str, object]):
 
 def evaluate_where(
     record: object,
-    value_getters: Dict[str, Callable[[object], object]],
+    i: int,
+    value_getters: Dict[str, Callable[[int, object], object]],
     where: Optional[str],
 ) -> bool:
     if where is None or where.strip() == "":
         return True
     scope: Dict[str, object] = {}
     for key, getter in value_getters.items():
-        scope[key] = getter(record)
+        scope[key] = getter(i, record)
 
     def re_search(pattern: str, value: object) -> bool:
         return re.search(pattern, str(value)) is not None
@@ -61,7 +62,7 @@ def add_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     return ['data', 'data_in', 'split', 'start', 'end', 'step', 'max_records']
 
 
-def parse_selected_getters(select_arg: Optional[str], value_getters: Dict[str, Callable[[object], object]]) -> Dict[str, Callable[[object], object]]:
+def parse_selected_getters(select_arg: Optional[str], value_getters: Dict[str, Callable[[int, object], object]]) -> Dict[str, Callable[[int, object], object]]:
     if select_arg is None or select_arg.strip() == "":
         return value_getters
     selected_keys = [key.strip() for key in select_arg.split(",") if key.strip() != ""]
@@ -91,14 +92,16 @@ if __name__ == "__main__":
     dataset = load_data(data_kwargs)
 
     value_getters = {
-        'name': lambda r: r.name,
-        'key': lambda r: list(r.metadata.keys()),
-        'split': lambda r: r.metadata.get("split"),
+        'idx': lambda i, r: i,
+        'uid': lambda i, r: r.uid,
+        'name': lambda i, r: r.name,
+        'key': lambda i, r: list(r.metadata.keys()),
+        'split': lambda i, r: r.metadata.get("split"),
     }
 
     special_value_getters = DERIVE_REGISTRY.get(args.data, {})
     for key, target in special_value_getters.items():
-        value_getters[key] = target
+        value_getters[key] = lambda _, r: target(r)
     selected_value_getters = parse_selected_getters(args.select, value_getters)
 
     unique_values: Dict[str, Dict[object, int]] = {}
@@ -106,21 +109,20 @@ if __name__ == "__main__":
     max_text_length = 0
     all_text_lengths = []
 
+    records_to_process = enumerate(dataset.iter_records())
     if has_where:
-        filtered_records = [record for record in dataset.iter_records() if evaluate_where(record, value_getters, args.where)]
+        filtered_records = [(i, record) for i, record in records_to_process if evaluate_where(record, i, value_getters, args.where)]
         records_to_process = filtered_records[slice(args.start, args.end, args.step)]
         if args.max_records is not None:
             records_to_process = records_to_process[:args.max_records]
-    else:
-        records_to_process = dataset.iter_records()
 
-    for record in records_to_process:
+    for i, record in records_to_process:
         if args.full_record:
             print(record)
         all_text_lengths.append(len(record.text))
 
         for key, getter in selected_value_getters.items():
-            value = getter(record)
+            value = getter(i, record)
             if value is None:
                 continue
             unique_value = unique_values.get(key, dict())
