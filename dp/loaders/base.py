@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
 import itertools
 
 
@@ -185,3 +185,30 @@ def load_split_indices(data_name: Optional[str], split: Optional[str]) -> Option
                 raise ValueError(f"Split index must be non-negative in {split_path}:{line_no}")
             values.append(value)
     return values
+
+
+def stable_unique_indices(values: Iterable[int]) -> List[int]:
+    seen: set[int] = set()
+    unique_values: List[int] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        unique_values.append(value)
+    return unique_values
+
+
+def load_concat_split_indices(
+    data_name: str,
+    split_names: Sequence[str],
+    deduplicate: bool = False,
+) -> List[int]:
+    concatenated: List[int] = []
+    for split_name in split_names:
+        indices = load_split_indices(data_name=data_name, split=split_name)
+        if indices is None:
+            raise ValueError(f"Missing split indices for dataset '{data_name}': {split_name}")
+        concatenated.extend(indices)
+    if deduplicate:
+        return stable_unique_indices(concatenated)
+    return concatenated

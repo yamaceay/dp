@@ -5,14 +5,16 @@ import re
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, load_split_indices
+from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, load_concat_split_indices
 
 class TabDatasetAdapter(DatasetAdapter):
+    DEFAULT_SPLIT_ORDER: List[str] = ["test", "val", "train"]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.data_in = Path(self.data_in)
         self._records = self._load_records(self.data_in)
-        self._split_indices = load_split_indices(data_name=self.data, split=self.split)
+        self._split_indices = self._resolve_split_indices()
         if self._split_indices is not None:
             for idx in self._split_indices:
                 if idx >= len(self._records):
@@ -97,3 +99,12 @@ class TabDatasetAdapter(DatasetAdapter):
                 )
                 annotations_processed.append(annotation)
         return annotations_processed
+
+    def _resolve_split_indices(self) -> Optional[List[int]]:
+        if self.split is None:
+            return load_concat_split_indices(
+                data_name=str(self.data),
+                split_names=self.DEFAULT_SPLIT_ORDER,
+                deduplicate=False,
+            )
+        return load_concat_split_indices(data_name=str(self.data), split_names=[str(self.split)], deduplicate=False)

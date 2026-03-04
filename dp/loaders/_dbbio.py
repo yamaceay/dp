@@ -7,10 +7,12 @@ from typing import Dict, Iterable, List, Optional, Union
 
 from datasets import Dataset, DatasetDict, load_dataset
 
-from dp.loaders.base import DatasetAdapter, DatasetRecord, load_split_indices
+from dp.loaders.base import DatasetAdapter, DatasetRecord, load_concat_split_indices, load_split_indices
 
 class DBBioDatasetAdapter(DatasetAdapter):
     """Adapter for the DB-Bio legal dataset."""
+
+    DEFAULT_SPLIT_ORDER: List[str] = ["train", "val", "test"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -121,23 +123,10 @@ class DBBioDatasetAdapter(DatasetAdapter):
         return self._load_default_indices()
 
     def _load_default_indices(self) -> List[int]:
-        split_names = ["train", "val", "test"]
-        concatenated: List[int] = []
-        for split_name in split_names:
-            indices = load_split_indices(data_name="db_bio", split=split_name)
-            if indices is None:
-                raise ValueError(f"Missing default split indices for db_bio: {split_name}")
-            concatenated.extend(indices)
-        return self._stable_unique(concatenated)
-
-    def _stable_unique(self, values: List[int]) -> List[int]:
-        seen: set[int] = set()
-        unique_values: List[int] = []
-        for value in values:
-            if value in seen:
-                continue
-            seen.add(value)
-            unique_values.append(value)
-        return unique_values
+        return load_concat_split_indices(
+            data_name="db_bio",
+            split_names=self.DEFAULT_SPLIT_ORDER,
+            deduplicate=True,
+        )
 
 __all__ = ["DBBioDatasetAdapter"]
