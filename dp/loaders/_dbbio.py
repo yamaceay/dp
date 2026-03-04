@@ -25,7 +25,7 @@ class DBBioDatasetAdapter(DatasetAdapter):
                 self._dataset = dataset["data"]
         except Exception as exc:  # pragma: no cover
             raise RuntimeError(f"Failed to load DB-Bio dataset from {self.data_in}") from exc
-        self._split_indices = load_split_indices(data_name=self.data, split=self.split)
+        self._split_indices = self._resolve_split_indices()
 
     def __len__(self) -> int:
         if self._split_indices is not None:
@@ -114,5 +114,30 @@ class DBBioDatasetAdapter(DatasetAdapter):
         ordered = [name for name in preferred if name in dataset]
         ordered.extend(name for name in dataset if name not in preferred)
         return ordered
+
+    def _resolve_split_indices(self) -> Optional[List[int]]:
+        if self.split is not None:
+            return load_split_indices(data_name=self.data, split=self.split)
+        return self._load_default_indices()
+
+    def _load_default_indices(self) -> List[int]:
+        split_names = ["train", "val", "test"]
+        concatenated: List[int] = []
+        for split_name in split_names:
+            indices = load_split_indices(data_name="db_bio", split=split_name)
+            if indices is None:
+                raise ValueError(f"Missing default split indices for db_bio: {split_name}")
+            concatenated.extend(indices)
+        return self._stable_unique(concatenated)
+
+    def _stable_unique(self, values: List[int]) -> List[int]:
+        seen: set[int] = set()
+        unique_values: List[int] = []
+        for value in values:
+            if value in seen:
+                continue
+            seen.add(value)
+            unique_values.append(value)
+        return unique_values
 
 __all__ = ["DBBioDatasetAdapter"]
