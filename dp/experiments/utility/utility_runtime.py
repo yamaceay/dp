@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import gc
+import hashlib
+import multiprocessing as mp
+import os
 from pathlib import Path
+import random
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from dp.experiments import ExperimentResult
 from dp.experiments.utility.base import UtilityTarget
+from dp.experiments.utility.downstream import DOWNSTREAM_HEAD_REGISTRY
 from dp.experiments.utility.io import iter_utility_evaluation_texts
 from dp.experiments.utility.models import UtilitySpec
+from dp.experiments.utility.vectorizer import FEATURE_EXTRACTOR_REGISTRY
 from dp.loaders.base import DatasetRecord
 
 
@@ -83,9 +90,57 @@ def _subset_by_keys(
     return out_keys, out_texts, out_labels
 
 
-def _fit_and_eval_single(
+def _stable_seed(base_seed: int, name: str) -> int:
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()
+    offset = int(digest[:8], 16)
+    return int((int(base_seed) + offset) % (2**31 - 1))
+
+
+def _set_global_seed(seed: Optional[int]) -> None:
+    if seed is None:
+        return
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import torch
+
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except Exception:
+        pass
+
+
+def _build_components_runtime(
     *,
-    spec: UtilitySpec,
+    default_vectorizer_name: str,
+    default_head_name: str,
+    vectorizer_name: Optional[str],
+    vectorizer_kwargs: Dict[str, Any],
+    head_name: Optional[str],
+    head_kwargs: Dict[str, Any],
+    identifier: Optional[str],
+) -> Tuple[Any, Any]:
+    resolved_vectorizer = (vectorizer_name or default_vectorizer_name or "").lower()
+    resolved_head = (head_name or default_head_name or "").lower()
+    if identifier:
+        parts = identifier.lower().replace(" ", "").replace("/", "+").split("+")
+        if len(parts) == 2:
+            resolved_vectorizer, resolved_head = parts[0], parts[1]
+    if resolved_vectorizer not in FEATURE_EXTRACTOR_REGISTRY:
+        raise ValueError(f"unknown vectorizer '{resolved_vectorizer}'")
+    if resolved_head not in DOWNSTREAM_HEAD_REGISTRY:
+        raise ValueError(f"unknown head '{resolved_head}'")
+    vectorizer = FEATURE_EXTRACTOR_REGISTRY[resolved_vectorizer](**dict(vectorizer_kwargs))
+    model = DOWNSTREAM_HEAD_REGISTRY[resolved_head](**dict(head_kwargs))
+    return vectorizer, model
+
+
+def _fit_and_eval_single_runtime(
+    *,
+    default_vectorizer_name: str,
+    default_head_name: str,
+    label_order: Optional[Sequence[str]],
     vectorizer_name: Optional[str],
     vectorizer_kwargs: Dict[str, Any],
     head_name: Optional[str],
@@ -99,8 +154,12 @@ def _fit_and_eval_single(
     test_labels: Sequence[Any],
     overall_texts: Sequence[str],
     overall_labels: Sequence[Any],
+    seed: Optional[int],
 ) -> Dict[str, Any]:
-    vectorizer, model = spec.build_components(
+    _set_global_seed(seed)
+    vectorizer, model = _build_components_runtime(
+        default_vectorizer_name=default_vectorizer_name,
+        default_head_name=default_head_name,
         vectorizer_name=vectorizer_name,
         vectorizer_kwargs=vectorizer_kwargs,
         head_name=head_name,
@@ -108,8 +167,8 @@ def _fit_and_eval_single(
         identifier=identifier,
     )
     try:
-        if hasattr(model, "set_label_order") and spec.target.label_order:
-            model.set_label_order(spec.target.label_order)
+        if hasattr(model, "set_label_order") and label_order:
+            model.set_label_order(list(label_order))
         model.setup()
         vectorizer.fit(list(train_texts))
         x_train = vectorizer.transform(list(train_texts))
@@ -133,6 +192,92 @@ def _fit_and_eval_single(
             model.cleanup()
         finally:
             vectorizer.cleanup()
+            gc.collect()
+
+
+def _isolated_worker(payload: Dict[str, Any], out_queue: Any) -> None:
+    try:
+        for key in (
+            "RANK",
+            "WORLD_SIZE",
+            "LOCAL_RANK",
+            "LOCAL_WORLD_SIZE",
+            "MASTER_ADDR",
+            "MASTER_PORT",
+            "TORCHELASTIC_RUN_ID",
+            "TORCHELASTIC_RESTART_COUNT",
+            "TORCHELASTIC_MAX_RESTARTS",
+            "TORCHELASTIC_ERROR_FILE",
+            "ACCELERATE_USE_FSDP",
+            "ACCELERATE_USE_DEEPSPEED",
+        ):
+            os.environ.pop(key, None)
+        os.environ["RANK"] = "0"
+        os.environ["WORLD_SIZE"] = "1"
+        os.environ["LOCAL_RANK"] = "-1"
+        result = _fit_and_eval_single_runtime(**payload)
+        out_queue.put({"ok": True, "result": result})
+    except Exception as exc:
+        out_queue.put({"ok": False, "error": repr(exc)})
+
+
+def _fit_and_eval_single_isolated(payload: Dict[str, Any]) -> Dict[str, Any]:
+    ctx = mp.get_context("spawn")
+    out_queue = ctx.Queue(maxsize=1)
+    process = ctx.Process(target=_isolated_worker, args=(payload, out_queue))
+    process.start()
+    message = out_queue.get()
+    process.join()
+    if process.exitcode != 0:
+        raise RuntimeError(f"isolated evaluation process failed with exit code {process.exitcode}")
+    if not isinstance(message, dict) or not bool(message.get("ok")):
+        error_message = "unknown isolated evaluation failure"
+        if isinstance(message, dict):
+            error_message = str(message.get("error", error_message))
+        raise RuntimeError(error_message)
+    result = message.get("result")
+    if not isinstance(result, dict):
+        raise RuntimeError("isolated evaluation returned invalid result")
+    return result
+
+
+def _fit_and_eval_single(
+    *,
+    spec: UtilitySpec,
+    vectorizer_name: Optional[str],
+    vectorizer_kwargs: Dict[str, Any],
+    head_name: Optional[str],
+    head_kwargs: Dict[str, Any],
+    identifier: Optional[str],
+    train_texts: Sequence[str],
+    train_labels: Sequence[Any],
+    val_texts: Sequence[str],
+    val_labels: Sequence[Any],
+    test_texts: Sequence[str],
+    test_labels: Sequence[Any],
+    overall_texts: Sequence[str],
+    overall_labels: Sequence[Any],
+    seed: Optional[int] = None,
+) -> Dict[str, Any]:
+    return _fit_and_eval_single_runtime(
+        default_vectorizer_name=spec.default_vectorizer,
+        default_head_name=spec.default_head,
+        label_order=spec.target.label_order,
+        vectorizer_name=vectorizer_name,
+        vectorizer_kwargs=vectorizer_kwargs,
+        head_name=head_name,
+        head_kwargs=head_kwargs,
+        identifier=identifier,
+        train_texts=train_texts,
+        train_labels=train_labels,
+        val_texts=val_texts,
+        val_labels=val_labels,
+        test_texts=test_texts,
+        test_labels=test_labels,
+        overall_texts=overall_texts,
+        overall_labels=overall_labels,
+        seed=seed,
+    )
 
 
 def _pick_tuned_head_kwargs(
@@ -154,6 +299,7 @@ def _pick_tuned_head_kwargs(
     test_labels: Sequence[Any],
     overall_texts: Sequence[str],
     overall_labels: Sequence[Any],
+    random_state: int,
 ) -> Tuple[Dict[str, Any], Dict[str, float], Dict[str, Any], List[Dict[str, Any]]]:
     values = list(tune_values or [])
     if not tune_param or not values:
@@ -172,6 +318,7 @@ def _pick_tuned_head_kwargs(
             test_labels=test_labels,
             overall_texts=overall_texts,
             overall_labels=overall_labels,
+            seed=_stable_seed(random_state, "baseline"),
         )
         return dict(base_head_kwargs), eval_result["val"], eval_result, []
 
@@ -198,6 +345,7 @@ def _pick_tuned_head_kwargs(
             test_labels=test_labels,
             overall_texts=overall_texts,
             overall_labels=overall_labels,
+            seed=_stable_seed(random_state, f"tune::{tune_param}::{value}"),
         )
         val_metrics = eval_result.get("val", {})
         score = float(val_metrics.get(primary_metric, 0.0))
@@ -280,6 +428,7 @@ def run_utility_experiment(
         test_labels=original_test_labels,
         overall_texts=all_texts,
         overall_labels=all_labels,
+        random_state=config.random_state,
     )
 
     baseline_train_metrics = dict(baseline_eval.get("train", {}))
@@ -309,6 +458,7 @@ def run_utility_experiment(
         yield from iter_utility_evaluation_texts(index_to_key, evaluation_sources, selected_keys=selected_keys)
 
     if protocol == "supervised_divergence":
+        _set_global_seed(_stable_seed(config.random_state, "supervised_divergence_shared"))
         shared_vectorizer, shared_model = spec.build_components(
             vectorizer_name=vectorizer_name,
             vectorizer_kwargs=vectorizer_kwargs,
@@ -370,22 +520,26 @@ def run_utility_experiment(
                         "utility": {"error": "missing_anonymized_split_records"},
                     }
                     continue
-                eval_result = _fit_and_eval_single(
-                    spec=spec,
-                    vectorizer_name=vectorizer_name,
-                    vectorizer_kwargs=vectorizer_kwargs,
-                    head_name=head_name,
-                    head_kwargs=selected_head_kwargs,
-                    identifier=identifier,
-                    train_texts=anon_train_texts,
-                    train_labels=anon_train_labels,
-                    val_texts=anon_val_texts if anon_val_texts else original_val_texts,
-                    val_labels=anon_val_labels if anon_val_labels else original_val_labels,
-                    test_texts=anon_test_texts,
-                    test_labels=anon_test_labels,
-                    overall_texts=anon_all_texts,
-                    overall_labels=anon_all_labels,
-                )
+                eval_payload: Dict[str, Any] = {
+                    "default_vectorizer_name": spec.default_vectorizer,
+                    "default_head_name": spec.default_head,
+                    "label_order": spec.target.label_order,
+                    "vectorizer_name": vectorizer_name,
+                    "vectorizer_kwargs": vectorizer_kwargs,
+                    "head_name": head_name,
+                    "head_kwargs": selected_head_kwargs,
+                    "identifier": identifier,
+                    "train_texts": anon_train_texts,
+                    "train_labels": anon_train_labels,
+                    "val_texts": anon_val_texts if anon_val_texts else original_val_texts,
+                    "val_labels": anon_val_labels if anon_val_labels else original_val_labels,
+                    "test_texts": anon_test_texts,
+                    "test_labels": anon_test_labels,
+                    "overall_texts": anon_all_texts,
+                    "overall_labels": anon_all_labels,
+                    "seed": _stable_seed(config.random_state, f"utility::{name}"),
+                }
+                eval_result = _fit_and_eval_single_isolated(eval_payload)
                 train_metrics = dict(eval_result.get("train", {}))
                 val_metrics = dict(eval_result.get("val", {}))
                 test_metrics = dict(eval_result.get("test", {}))
@@ -448,9 +602,24 @@ def run_utility_experiment(
     if not evaluations:
         raise ValueError("no anonymized texts aligned with dataset records")
 
+    setup_material = {
+        "protocol": str(protocol),
+        "model": str(model_name),
+        "primary_metric": str(primary_metric),
+        "vectorizer": str(vectorizer_name or spec.default_vectorizer),
+        "head": str(head_name or spec.default_head),
+        "vectorizer_kwargs": dict(vectorizer_kwargs),
+        "head_kwargs": dict(selected_head_kwargs),
+        "split_sizes": {"train": len(train_keys), "val": len(val_keys), "test": len(test_keys)},
+        "target": {"dataset": spec.dataset, "key": spec.target_key, "mode": spec.target.mode.value},
+        "random_state": int(config.random_state),
+    }
+    setup_hash = hashlib.sha1(repr(setup_material).encode("utf-8")).hexdigest()
+
     metrics_payload: Dict[str, Any] = {
         "model": str(model_name),
         "primary_metric": str(primary_metric),
+        "setup_hash": setup_hash,
         "baseline": {
             "metrics": dict(baseline_test_metrics),
             "train_size": len(train_keys),

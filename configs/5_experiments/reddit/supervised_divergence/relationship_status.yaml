@@ -15,6 +15,7 @@ source_splits:
   - split: indices/reddit/test.txt
     val: 1.0
 random_state: 42
+protocol: supervised_divergence
 head:
   type: bert_classifier
   params:
