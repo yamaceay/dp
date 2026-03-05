@@ -1,5 +1,9 @@
 dataset_sets:
-  - names: ["tab", "db_bio"]
+  - names: 
+    - name: tab
+      print_as: "TAB"
+    - name: db_bio
+      print_as: "DB-Bio"
     scores: 
       - name: privacy_exact_mean_reciprocal_rank
         rename_as: P_exact

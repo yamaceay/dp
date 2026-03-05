@@ -6,6 +6,7 @@ from pathlib import Path
 import ast
 import yaml
 import argparse
+import re
 
 X_AXIS_OPTIONS = {
     "p_exact": "P_exact",
@@ -25,6 +26,8 @@ dataset_names = [
     "tab",
 ]
 PARAMS_CONFIG_PATH = Path("configs/visualize/params.yaml")
+DATASET_CONFIG_PATH = Path("configs/visualize/datasets.yaml")
+METHODS_CONFIG_PATH = Path("configs/visualize/methods.yaml")
 OUTPUT_DIR = Path("images")
 
 _palette = [
@@ -57,6 +60,264 @@ def read_param_specs() -> dict[str, dict[str, object]]:
             param_specs[item["name"]] = item
     return param_specs
 
+
+def read_dataset_metric_bounds() -> dict[str, dict[str, tuple[float, float]]]:
+    with open(DATASET_CONFIG_PATH, "r") as f:
+        config = yaml.safe_load(f)
+    bounds_by_dataset: dict[str, dict[str, tuple[float, float]]] = {}
+    for dataset_set in config.get("dataset_sets", []):
+        dataset_scope = dataset_set.get("names")
+        dataset_names: list[str] = []
+        if isinstance(dataset_scope, list):
+            for entry in dataset_scope:
+                if isinstance(entry, str):
+                    dataset_names.append(entry)
+                    continue
+                if isinstance(entry, dict):
+                    dataset_name = entry.get("name")
+                    if isinstance(dataset_name, str):
+                        dataset_names.append(dataset_name)
+        if not dataset_names:
+            dataset_name = dataset_set.get("name")
+            if isinstance(dataset_name, str):
+                dataset_names = [dataset_name]
+        score_bounds: dict[str, tuple[float, float]] = {}
+        for score in dataset_set.get("scores", []):
+            score_name = score.get("rename_as", score.get("print_as", score.get("name")))
+            best_value = score.get("best")
+            worst_value = score.get("worst")
+            if not isinstance(score_name, str):
+                continue
+            if not isinstance(best_value, (int, float)) or not isinstance(worst_value, (int, float)):
+                continue
+            score_bounds[score_name] = (float(best_value), float(worst_value))
+        for dataset_name in dataset_names:
+            bounds_by_dataset[dataset_name] = dict(score_bounds)
+    return bounds_by_dataset
+
+
+def read_dataset_print_labels() -> dict[str, str]:
+    with open(DATASET_CONFIG_PATH, "r") as f:
+        config = yaml.safe_load(f)
+    labels: dict[str, str] = {}
+    for dataset_set in config.get("dataset_sets", []):
+        dataset_scope = dataset_set.get("names")
+        if isinstance(dataset_scope, list):
+            for entry in dataset_scope:
+                if isinstance(entry, dict):
+                    dataset_name = entry.get("name")
+                    dataset_print_as = entry.get("print_as")
+                    if isinstance(dataset_name, str) and isinstance(dataset_print_as, str) and dataset_print_as.strip():
+                        labels[dataset_name] = dataset_print_as.strip()
+                elif isinstance(entry, str):
+                    labels.setdefault(entry, entry.replace("_", "-").upper())
+            continue
+        dataset_name = dataset_set.get("name")
+        dataset_print_as = dataset_set.get("print_as")
+        if isinstance(dataset_name, str):
+            if isinstance(dataset_print_as, str) and dataset_print_as.strip():
+                labels[dataset_name] = dataset_print_as.strip()
+            else:
+                labels.setdefault(dataset_name, dataset_name.replace("_", "-").upper())
+    return labels
+
+
+def read_method_group_labels() -> dict[str, str]:
+    with open(METHODS_CONFIG_PATH, "r") as f:
+        config = yaml.safe_load(f)
+    labels: dict[str, str] = {}
+    for method_set in config.get("method_sets", []):
+        name = method_set.get("name")
+        print_as = method_set.get("print_as")
+        if isinstance(name, str) and isinstance(print_as, str) and print_as.strip():
+            labels[name] = print_as.strip()
+    return labels
+
+
+def format_metric_bounds_summary(
+    x_column: str,
+    y_column: str,
+    metric_bounds: dict[str, tuple[float, float]],
+) -> str:
+    lines: list[str] = []
+    x_bounds = metric_bounds.get(x_column)
+    if x_bounds is not None:
+        lines.append(f"{x_column}: best={x_bounds[0]:g} | worst={x_bounds[1]:g}")
+    y_bounds = metric_bounds.get(y_column)
+    if y_bounds is not None:
+        lines.append(f"{y_column}: best={y_bounds[0]:g} | worst={y_bounds[1]:g}")
+    return "\n".join(lines)
+
+
+def metric_label_with_unit(metric_name: str) -> str:
+    name, unit = metric_name_and_unit(metric_name)
+    if unit is None:
+        return name
+    return f"{name} ({unit})"
+
+
+def metric_name_and_unit(metric_name: str) -> tuple[str, str | None]:
+    if metric_name in {"P_exact", "P_more", "P_full"}:
+        return metric_name, "MRR"
+    if metric_name in {"U_nominal", "SD_nominal"}:
+        return metric_name, "ACC"
+    if metric_name in {"U_ordinal", "SD_ordinal"}:
+        return metric_name, "MAE"
+    return metric_name, None
+
+
+def y_axis_assessment_label(y_column: str) -> str:
+    if y_column.startswith("U_"):
+        return f"Utility ({y_column})"
+    if y_column.startswith("SD_"):
+        return f"Supervised divergence ({y_column})"
+    return y_column
+
+
+def y_metric_context(y_column: str) -> tuple[str, str, str, str] | None:
+    if y_column == "U_nominal":
+        return ("utility", "acc", "r", "a")
+    if y_column == "U_ordinal":
+        return ("utility", "mae", "r", "m")
+    if y_column == "SD_nominal":
+        return ("supervised_divergence", "acc", "r", "a")
+    if y_column == "SD_ordinal":
+        return ("supervised_divergence", "mae", "r", "m")
+    return None
+
+
+def _first_numeric(series: pd.Series) -> float | None:
+    numeric = pd.to_numeric(series, errors="coerce").dropna()
+    if numeric.empty:
+        return None
+    return float(numeric.iloc[0])
+
+
+def _first_count(df: pd.DataFrame, section_prefix: str, feature: str) -> float:
+    for count_column in (f"{section_prefix}__{feature}_count", f"{section_prefix}_{feature}_count"):
+        if count_column not in df.columns:
+            continue
+        value = _first_numeric(df[count_column])
+        if value is not None and value > 0:
+            return value
+    return 1.0
+
+
+def utility_anchor_values(
+    df: pd.DataFrame,
+    section_prefix: str,
+    abs_metric_name: str,
+) -> tuple[float, float] | None:
+    baseline_pattern = re.compile(rf"^{section_prefix}_(.+)_baseline_{abs_metric_name}$")
+    weighted_baseline = 0.0
+    weighted_dummy = 0.0
+    weight_total = 0.0
+
+    for column in df.columns:
+        match = baseline_pattern.match(column)
+        if not match:
+            continue
+        feature = match.group(1)
+        dummy_column = f"{section_prefix}_{feature}_dummy_{abs_metric_name}"
+        if dummy_column not in df.columns:
+            continue
+        baseline_value = _first_numeric(df[column])
+        dummy_value = _first_numeric(df[dummy_column])
+        if baseline_value is None or dummy_value is None:
+            continue
+        weight = _first_count(df, section_prefix, feature)
+        weighted_baseline += baseline_value * weight
+        weighted_dummy += dummy_value * weight
+        weight_total += weight
+
+    if weight_total <= 0:
+        return None
+    return (weighted_baseline / weight_total, weighted_dummy / weight_total)
+
+
+def build_absolute_recovery_block(
+    df: pd.DataFrame,
+    x_column: str,
+    y_column: str,
+    metric_bounds: dict[str, tuple[float, float]],
+) -> str:
+    rows: list[tuple[str, float, float]] = []
+    baseline_rows = df[df["method"] == "baseline"] if "method" in df.columns else pd.DataFrame()
+    if not baseline_rows.empty and x_column in baseline_rows.columns:
+        baseline_privacy = _first_numeric(baseline_rows[x_column])
+        if baseline_privacy is not None:
+            rows.append((x_column, baseline_privacy, 0.0))
+
+    metric_ctx = y_metric_context(y_column)
+    formula_lines: list[str] = []
+    if metric_ctx is not None:
+        section_prefix, abs_metric_name, rel_symbol, abs_symbol = metric_ctx
+        utility_anchors = utility_anchor_values(df, section_prefix, abs_metric_name)
+        if utility_anchors is not None:
+            rows.append((y_column, utility_anchors[0], utility_anchors[1]))
+            formula_lines.append("to obtain the absolute scores:")
+            formula_lines.append(f"{abs_symbol}(r) = r * (b - d) + d")
+
+    if not rows and not formula_lines:
+        return ""
+
+    metric_name_width = len("Metric")
+    for metric_name, _, _ in rows:
+        raw_name, _ = metric_name_and_unit(metric_name)
+        metric_name_width = max(metric_name_width, len(raw_name))
+    metric_width = len("Metric")
+
+    formatted_rows: list[tuple[str, float, float]] = []
+    for metric_name, baseline_value, dummy_value in rows:
+        raw_name, unit = metric_name_and_unit(metric_name)
+        if unit is None:
+            formatted_metric = raw_name
+        else:
+            formatted_metric = f"{raw_name.ljust(metric_name_width)} ({unit})"
+        metric_width = max(metric_width, len(formatted_metric))
+        formatted_rows.append((formatted_metric, baseline_value, dummy_value))
+
+    b_header = "b (baseline)"
+    d_header = "d (dummy)"
+    b_width = max(len(b_header), 7)
+    d_width = max(len(d_header), 7)
+
+    lines: list[str] = []
+    lines.append(f"{'Metric'.ljust(metric_width)} | {b_header.ljust(b_width)} | {d_header.ljust(d_width)}")
+    lines.append(f"{'-' * metric_width}-+-{'-' * b_width}-+-{'-' * d_width}")
+    for metric_name, baseline_value, dummy_value in formatted_rows:
+        lines.append(
+            f"{metric_name.ljust(metric_width)} | {baseline_value:>{b_width}.3f} | {dummy_value:>{d_width}.3f}"
+        )
+    if formula_lines:
+        lines.append("")
+        lines.extend(formula_lines)
+    return "\n".join(lines)
+
+
+def add_metric_bounds_to_plot(
+    ax: plt.Axes,
+    x_column: str,
+    y_column: str,
+    metric_bounds: dict[str, tuple[float, float]],
+) -> str:
+    labels: list[str] = []
+    x_bounds = metric_bounds.get(x_column)
+    if x_bounds is not None:
+        x_best, x_worst = x_bounds
+        ax.axvline(x_best, color="0.55", linestyle="--", linewidth=1.1, alpha=0.8, label="_nolegend_")
+        ax.axvline(x_worst, color="0.55", linestyle=":", linewidth=1.1, alpha=0.8, label="_nolegend_")
+        labels.append(f"{x_column}[best={x_best:g}, worst={x_worst:g}]")
+
+    y_bounds = metric_bounds.get(y_column)
+    if y_bounds is not None:
+        y_best, y_worst = y_bounds
+        ax.axhline(y_best, color="0.55", linestyle="--", linewidth=1.1, alpha=0.8, label="_nolegend_")
+        ax.axhline(y_worst, color="0.55", linestyle=":", linewidth=1.1, alpha=0.8, label="_nolegend_")
+        labels.append(f"{y_column}[best={y_best:g}, worst={y_worst:g}]")
+
+    return " | ".join(labels)
+
 def read_csv_file(path: Path, x_column: str, y_column: str) -> Optional[pd.DataFrame]:
     try:
         df = pd.read_csv(path)
@@ -66,11 +327,9 @@ def read_csv_file(path: Path, x_column: str, y_column: str) -> Optional[pd.DataF
         if y_column not in df.columns:
             print(f"Skipping file without {y_column}: {path}")
             return None
-        selected_cols = ["method", "params", x_column, y_column]
-        filtered = df[selected_cols].copy()
-        filtered = filtered.rename(columns={x_column: "P_plot", y_column: "U_plot"})
-        filtered["P_plot"] = pd.to_numeric(filtered["P_plot"], errors="coerce")
-        filtered["U_plot"] = pd.to_numeric(filtered["U_plot"], errors="coerce")
+        filtered = df.copy()
+        filtered["P_plot"] = pd.to_numeric(filtered[x_column], errors="coerce")
+        filtered["U_plot"] = pd.to_numeric(filtered[y_column], errors="coerce")
         filtered = filtered.dropna(subset=["P_plot", "U_plot"])
         if filtered.empty:
             print(f"Skipping file without valid {x_column}/{y_column} values: {path}")
@@ -269,19 +528,26 @@ if __name__ == "__main__":
     targets = resolve_plot_targets(args)
 
     param_specs = read_param_specs()
+    dataset_metric_bounds = read_dataset_metric_bounds()
+    dataset_print_labels = read_dataset_print_labels()
+    method_group_labels = read_method_group_labels()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for dataset_name in dataset_names:
+        metric_bounds = dataset_metric_bounds.get(dataset_name, {})
         method_names = discover_method_names(dataset_name)
         for method_name in method_names:
+            method_group_label = method_group_labels.get(method_name, method_name)
+            dataset_label = dataset_print_labels.get(dataset_name, dataset_name.replace("_", "-").upper())
             file_name = f"mds/{dataset_name}_logs_{method_name}.csv"
             file_path = Path(file_name)
             for x_name, x_column, y_name, y_column in targets:
                 df = read_csv_file(file_path, x_column, y_column)
                 if df is None:
                     continue
-                print(f"Dataset: {dataset_name}, Method: {method_name}, X: {x_column}, Y: {y_column}")
+                print(f"Dataset: {dataset_name}, Method Group: {method_group_label}, X: {x_column}, Y: {y_column}")
 
-                fig, ax = plt.subplots(figsize=(12, 6))
+                fig, ax = plt.subplots(figsize=(12, 8))
+                ax.set_box_aspect(1)
                 color_cache: dict[str, tuple[float, float, float]] = {}
 
                 df["params_dict"] = df["params"].apply(parse_params)
@@ -379,9 +645,19 @@ if __name__ == "__main__":
                             label=point_legend_label(grouped_method_name, params_dict),
                         )
 
+                info_block = build_absolute_recovery_block(df, x_column, y_column, metric_bounds)
                 ax.set_xlabel(f"Privacy ({x_column})")
-                ax.set_ylabel(y_column)
-                ax.set_title(f"{x_column} vs {y_column} for {dataset_name} - {method_name}")
+                ax.set_ylabel(y_axis_assessment_label(y_column))
+                ax.set_title(f"Privacy-Utility Tradeoff in {dataset_label}", fontsize=14, pad=24)
+                ax.text(
+                    0.5,
+                    1.01,
+                    method_group_label,
+                    transform=ax.transAxes,
+                    ha="center",
+                    va="bottom",
+                    fontsize=10,
+                )
                 ax.grid()
 
                 handles, labels = ax.get_legend_handles_labels()
@@ -398,15 +674,28 @@ if __name__ == "__main__":
                     dedup_handles,
                     dedup_labels,
                     title="Method Variants",
-                    bbox_to_anchor=(1.05, 1),
+                    bbox_to_anchor=(1.02, 1),
                     loc="upper left",
                     fontsize=9,
                     ncol=1 if len(dedup_labels) <= 5 else 2,
                 )
                 legend.get_title().set_fontsize(10)
 
-                fig.tight_layout()
+                if info_block:
+                    ax.text(
+                        1.05,
+                        0.06,
+                        info_block,
+                        transform=ax.transAxes,
+                        ha="left",
+                        va="bottom",
+                        fontsize=10,
+                        fontfamily="monospace",
+                        bbox={"facecolor": "white", "alpha": 0.9, "edgecolor": "0.8"},
+                    )
+
+                fig.tight_layout(rect=[0.06, 0.03, 0.73, 0.98])
                 output_path = OUTPUT_DIR / f"pu_tradeoff_{dataset_name}_{method_name}_{x_name}_{y_name}.png"
-                fig.savefig(output_path, dpi=200, bbox_inches="tight")
+                fig.savefig(output_path, dpi=200)
                 print(f"Saved plot to {output_path}")
                 plt.close(fig)

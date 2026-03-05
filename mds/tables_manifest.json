@@ -5,7 +5,7 @@
     "json_file": "db_bio_logs_record_level_rewriters.json",
     "dataset": "db_bio",
     "section": "record_level_rewriters",
-    "title": "DB-BIO results (record level rewriters)",
+    "title": "DB-Bio results (record level rewriters)",
     "heatmap_columns": [
       {
         "name": "P_exact",
@@ -70,7 +70,7 @@
     "json_file": "db_bio_logs_simple_maskers.json",
     "dataset": "db_bio",
     "section": "simple_maskers",
-    "title": "DB-BIO results (simple maskers)",
+    "title": "DB-Bio results (simple maskers)",
     "heatmap_columns": [
       {
         "name": "P_exact",
@@ -135,7 +135,7 @@
     "json_file": "db_bio_logs_simple_maskers_with_thresholds.json",
     "dataset": "db_bio",
     "section": "simple_maskers_with_thresholds",
-    "title": "DB-BIO results (simple maskers with thresholds)",
+    "title": "DB-Bio results (simple maskers with thresholds)",
     "heatmap_columns": [
       {
         "name": "P_exact",
@@ -200,7 +200,7 @@
     "json_file": "db_bio_logs_token_level_rewriters.json",
     "dataset": "db_bio",
     "section": "token_level_rewriters",
-    "title": "DB-BIO results (token level rewriters)",
+    "title": "DB-Bio results (token level rewriters)",
     "heatmap_columns": [
       {
         "name": "P_exact",
@@ -265,7 +265,7 @@
     "json_file": "db_bio_logs_token_level_rewriters_with_threshold_k.json",
     "dataset": "db_bio",
     "section": "token_level_rewriters_with_threshold_k",
-    "title": "DB-BIO results (token level rewriters with threshold k)",
+    "title": "DB-Bio results (token level rewriters with threshold k)",
     "heatmap_columns": [
       {
         "name": "P_exact",
@@ -330,7 +330,7 @@
     "json_file": "db_bio_logs_token_level_rewriters_with_threshold_rho.json",
     "dataset": "db_bio",
     "section": "token_level_rewriters_with_threshold_rho",
-    "title": "DB-BIO results (token level rewriters with threshold rho)",
+    "title": "DB-Bio results (token level rewriters with threshold rho)",
     "heatmap_columns": [
       {
         "name": "P_exact",

@@ -27,7 +27,7 @@ method_sets:
         print_as: "PETRE with Presidio-deid"
         params_one_run: {"k": [2, 3, 5, 7, 10]}
   - name: "record_level_rewriters"
-    print_as: "DP: Record-level rewriting methods with varying epsilon"
+    print_as: "DP Record-level rewriting methods with varying epsilon"
     methods:
       - method: "baseline"
         print_as: "Original data"
@@ -41,7 +41,7 @@ method_sets:
         print_as: "DP-Prompt"
         params: ["epsilon"]
   - name: "token_level_rewriters"
-    print_as: "DP: Token-level rewriting methods with varying epsilon"
+    print_as: "DP Token-level rewriting methods with varying epsilon"
     methods:
       - method: "baseline"
         print_as: "Original data"
@@ -55,7 +55,7 @@ method_sets:
         print_as: "Risk-aware DPMLM with Presidio-deid"
         params: ["epsilon"]
   - name: "token_level_rewriters_with_threshold_k"
-    print_as: "DP: Token-level rewriting methods with varying epsilon and limiting hyperparameters"
+    print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameters"
     methods:
       - method: "baseline"
         print_as: "Original data"
@@ -67,7 +67,7 @@ method_sets:
         params: ["epsilon"]
         params_one_run: {"k": [2, 3, 5, 7, 10]}
   - name: "token_level_rewriters_with_threshold_rho"
-    print_as: "DP: Token-level rewriting methods with varying epsilon and limiting hyperparameters"
+    print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameters"
     methods:
       - method: "baseline"
         print_as: "Original data"
@@ -80,7 +80,7 @@ method_sets:
         params_one_run: {"rho": [0.7, 0.8, 0.9]}
   - name: "token_level_rewriters_with_threshold_lambda"
     datasets: ["tab"]
-    print_as: "DP: Token-level rewriting methods with varying epsilon and limiting hyperparameters"
+    print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameters"
     methods:
       - method: "baseline"
         print_as: "Original data"

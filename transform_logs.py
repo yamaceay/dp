@@ -75,6 +75,9 @@ class LogMetricsEnricher:
             baseline_mae_key = f"{feature}_baseline_mae"
             dummy_mae_key = f"{feature}_dummy_mae"
             acc_key = f"{feature}_acc"
+            racc_key = f"{feature}_racc"
+            baseline_acc_key = f"{feature}_baseline_acc"
+            dummy_acc_key = f"{feature}_dummy_acc"
             if mae_key in utility_metrics:
                 if rmae_key in utility_metrics:
                     score = float(utility_metrics[rmae_key])
@@ -82,12 +85,12 @@ class LogMetricsEnricher:
                     mae_value = float(utility_metrics[mae_key])
                     baseline_mae = float(utility_metrics[baseline_mae_key])
                     dummy_mae = float(utility_metrics[dummy_mae_key])
-                    denominator = baseline_mae - dummy_mae
+                    denominator = dummy_mae - baseline_mae
                     if abs(denominator) <= 1e-12:
                         raise ValueError(
                             f"Feature '{feature}' has baseline/dummy mae with near-zero denominator"
                         )
-                    score = (mae_value - dummy_mae) / denominator
+                    score = (mae_value - baseline_mae) / denominator
                     utility_metrics[rmae_key] = score
                 elif not allow_missing_rmae:
                     raise ValueError(
@@ -97,9 +100,26 @@ class LogMetricsEnricher:
                     ordinal_weighted_sum += score * count
                     ordinal_weighted_count += count
             elif acc_key in utility_metrics:
-                score = float(utility_metrics[acc_key])
-                nominal_weighted_sum += score * count
-                nominal_weighted_count += count
+                if racc_key in utility_metrics:
+                    score = float(utility_metrics[racc_key])
+                elif baseline_acc_key in utility_metrics and dummy_acc_key in utility_metrics:
+                    acc_value = float(utility_metrics[acc_key])
+                    baseline_acc = float(utility_metrics[baseline_acc_key])
+                    dummy_acc = float(utility_metrics[dummy_acc_key])
+                    denominator = baseline_acc - dummy_acc
+                    if abs(denominator) <= 1e-12:
+                        raise ValueError(
+                            f"Feature '{feature}' has baseline/dummy acc with near-zero denominator"
+                        )
+                    score = (acc_value - dummy_acc) / denominator
+                    utility_metrics[racc_key] = score
+                elif not allow_missing_rmae:
+                    raise ValueError(
+                        f"Feature '{feature}' has acc but missing nominal utility score '{racc_key}'"
+                    )
+                if score is not None:
+                    nominal_weighted_sum += score * count
+                    nominal_weighted_count += count
             else:
                 raise ValueError(
                     f"Feature '{feature}' has neither ordinal mae nor nominal acc metric"
@@ -462,6 +482,7 @@ class MarkdownDatasetLogsWriter:
 
 def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
     dataset_projection_config = read_dataset_projection_config(DATASET_SETS_CONFIG_PATH)
+    dataset_print_labels = read_dataset_print_labels_config(DATASET_SETS_CONFIG_PATH)
     entries: list[dict[str, str]] = []
     for path in sorted(output_dir.glob("*.md")):
         stem = path.stem
@@ -503,7 +524,7 @@ def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
                 "json_file": json_file,
                 "dataset": dataset,
                 "section": section,
-                "title": typst_table_title(dataset, section),
+                "title": typst_table_title(dataset, section, dataset_print_labels),
                 "heatmap_columns": heatmap_columns,
                 "render_mode": "hierarchical" if HIERARCHICAL_SPLIT_TABLES else "flat",
             }
@@ -511,11 +532,44 @@ def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
     return entries
 
 
-def typst_table_title(dataset: str, section: str) -> str:
-    dataset_label = dataset.replace("_", "-").upper()
+def typst_table_title(dataset: str, section: str, dataset_print_labels: dict[str, str] | None = None) -> str:
+    dataset_label = (dataset_print_labels or {}).get(dataset, dataset.replace("_", "-").upper())
     if section == "all":
         return f"{dataset_label} results (all methods)"
     return f"{dataset_label} results ({section.replace('_', ' ')})"
+
+
+def _dataset_name_entries(dataset_set: dict[str, Any]) -> list[tuple[str, str | None]]:
+    entries = dataset_set.get("names")
+    if isinstance(entries, list):
+        result: list[tuple[str, str | None]] = []
+        for entry in entries:
+            if isinstance(entry, str):
+                result.append((entry, None))
+                continue
+            if isinstance(entry, dict):
+                dataset_name = entry.get("name")
+                dataset_print_as = entry.get("print_as")
+                if isinstance(dataset_name, str):
+                    result.append((dataset_name, dataset_print_as if isinstance(dataset_print_as, str) else None))
+        if result:
+            return result
+    dataset_name = dataset_set.get("name")
+    dataset_print_as = dataset_set.get("print_as")
+    if isinstance(dataset_name, str):
+        return [(dataset_name, dataset_print_as if isinstance(dataset_print_as, str) else None)]
+    return []
+
+
+def read_dataset_print_labels_config(path: str | Path) -> dict[str, str]:
+    with open(path, "r") as f:
+        config = yaml.safe_load(f)
+    labels: dict[str, str] = {}
+    for dataset_set in config.get("dataset_sets", []):
+        for dataset_name, dataset_print_as in _dataset_name_entries(dataset_set):
+            if dataset_print_as:
+                labels[dataset_name] = dataset_print_as
+    return labels
 
 
 def read_dataset_projection_config(path: str | Path) -> dict[str, list[dict[str, Any]]]:
@@ -523,10 +577,7 @@ def read_dataset_projection_config(path: str | Path) -> dict[str, list[dict[str,
         config = yaml.safe_load(f)
     projections: dict[str, list[dict[str, Any]]] = {}
     for dataset_set in config.get("dataset_sets", []):
-        dataset_names = dataset_set.get("names")
-        if dataset_names is None:
-            dataset_names = [dataset_set["name"]]
-        for dataset_name in dataset_names:
+        for dataset_name, _ in _dataset_name_entries(dataset_set):
             projections[dataset_name] = dataset_set.get("scores", [])
     return projections
 
