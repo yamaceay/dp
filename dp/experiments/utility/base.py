@@ -236,7 +236,7 @@ class TextUtilityExperiment(Experiment):
         self._median_dummy_mae_overall = self._compute_median_dummy_mae(all_labels)
         self._baseline_train_metrics = {k: float(v) for k, v in baseline_train_raw.items()}
         self._baseline_metrics = {k: float(v) for k, v in baseline_test_raw.items()} if baseline_test_raw else {}
-        self._baseline_overall_metrics = self._with_exp_rmae(baseline_overall_raw, self._median_dummy_mae_overall)
+        self._baseline_overall_metrics = self._with_utility_metrics(baseline_overall_raw, self._median_dummy_mae_overall)
         self._dummy_baseline_train_metrics = self._compute_dummy_metrics(actual_train_labels, actual_train_labels)
         self._dummy_baseline_test_metrics = self._compute_dummy_metrics(actual_train_labels, actual_test_labels) if actual_test_labels else {}
         self._dummy_baseline_overall_metrics = self._compute_dummy_metrics(actual_train_labels, all_labels)
@@ -301,7 +301,7 @@ class TextUtilityExperiment(Experiment):
 
             if not self._test_keys:
                 overall_metrics_raw, overall_matched, overall_cm = _eval_subset(list(self._all_key_set))
-                overall_metrics = self._with_exp_rmae(overall_metrics_raw, self._median_dummy_mae_overall)
+                overall_metrics = self._with_utility_metrics(overall_metrics_raw, self._median_dummy_mae_overall)
                 metrics = dict(overall_metrics)
                 drops = self._score_difference(self._baseline_overall_metrics or {}, metrics) if metrics else {}
                 overall_res = {
@@ -332,7 +332,7 @@ class TextUtilityExperiment(Experiment):
                 overall_metrics_raw, overall_matched, overall_cm = _eval_subset(list(self._all_key_set))
                 train_metrics = {k: float(v) for k, v in train_metrics_raw.items()}
                 test_metrics = {k: float(v) for k, v in test_metrics_raw.items()}
-                overall_metrics = self._with_exp_rmae(overall_metrics_raw, self._median_dummy_mae_overall)
+                overall_metrics = self._with_utility_metrics(overall_metrics_raw, self._median_dummy_mae_overall)
 
                 metrics = dict(test_metrics) if test_metrics else dict(overall_metrics)
                 drops = self._score_difference(self._baseline_metrics, metrics) if metrics else {}
@@ -498,7 +498,7 @@ class TextUtilityExperiment(Experiment):
                 drops[f"{name}_drop"] = float(value - current[name])
         return drops
 
-    def _with_exp_rmae(self, metrics: Dict[str, float], median_dummy_mae: Optional[float]) -> Dict[str, float]:
+    def _with_utility_metrics(self, metrics: Dict[str, float], median_dummy_mae: Optional[float]) -> Dict[str, float]:
         return {k: float(v) for k, v in metrics.items()}
 
     def _compute_median_dummy_mae(self, labels: Sequence[Any]) -> Optional[float]:

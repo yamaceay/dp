@@ -70,6 +70,46 @@ def _metric_is_minimized(metric_name: str) -> bool:
     return any(token in name for token in ("loss", "mae", "rmse", "mse", "error"))
 
 
+def _compute_dummy_metric_against_train_predictor(
+    train_labels: Sequence[Any],
+    eval_labels: Sequence[Any],
+    mode: UtilityTarget.Mode,
+    label_order: Optional[Sequence[str]],
+) -> tuple[str, float] | None:
+    if not train_labels or not eval_labels:
+        return None
+    if mode in (UtilityTarget.Mode.BINARY, UtilityTarget.Mode.NOMINAL):
+        counts: Dict[Any, int] = {}
+        first_index: Dict[Any, int] = {}
+        for index, label in enumerate(train_labels):
+            if label not in first_index:
+                first_index[label] = index
+                counts[label] = 0
+            counts[label] = counts[label] + 1
+        mode_label = min(counts.keys(), key=lambda label: (-counts[label], first_index[label]))
+        accuracy = float(np.mean(np.asarray([1.0 if label == mode_label else 0.0 for label in eval_labels], dtype=float)))
+        return "acc", accuracy
+    if mode is UtilityTarget.Mode.ORDINAL:
+        if not label_order:
+            return None
+        label_to_rank = {str(label): index for index, label in enumerate(label_order)}
+        try:
+            train_values = np.asarray([float(label_to_rank[str(label)]) for label in train_labels], dtype=float)
+            eval_values = np.asarray([float(label_to_rank[str(label)]) for label in eval_labels], dtype=float)
+        except KeyError:
+            return None
+        train_median = float(np.median(train_values))
+        mae = float(np.mean(np.abs(eval_values - train_median)))
+        return "mae", mae
+    if mode is UtilityTarget.Mode.CARDINAL:
+        train_values = np.asarray([float(label) for label in train_labels], dtype=float)
+        eval_values = np.asarray([float(label) for label in eval_labels], dtype=float)
+        train_mean = float(np.mean(train_values))
+        mse = float(np.mean(np.square(eval_values - train_mean)))
+        return "mse", mse
+    return None
+
+
 def _subset_by_keys(
     keys: Sequence[str],
     text_by_key: Dict[str, str],
@@ -410,6 +450,37 @@ def run_utility_experiment(
     if not original_train_texts or not original_test_texts:
         raise ValueError("not enough labeled records in fixed train/test splits")
 
+    if spec.target.mode in (UtilityTarget.Mode.BINARY, UtilityTarget.Mode.NOMINAL):
+        dummy_strategy = "mode"
+    elif spec.target.mode is UtilityTarget.Mode.ORDINAL:
+        dummy_strategy = "median"
+    elif spec.target.mode is UtilityTarget.Mode.CARDINAL:
+        dummy_strategy = "mean"
+    else:
+        dummy_strategy = "none"
+
+    dummy_metric_name: str | None = None
+    dummy_metric_values: Dict[str, float | None] = {"train": None, "test": None, "overall": None}
+    for split_name, eval_labels in (
+        ("train", original_train_labels),
+        ("test", original_test_labels),
+        ("overall", all_labels),
+    ):
+        dummy_result = _compute_dummy_metric_against_train_predictor(
+            original_train_labels,
+            eval_labels,
+            spec.target.mode,
+            spec.target.label_order,
+        )
+        if dummy_result is None:
+            continue
+        metric_name, metric_value = dummy_result
+        if dummy_metric_name is None:
+            dummy_metric_name = metric_name
+        elif dummy_metric_name != metric_name:
+            raise RuntimeError("inconsistent dummy metric across splits")
+        dummy_metric_values[split_name] = metric_value
+
     has_tuning = bool(config.tune_param and config.tune_values)
     selected_head_kwargs: Dict[str, Any]
     selected_val_metrics: Dict[str, float]
@@ -653,8 +724,18 @@ def run_utility_experiment(
             "train_metrics": dict(baseline_train_metrics),
             "test_metrics": dict(baseline_test_metrics),
             "overall_metrics": dict(baseline_overall_metrics),
-            "dummy": {},
-            "median_dummy_mae": {},
+            "dummy": (
+                {
+                    "strategy": dummy_strategy,
+                    dummy_metric_name: {
+                        "train": dummy_metric_values["train"],
+                        "test": dummy_metric_values["test"],
+                        "overall": dummy_metric_values["overall"],
+                    },
+                }
+                if dummy_metric_name
+                else {"strategy": dummy_strategy}
+            ),
             "val_metrics": dict(baseline_val_metrics),
             "selected_head_params": dict(selected_head_kwargs),
             "selected_val_metrics": dict(selected_val_metrics),

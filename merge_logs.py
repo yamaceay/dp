@@ -43,8 +43,72 @@ def parse_privacy_profile_from_log_name(log_name: str) -> str | None:
         return "full"
     return None
 
+
+def _load_test_indices(dataset: str) -> set[int]:
+    path = Path("indices") / dataset / "test.txt"
+    if not path.exists():
+        return set()
+    values: set[int] = set()
+    for line in path.read_text().splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            values.add(int(text))
+        except ValueError:
+            continue
+    return values
+
+
+def _summary_from_rank_rows(rows: List[Dict[str, Any]], test_indices: set[int]) -> Dict[str, Any] | None:
+    filtered: List[Dict[str, Any]] = []
+    for row in rows:
+        index_value = row.get("index")
+        rank_value = row.get("rank")
+        if not isinstance(index_value, int) or not isinstance(rank_value, (int, float)):
+            continue
+        if test_indices and index_value not in test_indices:
+            continue
+        if rank_value <= 0:
+            continue
+        filtered.append(row)
+    if not filtered:
+        return None
+    reciprocal_ranks = [1.0 / float(row["rank"]) for row in filtered]
+    accuracy = sum(1 for row in filtered if float(row["rank"]) == 1.0) / float(len(filtered))
+    return {
+        "count": len(filtered),
+        "mean_reciprocal_rank": sum(reciprocal_ranks) / float(len(filtered)),
+        "accuracy": accuracy,
+    }
+
 def filter_utility_metrics(result: Dict[str, Any], metrics: List[str], feature: str) -> Dict[str, Any]:
     return {feature + "_" + k: result[k] for k in metrics if k in result}
+
+
+def _extract_baseline_metric_overall(experiment_row: Dict[str, Any], metric_name: str) -> float | None:
+    baseline_raw = experiment_row.get("baseline_overall_metrics")
+    if isinstance(baseline_raw, dict) and isinstance(baseline_raw.get(metric_name), (int, float)):
+        return float(baseline_raw.get(metric_name))
+    fallback_key = f"baseline_{metric_name}_overall"
+    fallback_value = experiment_row.get(fallback_key)
+    if isinstance(fallback_value, (int, float)):
+        return float(fallback_value)
+    return None
+
+
+def _extract_dummy_metric_overall(experiment_row: Dict[str, Any]) -> tuple[str, float] | None:
+    dummy = experiment_row.get("baseline_dummy")
+    if not isinstance(dummy, dict):
+        return None
+    for metric_name in ("mae", "acc", "mse"):
+        metric_payload = dummy.get(metric_name)
+        if isinstance(metric_payload, dict) and isinstance(metric_payload.get("overall"), (int, float)):
+            return metric_name, float(metric_payload.get("overall"))
+    median = experiment_row.get("baseline_median_dummy_mae")
+    if isinstance(median, dict) and isinstance(median.get("overall"), (int, float)):
+        return "mae", float(median.get("overall"))
+    return None
 
 
 def extract_num_classes_from_utility_result(overall_results: Dict[str, Any]) -> int | None:
@@ -74,6 +138,9 @@ class UtilityExperimentLogParser(ExperimentLogParser):
     ) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
         experiment_result = None
+        baseline_metric_overall: Dict[str, float] = {}
+        dummy_metric_name: str | None = None
+        dummy_metric_overall: float | None = None
         total_count = None
         with Path(log_file).open("r", encoding="utf-8") as f:
             for line in f:
@@ -81,6 +148,15 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                 record_type = result.get("type")
                 if record_type == "experiment":
                     baseline_utility = filter_utility_metrics(result["baseline_overall_metrics"], metrics, feature)
+                    for metric_name in ("mae", "acc", "mse"):
+                        baseline_value = _extract_baseline_metric_overall(result, metric_name)
+                        if baseline_value is not None:
+                            baseline_metric_overall[metric_name] = baseline_value
+                            baseline_utility[f"{feature}_baseline_{metric_name}"] = baseline_value
+                    dummy_metric = _extract_dummy_metric_overall(result)
+                    if dummy_metric is not None:
+                        dummy_metric_name, dummy_metric_overall = dummy_metric
+                        baseline_utility[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
                     experiment_result = {
                         "dataset": dataset,
                         "feature": feature,
@@ -103,6 +179,10 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                 key = normalize_source_key(source, dataset)
                 method, params = parse_params_from_key(key)
                 utility_metrics = filter_utility_metrics(result["overall_results"]["metrics"], metrics, feature)
+                for metric_name, baseline_value in baseline_metric_overall.items():
+                    utility_metrics[f"{feature}_baseline_{metric_name}"] = baseline_value
+                if dummy_metric_name is not None and dummy_metric_overall is not None:
+                    utility_metrics[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
                 results.append(
                     {
                         "dataset": dataset,
@@ -120,6 +200,10 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                 if "grouped_results" in result:
                     for group_name, group_result in result["grouped_results"].items():
                         grouped_metrics = filter_utility_metrics(group_result["metrics"], metrics, feature)
+                        for metric_name, baseline_value in baseline_metric_overall.items():
+                            grouped_metrics[f"{feature}_baseline_{metric_name}"] = baseline_value
+                        if dummy_metric_name is not None and dummy_metric_overall is not None:
+                            grouped_metrics[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
                         grouped_num_classes = extract_num_classes_from_utility_result({"confusion_matrix": group_result.get("confusion_matrix")})
                         results.append(
                             {
@@ -142,45 +226,96 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
         results: List[Dict[str, Any]] = []
         log_name = Path(log_file).name
         privacy_profile = parse_privacy_profile_from_log_name(log_name)
+        test_indices = _load_test_indices(dataset) if privacy_profile == "full" else set()
+        original_rank_rows: List[Dict[str, Any]] = []
+        evaluation_rank_rows: Dict[str, List[Dict[str, Any]]] = {}
+        evaluation_rows: List[Dict[str, Any]] = []
+        experiment_row: Dict[str, Any] | None = None
         with Path(log_file).open("r", encoding="utf-8") as f:
             for line in f:
                 result = json.loads(line)
                 record_type = result.get("type")
                 if record_type == "experiment":
-                    score = result["score"]
-                    results.append(
-                        {
-                            "dataset": dataset,
-                            "method": "baseline",
-                            "params": {},
-                            "privacy_profile": privacy_profile,
-                            "count": result["original_record_count"],
-                            "privacy": {
-                                "mean_reciprocal_rank": score["mean_reciprocal_rank"],
-                                "accuracy": score["accuracy"],
-                            },
-                        }
-                    )
+                    experiment_row = result
+                    continue
+                if record_type == "original_rank":
+                    original_rank_rows.append(result)
+                    continue
+                if record_type == "evaluation_rank":
+                    evaluation_name = str(result.get("evaluation") or "")
+                    if evaluation_name:
+                        evaluation_rank_rows.setdefault(evaluation_name, []).append(result)
                     continue
                 if record_type != "evaluation":
                     continue
-                source = str(result.get("source", ""))
-                key = normalize_source_key(source, dataset)
-                method, params = parse_params_from_key(key)
-                summary = result["summary"]
-                results.append(
-                    {
-                        "dataset": dataset,
-                        "method": method,
-                        "params": params,
-                        "privacy_profile": privacy_profile,
-                        "count": summary["count"],
-                        "privacy": {
-                            "mean_reciprocal_rank": summary["mean_reciprocal_rank"],
-                            "accuracy": summary["accuracy"],
-                        },
+                evaluation_rows.append(result)
+
+        if experiment_row is not None:
+            if privacy_profile == "full":
+                summary = _summary_from_rank_rows(original_rank_rows, test_indices)
+                if summary is None:
+                    score = experiment_row.get("score", {})
+                    summary = {
+                        "count": int(experiment_row.get("original_record_count", 0)),
+                        "mean_reciprocal_rank": float(score.get("mean_reciprocal_rank", 0.0)),
+                        "accuracy": float(score.get("accuracy", 0.0)),
                     }
-                )
+            else:
+                score = experiment_row.get("score", {})
+                summary = {
+                    "count": int(experiment_row.get("original_record_count", 0)),
+                    "mean_reciprocal_rank": float(score.get("mean_reciprocal_rank", 0.0)),
+                    "accuracy": float(score.get("accuracy", 0.0)),
+                }
+            results.append(
+                {
+                    "dataset": dataset,
+                    "method": "baseline",
+                    "params": {},
+                    "privacy_profile": privacy_profile,
+                    "count": summary["count"],
+                    "privacy": {
+                        "mean_reciprocal_rank": summary["mean_reciprocal_rank"],
+                        "accuracy": summary["accuracy"],
+                    },
+                }
+            )
+
+        for result in evaluation_rows:
+            source = str(result.get("source", ""))
+            key = normalize_source_key(source, dataset)
+            method, params = parse_params_from_key(key)
+            if privacy_profile == "full":
+                evaluation_name = str(result.get("name") or "")
+                rank_rows = evaluation_rank_rows.get(evaluation_name, [])
+                summary = _summary_from_rank_rows(rank_rows, test_indices)
+                if summary is None:
+                    raw_summary = result.get("summary", {})
+                    summary = {
+                        "count": int(raw_summary.get("count", result.get("record_count", 0))),
+                        "mean_reciprocal_rank": float(raw_summary.get("mean_reciprocal_rank", 0.0)),
+                        "accuracy": float(raw_summary.get("accuracy", 0.0)),
+                    }
+            else:
+                raw_summary = result.get("summary", {})
+                summary = {
+                    "count": int(raw_summary.get("count", result.get("record_count", 0))),
+                    "mean_reciprocal_rank": float(raw_summary.get("mean_reciprocal_rank", 0.0)),
+                    "accuracy": float(raw_summary.get("accuracy", 0.0)),
+                }
+            results.append(
+                {
+                    "dataset": dataset,
+                    "method": method,
+                    "params": params,
+                    "privacy_profile": privacy_profile,
+                    "count": summary["count"],
+                    "privacy": {
+                        "mean_reciprocal_rank": summary["mean_reciprocal_rank"],
+                        "accuracy": summary["accuracy"],
+                    },
+                }
+            )
         return results
 
 class DivergenceExperimentLogParser(ExperimentLogParser):
@@ -303,7 +438,7 @@ if __name__ == "__main__":
         (log_file, dataset, divergence_metric_from_log_name(log_file.name)) for log_file, dataset in iter_type_dataset_logs("divergence")
     ]
 
-    utility_metrics = ["acc", "macro_mae", "mae", "macro_f1", "f1", "exp_rmae"]
+    utility_metrics = ["acc", "macro_mae", "mae", "macro_f1", "f1", "rmae"]
     
     all_results: List[Dict[str, Any]] = []
     for log_file, dataset in privacy_logs:

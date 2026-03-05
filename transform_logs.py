@@ -1,5 +1,4 @@
 import json
-import math
 import re
 from pathlib import Path
 from typing import Any
@@ -39,7 +38,7 @@ class LogMetricsEnricher:
                     continue
                 item_copy[section] = self._augment_utility_scores(
                     dict(section_metrics),
-                    allow_missing_exp_rmae=False,
+                    allow_missing_rmae=True,
                 )
             enriched.append(item_copy)
         return enriched
@@ -58,7 +57,7 @@ class LogMetricsEnricher:
     def _augment_utility_scores(
         self,
         utility_metrics: dict[str, Any],
-        allow_missing_exp_rmae: bool = False,
+        allow_missing_rmae: bool = False,
     ) -> dict[str, Any]:
         feature_counts = self._extract_feature_counts(utility_metrics)
         weighted_sum = 0.0
@@ -72,16 +71,31 @@ class LogMetricsEnricher:
                 continue
             score: float | None = None
             mae_key = f"{feature}_mae"
-            exp_key = f"{feature}_exp_rmae"
+            rmae_key = f"{feature}_rmae"
+            baseline_mae_key = f"{feature}_baseline_mae"
+            dummy_mae_key = f"{feature}_dummy_mae"
             acc_key = f"{feature}_acc"
             if mae_key in utility_metrics:
-                if exp_key in utility_metrics:
-                    score = float(utility_metrics[exp_key])
-                else:
+                if rmae_key in utility_metrics:
+                    score = float(utility_metrics[rmae_key])
+                elif baseline_mae_key in utility_metrics and dummy_mae_key in utility_metrics:
                     mae_value = float(utility_metrics[mae_key])
-                    score = math.exp(-mae_value)
-                ordinal_weighted_sum += score * count
-                ordinal_weighted_count += count
+                    baseline_mae = float(utility_metrics[baseline_mae_key])
+                    dummy_mae = float(utility_metrics[dummy_mae_key])
+                    denominator = baseline_mae - dummy_mae
+                    if abs(denominator) <= 1e-12:
+                        raise ValueError(
+                            f"Feature '{feature}' has baseline/dummy mae with near-zero denominator"
+                        )
+                    score = (mae_value - dummy_mae) / denominator
+                    utility_metrics[rmae_key] = score
+                elif not allow_missing_rmae:
+                    raise ValueError(
+                        f"Feature '{feature}' has mae but missing ordinal utility score '{rmae_key}'"
+                    )
+                if score is not None:
+                    ordinal_weighted_sum += score * count
+                    ordinal_weighted_count += count
             elif acc_key in utility_metrics:
                 score = float(utility_metrics[acc_key])
                 nominal_weighted_sum += score * count
@@ -308,7 +322,7 @@ class MarkdownDatasetLogsWriter:
 
     def _add_gain_column(self, frame: pd.DataFrame) -> pd.DataFrame:
         utility_columns = [column for column in ("U_nominal", "U_ordinal") if column in frame.columns]
-        privacy_columns = [column for column in ("P_exact", "P_more") if column in frame.columns]
+        privacy_columns = [column for column in ("P_exact", "P_more", "P_full") if column in frame.columns]
         if not utility_columns or not privacy_columns:
             return frame
         if "method" not in frame.columns:

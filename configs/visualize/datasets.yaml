@@ -9,6 +9,10 @@ dataset_sets:
         rename_as: P_more
         best: 0
         worst: 1
+      - name: privacy_full_mean_reciprocal_rank
+        rename_as: P_full
+        best: 0
+        worst: 1
       - name: utility_utility_nominal_weighted_score
         rename_as: U_nominal
         best: 1

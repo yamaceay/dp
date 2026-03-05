@@ -5,10 +5,20 @@ import pandas as pd
 from pathlib import Path
 import ast
 import yaml
+import argparse
 
-privacy_columns = ["P_exact"]
-utility_columns = ["U_overall", "utility_utility_total_score", "U_nominal"]
-method_columns = ["method", "params", "P_exact", "U_overall", "utility_utility_total_score", "U_nominal"]
+X_AXIS_OPTIONS = {
+    "p_exact": "P_exact",
+    "p_more": "P_more",
+    "p_full": "P_full",
+}
+
+Y_AXIS_OPTIONS = {
+    "u_nominal": "U_nominal",
+    "u_ordinal": "U_ordinal",
+    "sd_nominal": "SD_nominal",
+    "sd_ordinal": "SD_ordinal",
+}
 
 dataset_names = [
     "db_bio",
@@ -47,23 +57,77 @@ def read_param_specs() -> dict[str, dict[str, object]]:
             param_specs[item["name"]] = item
     return param_specs
 
-def read_csv_file(path: Path) -> Optional[pd.DataFrame]:
+def read_csv_file(path: Path, x_column: str, y_column: str) -> Optional[pd.DataFrame]:
     try:
         df = pd.read_csv(path)
-        if "P_exact" not in df.columns:
-            print(f"Skipping file without P_exact: {path}")
+        if x_column not in df.columns:
+            print(f"Skipping file without {x_column}: {path}")
             return None
-        utility_column = next((col for col in utility_columns if col in df.columns), None)
-        if utility_column is None:
-            print(f"Skipping file without utility score column: {path}")
+        if y_column not in df.columns:
+            print(f"Skipping file without {y_column}: {path}")
             return None
-        selected_cols = ["method", "params", "P_exact", utility_column]
+        selected_cols = ["method", "params", x_column, y_column]
         filtered = df[selected_cols].copy()
-        filtered = filtered.rename(columns={utility_column: "U_plot"})
+        filtered = filtered.rename(columns={x_column: "P_plot", y_column: "U_plot"})
+        filtered["P_plot"] = pd.to_numeric(filtered["P_plot"], errors="coerce")
+        filtered["U_plot"] = pd.to_numeric(filtered["U_plot"], errors="coerce")
+        filtered = filtered.dropna(subset=["P_plot", "U_plot"])
+        if filtered.empty:
+            print(f"Skipping file without valid {x_column}/{y_column} values: {path}")
+            return None
         return filtered
     except Exception as e:
         print(f"Error reading CSV file {path}")
         return None
+
+
+def _prompt_choice(prompt: str, options: list[tuple[str, str]]) -> tuple[str, str]:
+    print(prompt)
+    for idx, (_, label) in enumerate(options, start=1):
+        print(f"({idx}) {label}")
+    while True:
+        choice = input("Enter number: ").strip()
+        if not choice.isdigit():
+            print("Please enter a valid number.")
+            continue
+        index = int(choice)
+        if 1 <= index <= len(options):
+            return options[index - 1]
+        print("Choice out of range.")
+
+
+def resolve_plot_targets(args: argparse.Namespace) -> list[tuple[str, str, str, str]]:
+    if args.all:
+        targets: list[tuple[str, str, str, str]] = []
+        for x_name, x_column in X_AXIS_OPTIONS.items():
+            for y_name, y_column in Y_AXIS_OPTIONS.items():
+                targets.append((x_name, x_column, y_name, y_column))
+        return targets
+
+    if args.x_axis and args.y_axis:
+        return [
+            (
+                args.x_axis,
+                X_AXIS_OPTIONS[args.x_axis],
+                args.y_axis,
+                Y_AXIS_OPTIONS[args.y_axis],
+            )
+        ]
+
+    x_options = [
+        ("p_exact", "p_exact"),
+        ("p_more", "p_more"),
+        ("p_full", "p_full"),
+    ]
+    y_options = [
+        ("u_nominal", "u_nominal"),
+        ("u_ordinal", "u_ordinal"),
+        ("sd_nominal", "sd_nominal"),
+        ("sd_ordinal", "sd_ordinal"),
+    ]
+    x_name, _ = _prompt_choice("select x-axis:", x_options)
+    y_name, _ = _prompt_choice("select y-axis:", y_options)
+    return [(x_name, X_AXIS_OPTIONS[x_name], y_name, Y_AXIS_OPTIONS[y_name])]
 
 
 def discover_method_names(dataset_name: str) -> list[str]:
@@ -191,6 +255,19 @@ def point_legend_label(method: str, params_dict: dict[str, object]) -> str:
     return f"{method}({params_label})"
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate privacy-utility tradeoff plots")
+    parser.add_argument("--all", action="store_true", help="Generate all x/y tradeoff combinations")
+    parser.add_argument("--x-axis", choices=sorted(X_AXIS_OPTIONS.keys()), help="x-axis metric")
+    parser.add_argument("--y-axis", choices=sorted(Y_AXIS_OPTIONS.keys()), help="y-axis metric")
+    args = parser.parse_args()
+
+    if (args.x_axis and not args.y_axis) or (args.y_axis and not args.x_axis):
+        raise ValueError("Both --x-axis and --y-axis must be provided together.")
+    if args.all and (args.x_axis or args.y_axis):
+        raise ValueError("Use either --all or --x-axis/--y-axis, not both.")
+
+    targets = resolve_plot_targets(args)
+
     param_specs = read_param_specs()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for dataset_name in dataset_names:
@@ -198,137 +275,138 @@ if __name__ == "__main__":
         for method_name in method_names:
             file_name = f"mds/{dataset_name}_logs_{method_name}.csv"
             file_path = Path(file_name)
-            df = read_csv_file(file_path)
-            if df is None:
-                continue
-            print(f"Dataset: {dataset_name}, Method: {method_name}")
-            
-            fig, ax = plt.subplots(figsize=(12, 6))
-            color_cache: dict[str, tuple[float, float, float]] = {}
-
-            df["params_dict"] = df["params"].apply(parse_params)
-            df["param_keys_signature"] = df["params_dict"].apply(param_keys_signature)
-            df["method_param_key"] = df.apply(
-                lambda row: f"{row['method']}+{row['param_keys_signature']}",
-                axis=1,
-            )
-            df["shade_param"] = df["params_dict"].apply(select_shade_param)
-            df["base_color_group"] = df.apply(
-                lambda row: base_color_group_key(row["method"], row["params_dict"], row["param_keys_signature"]),
-                axis=1,
-            )
-            baseline_df = df[df["method"] == "baseline"]
-            baseline_point: tuple[float, float] | None = None
-            if not baseline_df.empty:
-                baseline_row = baseline_df.iloc[0]
-                baseline_point = (float(baseline_row["P_exact"]), float(baseline_row["U_plot"]))
-
-            shade_level_map: dict[str, dict[object, float]] = {}
-            for base_group, group_df in df.groupby("base_color_group", sort=False):
-                shade_param = group_df["shade_param"].iloc[0]
-                if not isinstance(shade_param, str):
-                    shade_level_map[base_group] = {}
+            for x_name, x_column, y_name, y_column in targets:
+                df = read_csv_file(file_path, x_column, y_column)
+                if df is None:
                     continue
-                shade_values = []
-                for params_dict in group_df["params_dict"]:
-                    if shade_param in params_dict:
-                        shade_values.append(params_dict[shade_param])
-                unique_values = sort_param_values(set(shade_values), shade_param, param_specs)
-                if not unique_values:
-                    shade_level_map[base_group] = {}
-                elif len(unique_values) == 1:
-                    shade_level_map[base_group] = {unique_values[0]: 0.45}
-                else:
-                    shade_level_map[base_group] = {
-                        value: idx / (len(unique_values) - 1)
-                        for idx, value in enumerate(unique_values)
-                    }
+                print(f"Dataset: {dataset_name}, Method: {method_name}, X: {x_column}, Y: {y_column}")
 
-            for base_group, group_df in df.groupby("base_color_group", sort=False):
-                first_row = group_df.iloc[0]
-                method_name = str(first_row["method"])
-                shade_param = first_row["shade_param"]
-                base_color = get_base_color(base_group, color_cache)
+                fig, ax = plt.subplots(figsize=(12, 6))
+                color_cache: dict[str, tuple[float, float, float]] = {}
 
-                ordered_rows = group_df.copy()
-                if isinstance(shade_param, str):
-                    ordered_rows["__shade_sort__"] = ordered_rows["params_dict"].apply(
-                        lambda params: sort_param_value_for_shading(params.get(shade_param))
-                    )
-                    ordered_rows = ordered_rows.sort_values("__shade_sort__")
-                    if param_specs.get(shade_param, {}).get("print_order") == "high_to_low":
-                        ordered_rows = ordered_rows.iloc[::-1]
+                df["params_dict"] = df["params"].apply(parse_params)
+                df["param_keys_signature"] = df["params_dict"].apply(param_keys_signature)
+                df["method_param_key"] = df.apply(
+                    lambda row: f"{row['method']}+{row['param_keys_signature']}",
+                    axis=1,
+                )
+                df["shade_param"] = df["params_dict"].apply(select_shade_param)
+                df["base_color_group"] = df.apply(
+                    lambda row: base_color_group_key(row["method"], row["params_dict"], row["param_keys_signature"]),
+                    axis=1,
+                )
+                baseline_df = df[df["method"] == "baseline"]
+                baseline_point: tuple[float, float] | None = None
+                if not baseline_df.empty:
+                    baseline_row = baseline_df.iloc[0]
+                    baseline_point = (float(baseline_row["P_plot"]), float(baseline_row["U_plot"]))
 
-                has_line = len(ordered_rows) >= 2
-                if has_line:
-                    ax.plot(
-                        ordered_rows["P_exact"],
-                        ordered_rows["U_plot"],
-                        color=base_color,
-                        linewidth=1.8,
-                        alpha=0.9,
-                        label="_nolegend_",
-                    )
+                shade_level_map: dict[str, dict[object, float]] = {}
+                for base_group, group_df in df.groupby("base_color_group", sort=False):
+                    shade_param = group_df["shade_param"].iloc[0]
+                    if not isinstance(shade_param, str):
+                        shade_level_map[base_group] = {}
+                        continue
+                    shade_values = []
+                    for params_dict in group_df["params_dict"]:
+                        if shade_param in params_dict:
+                            shade_values.append(params_dict[shade_param])
+                    unique_values = sort_param_values(set(shade_values), shade_param, param_specs)
+                    if not unique_values:
+                        shade_level_map[base_group] = {}
+                    elif len(unique_values) == 1:
+                        shade_level_map[base_group] = {unique_values[0]: 0.45}
+                    else:
+                        shade_level_map[base_group] = {
+                            value: idx / (len(unique_values) - 1)
+                            for idx, value in enumerate(unique_values)
+                        }
 
-                if has_line and baseline_point is not None and method_name != "baseline":
-                    endpoint = endpoint_row_for_baseline_extension(ordered_rows, shade_param, param_specs)
-                    ax.plot(
-                        [float(endpoint["P_exact"]), baseline_point[0]],
-                        [float(endpoint["U_plot"]), baseline_point[1]],
-                        color=base_color,
-                        linewidth=1.4,
-                        alpha=0.8,
-                        linestyle=":",
-                        label="_nolegend_",
-                    )
+                for base_group, group_df in df.groupby("base_color_group", sort=False):
+                    first_row = group_df.iloc[0]
+                    grouped_method_name = str(first_row["method"])
+                    shade_param = first_row["shade_param"]
+                    base_color = get_base_color(base_group, color_cache)
 
-                for _, row in ordered_rows.iterrows():
-                    params_dict = row["params_dict"]
-                    shade_value = None
+                    ordered_rows = group_df.copy()
                     if isinstance(shade_param, str):
-                        shade_value = params_dict.get(shade_param)
-                    shade_level = shade_level_map.get(base_group, {}).get(shade_value, 0.45)
-                    point_color = shade_color(base_color, shade_level)
+                        ordered_rows["__shade_sort__"] = ordered_rows["params_dict"].apply(
+                            lambda params: sort_param_value_for_shading(params.get(shade_param))
+                        )
+                        ordered_rows = ordered_rows.sort_values("__shade_sort__")
+                        if param_specs.get(shade_param, {}).get("print_order") == "high_to_low":
+                            ordered_rows = ordered_rows.iloc[::-1]
 
-                    ax.scatter(
-                        row["P_exact"],
-                        row["U_plot"],
-                        color=point_color,
-                        edgecolor=base_color,
-                        linewidth=0.8,
-                        alpha=0.98,
-                        s=90,
-                        label=point_legend_label(method_name, params_dict),
-                    )
+                    has_line = len(ordered_rows) >= 2
+                    if has_line:
+                        ax.plot(
+                            ordered_rows["P_plot"],
+                            ordered_rows["U_plot"],
+                            color=base_color,
+                            linewidth=1.8,
+                            alpha=0.9,
+                            label="_nolegend_",
+                        )
 
-            ax.set_xlabel("Privacy (P_exact)")
-            ax.set_ylabel("Utility")
-            ax.set_title(f"Privacy vs Utility for {dataset_name} - {method_name}")
-            ax.grid()
-            
-            handles, labels = ax.get_legend_handles_labels()
-            dedup_handles = []
-            dedup_labels = []
-            seen_labels = set()
-            for handle, label in zip(handles, labels):
-                if label == "_nolegend_" or label in seen_labels:
-                    continue
-                seen_labels.add(label)
-                dedup_handles.append(handle)
-                dedup_labels.append(label)
-            legend = ax.legend(
-                dedup_handles,
-                dedup_labels,
-                title="Method Variants",
-                bbox_to_anchor=(1.05, 1),
-                loc="upper left",
-                fontsize=9,
-                ncol=1 if len(dedup_labels) <= 5 else 2
-            )
-            legend.get_title().set_fontsize(10)
-            
-            fig.tight_layout()
-            output_path = OUTPUT_DIR / f"pu_tradeoff_{dataset_name}_{method_name}.png"
-            fig.savefig(output_path, dpi=200, bbox_inches="tight")
-            print(f"Saved plot to {output_path}")
-            plt.close(fig)
+                    if has_line and baseline_point is not None and grouped_method_name != "baseline":
+                        endpoint = endpoint_row_for_baseline_extension(ordered_rows, shade_param, param_specs)
+                        ax.plot(
+                            [float(endpoint["P_plot"]), baseline_point[0]],
+                            [float(endpoint["U_plot"]), baseline_point[1]],
+                            color=base_color,
+                            linewidth=1.4,
+                            alpha=0.8,
+                            linestyle=":",
+                            label="_nolegend_",
+                        )
+
+                    for _, row in ordered_rows.iterrows():
+                        params_dict = row["params_dict"]
+                        shade_value = None
+                        if isinstance(shade_param, str):
+                            shade_value = params_dict.get(shade_param)
+                        shade_level = shade_level_map.get(base_group, {}).get(shade_value, 0.45)
+                        point_color = shade_color(base_color, shade_level)
+
+                        ax.scatter(
+                                row["P_plot"],
+                            row["U_plot"],
+                            color=point_color,
+                            edgecolor=base_color,
+                            linewidth=0.8,
+                            alpha=0.98,
+                            s=90,
+                            label=point_legend_label(grouped_method_name, params_dict),
+                        )
+
+                ax.set_xlabel(f"Privacy ({x_column})")
+                ax.set_ylabel(y_column)
+                ax.set_title(f"{x_column} vs {y_column} for {dataset_name} - {method_name}")
+                ax.grid()
+
+                handles, labels = ax.get_legend_handles_labels()
+                dedup_handles = []
+                dedup_labels = []
+                seen_labels = set()
+                for handle, label in zip(handles, labels):
+                    if label == "_nolegend_" or label in seen_labels:
+                        continue
+                    seen_labels.add(label)
+                    dedup_handles.append(handle)
+                    dedup_labels.append(label)
+                legend = ax.legend(
+                    dedup_handles,
+                    dedup_labels,
+                    title="Method Variants",
+                    bbox_to_anchor=(1.05, 1),
+                    loc="upper left",
+                    fontsize=9,
+                    ncol=1 if len(dedup_labels) <= 5 else 2,
+                )
+                legend.get_title().set_fontsize(10)
+
+                fig.tight_layout()
+                output_path = OUTPUT_DIR / f"pu_tradeoff_{dataset_name}_{method_name}_{x_name}_{y_name}.png"
+                fig.savefig(output_path, dpi=200, bbox_inches="tight")
+                print(f"Saved plot to {output_path}")
+                plt.close(fig)
