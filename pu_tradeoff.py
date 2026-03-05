@@ -318,6 +318,23 @@ def add_metric_bounds_to_plot(
 
     return " | ".join(labels)
 
+
+def normalize_ordinal_plot_scores(
+    df: pd.DataFrame,
+    y_column: str,
+    metric_bounds: dict[str, tuple[float, float]],
+) -> pd.DataFrame:
+    if y_column not in {"U_ordinal", "SD_ordinal"}:
+        return df
+    bounds = metric_bounds.get(y_column)
+    if bounds is None:
+        return df
+    best_value, worst_value = bounds
+    if best_value < worst_value:
+        df = df.copy()
+        df["U_plot"] = 1.0 - df["U_plot"]
+    return df
+
 def read_csv_file(path: Path, x_column: str, y_column: str) -> Optional[pd.DataFrame]:
     try:
         df = pd.read_csv(path)
@@ -544,6 +561,7 @@ if __name__ == "__main__":
                 df = read_csv_file(file_path, x_column, y_column)
                 if df is None:
                     continue
+                df = normalize_ordinal_plot_scores(df, y_column, metric_bounds)
                 print(f"Dataset: {dataset_name}, Method Group: {method_group_label}, X: {x_column}, Y: {y_column}")
 
                 fig, ax = plt.subplots(figsize=(12, 8))
@@ -684,7 +702,7 @@ if __name__ == "__main__":
                 if info_block:
                     ax.text(
                         1.05,
-                        0.06,
+                        0.0,
                         info_block,
                         transform=ax.transAxes,
                         ha="left",

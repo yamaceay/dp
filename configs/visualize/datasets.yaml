@@ -23,16 +23,16 @@ dataset_sets:
         worst: 0
       - name: utility_utility_ordinal_weighted_score
         rename_as: U_ordinal
-        best: 1
-        worst: 0
+        best: 0
+        worst: 1
       - name: supervised_divergence_utility_nominal_weighted_score
         rename_as: SD_nominal
         best: 1
         worst: 0
       - name: supervised_divergence_utility_ordinal_weighted_score
         rename_as: SD_ordinal
-        best: 1
-        worst: 0
+        best: 0
+        worst: 1
       - name: divergence_bertscore
         rename_as: D_bertscore
         best: 0
