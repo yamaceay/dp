@@ -1,22 +1,20 @@
-from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple, Union
-from pathlib import Path
-import json
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import torch
 import numpy as np
 import string
-from collections import Counter
 
 from dp.loaders import DatasetRecord
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer
-from dp.methods.constants import Buckets, EpsilonParam, BucketDict, buckets_to_dicts
+from dp.methods.constants import Buckets, BucketDict, buckets_to_dicts
 from dp.utils.splitter import TextSplitter
 from dp.utils.memory import clear_memory
 from dp.utils.token_ledger import TokenLedger
 from dp.utils.risk import _scores_to_inverse_probs
 from dp.utils.precomputed_risk import align_precomputed_risk_scores
 from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
-from dp.utils.explainer.base import TokenExplainer, load_tri_label_mapping
-from dp.utils.selector.base import AnonymizerUnit, ApplyFn, AnonymizationStep
+from dp.utils.explainer.base import load_tri_label_mapping
+from dp.utils.selector.base import AnonymizerUnit, ApplyFn
+from dp.utils.chunking import TokenAwareChunker
 
 
 class DPMlmAnonymizer(Anonymizer):   
@@ -33,6 +31,10 @@ class DPMlmAnonymizer(Anonymizer):
         delete_probability: float = 0.0,
         risk_temperature: Optional[float] = None,
         max_retry_rounds: int = 1,
+        enable_dpmlm_chunking: bool = True,
+        dpmlm_chunk_max_tokens: int = 256,
+        dpmlm_chunk_overlap_tokens: int = 0,
+        dpmlm_chunking: Optional[Dict[str, Any]] = None,
         verbose: bool = False,
         **kwargs
     ):
@@ -48,7 +50,17 @@ class DPMlmAnonymizer(Anonymizer):
         self.delete_probability = delete_probability
         self.risk_temperature = risk_temperature
         self.max_retry_rounds = max_retry_rounds
+        chunking_cfg = dpmlm_chunking or {}
+        if not isinstance(chunking_cfg, dict):
+            raise ValueError("dpmlm_chunking must be a mapping")
+        chunking_enabled = chunking_cfg.get("enabled", enable_dpmlm_chunking)
+        chunking_max_tokens = chunking_cfg.get("max_tokens", dpmlm_chunk_max_tokens)
+        chunking_overlap_tokens = chunking_cfg.get("overlap_tokens", dpmlm_chunk_overlap_tokens)
+        self.enable_dpmlm_chunking = bool(chunking_enabled)
+        self.dpmlm_chunk_max_tokens = max(1, int(chunking_max_tokens))
+        self.dpmlm_chunk_overlap_tokens = max(0, int(chunking_overlap_tokens))
         self.verbose = bool(verbose)
+        self.dataset_name = str(kwargs.get("data") or "").strip().lower()
 
         self._unit: Optional[AnonymizerUnit] = None
         self._explainer = None
@@ -79,6 +91,15 @@ class DPMlmAnonymizer(Anonymizer):
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)
             self.model = AutoModelForMaskedLM.from_pretrained(self.model_checkpoint).to(self.device)
             self.detokenizer = TreebankWordDetokenizer()
+            model_max_length = getattr(self.tokenizer, "model_max_length", None)
+            if model_max_length is None or not isinstance(model_max_length, int) or model_max_length <= 0 or model_max_length > 100000:
+                model_max_length = 512
+            self.mlm_max_length = int(model_max_length)
+            self._token_chunker = TokenAwareChunker(
+                tokenizer=self.tokenizer,
+                max_tokens=self.dpmlm_chunk_max_tokens,
+                overlap_tokens=self.dpmlm_chunk_overlap_tokens,
+            )
 
         except ImportError as exc:
             raise ImportError("Required packages not found. Install with: uv pip install transformers nltk") from exc
@@ -187,6 +208,19 @@ class DPMlmAnonymizer(Anonymizer):
             offsets.append((start, end))
         return tokens, offsets
 
+    def _dpmlm_chunk_for_offset(self, sentence: str, offset: Tuple[int, int]) -> Tuple[str, Tuple[int, int]]:
+        if not self.enable_dpmlm_chunking:
+            return sentence, offset
+        chunk = self._token_chunker.centered_chunk(sentence, offset)
+        if chunk.start == 0 and chunk.end == len(sentence):
+            return sentence, offset
+
+        local_start = int(offset[0]) - int(chunk.start)
+        local_end = int(offset[1]) - int(chunk.start)
+        if local_start < 0 or local_end > len(chunk.text) or local_start >= local_end:
+            return sentence, offset
+        return chunk.text, (local_start, local_end)
+
     def _privatize_token(
         self,
         sentence: str,
@@ -195,11 +229,12 @@ class DPMlmAnonymizer(Anonymizer):
         epsilon: float,
         exclude_original: bool = False,
     ) -> str:
-        masked_sentence = self._replace_token(sentence, self.tokenizer.mask_token, offset)
-        if masked_sentence == sentence:
-            raise ValueError(f"Token {token} not found in sentence during masking: {sentence}")
+        sentence_for_mask, local_offset = self._dpmlm_chunk_for_offset(sentence, offset)
+        masked_sentence = self._replace_token(sentence_for_mask, self.tokenizer.mask_token, local_offset)
+        if masked_sentence == sentence_for_mask:
+            raise ValueError(f"Token {token} not found in sentence during masking: {sentence_for_mask}")
 
-        input_ids = self.tokenizer.encode(masked_sentence, add_special_tokens=True, truncation=True, max_length=512)
+        input_ids = self.tokenizer.encode(masked_sentence, add_special_tokens=True, truncation=True, max_length=self.mlm_max_length)
         
         try:
             mask_pos = input_ids.index(self.tokenizer.mask_token_id)
@@ -449,6 +484,78 @@ class DPMlmAnonymizer(Anonymizer):
             token = text[int(start):int(end)]
             print(f"Token nr. {token_idx}: {token} ({float(score):.3f})")
 
+    def _print_verbose_chunking_summary(
+        self,
+        text: str,
+        record_uid: Optional[str],
+        record_name: Optional[str],
+    ) -> None:
+        if not self.verbose:
+            return
+        record_ref = record_uid or record_name or "<unknown>"
+        if not self.enable_dpmlm_chunking:
+            print(f"[dpmlm][verbose] record={record_ref} chunking=disabled")
+            return
+        chunks = self._token_chunker.chunk(text)
+        n_chunks = len(chunks)
+        spans_preview = [f"({int(c.start)},{int(c.end)})" for c in chunks[:3]]
+        print(
+            f"[dpmlm][verbose] record={record_ref} chunking=enabled max_tokens={self.dpmlm_chunk_max_tokens} "
+            f"overlap_tokens={self.dpmlm_chunk_overlap_tokens} chunks={n_chunks} preview={spans_preview}"
+        )
+
+    def _print_verbose_epsilon_distribution(
+        self,
+        token_epsilons: Optional[np.ndarray],
+        epsilon: float,
+        record_uid: Optional[str],
+        record_name: Optional[str],
+    ) -> None:
+        if not self.verbose:
+            return
+        record_ref = record_uid or record_name or "<unknown>"
+        if token_epsilons is None or token_epsilons.size == 0:
+            print(f"[dpmlm][verbose] record={record_ref} epsilon_base={float(epsilon):.6f} token_epsilons=none")
+            return
+        values = token_epsilons.astype(float)
+        q10, q50, q90 = np.quantile(values, [0.10, 0.50, 0.90])
+        print(
+            f"[dpmlm][verbose] record={record_ref} epsilon_base={float(epsilon):.6f} "
+            f"token_epsilons(n={int(values.size)}, min={float(values.min()):.6f}, mean={float(values.mean()):.6f}, "
+            f"max={float(values.max()):.6f}, q10={float(q10):.6f}, q50={float(q50):.6f}, q90={float(q90):.6f})"
+        )
+
+    def _print_verbose_record_summary(
+        self,
+        epsilon_values: Sequence[float],
+        epsilon_token_count: int,
+        epsilon_token_sum: float,
+        epsilon_token_min: Optional[float],
+        epsilon_token_max: Optional[float],
+        variants: int,
+        record_uid: Optional[str],
+        record_name: Optional[str],
+    ) -> None:
+        if not self.verbose:
+            return
+        record_ref = record_uid or record_name or "<unknown>"
+        epsilon_values_str = [f"{float(v):.6f}" for v in sorted(set(float(v) for v in epsilon_values))]
+        if epsilon_token_count > 0 and epsilon_token_min is not None and epsilon_token_max is not None:
+            epsilon_token_mean = epsilon_token_sum / float(epsilon_token_count)
+            epsilon_token_summary = (
+                f"n={int(epsilon_token_count)},min={float(epsilon_token_min):.6f},"
+                f"mean={float(epsilon_token_mean):.6f},max={float(epsilon_token_max):.6f}"
+            )
+        else:
+            epsilon_token_summary = "none"
+        chunking_mode = "enabled" if self.enable_dpmlm_chunking else "disabled"
+        print(
+            f"[dpmlm][verbose] record={record_ref} summary variants={int(variants)} "
+            f"epsilons={epsilon_values_str} token_eps_global={epsilon_token_summary} "
+            f"chunking={chunking_mode} max_tokens={int(self.dpmlm_chunk_max_tokens)} "
+            f"overlap_tokens={int(self.dpmlm_chunk_overlap_tokens)}"
+        )
+
     def _is_token_masked(
         self,
         token_start: int,
@@ -490,6 +597,12 @@ class DPMlmAnonymizer(Anonymizer):
                 raise ValueError("DPMlmAnonymizer requires epsilon via Buckets (EpsilonParam)")
             combos_by_epsilon.setdefault(float(eps_val), []).append(hp)
 
+        debug_epsilon_values: List[float] = []
+        debug_epsilon_token_count = 0
+        debug_epsilon_token_sum = 0.0
+        debug_epsilon_token_min: Optional[float] = None
+        debug_epsilon_token_max: Optional[float] = None
+
         for eps_val, eps_combos in combos_by_epsilon.items():
             try:
                 precomputed_offsets = self._resolve_precomputed_offsets(record_name, record_uid)
@@ -497,6 +610,12 @@ class DPMlmAnonymizer(Anonymizer):
                     _, offsets = self._tokenize(text)
                 else:
                     offsets = precomputed_offsets
+
+                self._print_verbose_chunking_summary(
+                    text=text,
+                    record_uid=record_uid,
+                    record_name=record_name,
+                )
 
                 if self._unit is None:
                     from dp.utils.selector.all_selector import AllUnit
@@ -545,6 +664,24 @@ class DPMlmAnonymizer(Anonymizer):
                     else:
                         weights = _scores_to_inverse_probs(risk_scores, temperature=self.risk_temperature)
                     token_epsilons = eps_val * weights * len(weights)
+
+                self._print_verbose_epsilon_distribution(
+                    token_epsilons=token_epsilons,
+                    epsilon=eps_val,
+                    record_uid=record_uid,
+                    record_name=record_name,
+                )
+                debug_epsilon_values.append(float(eps_val))
+                if token_epsilons is not None and token_epsilons.size > 0:
+                    values = token_epsilons.astype(float)
+                    local_min = float(values.min())
+                    local_max = float(values.max())
+                    debug_epsilon_token_count += int(values.size)
+                    debug_epsilon_token_sum += float(values.sum())
+                    if debug_epsilon_token_min is None or local_min < debug_epsilon_token_min:
+                        debug_epsilon_token_min = local_min
+                    if debug_epsilon_token_max is None or local_max > debug_epsilon_token_max:
+                        debug_epsilon_token_max = local_max
 
                 runtime_stats: Dict[str, int] = {
                     "perturbed": 0,
@@ -627,5 +764,16 @@ class DPMlmAnonymizer(Anonymizer):
 
             finally:
                 clear_memory()
+
+        self._print_verbose_record_summary(
+            epsilon_values=debug_epsilon_values,
+            epsilon_token_count=debug_epsilon_token_count,
+            epsilon_token_sum=debug_epsilon_token_sum,
+            epsilon_token_min=debug_epsilon_token_min,
+            epsilon_token_max=debug_epsilon_token_max,
+            variants=len(outputs),
+            record_uid=record_uid,
+            record_name=record_name,
+        )
 
         return outputs

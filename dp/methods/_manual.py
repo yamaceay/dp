@@ -1,6 +1,6 @@
 from typing import List, Optional, Tuple
 
-from dp.loaders import TextAnnotation, get_adapter
+from dp.loaders import TextAnnotation
 from dp.loaders.base import TextAnnotations
 
 from dp.methods.anonymizer import AnonymizationResult, Anonymizer

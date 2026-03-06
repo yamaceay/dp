@@ -1,2 +1,7 @@
 params:
   epsilon: "*"
+
+dpmlm_chunking:
+  enabled: true
+  max_tokens: 256
+  overlap_tokens: 128

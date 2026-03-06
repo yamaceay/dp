@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Protocol, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Protocol
 import json
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation

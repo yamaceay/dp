@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional
 
 from dp.loaders import get_adapter
 from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord, merge_records, presidio_anonymize

@@ -11,7 +11,6 @@ from dp.utils.splitter import TextSplitter
 from dp.utils.token_ledger import TokenLedger
 from dp.utils.selector.base import AnonymizerUnit, ApplyFn
 from dp.utils.selector.by_risk_selector import ByRiskUnit
-from dp.utils.explainer.base import TokenExplainer
 from dp.utils.stopwords import build_terms_to_ignore
 from dp.utils.precomputed_risk import align_precomputed_risk_scores
 from dp.loaders import DatasetRecord
