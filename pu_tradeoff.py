@@ -174,11 +174,11 @@ def metric_direction_arrow(metric_name: str, metric_bounds: dict[str, tuple[floa
     if bounds is None:
         return ""
     best_value, worst_value = bounds
+    assert best_value != worst_value, f"Best and worst values are the same for {metric_name}"
     if best_value > worst_value:
         return "↑"
-    if best_value < worst_value:
+    else:
         return "↓"
-    return ""
 
 
 def metric_label_with_unit_and_direction(
@@ -186,6 +186,7 @@ def metric_label_with_unit_and_direction(
     metric_bounds: dict[str, tuple[float, float]],
 ) -> str:
     name, unit = metric_name_and_unit(metric_name)
+
     direction = metric_direction_arrow(metric_name, metric_bounds)
     if unit is None and not direction:
         return name
@@ -209,9 +210,9 @@ def metric_name_and_unit(metric_name: str) -> tuple[str, str | None]:
 def y_axis_assessment_label(y_column: str, metric_bounds: dict[str, tuple[float, float]]) -> str:
     metric_label = metric_label_with_unit_and_direction(y_column, metric_bounds)
     if y_column.startswith("U_"):
-        return f"Utility ({metric_label})"
+        return f"Relative Utility (r{metric_label})"
     if y_column.startswith("SD_"):
-        return f"Supervised divergence ({metric_label})"
+        return f"Relative Supervised divergence (r{metric_label})"
     return metric_label
 
 
@@ -292,14 +293,16 @@ def build_absolute_recovery_block(
     metric_ctx = y_metric_context(y_column)
     formula_lines: list[str] = []
     if metric_ctx is not None:
-        section_prefix, abs_metric_name, rel_symbol, abs_symbol = metric_ctx
+        section_prefix, abs_metric_name, *_ = metric_ctx
         utility_anchors = utility_anchor_values(df, section_prefix, abs_metric_name)
         if utility_anchors is not None:
             rows.append((y_column, utility_anchors[0], utility_anchors[1]))
-            formula_lines.append("to obtain the absolute scores:")
-            formula_lines.append("t(r) = r       (for ↑ metrics)")
-            formula_lines.append("t(r) = 1 - r   (for ↓ metrics)")
-            formula_lines.append(f"{abs_symbol}(r) = t(r) * b + (1 - t(r)) * d")
+            direction = metric_direction_arrow(y_column, metric_bounds)
+            upper_metric_name = abs_metric_name.upper()
+            if direction == "↓":
+                formula_lines.append(f"{upper_metric_name} = (1 - r{upper_metric_name}) · b + r{upper_metric_name} · d")
+            else:
+                formula_lines.append(f"{upper_metric_name} = r{upper_metric_name} · b + (1 - r{upper_metric_name}) · d")
 
     if not rows and not formula_lines:
         return ""
@@ -619,7 +622,7 @@ if __name__ == "__main__":
                 df = normalize_ordinal_plot_scores(df, y_column, metric_bounds)
                 print(f"Dataset: {dataset_name}, Method Group: {method_group_label}, X: {x_column}, Y: {y_column}")
 
-                fig, ax = plt.subplots(figsize=(13, 9))
+                fig, ax = plt.subplots(figsize=(12, 8))
                 ax.set_box_aspect(1)
                 color_cache: dict[str, tuple[float, float, float]] = {}
                 marker_cache: dict[str, str] = {}
@@ -710,7 +713,7 @@ if __name__ == "__main__":
                         point_color = shade_color(base_color, shade_level)
 
                         ax.scatter(
-                                row["P_plot"],
+                            row["P_plot"],
                             row["U_plot"],
                             marker=method_marker,
                             color=point_color,
@@ -724,9 +727,9 @@ if __name__ == "__main__":
                 info_block = build_absolute_recovery_block(df, x_column, y_column, metric_bounds)
                 ax.set_xlabel(f"Privacy ({x_column})")
                 if y_column.startswith("U_"):
-                    ax.set_ylabel(f"Utility ({y_column})")
+                    ax.set_ylabel(f"Relative Utility ({y_column})")
                 elif y_column.startswith("SD_"):
-                    ax.set_ylabel(f"Supervised divergence ({y_column})")
+                    ax.set_ylabel(f"Relative Supervised divergence ({y_column})")
                 else:
                     ax.set_ylabel(y_column)
                 ax.set_title(f"Privacy-Utility Tradeoff in {dataset_label}", fontsize=14, pad=24)
@@ -776,7 +779,9 @@ if __name__ == "__main__":
                     )
 
                 fig.tight_layout(rect=[0.06, 0.03, 0.73, 0.98])
-                output_path = OUTPUT_DIR / f"pu_tradeoff_{dataset_name}_{method_name}_{x_name}_{y_name}.png"
+                output_dir = OUTPUT_DIR / method_name / dataset_name / x_name
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = output_dir / f"{y_name}.png"
                 fig.savefig(output_path, dpi=200)
                 print(f"Saved plot to {output_path}")
                 plt.close(fig)
