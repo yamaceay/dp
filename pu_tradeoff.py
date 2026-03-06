@@ -44,6 +44,19 @@ _palette = [
     "#55A868",
     "#8172B3",
 ]
+_marker_palette = [
+    "o",
+    "s",
+    "^",
+    "D",
+    "P",
+    "X",
+    "v",
+    "<",
+    ">",
+    "h",
+    "*",
+]
 _param_label_map = {
     "epsilon": "ε",
     "rho": "ρ",
@@ -483,6 +496,15 @@ def get_base_color(
     return color_cache[color_key]
 
 
+def get_group_marker(
+    group_key: str,
+    marker_cache: dict[str, str],
+) -> str:
+    if group_key not in marker_cache:
+        marker_cache[group_key] = _marker_palette[len(marker_cache) % len(_marker_palette)]
+    return marker_cache[group_key]
+
+
 def shade_color(color: tuple[float, float, float], level: float) -> tuple[float, float, float]:
     rgb = mcolors.to_rgb(color)
     hsv = mcolors.rgb_to_hsv(rgb)
@@ -600,6 +622,7 @@ if __name__ == "__main__":
                 fig, ax = plt.subplots(figsize=(13, 9))
                 ax.set_box_aspect(1)
                 color_cache: dict[str, tuple[float, float, float]] = {}
+                marker_cache: dict[str, str] = {}
 
                 df["params_dict"] = df["params"].apply(parse_params)
                 df["param_keys_signature"] = df["params_dict"].apply(param_keys_signature)
@@ -644,6 +667,7 @@ if __name__ == "__main__":
                     grouped_method_name = str(first_row["method"])
                     shade_param = first_row["shade_param"]
                     base_color = get_base_color(base_group, color_cache)
+                    method_marker = get_group_marker(base_group, marker_cache)
 
                     ordered_rows = group_df.copy()
                     if isinstance(shade_param, str):
@@ -688,6 +712,7 @@ if __name__ == "__main__":
                         ax.scatter(
                                 row["P_plot"],
                             row["U_plot"],
+                            marker=method_marker,
                             color=point_color,
                             edgecolor=base_color,
                             linewidth=0.8,
