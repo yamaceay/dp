@@ -156,6 +156,33 @@ def metric_label_with_unit(metric_name: str) -> str:
     return f"{name} ({unit})"
 
 
+def metric_direction_arrow(metric_name: str, metric_bounds: dict[str, tuple[float, float]]) -> str:
+    bounds = metric_bounds.get(metric_name)
+    if bounds is None:
+        return ""
+    best_value, worst_value = bounds
+    if best_value > worst_value:
+        return "↑"
+    if best_value < worst_value:
+        return "↓"
+    return ""
+
+
+def metric_label_with_unit_and_direction(
+    metric_name: str,
+    metric_bounds: dict[str, tuple[float, float]],
+) -> str:
+    name, unit = metric_name_and_unit(metric_name)
+    direction = metric_direction_arrow(metric_name, metric_bounds)
+    if unit is None and not direction:
+        return name
+    if unit is None:
+        return f"{name} ({direction})"
+    if not direction:
+        return f"{name} ({unit})"
+    return f"{name} ({unit} {direction})"
+
+
 def metric_name_and_unit(metric_name: str) -> tuple[str, str | None]:
     if metric_name in {"P_exact", "P_more", "P_full"}:
         return metric_name, "MRR"
@@ -166,12 +193,13 @@ def metric_name_and_unit(metric_name: str) -> tuple[str, str | None]:
     return metric_name, None
 
 
-def y_axis_assessment_label(y_column: str) -> str:
+def y_axis_assessment_label(y_column: str, metric_bounds: dict[str, tuple[float, float]]) -> str:
+    metric_label = metric_label_with_unit_and_direction(y_column, metric_bounds)
     if y_column.startswith("U_"):
-        return f"Utility ({y_column})"
+        return f"Utility ({metric_label})"
     if y_column.startswith("SD_"):
-        return f"Supervised divergence ({y_column})"
-    return y_column
+        return f"Supervised divergence ({metric_label})"
+    return metric_label
 
 
 def y_metric_context(y_column: str) -> tuple[str, str, str, str] | None:
@@ -256,7 +284,9 @@ def build_absolute_recovery_block(
         if utility_anchors is not None:
             rows.append((y_column, utility_anchors[0], utility_anchors[1]))
             formula_lines.append("to obtain the absolute scores:")
-            formula_lines.append(f"{abs_symbol}(r) = r * (b - d) + d")
+            formula_lines.append("t(r) = r       (for ↑ metrics)")
+            formula_lines.append("t(r) = 1 - r   (for ↓ metrics)")
+            formula_lines.append(f"{abs_symbol}(r) = t(r) * b + (1 - t(r)) * d")
 
     if not rows and not formula_lines:
         return ""
@@ -270,8 +300,11 @@ def build_absolute_recovery_block(
     formatted_rows: list[tuple[str, float, float]] = []
     for metric_name, baseline_value, dummy_value in rows:
         raw_name, unit = metric_name_and_unit(metric_name)
+        direction = metric_direction_arrow(metric_name, metric_bounds)
         if unit is None:
-            formatted_metric = raw_name
+            formatted_metric = raw_name if not direction else f"{raw_name} ({direction})"
+        elif direction:
+            formatted_metric = f"{raw_name.ljust(metric_name_width)} ({unit} {direction})"
         else:
             formatted_metric = f"{raw_name.ljust(metric_name_width)} ({unit})"
         metric_width = max(metric_width, len(formatted_metric))
@@ -564,7 +597,7 @@ if __name__ == "__main__":
                 df = normalize_ordinal_plot_scores(df, y_column, metric_bounds)
                 print(f"Dataset: {dataset_name}, Method Group: {method_group_label}, X: {x_column}, Y: {y_column}")
 
-                fig, ax = plt.subplots(figsize=(12, 8))
+                fig, ax = plt.subplots(figsize=(13, 9))
                 ax.set_box_aspect(1)
                 color_cache: dict[str, tuple[float, float, float]] = {}
 
@@ -665,7 +698,12 @@ if __name__ == "__main__":
 
                 info_block = build_absolute_recovery_block(df, x_column, y_column, metric_bounds)
                 ax.set_xlabel(f"Privacy ({x_column})")
-                ax.set_ylabel(y_axis_assessment_label(y_column))
+                if y_column.startswith("U_"):
+                    ax.set_ylabel(f"Utility ({y_column})")
+                elif y_column.startswith("SD_"):
+                    ax.set_ylabel(f"Supervised divergence ({y_column})")
+                else:
+                    ax.set_ylabel(y_column)
                 ax.set_title(f"Privacy-Utility Tradeoff in {dataset_label}", fontsize=14, pad=24)
                 ax.text(
                     0.5,
