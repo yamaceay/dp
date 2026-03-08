@@ -2,6 +2,7 @@
 set -euo pipefail
 
 max_rows=""
+trim=false
 sort_output=false
 filter_threshold=""
 declare -a files=()
@@ -11,8 +12,9 @@ usage() {
   printf "  %s --max <rows> <file1> [file2 ...]\n" "$0"
   printf "  wc -l <files...> | %s --max <rows>\n" "$0"
   printf "\nOptions:\n"
-  printf "  --sort                Sort output by ratio (default: no sorting)\n"
+  printf "  --sort                 Sort output by ratio (default: no sorting)\n"
   printf "  --filter \$THRESHOLD   Only show files with ratio below a certain threshold\n"
+  printf "  --trim                 Remove leading path components\n"
 }
 
 while (($# > 0)); do
@@ -30,6 +32,9 @@ while (($# > 0)); do
       [[ $# -gt 0 ]] || { usage; exit 1; }
       filter_threshold="$1"
       ;;
+    --trim)
+      trim=true
+      ;;
     -h|--help)
       usage
       exit 0
@@ -46,11 +51,16 @@ done
 (( max_rows > 0 )) || { printf "--max must be > 0\n" >&2; exit 1; }
 
 print_ratio() {
-  local count=$1 path=$2
+  local count=$1 path=$2 trim=$3
+  default_pad_width=100
+  if [[ "$trim" == "true" ]]; then
+    default_pad_width=60
+    path="${path##*/}"
+  fi
   local ratio pad_width num_digits
   
   printf -v ratio "%.2f" "$(awk -v c="$count" -v m="$max_rows" 'BEGIN { print c / m }')"
-  pad_width=${PATH_PAD:-100}
+  pad_width=${PATH_PAD:-${default_pad_width}}
   num_digits=${#max_rows}
   printf "%s\t%-${pad_width}s\t%+${num_digits}s/%s\n" "$ratio" "$path" "$count" "$max_rows"
 }
@@ -63,7 +73,7 @@ run_counting() {
       if [[ "$count" -ge "$max_rows" ]]; then
         continue
       fi
-      print_ratio "$count" "$f"
+      print_ratio "$count" "$f" "$trim"
     done
   else
     while IFS= read -r line; do
@@ -72,7 +82,7 @@ run_counting() {
       path="$(awk '{$1=""; sub(/^[[:space:]]+/, ""); print}' <<< "$line")"
       [[ "$count" =~ ^[0-9]+$ ]] || continue
       [[ "$path" == "total" ]] && continue
-      print_ratio "$count" "$path"
+      print_ratio "$count" "$path" "$trim"
     done
   fi
 }

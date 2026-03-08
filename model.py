@@ -539,7 +539,6 @@ if __name__ == "__main__":
         runtime_args['rhos'] = runtime_bundle.risk_tolerance_values
     
     dataset_indices_all = compute_dataset_indices(len(records), data_kwargs)
-    index_lookup = {idx: pos for pos, idx in enumerate(dataset_indices_all)}
     
     texts_arg = runtime_kwargs.pop("texts", None)
     indices_arg = runtime_kwargs.pop("indices", None)
@@ -570,7 +569,7 @@ if __name__ == "__main__":
             record_positions = list(range(len(texts_arg)))
             texts_or_indices = texts_arg
         else:
-            selected_records = [records[index_lookup[idx]] for idx in selected_indices]
+            selected_records = [records[idx] for idx in selected_indices]
             texts_or_indices = [r.text for r in selected_records]
             record_names_for_precompute = [str(r.uid) for r in selected_records]
             prior_edits_for_precompute = [
