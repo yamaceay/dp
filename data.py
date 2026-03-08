@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
     special_value_getters = DERIVE_REGISTRY.get(args.data, {})
     for key, target in special_value_getters.items():
-        value_getters[key] = lambda _, r: target(r)
+        value_getters[key] = lambda _, r, target=target: target(r)
     selected_value_getters = parse_selected_getters(args.select, value_getters)
 
     unique_values: Dict[str, Dict[object, int]] = {}
@@ -127,7 +127,7 @@ if __name__ == "__main__":
                 continue
             unique_value = unique_values.get(key, dict())
             not_a_list = not isinstance(value, (list, set))
-            if not_a_list :
+            if not_a_list:
                 value = [value]
             for v in value:
                 unique_value[v] = unique_value.get(v, 0) + 1
@@ -158,7 +158,11 @@ if __name__ == "__main__":
         else:
             functional_records = list(dataset.iter_records())
         exclude_keys = ["key"] if "key" in selected_value_getters else []
-        func_analysis = FunctionalAnalysis(functional_records, selected_value_getters, exclude_keys=exclude_keys)
+        selected_value_getters_for_func = {
+            k: (lambda r, getter=v: getter(None, r))
+            for k, v in selected_value_getters.items()
+        }
+        func_analysis = FunctionalAnalysis(functional_records, selected_value_getters_for_func, exclude_keys=exclude_keys)
         func_analysis.analyze()
         functionals = func_analysis.dag()
         print("Functional mappings found:")

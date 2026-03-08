@@ -247,6 +247,15 @@ def tab_country_groups(record: DatasetRecord, region_groups: List[str] | None = 
 def db_bio_label(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("label"))
 
+def db_bio_l1(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("l1"))
+
+def db_bio_l2(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("l2"))
+
+def db_bio_l3(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("l3"))
+
 def yelp_is_positive(record: DatasetRecord) -> Optional[bool]:
     stars = record.metadata.get("stars")
     if stars is None:
@@ -280,6 +289,9 @@ DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
     },
     "db_bio": {
         "label": db_bio_label,
+        "l1": db_bio_l1,
+        "l2": db_bio_l2,
+        "l3": db_bio_l3,
     },
     "yelp": {
         "is_positive": yelp_is_positive, 
