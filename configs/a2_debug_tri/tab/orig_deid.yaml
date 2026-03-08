@@ -1,0 +1,5 @@
+data: tab
+data_in: data/tab
+risk_in: data/tab/tri_risk/shap.jsonl
+result_in: ../../../netscratch/yay/_ext_outputs/tab/presidio/{run_timestamp}_tab_presidio.jsonl
+pipeline_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/full/full
