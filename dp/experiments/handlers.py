@@ -22,6 +22,7 @@ from dp.experiments.config import (
 from dp.experiments.divergence.base import TextDivergenceExperiment
 from dp.experiments.divergence.bertscore import BERTScoreDivergence
 from dp.experiments.divergence.cosine import CosineSimilarityDivergence
+from dp.experiments.divergence.pp import PerturbationPercentageDivergence
 from dp.experiments.divergence.io import (
     build_divergence_evaluation_inputs,
     build_original_texts,
@@ -360,6 +361,8 @@ def build_divergence_experiment(metric_type: str, metric_params: Dict[str, Any])
         vectorizer_config = metric_params["vectorizer"] if "vectorizer" in metric_params else None
         vectorizer = build_vectorizer_from_config(vectorizer_config) if vectorizer_config is not None else None
         return CosineSimilarityDivergence(vectorizer=vectorizer)
+    if metric_type == "pp":
+        return PerturbationPercentageDivergence()
     raise ValueError(f"unsupported divergence metric '{metric_type}'")
 
 

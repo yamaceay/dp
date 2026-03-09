@@ -41,3 +41,7 @@ dataset_sets:
         rename_as: D_cosine
         best: 0
         worst: 1
+      - name: divergence_pp
+        rename_as: D_pp
+        best: 0
+        worst: 1

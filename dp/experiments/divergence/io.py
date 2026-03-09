@@ -30,10 +30,11 @@ def build_divergence_evaluation_inputs(
     for name, path in sources.items():
         entries = read_jsonl(path)
         texts: Dict[str, str] = {}
+        metadata: Dict[str, Dict[str, Any]] = {}
         for entry in entries:
             idx = entry.get("idx")
             text = entry.get("text", "")
-            if idx is None or not text:
+            if idx is None:
                 continue
             try:
                 idx_value = int(idx)
@@ -42,10 +43,15 @@ def build_divergence_evaluation_inputs(
             key = index_to_key.get(idx_value)
             if not key:
                 continue
-            texts[key] = text
+            if text:
+                texts[key] = text
+            row_metadata = entry.get("metadata")
+            if isinstance(row_metadata, dict):
+                metadata[key] = dict(row_metadata)
         evaluations[name] = {
             "texts": texts,
             "total": len(entries),
+            "metadata": metadata,
         }
     return evaluations
 

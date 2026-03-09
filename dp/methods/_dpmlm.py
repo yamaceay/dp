@@ -744,6 +744,7 @@ class DPMlmAnonymizer(Anonymizer):
                         **runtime_stats,
                         **step.metadata,
                     }
+                    metadata["total"] = int(len(offsets))
                     token_edits = [TokenEdit.from_mapping(e) for e in ledger.result_edits_metadata()]
                     if used_precomputed:
                         metadata["explainer"] = "PrecomputedRisk"

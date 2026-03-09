@@ -59,9 +59,11 @@ class TextDivergenceExperiment(Experiment, ABC):
             if not texts:
                 continue
             total = int(payload.get("total", len(texts)))
+            metadata = dict(payload.get("metadata", {}))
             filtered[name] = {
                 "texts": texts,
                 "total": total,
+                "metadata": metadata,
             }
         if not filtered:
             raise ValueError("evaluation_datasets must contain at least one non-empty dataset")

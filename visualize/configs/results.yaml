@@ -69,3 +69,9 @@ results:
   divergence_db_bio_cosine:
     dataset: db_bio
     flat: db_bio/divergence/cosine.json
+  divergence_tab_pp:
+    dataset: tab
+    flat: tab/divergence/pp.json
+  divergence_db_bio_pp:
+    dataset: db_bio
+    flat: db_bio/divergence/pp.json
