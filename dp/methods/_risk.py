@@ -173,8 +173,8 @@ class RiskAnonymizer(Anonymizer):
             metadata: Dict[str, Any] = {
                 "method": "risk",
                 "rho": rho,
-                "removed_count": runtime_stats["masked"],
-                "total_tokens": len(spans),
+                "masked": runtime_stats["masked"],
+                "total": len(spans),
                 **step.metadata,
             }
             token_edits = [TokenEdit.from_mapping(e) for e in result_edits]
@@ -194,7 +194,7 @@ class RiskAnonymizer(Anonymizer):
                 AnonymizationResult(
                     text=text,
                     annotations=TextAnnotations(),
-                    metadata={"method": "risk", "masked": 0},
+                    metadata={"method": "risk", "masked": 0, "total": 0},
                 ),
             ))
         

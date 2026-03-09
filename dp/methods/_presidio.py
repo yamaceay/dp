@@ -66,7 +66,7 @@ class PresidioAnonymizer(Anonymizer):
             last = end
         out_parts.append(text[last:])
         anonymized = "".join(out_parts)
-        metadata = {"method": "presidio"}
+        metadata = {"method": "presidio", "masked": len(spans), "total": len(spans)}
         hp = {} if not buckets else buckets_to_dicts(buckets)[0]
         return [
             (

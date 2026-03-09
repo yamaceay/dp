@@ -133,7 +133,8 @@ class BaroudAnonymizer(Anonymizer):
             metadata: Dict[str, Any] = {
                 "method": self._model_name,
                 "lambda": threshold,
-                "pii_detected": runtime_stats["masked"],
+                "masked": runtime_stats["masked"],
+                "total": len(spans),
                 **step.metadata,
             }
             token_edits = [TokenEdit.from_mapping(e) for e in result_edits]

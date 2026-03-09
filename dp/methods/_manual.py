@@ -53,7 +53,7 @@ class ManualAnonymizer(Anonymizer):
         out_parts.append(text[last:])
         anonymized = "".join(out_parts)
         
-        metadata = {"method": "manual"}
+        metadata = {"method": "manual", "masked": len(spans), "total": len(spans)}
         return [
             (
                 BucketDict(),

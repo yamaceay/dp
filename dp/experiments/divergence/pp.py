@@ -39,7 +39,7 @@ class PerturbationPercentageDivergence(TextDivergenceExperiment):
 
     @staticmethod
     def _compute_pp(metadata: Dict[str, Any]) -> float:
-        perturbed = PerturbationPercentageDivergence._as_non_negative_int(metadata.get("perturbed"))
+        perturbed = PerturbationPercentageDivergence._as_non_negative_int(metadata.get("perturbed", metadata.get("masked")))
         total = PerturbationPercentageDivergence._as_non_negative_int(metadata.get("total"))
         if total <= 0:
             return 0.0

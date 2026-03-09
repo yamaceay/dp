@@ -1,7 +1,13 @@
 dataset: tab
 data_in: data/tab
 annotations_in:
-  - ../../../netscratch/yay/_ext_outputs/tab
+  - ../../../netscratch/yay/_ext_outputs/tab/baroud
+  - ../../../netscratch/yay/_ext_outputs/tab/dpmlm
+  - ../../../netscratch/yay/_ext_outputs/tab/manual
+  - ../../../netscratch/yay/_ext_outputs/tab/petre
+  - ../../../netscratch/yay/_ext_outputs/tab/presidio
+  - ../../../netscratch/yay/_ext_outputs/tab/risk
+  - ../../../netscratch/yay/_ext_outputs/tab/spacy
 metric:
   type: pp
 output:

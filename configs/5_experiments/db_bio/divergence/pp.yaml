@@ -1,7 +1,11 @@
 dataset: db_bio
 data_in: data/db_bio
 annotations_in:
-  - ../../../netscratch/yay/_ext_outputs/db_bio
+  - ../../../netscratch/yay/_ext_outputs/db_bio/dpmlm
+  - ../../../netscratch/yay/_ext_outputs/db_bio/petre
+  - ../../../netscratch/yay/_ext_outputs/db_bio/presidio
+  - ../../../netscratch/yay/_ext_outputs/db_bio/risk
+  - ../../../netscratch/yay/_ext_outputs/db_bio/spacy
 metric:
   type: pp
 output:
