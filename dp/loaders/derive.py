@@ -144,10 +144,15 @@ ORDINAL_GROUPERS: Dict[str, Tuple[Callable[[str], str], List[str]]] = {
 }
 
 TAB_YEAR_GROUP_ORDER: List[str] = [
-    "1975-2003",
-    "2004-2007",
-    "2008-2009",
-    "2010-2017",
+    "1975-2000",
+    "2000-2003",
+    "2004-2005",
+    "2006",
+    "2007",
+    "2008",
+    "2009",
+    "2010-2011",
+    "2012-2017",
 ]
 
 TAB_COUNTRY_GROUP_ORDER: List[str] = [
@@ -230,7 +235,7 @@ def tab_articles(record: DatasetRecord) -> Optional[List[str]]:
 def tab_year_groups(record: DatasetRecord, year_groups: List[str] | None = None) -> str:
     groups = year_groups or TAB_YEAR_GROUP_ORDER
     year = record.metadata.get("year")
-    bounds = [(int(g.split("-")[0]), int(g.split("-")[1])) for g in groups]
+    bounds = [(int(g.split("-")[0]), int(g.split("-")[1])) if "-" in g else (int(g), int(g)) for g in groups]
     mapping = {c: g for g, (start, end) in zip(groups, bounds) for c in range(start, end + 1)}
     if year not in mapping:
         raise ValueError(f"Year {year} not in any defined year groups.")
