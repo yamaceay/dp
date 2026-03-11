@@ -101,6 +101,11 @@ def load_records(dataset: str, data_in: Optional[str], max_records: Optional[int
     return list(adapter.iter_records())
 
 
+def _build_index_to_key(dataset: str, data_in: Optional[str], max_records: Optional[int]) -> Dict[int, str]:
+    adapter = get_adapter(dataset, data=dataset, data_in=data_in, max_records=max_records)
+    return {idx: _record_key(rec, idx) for idx, rec in enumerate(adapter.iter_records())}
+
+
 def _parse_optional_task_id(value: Any) -> Optional[int]:
     if value is None:
         return None
@@ -476,8 +481,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         raise RuntimeError("no anonymized output files discovered")
     split_keys, split_records = _resolve_split_keys(ctx, params)
     records = split_records or records
-    all_records_for_index = load_records(ctx.dataset, ctx.data_in, params.get("max_records"))
-    index_to_key = {idx: _record_key(rec, idx) for idx, rec in enumerate(all_records_for_index)}
+    index_to_key = _build_index_to_key(ctx.dataset, ctx.data_in, params.get("max_records"))
     protocol = str(params.get("protocol", "utility")).strip().lower() or "utility"
     evaluation_texts = None
     if protocol not in {"utility", "supervised_divergence"}:
@@ -818,8 +822,7 @@ def handle_divergence(args: Any, config: ConfigDict) -> None:
     sources = collect_jsonl_sources(*ctx.annotations, task_id=ctx.task_id)
     if not sources:
         raise RuntimeError("no anonymized output files discovered")
-    all_records_for_index = load_records(ctx.dataset, ctx.data_in, ctx.max_records)
-    div_index_to_key = {idx: _record_key(rec, idx) for idx, rec in enumerate(all_records_for_index)}
+    div_index_to_key = _build_index_to_key(ctx.dataset, ctx.data_in, ctx.max_records)
     evaluation_inputs = build_divergence_evaluation_inputs(div_index_to_key, sources)
     evaluation_inputs = {name: payload for name, payload in evaluation_inputs.items() if payload.get("texts")}
     if not evaluation_inputs:
