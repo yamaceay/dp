@@ -476,10 +476,12 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         raise RuntimeError("no anonymized output files discovered")
     split_keys, split_records = _resolve_split_keys(ctx, params)
     records = split_records or records
+    all_records_for_index = load_records(ctx.dataset, ctx.data_in, params.get("max_records"))
+    index_to_key = {idx: _record_key(rec, idx) for idx, rec in enumerate(all_records_for_index)}
     protocol = str(params.get("protocol", "utility")).strip().lower() or "utility"
     evaluation_texts = None
     if protocol not in {"utility", "supervised_divergence"}:
-        evaluation_texts = align_evaluation_texts(records, sources)
+        evaluation_texts = align_evaluation_texts(index_to_key, records, sources)
     if ctx.debug:
         print("Evaluation sources:")
         if evaluation_texts is None:
@@ -532,7 +534,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
             records=records,
             evaluation_texts=evaluation_texts,
             evaluation_sources=sources,
-            index_to_key={idx: str(record.uid) for idx, record in enumerate(records)},
+            index_to_key=index_to_key,
             vectorizer_name=vec_name or None,
             vectorizer_kwargs=vec_kwargs,
             head_name=head_name or None,
@@ -816,7 +818,9 @@ def handle_divergence(args: Any, config: ConfigDict) -> None:
     sources = collect_jsonl_sources(*ctx.annotations, task_id=ctx.task_id)
     if not sources:
         raise RuntimeError("no anonymized output files discovered")
-    evaluation_inputs = build_divergence_evaluation_inputs(records, sources)
+    all_records_for_index = load_records(ctx.dataset, ctx.data_in, ctx.max_records)
+    div_index_to_key = {idx: _record_key(rec, idx) for idx, rec in enumerate(all_records_for_index)}
+    evaluation_inputs = build_divergence_evaluation_inputs(div_index_to_key, sources)
     evaluation_inputs = {name: payload for name, payload in evaluation_inputs.items() if payload.get("texts")}
     if not evaluation_inputs:
         raise RuntimeError("no anonymized outputs aligned with dataset records")

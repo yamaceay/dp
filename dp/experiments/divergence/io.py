@@ -22,10 +22,9 @@ def read_jsonl(path: Path) -> List[Dict[str, Any]]:
 
 
 def build_divergence_evaluation_inputs(
-    records: List[DatasetRecord],
+    index_to_key: Dict[int, str],
     sources: Dict[str, Path],
 ) -> Dict[str, Dict[str, Any]]:
-    index_to_key = {idx: record.uid for idx, record in enumerate(records)}
     evaluations: Dict[str, Dict[str, Any]] = {}
     for name, path in sources.items():
         entries = read_jsonl(path)

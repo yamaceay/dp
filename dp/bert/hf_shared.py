@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple
 
 import numpy as np
@@ -19,11 +20,22 @@ from dp.utils.device import resolve_device
 def load_backbone_with_optional_checkpoint(model_name: str, checkpoint_source: Optional[str]) -> Any:
     base_model = AutoModel.from_pretrained(model_name)
     if checkpoint_source:
-        try:
-            checkpoint_model = AutoModel.from_pretrained(checkpoint_source)
-            base_model.load_state_dict(checkpoint_model.state_dict(), strict=False)
-        except Exception:
-            pass
+        checkpoint_path = Path(checkpoint_source)
+        safetensors_file = checkpoint_path / "model.safetensors"
+        pytorch_file = checkpoint_path / "pytorch_model.bin"
+        if safetensors_file.exists():
+            from safetensors.torch import load_file
+            state_dict = load_file(str(safetensors_file))
+            base_model.load_state_dict(state_dict, strict=False)
+        elif pytorch_file.exists():
+            state_dict = torch.load(str(pytorch_file), map_location="cpu")
+            base_model.load_state_dict(state_dict, strict=False)
+        else:
+            try:
+                checkpoint_model = AutoModel.from_pretrained(checkpoint_source)
+                base_model.load_state_dict(checkpoint_model.state_dict(), strict=False)
+            except Exception as exc:
+                print(f"WARNING: failed to load init_checkpoint from {checkpoint_source}: {exc}")
     return base_model
 
 

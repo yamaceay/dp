@@ -8,11 +8,10 @@ target:
   key: label
   type: nominal
 source_splits:
-  - val: 1.0
   - split: indices/db_bio/train.txt
     train: 1.0
   - split: indices/db_bio/val.txt
-    train: 1.0
+    val: 1.0
 random_state: 42
 protocol: supervised_divergence
 head:

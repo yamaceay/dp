@@ -8,7 +8,6 @@ target:
   key: year_group
   type: ordinal
 source_splits:
-  - val: 1.0
   - split: indices/tab/train.txt
     train: 1.0
   - split: indices/tab/val.txt

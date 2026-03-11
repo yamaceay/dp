@@ -442,7 +442,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         predictions = self.predict(x)
         y_arr = np.array(y)
         pred_arr = np.array(predictions)
-        unique_labels = sorted(set(y))
+        unique_labels = sorted(set(y) | set(predictions))
         per_class_precision, per_class_recall, per_class_f1, per_class_support = precision_recall_fscore_support(
             y, predictions, labels=unique_labels, average=None, zero_division=0
         )

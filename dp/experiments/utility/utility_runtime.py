@@ -7,6 +7,7 @@ import multiprocessing as mp
 import os
 from pathlib import Path
 import random
+import tempfile
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -210,6 +211,7 @@ def _fit_and_eval_single_runtime(
         if hasattr(model, "set_label_order") and label_order:
             model.set_label_order(list(label_order))
         model.setup()
+
         vectorizer.fit(list(train_texts))
         x_train = vectorizer.transform(list(train_texts))
         x_val = vectorizer.transform(list(val_texts)) if val_texts else x_train
@@ -617,6 +619,9 @@ def run_utility_experiment(
                         "utility": {"error": "missing_anonymized_split_records"},
                     }
                     continue
+                isolated_head_kwargs = dict(selected_head_kwargs)
+                if "checkpoint_dir" in isolated_head_kwargs:
+                    isolated_head_kwargs["checkpoint_dir"] = tempfile.mkdtemp(prefix="utility_eval_")
                 eval_payload: Dict[str, Any] = {
                     "default_vectorizer_name": spec.default_vectorizer,
                     "default_head_name": spec.default_head,
@@ -624,7 +629,7 @@ def run_utility_experiment(
                     "vectorizer_name": vectorizer_name,
                     "vectorizer_kwargs": vectorizer_kwargs,
                     "head_name": head_name,
-                    "head_kwargs": selected_head_kwargs,
+                    "head_kwargs": isolated_head_kwargs,
                     "identifier": identifier,
                     "train_texts": anon_train_texts,
                     "train_labels": anon_train_labels,

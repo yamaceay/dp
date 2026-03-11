@@ -148,8 +148,11 @@ def select_records(records: List[DatasetRecord], criteria: Dict[str, Any]) -> Li
     return selected
 
 
-def align_evaluation_texts(records: List[DatasetRecord], sources: Dict[str, Path]) -> Dict[str, Dict[str, str]]:
-    index_to_key = {idx: record.uid for idx, record in enumerate(records)}
+def align_evaluation_texts(
+    index_to_key: Dict[int, str],
+    records: List[DatasetRecord],
+    sources: Dict[str, Path],
+) -> Dict[str, Dict[str, str]]:
     mapping = build_utility_evaluation_texts(index_to_key, sources)
     selected = {str(r.uid) for r in records}
     return {name: {k: v for k, v in m.items() if str(k) in selected} for name, m in mapping.items() if m}
