@@ -16,7 +16,7 @@ random_state: 42
 head:
   type: bert_classifier
   params:
-    epochs: 5
+    epochs: 3
     init_checkpoint: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/exact/exact/finetuning/{checkpoint}
     checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/db_bio/label_anonymized
     primary_metric: macro_f1
