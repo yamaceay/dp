@@ -66,6 +66,19 @@ class LogMetricsEnricher:
         ordinal_weighted_count = 0
         nominal_weighted_sum = 0.0
         nominal_weighted_count = 0
+        ordinal_raw_sum = 0.0
+        ordinal_raw_count = 0
+        nominal_raw_sum = 0.0
+        nominal_raw_count = 0
+        ordinal_baseline_sum = 0.0
+        ordinal_baseline_count = 0
+        ordinal_dummy_sum = 0.0
+        ordinal_dummy_count = 0
+        nominal_baseline_sum = 0.0
+        nominal_baseline_count = 0
+        nominal_dummy_sum = 0.0
+        nominal_dummy_count = 0
+        dummy_strategies: set[str] = set()
         for feature, count in feature_counts.items():
             if not feature:
                 continue
@@ -78,11 +91,22 @@ class LogMetricsEnricher:
             racc_key = f"{feature}_racc"
             baseline_acc_key = f"{feature}_baseline_acc"
             dummy_acc_key = f"{feature}_dummy_acc"
+            strategy_key = f"{feature}_dummy_strategy"
+            if strategy_key in utility_metrics:
+                dummy_strategies.add(str(utility_metrics[strategy_key]))
             if mae_key in utility_metrics:
+                mae_value = float(utility_metrics[mae_key])
+                ordinal_raw_sum += mae_value * count
+                ordinal_raw_count += count
+                if baseline_mae_key in utility_metrics:
+                    ordinal_baseline_sum += float(utility_metrics[baseline_mae_key]) * count
+                    ordinal_baseline_count += count
+                if dummy_mae_key in utility_metrics:
+                    ordinal_dummy_sum += float(utility_metrics[dummy_mae_key]) * count
+                    ordinal_dummy_count += count
                 if rmae_key in utility_metrics:
                     score = float(utility_metrics[rmae_key])
                 elif baseline_mae_key in utility_metrics and dummy_mae_key in utility_metrics:
-                    mae_value = float(utility_metrics[mae_key])
                     baseline_mae = float(utility_metrics[baseline_mae_key])
                     dummy_mae = float(utility_metrics[dummy_mae_key])
                     denominator = dummy_mae - baseline_mae
@@ -100,10 +124,18 @@ class LogMetricsEnricher:
                     ordinal_weighted_sum += score * count
                     ordinal_weighted_count += count
             elif acc_key in utility_metrics:
+                acc_value = float(utility_metrics[acc_key])
+                nominal_raw_sum += acc_value * count
+                nominal_raw_count += count
+                if baseline_acc_key in utility_metrics:
+                    nominal_baseline_sum += float(utility_metrics[baseline_acc_key]) * count
+                    nominal_baseline_count += count
+                if dummy_acc_key in utility_metrics:
+                    nominal_dummy_sum += float(utility_metrics[dummy_acc_key]) * count
+                    nominal_dummy_count += count
                 if racc_key in utility_metrics:
                     score = float(utility_metrics[racc_key])
                 elif baseline_acc_key in utility_metrics and dummy_acc_key in utility_metrics:
-                    acc_value = float(utility_metrics[acc_key])
                     baseline_acc = float(utility_metrics[baseline_acc_key])
                     dummy_acc = float(utility_metrics[dummy_acc_key])
                     denominator = baseline_acc - dummy_acc
@@ -121,9 +153,11 @@ class LogMetricsEnricher:
                     nominal_weighted_sum += score * count
                     nominal_weighted_count += count
             else:
-                raise ValueError(
-                    f"Feature '{feature}' has neither ordinal mae nor nominal acc metric"
-                )
+                if not allow_missing_rmae:
+                    raise ValueError(
+                        f"Feature '{feature}' has neither ordinal mae nor nominal acc metric"
+                    )
+                continue
             if score is None:
                 continue
             utility_metrics[f"{feature}_score"] = score
@@ -139,6 +173,22 @@ class LogMetricsEnricher:
         if nominal_weighted_count > 0:
             utility_metrics["utility_nominal_weighted_score"] = nominal_weighted_sum / nominal_weighted_count
             utility_metrics["_utility_nominal_score_count"] = nominal_weighted_count
+        if ordinal_raw_count > 0:
+            utility_metrics["utility_ordinal_raw_mae"] = ordinal_raw_sum / ordinal_raw_count
+            utility_metrics["_utility_ordinal_raw_count"] = ordinal_raw_count
+        if ordinal_baseline_count > 0:
+            utility_metrics["utility_ordinal_baseline_mae"] = ordinal_baseline_sum / ordinal_baseline_count
+        if ordinal_dummy_count > 0:
+            utility_metrics["utility_ordinal_dummy_mae"] = ordinal_dummy_sum / ordinal_dummy_count
+        if nominal_raw_count > 0:
+            utility_metrics["utility_nominal_raw_acc"] = nominal_raw_sum / nominal_raw_count
+            utility_metrics["_utility_nominal_raw_count"] = nominal_raw_count
+        if nominal_baseline_count > 0:
+            utility_metrics["utility_nominal_baseline_acc"] = nominal_baseline_sum / nominal_baseline_count
+        if nominal_dummy_count > 0:
+            utility_metrics["utility_nominal_dummy_acc"] = nominal_dummy_sum / nominal_dummy_count
+        if dummy_strategies:
+            utility_metrics["utility_dummy_strategy"] = ",".join(sorted(dummy_strategies))
         return utility_metrics
 
 class RedditUtilityByHardness:

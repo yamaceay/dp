@@ -97,17 +97,18 @@ def _extract_baseline_metric_overall(experiment_row: Dict[str, Any], metric_name
     return None
 
 
-def _extract_dummy_metric_overall(experiment_row: Dict[str, Any]) -> tuple[str, float] | None:
+def _extract_dummy_metric_overall(experiment_row: Dict[str, Any]) -> tuple[str, float, str | None] | None:
     dummy = experiment_row.get("baseline_dummy")
     if not isinstance(dummy, dict):
         return None
+    strategy: str | None = dummy.get("strategy") if isinstance(dummy.get("strategy"), str) else None
     for metric_name in ("mae", "acc", "mse"):
         metric_payload = dummy.get(metric_name)
         if isinstance(metric_payload, dict) and isinstance(metric_payload.get("overall"), (int, float)):
-            return metric_name, float(metric_payload.get("overall"))
+            return metric_name, float(metric_payload.get("overall")), strategy
     median = experiment_row.get("baseline_median_dummy_mae")
     if isinstance(median, dict) and isinstance(median.get("overall"), (int, float)):
-        return "mae", float(median.get("overall"))
+        return "mae", float(median.get("overall")), strategy or "median"
     return None
 
 
@@ -141,6 +142,7 @@ class UtilityExperimentLogParser(ExperimentLogParser):
         baseline_metric_overall: Dict[str, float] = {}
         dummy_metric_name: str | None = None
         dummy_metric_overall: float | None = None
+        dummy_strategy: str | None = None
         total_count = None
         with Path(log_file).open("r", encoding="utf-8") as f:
             for line in f:
@@ -153,28 +155,47 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         if baseline_value is not None:
                             baseline_metric_overall[metric_name] = baseline_value
                             baseline_utility[f"{feature}_baseline_{metric_name}"] = baseline_value
+                    dummy_utility = {}
                     dummy_metric = _extract_dummy_metric_overall(result)
                     if dummy_metric is not None:
-                        dummy_metric_name, dummy_metric_overall = dummy_metric
-                        baseline_utility[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
-                    experiment_result = {
+                        dummy_metric_name, dummy_metric_overall, dummy_strategy = dummy_metric
+                        dummy_utility[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
+                        if dummy_strategy is not None:
+                            dummy_utility[f"{feature}_dummy_strategy"] = dummy_strategy
+                    experiment_result_baseline = {
                         "dataset": dataset,
                         "feature": feature,
                         "method": "baseline",
                         "params": {},
                         section_name: baseline_utility,
                     }
+                    experiment_result_dummy = {
+                        "dataset": dataset,
+                        "feature": feature,
+                        "method": "dummy",
+                        "params": {},
+                        section_name: dummy_utility,
+                    }
                     continue
                 if record_type != "evaluation":
                     continue
                 count = result["overall_results"]["total"]
                 num_classes = extract_num_classes_from_utility_result(result["overall_results"])
-                if experiment_result and total_count is None:
+                if (experiment_result_baseline or experiment_result_dummy) and total_count is None:
                     total_count = count
-                    experiment_result["count"] = count
+                    if experiment_result_baseline:
+                        experiment_result_baseline["count"] = count
+                    if experiment_result_dummy:
+                        experiment_result_dummy["count"] = count
                     if num_classes is not None:
-                        experiment_result[section_name][f"_{feature}_num_classes"] = num_classes
-                    results.append(experiment_result)
+                        if experiment_result_baseline:
+                            experiment_result_baseline[section_name][f"_{feature}_num_classes"] = num_classes
+                        if experiment_result_dummy:
+                            experiment_result_dummy[section_name][f"_{feature}_num_classes"] = num_classes
+                    if experiment_result_baseline:
+                        results.append(experiment_result_baseline)
+                    if experiment_result_dummy:
+                        results.append(experiment_result_dummy)
                 source = str(result.get("source", ""))
                 key = normalize_source_key(source, dataset)
                 method, params = parse_params_from_key(key)
@@ -183,6 +204,8 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                     utility_metrics[f"{feature}_baseline_{metric_name}"] = baseline_value
                 if dummy_metric_name is not None and dummy_metric_overall is not None:
                     utility_metrics[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
+                if dummy_strategy is not None:
+                    utility_metrics[f"{feature}_dummy_strategy"] = dummy_strategy
                 results.append(
                     {
                         "dataset": dataset,
@@ -204,6 +227,8 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                             grouped_metrics[f"{feature}_baseline_{metric_name}"] = baseline_value
                         if dummy_metric_name is not None and dummy_metric_overall is not None:
                             grouped_metrics[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
+                        if dummy_strategy is not None:
+                            grouped_metrics[f"{feature}_dummy_strategy"] = dummy_strategy
                         grouped_num_classes = extract_num_classes_from_utility_result({"confusion_matrix": group_result.get("confusion_matrix")})
                         results.append(
                             {
@@ -403,7 +428,7 @@ class LogGrouper:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Merge experiment logs into a single JSON file.")
-    parser.add_argument("-o", "--output", type=str, help="Output file for merged logs")
+    parser.add_argument("-o", "--output", type=str, default="merged_logs.json", help="Output file for merged logs")
     args = parser.parse_args()
 
     def iter_type_dataset_logs(type_name: str) -> List[tuple[Path, str]]:

@@ -50,6 +50,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -58,6 +82,107 @@
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_pp",
+        "source_name": "divergence_pp",
+        "best": 0,
+        "worst": 1
+      }
+    ],
+    "render_mode": "hierarchical"
+  },
+  {
+    "file": "db_bio_logs_risk_maskers.md",
+    "csv_file": "db_bio_logs_risk_maskers.csv",
+    "json_file": "db_bio_logs_risk_maskers.json",
+    "dataset": "db_bio",
+    "section": "risk_maskers",
+    "title": "DB-Bio results (risk maskers)",
+    "heatmap_columns": [
+      {
+        "name": "P_exact",
+        "source_name": "privacy_exact_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "P_more",
+        "source_name": "privacy_more_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "P_full",
+        "source_name": "privacy_full_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "U_nominal",
+        "source_name": "utility_utility_nominal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal",
+        "source_name": "utility_utility_ordinal_weighted_score",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal",
+        "source_name": "supervised_divergence_utility_nominal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal",
+        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_bertscore",
+        "source_name": "divergence_bertscore",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_cosine",
+        "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_pp",
+        "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
       }
@@ -115,6 +240,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -123,6 +272,12 @@
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_pp",
+        "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
       }
@@ -180,6 +335,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -188,6 +367,12 @@
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_pp",
+        "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
       }
@@ -245,6 +430,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -253,6 +462,12 @@
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_pp",
+        "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
       }
@@ -310,6 +525,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -318,6 +557,12 @@
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_pp",
+        "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
       }
@@ -375,6 +620,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -383,6 +652,12 @@
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_pp",
+        "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
       }
@@ -440,6 +715,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -452,10 +751,105 @@
         "worst": 1
       },
       {
-        "name": "relative_gain",
-        "source_name": "relative_gain",
+        "name": "D_pp",
+        "source_name": "divergence_pp",
+        "best": 0,
+        "worst": 1
+      }
+    ],
+    "render_mode": "hierarchical"
+  },
+  {
+    "file": "tab_logs_risk_maskers.md",
+    "csv_file": "tab_logs_risk_maskers.csv",
+    "json_file": "tab_logs_risk_maskers.json",
+    "dataset": "tab",
+    "section": "risk_maskers",
+    "title": "TAB results (risk maskers)",
+    "heatmap_columns": [
+      {
+        "name": "P_exact",
+        "source_name": "privacy_exact_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "P_more",
+        "source_name": "privacy_more_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "P_full",
+        "source_name": "privacy_full_mean_reciprocal_rank",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "U_nominal",
+        "source_name": "utility_utility_nominal_weighted_score",
         "best": 1,
-        "worst": -1
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal",
+        "source_name": "utility_utility_ordinal_weighted_score",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal",
+        "source_name": "supervised_divergence_utility_nominal_weighted_score",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal",
+        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_bertscore",
+        "source_name": "divergence_bertscore",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_cosine",
+        "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_pp",
+        "source_name": "divergence_pp",
+        "best": 0,
+        "worst": 1
       }
     ],
     "render_mode": "hierarchical"
@@ -511,6 +905,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -523,10 +941,10 @@
         "worst": 1
       },
       {
-        "name": "relative_gain",
-        "source_name": "relative_gain",
-        "best": 1,
-        "worst": -1
+        "name": "D_pp",
+        "source_name": "divergence_pp",
+        "best": 0,
+        "worst": 1
       }
     ],
     "render_mode": "hierarchical"
@@ -582,6 +1000,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -590,6 +1032,12 @@
       {
         "name": "D_cosine",
         "source_name": "divergence_cosine",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "D_pp",
+        "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
       },
@@ -653,6 +1101,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -665,10 +1137,10 @@
         "worst": 1
       },
       {
-        "name": "relative_gain",
-        "source_name": "relative_gain",
-        "best": 1,
-        "worst": -1
+        "name": "D_pp",
+        "source_name": "divergence_pp",
+        "best": 0,
+        "worst": 1
       }
     ],
     "render_mode": "hierarchical"
@@ -724,6 +1196,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -736,10 +1232,10 @@
         "worst": 1
       },
       {
-        "name": "relative_gain",
-        "source_name": "relative_gain",
-        "best": 1,
-        "worst": -1
+        "name": "D_pp",
+        "source_name": "divergence_pp",
+        "best": 0,
+        "worst": 1
       }
     ],
     "render_mode": "hierarchical"
@@ -795,6 +1291,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -807,10 +1327,10 @@
         "worst": 1
       },
       {
-        "name": "relative_gain",
-        "source_name": "relative_gain",
-        "best": 1,
-        "worst": -1
+        "name": "D_pp",
+        "source_name": "divergence_pp",
+        "best": 0,
+        "worst": 1
       }
     ],
     "render_mode": "hierarchical"
@@ -866,6 +1386,30 @@
         "worst": 1
       },
       {
+        "name": "U_nominal_raw",
+        "source_name": "utility_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "U_ordinal_raw",
+        "source_name": "utility_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
+        "name": "SD_nominal_raw",
+        "source_name": "supervised_divergence_utility_nominal_raw_acc",
+        "best": 1,
+        "worst": 0
+      },
+      {
+        "name": "SD_ordinal_raw",
+        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
+        "best": 0,
+        "worst": 1
+      },
+      {
         "name": "D_bertscore",
         "source_name": "divergence_bertscore",
         "best": 0,
@@ -878,10 +1422,10 @@
         "worst": 1
       },
       {
-        "name": "relative_gain",
-        "source_name": "relative_gain",
-        "best": 1,
-        "worst": -1
+        "name": "D_pp",
+        "source_name": "divergence_pp",
+        "best": 0,
+        "worst": 1
       }
     ],
     "render_mode": "hierarchical"

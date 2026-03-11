@@ -15,10 +15,10 @@ X_AXIS_OPTIONS = {
 }
 
 Y_AXIS_OPTIONS = {
-    "u_nominal": "U_nominal",
-    "u_ordinal": "U_ordinal",
-    "sd_nominal": "SD_nominal",
-    "sd_ordinal": "SD_ordinal",
+    "u_nominal": "U_nominal_raw",
+    "u_ordinal": "U_ordinal_raw",
+    "sd_nominal": "SD_nominal_raw",
+    "sd_ordinal": "SD_ordinal_raw",
 }
 
 dataset_names = [
@@ -200,31 +200,31 @@ def metric_label_with_unit_and_direction(
 def metric_name_and_unit(metric_name: str) -> tuple[str, str | None]:
     if metric_name in {"P_exact", "P_more", "P_full"}:
         return metric_name, "MRR"
-    if metric_name in {"U_nominal", "SD_nominal"}:
-        return metric_name, "ACC"
-    if metric_name in {"U_ordinal", "SD_ordinal"}:
-        return metric_name, "MAE"
+    if metric_name in {"U_nominal_raw", "SD_nominal_raw"}:
+        return metric_name.replace("_raw", ""), "ACC"
+    if metric_name in {"U_ordinal_raw", "SD_ordinal_raw"}:
+        return metric_name.replace("_raw", ""), "MAE"
     return metric_name, None
 
 
 def y_axis_assessment_label(y_column: str, metric_bounds: dict[str, tuple[float, float]]) -> str:
     metric_label = metric_label_with_unit_and_direction(y_column, metric_bounds)
     if y_column.startswith("U_"):
-        return f"Relative Utility (r{metric_label})"
+        return f"Utility ({metric_label})"
     if y_column.startswith("SD_"):
-        return f"Relative Supervised divergence (r{metric_label})"
+        return f"Supervised divergence ({metric_label})"
     return metric_label
 
 
-def y_metric_context(y_column: str) -> tuple[str, str, str, str] | None:
-    if y_column == "U_nominal":
-        return ("utility", "acc", "r", "a")
-    if y_column == "U_ordinal":
-        return ("utility", "mae", "r", "m")
-    if y_column == "SD_nominal":
-        return ("supervised_divergence", "acc", "r", "a")
-    if y_column == "SD_ordinal":
-        return ("supervised_divergence", "mae", "r", "m")
+def y_metric_context(y_column: str) -> tuple[str, str] | None:
+    if y_column == "U_nominal_raw":
+        return ("utility", "acc")
+    if y_column == "U_ordinal_raw":
+        return ("utility", "mae")
+    if y_column == "SD_nominal_raw":
+        return ("supervised_divergence", "acc")
+    if y_column == "SD_ordinal_raw":
+        return ("supervised_divergence", "mae")
     return None
 
 
@@ -235,154 +235,46 @@ def _first_numeric(series: pd.Series) -> float | None:
     return float(numeric.iloc[0])
 
 
-def _first_count(df: pd.DataFrame, section_prefix: str, feature: str) -> float:
-    for count_column in (f"{section_prefix}__{feature}_count", f"{section_prefix}_{feature}_count"):
-        if count_column not in df.columns:
-            continue
-        value = _first_numeric(df[count_column])
-        if value is not None and value > 0:
-            return value
-    return 1.0
-
-
-def utility_anchor_values(
-    df: pd.DataFrame,
-    section_prefix: str,
-    abs_metric_name: str,
-) -> tuple[float, float] | None:
-    baseline_pattern = re.compile(rf"^{section_prefix}_(.+)_baseline_{abs_metric_name}$")
-    weighted_baseline = 0.0
-    weighted_dummy = 0.0
-    weight_total = 0.0
-
-    for column in df.columns:
-        match = baseline_pattern.match(column)
-        if not match:
-            continue
-        feature = match.group(1)
-        dummy_column = f"{section_prefix}_{feature}_dummy_{abs_metric_name}"
-        if dummy_column not in df.columns:
-            continue
-        baseline_value = _first_numeric(df[column])
-        dummy_value = _first_numeric(df[dummy_column])
-        if baseline_value is None or dummy_value is None:
-            continue
-        weight = _first_count(df, section_prefix, feature)
-        weighted_baseline += baseline_value * weight
-        weighted_dummy += dummy_value * weight
-        weight_total += weight
-
-    if weight_total <= 0:
-        return None
-    return (weighted_baseline / weight_total, weighted_dummy / weight_total)
-
-
-def build_absolute_recovery_block(
-    df: pd.DataFrame,
-    x_column: str,
-    y_column: str,
-    metric_bounds: dict[str, tuple[float, float]],
-) -> str:
-    rows: list[tuple[str, float, float]] = []
-    baseline_rows = df[df["method"] == "baseline"] if "method" in df.columns else pd.DataFrame()
-    if not baseline_rows.empty and x_column in baseline_rows.columns:
-        baseline_privacy = _first_numeric(baseline_rows[x_column])
-        if baseline_privacy is not None:
-            rows.append((x_column, baseline_privacy, 0.0))
-
+def extract_dummy_strategy(df: pd.DataFrame, y_column: str) -> str | None:
     metric_ctx = y_metric_context(y_column)
-    formula_lines: list[str] = []
-    if metric_ctx is not None:
-        section_prefix, abs_metric_name, *_ = metric_ctx
-        utility_anchors = utility_anchor_values(df, section_prefix, abs_metric_name)
-        if utility_anchors is not None:
-            rows.append((y_column, utility_anchors[0], utility_anchors[1]))
-            direction = metric_direction_arrow(y_column, metric_bounds)
-            upper_metric_name = abs_metric_name.upper()
-            if direction == "↓":
-                formula_lines.append(f"{upper_metric_name} = (1 - r{upper_metric_name}) · b + r{upper_metric_name} · d")
-            else:
-                formula_lines.append(f"{upper_metric_name} = r{upper_metric_name} · b + (1 - r{upper_metric_name}) · d")
-
-    if not rows and not formula_lines:
-        return ""
-
-    metric_name_width = len("Metric")
-    for metric_name, _, _ in rows:
-        raw_name, _ = metric_name_and_unit(metric_name)
-        metric_name_width = max(metric_name_width, len(raw_name))
-    metric_width = len("Metric")
-
-    formatted_rows: list[tuple[str, float, float]] = []
-    for metric_name, baseline_value, dummy_value in rows:
-        raw_name, unit = metric_name_and_unit(metric_name)
-        direction = metric_direction_arrow(metric_name, metric_bounds)
-        if unit is None:
-            formatted_metric = raw_name if not direction else f"{raw_name} ({direction})"
-        elif direction:
-            formatted_metric = f"{raw_name.ljust(metric_name_width)} ({unit} {direction})"
-        else:
-            formatted_metric = f"{raw_name.ljust(metric_name_width)} ({unit})"
-        metric_width = max(metric_width, len(formatted_metric))
-        formatted_rows.append((formatted_metric, baseline_value, dummy_value))
-
-    b_header = "b (baseline)"
-    d_header = "d (dummy)"
-    b_width = max(len(b_header), 7)
-    d_width = max(len(d_header), 7)
-
-    lines: list[str] = []
-    lines.append(f"{'Metric'.ljust(metric_width)} | {b_header.ljust(b_width)} | {d_header.ljust(d_width)}")
-    lines.append(f"{'-' * metric_width}-+-{'-' * b_width}-+-{'-' * d_width}")
-    for metric_name, baseline_value, dummy_value in formatted_rows:
-        lines.append(
-            f"{metric_name.ljust(metric_width)} | {baseline_value:>{b_width}.3f} | {dummy_value:>{d_width}.3f}"
-        )
-    if formula_lines:
-        lines.append("")
-        lines.extend(formula_lines)
-    return "\n".join(lines)
+    if metric_ctx is None:
+        return None
+    section_prefix = metric_ctx[0]
+    strategy_col = f"{section_prefix}_utility_dummy_strategy"
+    if strategy_col not in df.columns:
+        return None
+    strategies = df[strategy_col].dropna().unique()
+    if len(strategies) == 0:
+        return None
+    return str(strategies[0])
 
 
-def add_metric_bounds_to_plot(
+def add_central_tendency_line(
     ax: plt.Axes,
-    x_column: str,
-    y_column: str,
-    metric_bounds: dict[str, tuple[float, float]],
-) -> str:
-    labels: list[str] = []
-    x_bounds = metric_bounds.get(x_column)
-    if x_bounds is not None:
-        x_best, x_worst = x_bounds
-        ax.axvline(x_best, color="0.55", linestyle="--", linewidth=1.1, alpha=0.8, label="_nolegend_")
-        ax.axvline(x_worst, color="0.55", linestyle=":", linewidth=1.1, alpha=0.8, label="_nolegend_")
-        labels.append(f"{x_column}[best={x_best:g}, worst={x_worst:g}]")
-
-    y_bounds = metric_bounds.get(y_column)
-    if y_bounds is not None:
-        y_best, y_worst = y_bounds
-        ax.axhline(y_best, color="0.55", linestyle="--", linewidth=1.1, alpha=0.8, label="_nolegend_")
-        ax.axhline(y_worst, color="0.55", linestyle=":", linewidth=1.1, alpha=0.8, label="_nolegend_")
-        labels.append(f"{y_column}[best={y_best:g}, worst={y_worst:g}]")
-
-    return " | ".join(labels)
-
-
-def normalize_ordinal_plot_scores(
     df: pd.DataFrame,
     y_column: str,
-    metric_bounds: dict[str, tuple[float, float]],
-) -> pd.DataFrame:
-    if y_column not in {"U_ordinal", "SD_ordinal"}:
-        return df
-    bounds = metric_bounds.get(y_column)
-    if bounds is None:
-        return df
-    best_value, worst_value = bounds
-    if best_value < worst_value:
-        df = df.copy()
-        df["U_plot"] = 1.0 - df["U_plot"]
-    return df
+) -> None:
+    metric_ctx = y_metric_context(y_column)
+    if metric_ctx is None:
+        return
+    section_prefix, abs_metric_name = metric_ctx
+    dummy_col = f"{section_prefix}_utility_{'nominal' if abs_metric_name == 'acc' else 'ordinal'}_dummy_{abs_metric_name}"
+    experiment_df = df[~df["method"].isin(["baseline", "dummy"])] if "method" in df.columns else df
+    dummy_value: float | None = None
+    if dummy_col in experiment_df.columns:
+        dummy_value = _first_numeric(experiment_df[dummy_col])
+    if dummy_value is None:
+        return
+    strategy = extract_dummy_strategy(experiment_df, y_column)
+    label = strategy if strategy else "dummy"
+    ax.axhline(
+        dummy_value,
+        color="#888888",
+        linestyle="-.",
+        linewidth=1.3,
+        alpha=0.85,
+        label=f"{label} ({dummy_value:.3f})",
+    )
 
 def read_csv_file(path: Path, x_column: str, y_column: str) -> Optional[pd.DataFrame]:
     try:
@@ -619,7 +511,6 @@ if __name__ == "__main__":
                 df = read_csv_file(file_path, x_column, y_column)
                 if df is None:
                     continue
-                df = normalize_ordinal_plot_scores(df, y_column, metric_bounds)
                 print(f"Dataset: {dataset_name}, Method Group: {method_group_label}, X: {x_column}, Y: {y_column}")
 
                 fig, ax = plt.subplots(figsize=(12, 8))
@@ -724,14 +615,9 @@ if __name__ == "__main__":
                             label=point_legend_label(grouped_method_name, params_dict),
                         )
 
-                info_block = build_absolute_recovery_block(df, x_column, y_column, metric_bounds)
+                add_central_tendency_line(ax, df, y_column)
                 ax.set_xlabel(f"Privacy ({x_column})")
-                if y_column.startswith("U_"):
-                    ax.set_ylabel(f"Relative Utility ({y_column})")
-                elif y_column.startswith("SD_"):
-                    ax.set_ylabel(f"Relative Supervised divergence ({y_column})")
-                else:
-                    ax.set_ylabel(y_column)
+                ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
                 ax.set_title(f"Privacy-Utility Tradeoff in {dataset_label}", fontsize=14, pad=24)
                 ax.text(
                     0.5,
@@ -764,19 +650,6 @@ if __name__ == "__main__":
                     ncol=1 if len(dedup_labels) <= 5 else 2,
                 )
                 legend.get_title().set_fontsize(10)
-
-                if info_block:
-                    ax.text(
-                        1.05,
-                        0.0,
-                        info_block,
-                        transform=ax.transAxes,
-                        ha="left",
-                        va="bottom",
-                        fontsize=10,
-                        fontfamily="monospace",
-                        bbox={"facecolor": "white", "alpha": 0.9, "edgecolor": "0.8"},
-                    )
 
                 fig.tight_layout(rect=[0.06, 0.03, 0.73, 0.98])
                 output_dir = OUTPUT_DIR / method_name / dataset_name / x_name
