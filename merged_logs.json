@@ -1479,7 +1479,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 10
     },
@@ -1521,7 +1521,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 100
     },
@@ -1563,7 +1563,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 25
     },
@@ -1605,7 +1605,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 250
     },
@@ -1647,7 +1647,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 50
     },
@@ -2161,7 +2161,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 10
     },
@@ -2633,7 +2633,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 100
     },
@@ -3105,7 +3105,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 25
     },
@@ -3577,7 +3577,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 250
     },
@@ -3834,7 +3834,7 @@
   },
   {
     "dataset": "db_bio",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 50
     },
@@ -7278,7 +7278,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 10
     },
@@ -7336,7 +7336,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 100
     },
@@ -7394,7 +7394,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 25
     },
@@ -7452,7 +7452,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 250
     },
@@ -7510,7 +7510,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap_masked",
+    "method": "dpmlm_shap",
     "params": {
       "epsilon": 50
     },
@@ -8216,7 +8216,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 10
     },
@@ -8864,7 +8864,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 100
     },
@@ -9512,7 +9512,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 25
     },
@@ -10160,7 +10160,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 250
     },
@@ -10808,7 +10808,7 @@
   },
   {
     "dataset": "tab",
-    "method": "dpmlm_shap",
+    "method": "dpmlm_shap_no_presidio",
     "params": {
       "epsilon": 50
     },
