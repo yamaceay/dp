@@ -26,25 +26,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -66,6 +66,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -97,25 +103,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -137,6 +143,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -168,25 +180,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -208,77 +220,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
-      }
-    ],
-    "render_mode": "hierarchical"
-  },
-  {
-    "file": "db_bio_logs_simple_maskers_with_thresholds.md",
-    "csv_file": "db_bio_logs_simple_maskers_with_thresholds.csv",
-    "json_file": "db_bio_logs_simple_maskers_with_thresholds.json",
-    "dataset": "db_bio",
-    "section": "simple_maskers_with_thresholds",
-    "title": "DB-Bio results (simple maskers with thresholds)",
-    "heatmap_columns": [
+      },
       {
-        "name": "P_exact",
-        "source_name": "privacy_exact_mean_reciprocal_rank",
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
         "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "P_more",
-        "source_name": "privacy_more_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "P_full",
-        "source_name": "privacy_full_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "U_nominal_raw",
-        "source_name": "utility_utility_nominal_raw_acc",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal_raw",
-        "source_name": "utility_utility_ordinal_raw_mae",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal_raw",
-        "source_name": "supervised_divergence_utility_nominal_raw_acc",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal_raw",
-        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "D_bertscore",
-        "source_name": "divergence_bertscore",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "D_cosine",
-        "source_name": "divergence_cosine",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "D_pp",
-        "source_name": "divergence_pp",
-        "best": 0,
-        "worst": 1
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -310,25 +257,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -350,6 +297,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -381,25 +334,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -421,6 +374,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -452,25 +411,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -492,6 +451,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -523,25 +488,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -563,6 +528,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -594,25 +565,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -634,6 +605,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -665,96 +642,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
-        "source_name": "supervised_divergence_utility_ordinal_raw_mae",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "D_bertscore",
-        "source_name": "divergence_bertscore",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "D_cosine",
-        "source_name": "divergence_cosine",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "D_pp",
-        "source_name": "divergence_pp",
-        "best": 0,
-        "worst": 1
-      }
-    ],
-    "render_mode": "hierarchical"
-  },
-  {
-    "file": "tab_logs_simple_maskers_with_thresholds.md",
-    "csv_file": "tab_logs_simple_maskers_with_thresholds.csv",
-    "json_file": "tab_logs_simple_maskers_with_thresholds.json",
-    "dataset": "tab",
-    "section": "simple_maskers_with_thresholds",
-    "title": "TAB results (simple maskers with thresholds)",
-    "heatmap_columns": [
-      {
-        "name": "P_exact",
-        "source_name": "privacy_exact_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "P_more",
-        "source_name": "privacy_more_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "P_full",
-        "source_name": "privacy_full_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "U_nominal_raw",
-        "source_name": "utility_utility_nominal_raw_acc",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal_raw",
-        "source_name": "utility_utility_ordinal_raw_mae",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal_raw",
-        "source_name": "supervised_divergence_utility_nominal_raw_acc",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -778,10 +684,10 @@
         "worst": 1
       },
       {
-        "name": "relative_gain",
-        "source_name": "relative_gain",
-        "best": 1,
-        "worst": -1
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -813,25 +719,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -853,6 +759,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -884,25 +796,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -924,6 +836,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -955,25 +873,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -995,6 +913,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"
@@ -1026,25 +950,25 @@
         "worst": 1
       },
       {
-        "name": "U_nominal_raw",
+        "name": "U_nominal_acc",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "U_ordinal_raw",
+        "name": "U_ordinal_mae",
         "source_name": "utility_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
       },
       {
-        "name": "SD_nominal_raw",
+        "name": "SD_nominal_acc",
         "source_name": "supervised_divergence_utility_nominal_raw_acc",
         "best": 1,
         "worst": 0
       },
       {
-        "name": "SD_ordinal_raw",
+        "name": "SD_ordinal_mae",
         "source_name": "supervised_divergence_utility_ordinal_raw_mae",
         "best": 0,
         "worst": 1
@@ -1066,6 +990,12 @@
         "source_name": "divergence_pp",
         "best": 0,
         "worst": 1
+      },
+      {
+        "name": "T_anon_avg_s",
+        "source_name": "runtime_anon_avg_time_s",
+        "best": 0,
+        "worst": "float(\"inf\")"
       }
     ],
     "render_mode": "hierarchical"

@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
+
 INPUT_LOGS_PATH = Path("merged_logs.json")
 OUTPUT_DIR = Path("mds")
 REDDIT_UTILITY_OUTPUT_PATH = OUTPUT_DIR / "reddit_utility.json"
@@ -17,6 +18,11 @@ TYPST_TABLES_MANIFEST_PATH = OUTPUT_DIR / "tables_manifest.json"
 INCLUDE_GROUPED_ROWS = False
 HIERARCHICAL_SPLIT_TABLES = True
 ENABLED_DATASETS = {"db_bio", "tab"}
+
+dataset_lengths = {
+    "db_bio": 2419,
+    "tab": 1268,
+}
 
 
 def read_logs(path: str | Path) -> list[dict[str, Any]]:
@@ -39,27 +45,43 @@ class LogMetricsEnricher:
                 item_copy[section] = self._augment_utility_scores(
                     dict(section_metrics),
                     allow_missing_rmae=True,
+                    dataset=item_copy.get("dataset"),
                 )
             enriched.append(item_copy)
         return enriched
 
-    def _extract_feature_counts(self, section_metrics: dict[str, Any]) -> dict[str, int]:
-        feature_counts: dict[str, int] = {}
-        for metric_name, metric_value in section_metrics.items():
-            if metric_name == "_count":
-                feature_counts[""] = int(metric_value)
+    def _extract_feature_counts(self, section_metrics: dict[str, Any], dataset: str) -> dict[str, int]:
+        default_count = dataset_lengths.get(dataset)
+        if default_count is None:
+            raise ValueError(f"Unknown dataset: {dataset}")
+        suffixes = ("_mae", "_rmae", "_acc", "_racc", "_count")
+        features: set[str] = set()
+        for metric_name in section_metrics.keys():
+            if not isinstance(metric_name, str):
                 continue
-            match = re.match(r"^_(.+)_count$", metric_name)
-            if match:
-                feature_counts[match.group(1)] = int(metric_value)
+            for suffix in suffixes:
+                if metric_name.endswith(suffix):
+                    feature = metric_name[: -len(suffix)]
+                    if feature and "_baseline" not in feature and "_dummy" not in feature:
+                        features.add(feature)
+                    break
+
+        feature_counts: dict[str, int] = {}
+        for feature in sorted(features):
+            raw_count = section_metrics.get(f"{feature}_count")
+            if isinstance(raw_count, (int, float)) and raw_count > 0:
+                feature_counts[feature] = int(raw_count)
+            else:
+                feature_counts[feature] = default_count
         return feature_counts
 
     def _augment_utility_scores(
         self,
         utility_metrics: dict[str, Any],
         allow_missing_rmae: bool = False,
+        dataset: str = None,
     ) -> dict[str, Any]:
-        feature_counts = self._extract_feature_counts(utility_metrics)
+        feature_counts = self._extract_feature_counts(utility_metrics, dataset)
         weighted_sum = 0.0
         weighted_count = 0
         ordinal_weighted_sum = 0.0
@@ -70,52 +92,20 @@ class LogMetricsEnricher:
         ordinal_raw_count = 0
         nominal_raw_sum = 0.0
         nominal_raw_count = 0
-        ordinal_baseline_sum = 0.0
-        ordinal_baseline_count = 0
-        ordinal_dummy_sum = 0.0
-        ordinal_dummy_count = 0
-        nominal_baseline_sum = 0.0
-        nominal_baseline_count = 0
-        nominal_dummy_sum = 0.0
-        nominal_dummy_count = 0
-        dummy_strategies: set[str] = set()
         for feature, count in feature_counts.items():
             if not feature:
                 continue
             score: float | None = None
             mae_key = f"{feature}_mae"
             rmae_key = f"{feature}_rmae"
-            baseline_mae_key = f"{feature}_baseline_mae"
-            dummy_mae_key = f"{feature}_dummy_mae"
             acc_key = f"{feature}_acc"
             racc_key = f"{feature}_racc"
-            baseline_acc_key = f"{feature}_baseline_acc"
-            dummy_acc_key = f"{feature}_dummy_acc"
-            strategy_key = f"{feature}_dummy_strategy"
-            if strategy_key in utility_metrics:
-                dummy_strategies.add(str(utility_metrics[strategy_key]))
             if mae_key in utility_metrics:
                 mae_value = float(utility_metrics[mae_key])
                 ordinal_raw_sum += mae_value * count
                 ordinal_raw_count += count
-                if baseline_mae_key in utility_metrics:
-                    ordinal_baseline_sum += float(utility_metrics[baseline_mae_key]) * count
-                    ordinal_baseline_count += count
-                if dummy_mae_key in utility_metrics:
-                    ordinal_dummy_sum += float(utility_metrics[dummy_mae_key]) * count
-                    ordinal_dummy_count += count
                 if rmae_key in utility_metrics:
                     score = float(utility_metrics[rmae_key])
-                elif baseline_mae_key in utility_metrics and dummy_mae_key in utility_metrics:
-                    baseline_mae = float(utility_metrics[baseline_mae_key])
-                    dummy_mae = float(utility_metrics[dummy_mae_key])
-                    denominator = dummy_mae - baseline_mae
-                    if abs(denominator) <= 1e-12:
-                        raise ValueError(
-                            f"Feature '{feature}' has baseline/dummy mae with near-zero denominator"
-                        )
-                    score = (mae_value - baseline_mae) / denominator
-                    utility_metrics[rmae_key] = score
                 elif not allow_missing_rmae:
                     raise ValueError(
                         f"Feature '{feature}' has mae but missing ordinal utility score '{rmae_key}'"
@@ -127,24 +117,8 @@ class LogMetricsEnricher:
                 acc_value = float(utility_metrics[acc_key])
                 nominal_raw_sum += acc_value * count
                 nominal_raw_count += count
-                if baseline_acc_key in utility_metrics:
-                    nominal_baseline_sum += float(utility_metrics[baseline_acc_key]) * count
-                    nominal_baseline_count += count
-                if dummy_acc_key in utility_metrics:
-                    nominal_dummy_sum += float(utility_metrics[dummy_acc_key]) * count
-                    nominal_dummy_count += count
                 if racc_key in utility_metrics:
                     score = float(utility_metrics[racc_key])
-                elif baseline_acc_key in utility_metrics and dummy_acc_key in utility_metrics:
-                    baseline_acc = float(utility_metrics[baseline_acc_key])
-                    dummy_acc = float(utility_metrics[dummy_acc_key])
-                    denominator = baseline_acc - dummy_acc
-                    if abs(denominator) <= 1e-12:
-                        raise ValueError(
-                            f"Feature '{feature}' has baseline/dummy acc with near-zero denominator"
-                        )
-                    score = (acc_value - dummy_acc) / denominator
-                    utility_metrics[racc_key] = score
                 elif not allow_missing_rmae:
                     raise ValueError(
                         f"Feature '{feature}' has acc but missing nominal utility score '{racc_key}'"
@@ -176,19 +150,9 @@ class LogMetricsEnricher:
         if ordinal_raw_count > 0:
             utility_metrics["utility_ordinal_raw_mae"] = ordinal_raw_sum / ordinal_raw_count
             utility_metrics["_utility_ordinal_raw_count"] = ordinal_raw_count
-        if ordinal_baseline_count > 0:
-            utility_metrics["utility_ordinal_baseline_mae"] = ordinal_baseline_sum / ordinal_baseline_count
-        if ordinal_dummy_count > 0:
-            utility_metrics["utility_ordinal_dummy_mae"] = ordinal_dummy_sum / ordinal_dummy_count
         if nominal_raw_count > 0:
             utility_metrics["utility_nominal_raw_acc"] = nominal_raw_sum / nominal_raw_count
             utility_metrics["_utility_nominal_raw_count"] = nominal_raw_count
-        if nominal_baseline_count > 0:
-            utility_metrics["utility_nominal_baseline_acc"] = nominal_baseline_sum / nominal_baseline_count
-        if nominal_dummy_count > 0:
-            utility_metrics["utility_nominal_dummy_acc"] = nominal_dummy_sum / nominal_dummy_count
-        if dummy_strategies:
-            utility_metrics["utility_dummy_strategy"] = ",".join(sorted(dummy_strategies))
         return utility_metrics
 
 class RedditUtilityByHardness:
@@ -252,7 +216,7 @@ class FlatDatasetLogs:
                 "method": item["method"],
                 "params": order_params_dict(params),
             }
-            for section in ("privacy", "utility", "supervised_divergence", "divergence"):
+            for section in ("privacy", "utility", "supervised_divergence", "divergence", "runtime"):
                 for metric, value in item.get(section, {}).items():
                     flat_item[f"{section}_{metric}"] = value
             if item["method"] == "baseline":
@@ -370,70 +334,13 @@ class MarkdownDatasetLogsWriter:
             columns.append(score_name)
             rename_map[score_name] = score.get("rename_as", score.get("print_as", score_name))
 
-        section_prefixes = (
-            "privacy_",
-            "utility_",
-            "supervised_divergence_",
-            "divergence_",
-        )
-        for column_name in sorted(frame.columns):
-            if column_name in columns:
-                continue
-            if any(column_name.startswith(prefix) for prefix in section_prefixes):
-                columns.append(column_name)
-
         missing_required = [column for column in required_columns if column not in frame.columns]
         if missing_required:
             raise ValueError(f"Missing required columns for dataset '{dataset}' projection: {missing_required}")
 
         projected = frame[columns].copy()
         projected = projected.rename(columns=rename_map)
-        return self._add_gain_column(projected)
-
-    def _add_gain_column(self, frame: pd.DataFrame) -> pd.DataFrame:
-        utility_columns = [column for column in ("U_nominal", "U_ordinal") if column in frame.columns]
-        privacy_columns = [column for column in ("P_exact", "P_more", "P_full") if column in frame.columns]
-        if not utility_columns or not privacy_columns:
-            return frame
-        if "method" not in frame.columns:
-            return frame
-
-        baseline_rows = frame[frame["method"] == "baseline"]
-        if baseline_rows.empty:
-            return frame
-        baseline_row = baseline_rows.iloc[0]
-
-        utility_baseline = self._safe_sum_numeric(baseline_row, utility_columns)
-        privacy_baseline = self._safe_sum_numeric(baseline_row, privacy_columns)
-        if utility_baseline is None or privacy_baseline is None:
-            return frame
-        if utility_baseline == 0.0 or privacy_baseline == 0.0:
-            return frame
-
-        gain_values: list[float | None] = []
-        for _, row in frame.iterrows():
-            utility_value = self._safe_sum_numeric(row, utility_columns)
-            privacy_value = self._safe_sum_numeric(row, privacy_columns)
-            if utility_value is None or privacy_value is None:
-                gain_values.append(None)
-                continue
-            gain = (utility_value / utility_baseline) - (privacy_value / privacy_baseline)
-            gain_values.append(gain)
-
-        gain_position = len(frame.columns)
-        if "D_cosine" in frame.columns:
-            gain_position = list(frame.columns).index("D_cosine") + 1
-        frame.insert(gain_position, "relative_gain", gain_values)
-        return frame
-
-    def _safe_sum_numeric(self, row: pd.Series, columns: list[str]) -> float | None:
-        total = 0.0
-        for column in columns:
-            value = row[column]
-            if pd.isna(value):
-                return None
-            total += float(value)
-        return total
+        return projected
 
     def write_dataset_tables(self) -> list[Path]:
         written: list[Path] = []

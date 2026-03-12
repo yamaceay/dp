@@ -18,19 +18,19 @@ dataset_sets:
         best: 0
         worst: 1
       - name: utility_utility_nominal_raw_acc
-        rename_as: U_nominal_raw
+        rename_as: U_nominal_acc
         best: 1
         worst: 0
       - name: utility_utility_ordinal_raw_mae
-        rename_as: U_ordinal_raw
+        rename_as: U_ordinal_mae
         best: 0
         worst: 1
       - name: supervised_divergence_utility_nominal_raw_acc
-        rename_as: SD_nominal_raw
+        rename_as: SD_nominal_acc
         best: 1
         worst: 0
       - name: supervised_divergence_utility_ordinal_raw_mae
-        rename_as: SD_ordinal_raw
+        rename_as: SD_ordinal_mae
         best: 0
         worst: 1
       - name: divergence_bertscore
@@ -45,3 +45,7 @@ dataset_sets:
         rename_as: D_pp
         best: 0
         worst: 1
+      - name: runtime_anon_avg_time_s
+        rename_as: T_anon_avg_s
+        best: 0
+        worst: float("inf")

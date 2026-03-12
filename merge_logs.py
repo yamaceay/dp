@@ -5,42 +5,12 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from dp.utils.log_keys import normalize_source_key, parse_params_from_key
 
-def parse_params_from_key(key: str) -> tuple[str, Dict[str, Any]]:
-    params: Dict[str, Any] = {}
-    method = key
-    is_dpmlm_shap_no_delim = False
-    if "?" in key:
-        method, params_str = key.split("?", 1)
-        for param in params_str.split("&"):
-            if "=" not in param:
-                raise ValueError(f"Unexpected hyperparameter format: {param}")
-            name, value = param.split("=", 1)
-            if method == "dpmlm_shap" and name in {"k", "rho", "lambda"}:
-                is_dpmlm_shap_no_delim = True
-            if name in {"epsilon", "k"}:
-                value = int(value)
-            elif name in {"rho", "lambda"}:
-                value = float(value) / 100.0
-            params[name] = value
-    params = dict(sorted(params.items(), key=lambda item: item[0]))
-    if not is_dpmlm_shap_no_delim:
-        if method == "dpmlm_shap":
-            method = "dpmlm_shap_no_presidio"
-        elif method == "dpmlm_shap_masked":
-            method = "dpmlm_shap"
-    return method, params
-
-
-def normalize_source_key(source_path: str, dataset: str) -> str:
-    name = Path(source_path).name
-    if name.endswith(".jsonl"):
-        name = name[:-6]
-    key = re.sub(rf"^\d{{8}}_\d{{6}}_{re.escape(dataset)}_", "", name)
-    method, sep, params = key.partition("?")
-    method = re.sub(r"_eps_[0-9]{3}$", "", method)
-    method = re.sub(r"(?:_k|_risk|_pii)$", "", method)
-    return method + ((sep + params) if sep else "")
+dataset_lengths = {
+    "db_bio": 2419,
+    "tab": 1268,
+}
 
 def parse_privacy_profile_from_log_name(log_name: str) -> str | None:
     if re.search(r"^more\.jsonl$", log_name):
@@ -146,64 +116,30 @@ class UtilityExperimentLogParser(ExperimentLogParser):
         section_name: str = "utility",
     ) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
-        experiment_result = None
         baseline_metric_overall: Dict[str, float] = {}
         dummy_metric_name: str | None = None
         dummy_metric_overall: float | None = None
         dummy_strategy: str | None = None
-        total_count = None
         with Path(log_file).open("r", encoding="utf-8") as f:
             for line in f:
                 result = json.loads(line)
                 record_type = result.get("type")
                 if record_type == "experiment":
-                    baseline_utility = filter_utility_metrics(result["baseline_overall_metrics"], metrics, feature)
-                    for metric_name in ("mae", "acc", "mse"):
+                    baseline_metric_overall = {}
+                    for metric_name in metrics:
                         baseline_value = _extract_baseline_metric_overall(result, metric_name)
                         if baseline_value is not None:
                             baseline_metric_overall[metric_name] = baseline_value
-                            baseline_utility[f"{feature}_baseline_{metric_name}"] = baseline_value
-                    dummy_utility = {}
                     dummy_metric = _extract_dummy_metric_overall(result)
-                    if dummy_metric is not None:
+                    if dummy_metric is None:
+                        dummy_metric_name = None
+                        dummy_metric_overall = None
+                        dummy_strategy = None
+                    else:
                         dummy_metric_name, dummy_metric_overall, dummy_strategy = dummy_metric
-                        dummy_utility[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
-                        if dummy_strategy is not None:
-                            dummy_utility[f"{feature}_dummy_strategy"] = dummy_strategy
-                    experiment_result_baseline = {
-                        "dataset": dataset,
-                        "feature": feature,
-                        "method": "baseline",
-                        "params": {},
-                        section_name: baseline_utility,
-                    }
-                    experiment_result_dummy = {
-                        "dataset": dataset,
-                        "feature": feature,
-                        "method": "dummy",
-                        "params": {},
-                        section_name: dummy_utility,
-                    }
                     continue
                 if record_type != "evaluation":
                     continue
-                count = result["overall_results"]["total"]
-                num_classes = extract_num_classes_from_utility_result(result["overall_results"])
-                if (experiment_result_baseline or experiment_result_dummy) and total_count is None:
-                    total_count = count
-                    if experiment_result_baseline:
-                        experiment_result_baseline["count"] = count
-                    if experiment_result_dummy:
-                        experiment_result_dummy["count"] = count
-                    if num_classes is not None:
-                        if experiment_result_baseline:
-                            experiment_result_baseline[section_name][f"_{feature}_num_classes"] = num_classes
-                        if experiment_result_dummy:
-                            experiment_result_dummy[section_name][f"_{feature}_num_classes"] = num_classes
-                    if experiment_result_baseline:
-                        results.append(experiment_result_baseline)
-                    if experiment_result_dummy:
-                        results.append(experiment_result_dummy)
                 source = str(result.get("source", ""))
                 key = normalize_source_key(source, dataset)
                 method, params = parse_params_from_key(key)
@@ -220,38 +156,11 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         "feature": feature,
                         "method": method,
                         "params": params,
-                        "count": result["overall_results"]["total"],
                         section_name: {
                             **utility_metrics,
-                            **({f"_{feature}_num_classes": num_classes} if num_classes is not None else {}),
                         },
                     }
                 )
-
-                if "grouped_results" in result:
-                    for group_name, group_result in result["grouped_results"].items():
-                        grouped_metrics = filter_utility_metrics(group_result["metrics"], metrics, feature)
-                        for metric_name, baseline_value in baseline_metric_overall.items():
-                            grouped_metrics[f"{feature}_baseline_{metric_name}"] = baseline_value
-                        if dummy_metric_name is not None and dummy_metric_overall is not None:
-                            grouped_metrics[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
-                        if dummy_strategy is not None:
-                            grouped_metrics[f"{feature}_dummy_strategy"] = dummy_strategy
-                        grouped_num_classes = extract_num_classes_from_utility_result({"confusion_matrix": group_result.get("confusion_matrix")})
-                        results.append(
-                            {
-                                "dataset": dataset,
-                                "feature": feature,
-                                "method": method,
-                                "params": params,
-                                "group": group_name,
-                                "count": group_result["total"],
-                                section_name: {
-                                    **grouped_metrics,
-                                    **({f"_{feature}_num_classes": grouped_num_classes} if grouped_num_classes is not None else {}),
-                                },
-                            }
-                        )
         return results
 
 class PrivacyExperimentLogParser(ExperimentLogParser):
@@ -392,10 +301,11 @@ def experiment_type(result: Dict[str, Any]) -> str:
 class LogGrouper:
     def group(results: List[Dict[str, Any]]) -> Dict[tuple, List[Dict[str, Any]]]:
         grouped: Dict[Tuple[str, str, frozenset, str | None], Dict[str, Any]] = {}
+        valid_types = ["privacy", "utility", "supervised_divergence", "divergence", "runtime"]
         for result in results:
             assert all(field in result for field in ["dataset", "method", "params"]), f"Missing required fields in result: {result}"
-            assert any(field in result for field in ["privacy", "utility", "supervised_divergence", "divergence"]), f"Missing privacy/utility/divergence field in result: {result}"
-            
+            assert any(field in result for field in valid_types), f"Missing privacy/utility/divergence/runtime field in result: {result}"
+
             identifiers = {k: result[k] for k in ["dataset", "method", "params"]}
             group = maybe_group(result)
             if group:
@@ -406,13 +316,18 @@ class LogGrouper:
             if "group" in identifiers:
                 grouped[key]["group"] = identifiers["group"]
 
-            type_of_experiment = experiment_type(result)
-            metrics = dict(result[type_of_experiment])
-            feature = maybe_feature(result)
-            if feature:
-                metrics["_{}_count".format(feature)] = result["count"]
+            for type_of_experiment in valid_types:
+                if type_of_experiment in result:
+                    break
             else:
-                metrics["_count"] = result["count"]
+                raise ValueError(f"Could not determine experiment type for result: {result}")
+
+            metrics = dict(result[type_of_experiment])
+            # feature = maybe_feature(result)
+            # if feature and type_of_experiment != "runtime":
+            #     metrics["_{}_count".format(feature)] = result.get("count")
+            # elif type_of_experiment != "runtime":
+            #     metrics["_count"] = result.get("count")
             if type_of_experiment == "privacy":
                 profile = str(result.get("privacy_profile") or "exact")
                 prefixed_metrics: Dict[str, Any] = {}
@@ -471,8 +386,21 @@ if __name__ == "__main__":
         (log_file, dataset, divergence_metric_from_log_name(log_file.name)) for log_file, dataset in iter_type_dataset_logs("divergence")
     ]
 
+    def iter_runtime_logs() -> List[tuple[Path, str]]:
+        root = Path("logs/runtime")
+        if not root.exists():
+            return []
+        rows: List[tuple[Path, str]] = []
+        for dataset_dir in sorted([p for p in root.iterdir() if p.is_dir()]):
+            dataset = dataset_dir.name
+            for log_file in sorted(dataset_dir.glob("*.jsonl")):
+                rows.append((log_file, dataset))
+        return rows
+
+    runtime_logs = iter_runtime_logs()
+
     utility_metrics = ["acc", "macro_mae", "mae", "macro_f1", "f1", "rmae"]
-    
+
     all_results: List[Dict[str, Any]] = []
     for log_file, dataset in privacy_logs:
         all_results.extend(PrivacyExperimentLogParser.parse(log_file, dataset))
@@ -482,9 +410,23 @@ if __name__ == "__main__":
         all_results.extend(UtilityExperimentLogParser.parse(log_file, dataset, feature, utility_metrics, section_name="supervised_divergence"))
     for log_file, dataset, metric in divergence_logs:
         all_results.extend(DivergenceExperimentLogParser.parse(log_file, dataset, metric))
-    
+
+    for log_file, dataset in runtime_logs:
+        with log_file.open("r", encoding="utf-8") as f:
+            for line in f:
+                entry = json.loads(line)
+                all_results.append({
+                    "dataset": dataset,
+                    "method": entry.pop("method"),
+                    "params": entry.pop("params"),
+                    "runtime": {
+                        **entry
+                    },
+                    "type": "runtime"
+                })
+
     grouped_results = LogGrouper.group(all_results)
-    
+
     if args.output:
         with open(args.output, "w") as f:
             json.dump(grouped_results, f, indent=2)

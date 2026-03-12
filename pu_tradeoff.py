@@ -15,10 +15,10 @@ X_AXIS_OPTIONS = {
 }
 
 Y_AXIS_OPTIONS = {
-    "u_nominal": "U_nominal_raw",
-    "u_ordinal": "U_ordinal_raw",
-    "sd_nominal": "SD_nominal_raw",
-    "sd_ordinal": "SD_ordinal_raw",
+    "u_nominal": "U_nominal_acc",
+    "u_ordinal": "U_ordinal_mae",
+    "sd_nominal": "SD_nominal_acc",
+    "sd_ordinal": "SD_ordinal_mae",
 }
 
 dataset_names = [
@@ -200,10 +200,10 @@ def metric_label_with_unit_and_direction(
 def metric_name_and_unit(metric_name: str) -> tuple[str, str | None]:
     if metric_name in {"P_exact", "P_more", "P_full"}:
         return metric_name, "MRR"
-    if metric_name in {"U_nominal_raw", "SD_nominal_raw"}:
-        return metric_name.replace("_raw", ""), "ACC"
-    if metric_name in {"U_ordinal_raw", "SD_ordinal_raw"}:
-        return metric_name.replace("_raw", ""), "MAE"
+    if metric_name in {"U_nominal_acc", "SD_nominal_acc", "U_nominal_raw", "SD_nominal_raw"}:
+        return metric_name.replace("_raw", "").replace("_acc", ""), "ACC"
+    if metric_name in {"U_ordinal_mae", "SD_ordinal_mae", "U_ordinal_raw", "SD_ordinal_raw"}:
+        return metric_name.replace("_raw", "").replace("_mae", ""), "MAE"
     return metric_name, None
 
 
@@ -217,13 +217,13 @@ def y_axis_assessment_label(y_column: str, metric_bounds: dict[str, tuple[float,
 
 
 def y_metric_context(y_column: str) -> tuple[str, str] | None:
-    if y_column == "U_nominal_raw":
+    if y_column in {"U_nominal_acc", "U_nominal_raw"}:
         return ("utility", "acc")
-    if y_column == "U_ordinal_raw":
+    if y_column in {"U_ordinal_mae", "U_ordinal_raw"}:
         return ("utility", "mae")
-    if y_column == "SD_nominal_raw":
+    if y_column in {"SD_nominal_acc", "SD_nominal_raw"}:
         return ("supervised_divergence", "acc")
-    if y_column == "SD_ordinal_raw":
+    if y_column in {"SD_ordinal_mae", "SD_ordinal_raw"}:
         return ("supervised_divergence", "mae")
     return None
 
@@ -251,25 +251,54 @@ def extract_dummy_strategy(df: pd.DataFrame, y_column: str) -> str | None:
 
 def add_central_tendency_line(
     ax: plt.Axes,
-    df: pd.DataFrame,
+    reference_df: pd.DataFrame,
     y_column: str,
 ) -> None:
     metric_ctx = y_metric_context(y_column)
     if metric_ctx is None:
         return
     section_prefix, abs_metric_name = metric_ctx
-    dummy_col = f"{section_prefix}_utility_{'nominal' if abs_metric_name == 'acc' else 'ordinal'}_dummy_{abs_metric_name}"
-    experiment_df = df[~df["method"].isin(["baseline", "dummy"])] if "method" in df.columns else df
+    search_df = (
+        reference_df[~reference_df["method"].isin(["baseline", "dummy"])]
+        if "method" in reference_df.columns
+        else reference_df
+    )
+
+    baseline_columns = [
+        col for col in search_df.columns
+        if re.match(rf"^{section_prefix}_.+_baseline_{abs_metric_name}$", col)
+    ]
+    baseline_value: float | None = None
+    for baseline_col in baseline_columns:
+        baseline_value = _first_numeric(search_df[baseline_col])
+        if baseline_value is not None:
+            break
+    if baseline_value is not None:
+        ax.axhline(
+            baseline_value,
+            color="#2ca02c",
+            linestyle="--",
+            linewidth=1.3,
+            alpha=0.9,
+            label=f"baseline clf ({baseline_value:.3f})",
+        )
+
+    dummy_columns = [
+        col for col in search_df.columns
+        if re.match(rf"^{section_prefix}_.+_dummy_{abs_metric_name}$", col)
+    ]
     dummy_value: float | None = None
-    if dummy_col in experiment_df.columns:
-        dummy_value = _first_numeric(experiment_df[dummy_col])
+    for dummy_col in dummy_columns:
+        dummy_value = _first_numeric(search_df[dummy_col])
+        if dummy_value is not None:
+            break
     if dummy_value is None:
         return
-    strategy = extract_dummy_strategy(experiment_df, y_column)
-    label = strategy if strategy else "dummy"
+    strategy = extract_dummy_strategy(search_df, y_column)
+    label = strategy if strategy else "dummy clf"
     ax.axhline(
         dummy_value,
-        color="#888888",
+        color="#d62728",
         linestyle="-.",
         linewidth=1.3,
         alpha=0.85,
@@ -295,6 +324,16 @@ def read_csv_file(path: Path, x_column: str, y_column: str) -> Optional[pd.DataF
         return filtered
     except Exception as e:
         print(f"Error reading CSV file {path}")
+        return None
+
+
+def read_dataset_reference_frame(dataset_name: str) -> Optional[pd.DataFrame]:
+    path = Path(f"mds/{dataset_name}_logs.csv")
+    if not path.exists():
+        return None
+    try:
+        return pd.read_csv(path)
+    except Exception:
         return None
 
 
@@ -501,6 +540,7 @@ if __name__ == "__main__":
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for dataset_name in dataset_names:
         metric_bounds = dataset_metric_bounds.get(dataset_name, {})
+        reference_df = read_dataset_reference_frame(dataset_name)
         method_names = discover_method_names(dataset_name)
         for method_name in method_names:
             method_group_label = method_group_labels.get(method_name, method_name)
@@ -615,7 +655,7 @@ if __name__ == "__main__":
                             label=point_legend_label(grouped_method_name, params_dict),
                         )
 
-                add_central_tendency_line(ax, df, y_column)
+                add_central_tendency_line(ax, reference_df if reference_df is not None else df, y_column)
                 ax.set_xlabel(f"Privacy ({x_column})")
                 ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
                 ax.set_title(f"Privacy-Utility Tradeoff in {dataset_label}", fontsize=14, pad=24)
