@@ -7,6 +7,7 @@ import multiprocessing as mp
 import os
 from pathlib import Path
 import random
+import shutil
 import tempfile
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
@@ -501,26 +502,35 @@ def run_utility_experiment(
         baseline_test_metrics = {}
         baseline_overall_metrics = {}
     else:
-        selected_head_kwargs, selected_val_metrics, baseline_eval, tuning_trials = _pick_tuned_head_kwargs(
-            base_head_kwargs=head_kwargs,
-            tune_param=config.tune_param,
-            tune_values=config.tune_values,
-            spec=spec,
-            vectorizer_name=vectorizer_name,
-            vectorizer_kwargs=vectorizer_kwargs,
-            head_name=head_name,
-            identifier=identifier,
-            primary_metric=primary_metric,
-            train_texts=original_train_texts,
-            train_labels=original_train_labels,
-            val_texts=original_val_texts,
-            val_labels=original_val_labels,
-            test_texts=original_test_texts,
-            test_labels=original_test_labels,
-            overall_texts=all_texts,
-            overall_labels=all_labels,
-            random_state=config.random_state,
-        )
+        baseline_head_kwargs = dict(head_kwargs)
+        baseline_ckpt_dir: Optional[str] = None
+        if "checkpoint_dir" in baseline_head_kwargs:
+            baseline_ckpt_dir = tempfile.mkdtemp(prefix="utility_baseline_")
+            baseline_head_kwargs["checkpoint_dir"] = baseline_ckpt_dir
+        try:
+            selected_head_kwargs, selected_val_metrics, baseline_eval, tuning_trials = _pick_tuned_head_kwargs(
+                base_head_kwargs=baseline_head_kwargs,
+                tune_param=config.tune_param,
+                tune_values=config.tune_values,
+                spec=spec,
+                vectorizer_name=vectorizer_name,
+                vectorizer_kwargs=vectorizer_kwargs,
+                head_name=head_name,
+                identifier=identifier,
+                primary_metric=primary_metric,
+                train_texts=original_train_texts,
+                train_labels=original_train_labels,
+                val_texts=original_val_texts,
+                val_labels=original_val_labels,
+                test_texts=original_test_texts,
+                test_labels=original_test_labels,
+                overall_texts=all_texts,
+                overall_labels=all_labels,
+                random_state=config.random_state,
+            )
+        finally:
+            if baseline_ckpt_dir is not None:
+                shutil.rmtree(baseline_ckpt_dir, ignore_errors=True)
 
         baseline_train_metrics = dict(baseline_eval.get("train", {}))
         baseline_val_metrics = dict(baseline_eval.get("val", {}))
@@ -620,8 +630,10 @@ def run_utility_experiment(
                     }
                     continue
                 isolated_head_kwargs = dict(selected_head_kwargs)
+                temp_ckpt_dir: Optional[str] = None
                 if "checkpoint_dir" in isolated_head_kwargs:
-                    isolated_head_kwargs["checkpoint_dir"] = tempfile.mkdtemp(prefix="utility_eval_")
+                    temp_ckpt_dir = tempfile.mkdtemp(prefix="utility_eval_")
+                    isolated_head_kwargs["checkpoint_dir"] = temp_ckpt_dir
                 eval_payload: Dict[str, Any] = {
                     "default_vectorizer_name": spec.default_vectorizer,
                     "default_head_name": spec.default_head,
@@ -641,7 +653,11 @@ def run_utility_experiment(
                     "overall_labels": anon_all_labels,
                     "seed": _stable_seed(config.random_state, f"utility::{name}"),
                 }
-                eval_result = _fit_and_eval_single_isolated(eval_payload)
+                try:
+                    eval_result = _fit_and_eval_single_isolated(eval_payload)
+                finally:
+                    if temp_ckpt_dir is not None:
+                        shutil.rmtree(temp_ckpt_dir, ignore_errors=True)
                 train_metrics = dict(eval_result.get("train", {}))
                 val_metrics = dict(eval_result.get("val", {}))
                 test_metrics = dict(eval_result.get("test", {}))
