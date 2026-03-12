@@ -26,30 +26,6 @@
         "worst": 1
       },
       {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
         "name": "U_nominal_raw",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
@@ -117,30 +93,6 @@
       {
         "name": "P_full",
         "source_name": "privacy_full_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
         "best": 0,
         "worst": 1
       },
@@ -216,30 +168,6 @@
         "worst": 1
       },
       {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
         "name": "U_nominal_raw",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
@@ -307,30 +235,6 @@
       {
         "name": "P_full",
         "source_name": "privacy_full_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
         "best": 0,
         "worst": 1
       },
@@ -406,30 +310,6 @@
         "worst": 1
       },
       {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
         "name": "U_nominal_raw",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
@@ -497,30 +377,6 @@
       {
         "name": "P_full",
         "source_name": "privacy_full_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
         "best": 0,
         "worst": 1
       },
@@ -596,30 +452,6 @@
         "worst": 1
       },
       {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
         "name": "U_nominal_raw",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
@@ -687,30 +519,6 @@
       {
         "name": "P_full",
         "source_name": "privacy_full_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
         "best": 0,
         "worst": 1
       },
@@ -786,30 +594,6 @@
         "worst": 1
       },
       {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
         "name": "U_nominal_raw",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
@@ -881,30 +665,6 @@
         "worst": 1
       },
       {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
         "name": "U_nominal_raw",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
@@ -972,30 +732,6 @@
       {
         "name": "P_full",
         "source_name": "privacy_full_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
         "best": 0,
         "worst": 1
       },
@@ -1077,30 +813,6 @@
         "worst": 1
       },
       {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
         "name": "U_nominal_raw",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
@@ -1168,30 +880,6 @@
       {
         "name": "P_full",
         "source_name": "privacy_full_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
         "best": 0,
         "worst": 1
       },
@@ -1267,30 +955,6 @@
         "worst": 1
       },
       {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
         "name": "U_nominal_raw",
         "source_name": "utility_utility_nominal_raw_acc",
         "best": 1,
@@ -1358,30 +1022,6 @@
       {
         "name": "P_full",
         "source_name": "privacy_full_mean_reciprocal_rank",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "U_nominal",
-        "source_name": "utility_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "U_ordinal",
-        "source_name": "utility_utility_ordinal_weighted_score",
-        "best": 0,
-        "worst": 1
-      },
-      {
-        "name": "SD_nominal",
-        "source_name": "supervised_divergence_utility_nominal_weighted_score",
-        "best": 1,
-        "worst": 0
-      },
-      {
-        "name": "SD_ordinal",
-        "source_name": "supervised_divergence_utility_ordinal_weighted_score",
         "best": 0,
         "worst": 1
       },
