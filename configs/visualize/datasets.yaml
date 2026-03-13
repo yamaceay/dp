@@ -45,7 +45,7 @@ dataset_sets:
         rename_as: D_pp
         best: 0
         worst: 1
-      - name: runtime_anon_avg_time_s
+      - name: runtime_avg_anon_time_s
         rename_as: T_anon_avg_s
         best: 0
         worst: float("inf")
