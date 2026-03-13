@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Tuple
 
 from dp.utils.log_keys import normalize_source_key, parse_params_from_key
 
+SEQUENTIAL_PROGRESS_PARAMS = {"k", "rho", "lambda"}
+
 dataset_lengths = {
     "db_bio": 2419,
     "tab": 1268,
@@ -298,6 +300,54 @@ def experiment_type(result: Dict[str, Any]) -> str:
             return field
     raise ValueError(f"Could not determine experiment type for result: {result}")
 
+
+def _group_key_without_progress_params(dataset: str, method: str, params: Dict[str, Any]) -> tuple[str, str, frozenset[tuple[str, Any]]]:
+    filtered_params = {k: v for k, v in params.items() if k not in SEQUENTIAL_PROGRESS_PARAMS}
+    return dataset, method, frozenset(filtered_params.items())
+
+
+def add_real_anonymization_runtime(grouped_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    max_pp_by_group: Dict[tuple[str, str, frozenset[tuple[str, Any]]], float] = {}
+
+    for row in grouped_results:
+        divergence = row.get("divergence")
+        params = row.get("params")
+        if not isinstance(divergence, dict) or not isinstance(params, dict):
+            continue
+        if not any(param_name in params for param_name in SEQUENTIAL_PROGRESS_PARAMS):
+            continue
+        pp = divergence.get("pp")
+        if not isinstance(pp, (int, float)):
+            continue
+        key = _group_key_without_progress_params(str(row.get("dataset")), str(row.get("method")), params)
+        max_pp_by_group[key] = max(float(pp), max_pp_by_group.get(key, float("-inf")))
+
+    for row in grouped_results:
+        runtime = row.get("runtime")
+        if not isinstance(runtime, dict):
+            continue
+        anon_total_time_s = runtime.get("anon_total_time_s")
+        if not isinstance(anon_total_time_s, (int, float)):
+            continue
+
+        real_anon_total_time_s = float(anon_total_time_s)
+        params = row.get("params")
+        divergence = row.get("divergence")
+        if isinstance(params, dict) and isinstance(divergence, dict) and any(param_name in params for param_name in SEQUENTIAL_PROGRESS_PARAMS):
+            pp = divergence.get("pp")
+            if isinstance(pp, (int, float)):
+                key = _group_key_without_progress_params(str(row.get("dataset")), str(row.get("method")), params)
+                max_pp = max_pp_by_group.get(key)
+                if isinstance(max_pp, float) and max_pp > 0.0:
+                    real_anon_total_time_s = float(anon_total_time_s) * (float(pp) / max_pp)
+
+        runtime["real_anon_total_time_s"] = real_anon_total_time_s
+        anon_texts_processed = runtime.get("anon_texts_processed")
+        if isinstance(anon_texts_processed, (int, float)) and float(anon_texts_processed) > 0.0:
+            runtime["avg_anon_time_s"] = real_anon_total_time_s / float(anon_texts_processed)
+
+    return grouped_results
+
 class LogGrouper:
     def group(results: List[Dict[str, Any]]) -> Dict[tuple, List[Dict[str, Any]]]:
         grouped: Dict[Tuple[str, str, frozenset, str | None], Dict[str, Any]] = {}
@@ -426,6 +476,7 @@ if __name__ == "__main__":
                 })
 
     grouped_results = LogGrouper.group(all_results)
+    grouped_results = add_real_anonymization_runtime(grouped_results)
 
     if args.output:
         with open(args.output, "w") as f:
