@@ -33,19 +33,29 @@ dataset_sets:
         rename_as: SD_ordinal_mae
         best: 0
         worst: 1
-      - name: divergence_bertscore
-        rename_as: D_bertscore
-        best: 0
-        worst: 1
-      - name: divergence_cosine
-        rename_as: D_cosine
-        best: 0
-        worst: 1
-      - name: divergence_pp
-        rename_as: D_pp
-        best: 0
-        worst: 1
       - name: runtime_avg_anon_time_s
         rename_as: T_anon_avg_s
         best: 0
         worst: float("inf")
+      - name: divergence_bertscore
+        rename_as: D_bertscore
+        best: 0
+        worst: 1
+        exclude:
+          - baseline
+      - name: divergence_cosine
+        rename_as: D_cosine
+        best: 0
+        worst: 1
+        exclude:
+          - baseline
+      - name: divergence_pp
+        rename_as: D_pp
+        best: 0
+        worst: 1
+        exclude: 
+          - baseline
+          - spacy
+          - presidio
+          - manual
+          - baroud

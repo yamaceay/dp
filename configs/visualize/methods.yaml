@@ -12,11 +12,11 @@ method_sets:
         print_as: "Manual"
         datasets: ["tab"]
       - method: "baroud"
-        print_as: "NER-based masking"
+        print_as: "IPI"
         params_one_run: {"lambda": [0.5, 0.9]}
         datasets: ["tab"]
       - method: "petre_shap"
-        print_as: "PETRE + Presidio"
+        print_as: "PETRE+Pr"
         params_one_run: {"k": [2, 3, 5, 7, 10]}
   - name: "risk_maskers"
     print_as: "Risk-based masking with threshold hyperparameter rho"
@@ -26,7 +26,7 @@ method_sets:
       - method: "presidio"
         print_as: "Presidio"
       - method: "risk_shap"
-        print_as: "Risk-based masking + Presidio"
+        print_as: "Risk+Pr"
         params_one_run: {"rho": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}
   - name: "record_level_rewriters"
     print_as: "DP Record-level rewriting methods with varying epsilon"
@@ -51,10 +51,10 @@ method_sets:
         print_as: "DP-MLM"
         params: ["epsilon"]
       - method: "dpmlm_shap_no_presidio"
-        print_as: "Risk-Aware DP-MLM"
+        print_as: "DP-MLM-X"
         params: ["epsilon"]
       - method: "dpmlm_shap"
-        print_as: "Risk-Aware DP-MLM + Presidio"
+        print_as: "DP-MLM-X+Pr"
         params: ["epsilon"]
   - name: "token_level_rewriters_with_threshold_k"
     print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter k"
@@ -64,10 +64,10 @@ method_sets:
       - method: "presidio"
         print_as: "Presidio"
       - method: "dpmlm_shap"
-        print_as: "Risk-Aware DP-MLM + Presidio"
+        print_as: "DP-MLM-X+Pr"
         params: ["epsilon"]
       - method: "dpmlm_shap"
-        print_as: "Risk-Aware k-DP-MLM + Presidio"
+        print_as: "k-DP-MLM-X+Pr"
         params: ["epsilon"]
         params_one_run: {"k": [2, 3, 5, 7, 10]}
   - name: "token_level_rewriters_with_threshold_lambda"
@@ -79,10 +79,10 @@ method_sets:
       - method: "presidio"
         print_as: "Presidio"
       - method: "dpmlm_shap"
-        print_as: "Risk-Aware DP-MLM + Presidio"
+        print_as: "DP-MLM-X+Pr"
         params: ["epsilon"]
       - method: "dpmlm_shap"
-        print_as: "Risk-Aware λ-DP-MLM + Presidio"
+        print_as: "λ-DP-MLM-X+Pr"
         params: ["epsilon"]
         params_one_run: {"lambda": [0.5, 0.9]}
   - name: "token_level_rewriters_with_threshold_rho"
@@ -93,9 +93,9 @@ method_sets:
       - method: "presidio"
         print_as: "Presidio"
       - method: "dpmlm_shap"
-        print_as: "Risk-Aware DP-MLM + Presidio"
+        print_as: "DP-MLM-X+Pr"
         params: ["epsilon"]
       - method: "dpmlm_shap"
-        print_as: "Risk-Aware ρ-DP-MLM + Presidio"
+        print_as: "ρ-DP-MLM-X+Pr"
         params_one_run: ["epsilon"]
         params: {"rho": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}

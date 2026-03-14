@@ -116,6 +116,31 @@ def matches_exact_requirement(method: str, params: Dict[str, Any], requirement: 
     return method == requirement["method"] and set(params) == set(requirement["params"])
 
 
+def run_step_0(root: Path) -> None:
+    for dataset in ["db_bio", "tab"]:
+        anon_path = root / "logs" / "runtime" / dataset / "anon.jsonl"
+        if not anon_path.is_file():
+            print(f"skipping missing anon log: {anon_path}", file=sys.stderr)
+            continue
+        rows = read_jsonl_rows(anon_path)
+        presidio_runtime = next(row for row in rows if row["method"] == "presidio").get("anon_total_time_s")
+        if presidio_runtime is None:
+            raise ValueError(f"Presidio runtime not found in {anon_path}")
+        new_rows = []
+        for row in rows:
+            method = row["method"]
+            params = row["params"]
+            new_row = dict(
+                method=method, 
+                params=params, 
+                deid_total_time_s=0.0,
+            )
+            if any(matches_exact_requirement(method, params, req) for req in REQUIRES_FULL_DEID):
+                new_row["deid_total_time_s"] = presidio_runtime
+            new_rows.append(new_row)
+            
+        write_jsonl_rows(root / "logs" / "runtime" / dataset / "deid.jsonl", new_rows)
+
 def run_step_1(root: Path) -> None:
     def extract_output_paths(text: str) -> List[str]:
         paths: List[str] = []
@@ -343,6 +368,7 @@ def main() -> None:
     run_step_2(root)
     run_step_3(root)
     run_step_4(root)
+    run_step_0(root)
 
 
 if __name__ == "__main__":

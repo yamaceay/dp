@@ -11,6 +11,15 @@ import yaml
 import argparse
 import re
 
+from plot_layout import (
+    LAYOUT,
+    SUBTITLE_Y,
+    SUPTITLE_Y,
+    TIGHT_LAYOUT_RECT,
+    create_panel_axes,
+    order_is_descending,
+)
+
 X_AXIS_OPTIONS = {
     "p_exact": "P_exact",
     "p_more": "P_more",
@@ -111,6 +120,62 @@ def read_dataset_metric_bounds() -> dict[str, dict[str, tuple[float, float]]]:
         for dataset_name in dataset_names:
             bounds_by_dataset[dataset_name] = dict(score_bounds)
     return bounds_by_dataset
+
+
+def normalized_excluded_methods(raw_methods: object) -> set[str]:
+    if not isinstance(raw_methods, list):
+        return set()
+    normalized: set[str] = set()
+    for item in raw_methods:
+        if not isinstance(item, str):
+            continue
+        token = item.strip().lower()
+        if not token:
+            continue
+        normalized.add(token)
+    return normalized
+
+
+def method_is_excluded(method: str, excluded_methods: set[str]) -> bool:
+    normalized_method = method.strip().lower()
+    if normalized_method in excluded_methods:
+        return True
+    return any(normalized_method.startswith(f"{excluded}_") for excluded in excluded_methods)
+
+
+def read_dataset_metric_exclusions() -> dict[str, dict[str, set[str]]]:
+    with open(DATASET_CONFIG_PATH, "r") as f:
+        config = yaml.safe_load(f)
+    exclusions_by_dataset: dict[str, dict[str, set[str]]] = {}
+    for dataset_set in config.get("dataset_sets", []):
+        dataset_scope = dataset_set.get("names")
+        dataset_names: list[str] = []
+        if isinstance(dataset_scope, list):
+            for entry in dataset_scope:
+                if isinstance(entry, str):
+                    dataset_names.append(entry)
+                    continue
+                if isinstance(entry, dict):
+                    dataset_name = entry.get("name")
+                    if isinstance(dataset_name, str):
+                        dataset_names.append(dataset_name)
+        if not dataset_names:
+            dataset_name = dataset_set.get("name")
+            if isinstance(dataset_name, str):
+                dataset_names = [dataset_name]
+        score_exclusions: dict[str, set[str]] = {}
+        for score in dataset_set.get("scores", []):
+            if not isinstance(score, dict):
+                continue
+            excluded_methods = normalized_excluded_methods(score.get("exclude", []))
+            if not excluded_methods:
+                continue
+            for metric_key in (score.get("name"), score.get("rename_as"), score.get("print_as")):
+                if isinstance(metric_key, str) and metric_key.strip():
+                    score_exclusions[metric_key] = set(excluded_methods)
+        for dataset_name in dataset_names:
+            exclusions_by_dataset[dataset_name] = dict(score_exclusions)
+    return exclusions_by_dataset
 
 
 def read_dataset_print_labels() -> dict[str, str]:
@@ -580,10 +645,7 @@ def sort_param_value_for_shading(value: object) -> tuple[int, object]:
 
 def sort_param_values(values: set[object], param_name: str | None, param_specs: dict[str, dict[str, object]]) -> list[object]:
     ordered = sorted(values, key=sort_param_value_for_shading)
-    if not isinstance(param_name, str):
-        return ordered
-    spec = param_specs.get(param_name, {})
-    if spec.get("print_order") == "high_to_low":
+    if order_is_descending(param_name, param_specs):
         ordered.reverse()
     return ordered
 
@@ -782,28 +844,14 @@ def set_zoomed_limits(
 
 
 def create_tradeoff_axes(num_panels: int) -> tuple[plt.Figure, list[plt.Axes]]:
-    if num_panels == 5:
-        fig = plt.figure(figsize=(18, 12))
-        grid = fig.add_gridspec(2, 23)
-        first = fig.add_subplot(grid[0, 4:11])
-        second = fig.add_subplot(grid[0, 12:19], sharex=first, sharey=first)
-        third = fig.add_subplot(grid[1, 0:7], sharex=first, sharey=first)
-        fourth = fig.add_subplot(grid[1, 8:15], sharex=first, sharey=first)
-        fifth = fig.add_subplot(grid[1, 16:23], sharex=first, sharey=first)
-        return fig, [first, second, third, fourth, fifth]
-
-    if num_panels <= 3:
-        fig, axes = plt.subplots(1, num_panels, figsize=(8 * num_panels, 7), squeeze=False, sharex=True, sharey=True)
-        return fig, list(axes[0])
-
-    ncols = 3
-    nrows = math.ceil(num_panels / ncols)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(8 * ncols, 6 * nrows), squeeze=False, sharex=True, sharey=True)
-    flat_axes = list(axes.flat)
-    for extra_ax in flat_axes[num_panels:]:
-        extra_ax.set_visible(False)
-    return fig, flat_axes[:num_panels]
-
+    fig, axes = create_panel_axes(
+        num_panels,
+        sharex=True,
+        sharey=True,
+        row_size=(8.0, 7.0),
+        grid_size=(8.0, 6.0),
+    )
+    return fig, axes
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate privacy-utility tradeoff plots")
@@ -821,6 +869,7 @@ if __name__ == "__main__":
 
     param_specs = read_param_specs()
     dataset_metric_bounds = read_dataset_metric_bounds()
+    dataset_metric_exclusions = read_dataset_metric_exclusions()
     dataset_print_labels = read_dataset_print_labels()
     method_group_labels = read_method_group_labels()
     method_display_specs = read_method_display_specs()
@@ -839,6 +888,15 @@ if __name__ == "__main__":
                 raw_df = read_csv_file(file_path, x_column, y_column)
                 if raw_df is None:
                     continue
+                metric_exclusions = dataset_metric_exclusions.get(dataset_name, {})
+                excluded_methods = set(metric_exclusions.get(x_column, set())) | set(metric_exclusions.get(y_column, set()))
+                if excluded_methods:
+                    exclusion_mask = raw_df["method"].astype(str).apply(
+                        lambda method: not method_is_excluded(method, excluded_methods)
+                    )
+                    raw_df = raw_df[exclusion_mask].copy()
+                    if raw_df.empty:
+                        continue
                 print(f"Dataset: {dataset_name}, Method Group: {method_group_label}, X: {x_column}, Y: {y_column}")
 
                 df = raw_df.copy()
@@ -908,7 +966,7 @@ if __name__ == "__main__":
                                 lambda params: sort_param_value_for_shading(params.get(shade_param))
                             )
                             ordered_rows = ordered_rows.sort_values("__shade_sort__")
-                            if param_specs.get(shade_param, {}).get("print_order") == "high_to_low":
+                            if order_is_descending(shade_param, param_specs):
                                 ordered_rows = ordered_rows.iloc[::-1]
 
                         has_line = len(ordered_rows) >= 2
@@ -954,8 +1012,23 @@ if __name__ == "__main__":
                     add_central_tendency_line(ax, reference_source_df, y_column)
                     ax.set_xlabel(f"Privacy ({x_column})")
                     ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
-                    if epsilon_value is not None:
-                        ax.set_title(f"ε={epsilon_value}", fontsize=12, pad=14)
+                    if len(panel_values) > 1:
+                        if epsilon_value is not None:
+                            ax.set_title(f"ε={epsilon_value}", fontsize=12, pad=14)
+                    else:
+                        if epsilon_value is None:
+                            ax.set_title(
+                                f"Privacy-Utility Tradeoff in {dataset_label} | {method_group_label}",
+                                fontsize=12,
+                                pad=14,
+                            )
+                        else:
+                            ax.set_title(
+                                f"Privacy-Utility Tradeoff in {dataset_label} | "
+                                f"{method_group_label} | ε={epsilon_value}",
+                                fontsize=12,
+                                pad=14,
+                            )
                     ax.grid(alpha=0.25)
 
                     handles, labels = ax.get_legend_handles_labels()
@@ -1000,9 +1073,12 @@ if __name__ == "__main__":
                         extra_y_values=extra_y_values,
                     )
 
-                fig.suptitle(f"Privacy-Utility Tradeoff in {dataset_label}", fontsize=14, y=0.98)
-                fig.text(0.5, 0.94, method_group_label, ha="center", va="center", fontsize=10)
-                fig.tight_layout(rect=[0.03, 0.03, 0.9, 0.93])
+                if len(panel_values) > 1:
+                    fig.suptitle(f"Privacy-Utility Tradeoff in {dataset_label}", fontsize=14, y=SUPTITLE_Y)
+                    fig.text(0.5, SUBTITLE_Y, method_group_label, ha="center", va="center", fontsize=10)
+                    fig.tight_layout(rect=TIGHT_LAYOUT_RECT)
+                else:
+                    fig.tight_layout(rect=[0.03, 0.03, 0.97, 0.98])
                 output_dir = OUTPUT_DIR / method_name / dataset_name / x_name
                 output_dir.mkdir(parents=True, exist_ok=True)
                 output_path = output_dir / f"{y_name}.png"
