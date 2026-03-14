@@ -19,10 +19,12 @@ method_sets:
         print_as: "PETRE + Presidio"
         params_one_run: {"k": [2, 3, 5, 7, 10]}
   - name: "risk_maskers"
-    print_as: "Risk-based masking with varying rho"
+    print_as: "Risk-based masking with threshold hyperparameter rho"
     methods:
       - method: "baseline"
         print_as: "Original"
+      - method: "presidio"
+        print_as: "Presidio"
       - method: "risk_shap"
         print_as: "Risk-based masking + Presidio"
         params_one_run: {"rho": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}
@@ -59,6 +61,8 @@ method_sets:
     methods:
       - method: "baseline"
         print_as: "Original"
+      - method: "presidio"
+        print_as: "Presidio"
       - method: "dpmlm_shap"
         print_as: "Risk-Aware DP-MLM + Presidio"
         params: ["epsilon"]
@@ -72,6 +76,8 @@ method_sets:
     methods:
       - method: "baseline"
         print_as: "Original"
+      - method: "presidio"
+        print_as: "Presidio"
       - method: "dpmlm_shap"
         print_as: "Risk-Aware DP-MLM + Presidio"
         params: ["epsilon"]
@@ -84,6 +90,8 @@ method_sets:
     methods:
       - method: "baseline"
         print_as: "Original"
+      - method: "presidio"
+        print_as: "Presidio"
       - method: "dpmlm_shap"
         print_as: "Risk-Aware DP-MLM + Presidio"
         params: ["epsilon"]

@@ -60,6 +60,7 @@ _marker_palette = [
     "h",
     "*",
 ]
+PRESIDIO_COLOR = "#8F2D56"
 _param_label_map = {
     "epsilon": "ε",
     "rho": "ρ",
@@ -150,19 +151,32 @@ def read_method_group_labels() -> dict[str, str]:
     return labels
 
 
-def format_metric_bounds_summary(
-    x_column: str,
-    y_column: str,
-    metric_bounds: dict[str, tuple[float, float]],
-) -> str:
-    lines: list[str] = []
-    x_bounds = metric_bounds.get(x_column)
-    if x_bounds is not None:
-        lines.append(f"{x_column}: best={x_bounds[0]:g} | worst={x_bounds[1]:g}")
-    y_bounds = metric_bounds.get(y_column)
-    if y_bounds is not None:
-        lines.append(f"{y_column}: best={y_bounds[0]:g} | worst={y_bounds[1]:g}")
-    return "\n".join(lines)
+def read_method_display_specs() -> dict[str, list[dict[str, object]]]:
+    with open(METHODS_CONFIG_PATH, "r") as f:
+        config = yaml.safe_load(f)
+    specs: dict[str, list[dict[str, object]]] = {}
+    for method_set in config.get("method_sets", []):
+        group_name = method_set.get("name")
+        methods = method_set.get("methods", [])
+        if not isinstance(group_name, str) or not isinstance(methods, list):
+            continue
+        group_specs: list[dict[str, object]] = []
+        for method_spec in methods:
+            if isinstance(method_spec, dict):
+                group_specs.append(method_spec)
+        specs[group_name] = group_specs
+    return specs
+
+
+def configured_method_group_names() -> list[str]:
+    with open(METHODS_CONFIG_PATH, "r") as f:
+        config = yaml.safe_load(f)
+    names: list[str] = []
+    for method_set in config.get("method_sets", []):
+        name = method_set.get("name")
+        if isinstance(name, str):
+            names.append(name)
+    return names
 
 
 def metric_label_with_unit(metric_name: str) -> str:
@@ -280,6 +294,80 @@ def reference_y_values(reference_df: pd.DataFrame, y_column: str) -> list[float]
             break
 
     return values
+
+
+def reference_method_point(
+    reference_df: pd.DataFrame | None,
+    method_name: str,
+    x_column: str,
+    y_column: str,
+) -> tuple[float, float] | None:
+    if reference_df is None:
+        return None
+    if "method" not in reference_df.columns or x_column not in reference_df.columns or y_column not in reference_df.columns:
+        return None
+    method_rows = reference_df[reference_df["method"] == method_name].copy()
+    if method_rows.empty:
+        return None
+    method_rows["P_plot"] = pd.to_numeric(method_rows[x_column], errors="coerce")
+    method_rows["U_plot"] = pd.to_numeric(method_rows[y_column], errors="coerce")
+    method_rows = method_rows.dropna(subset=["P_plot", "U_plot"])
+    if method_rows.empty:
+        return None
+    row = method_rows.iloc[0]
+    return float(row["P_plot"]), float(row["U_plot"])
+
+
+def raw_metric_column(metric_name: str) -> str | None:
+    raw_columns = {
+        "P_exact": "privacy_exact_mean_reciprocal_rank",
+        "P_more": "privacy_more_mean_reciprocal_rank",
+        "P_full": "privacy_full_mean_reciprocal_rank",
+        "U_nominal_acc": "utility_utility_nominal_raw_acc",
+        "U_ordinal_mae": "utility_utility_ordinal_raw_mae",
+        "SD_nominal_acc": "supervised_divergence_utility_nominal_raw_acc",
+        "SD_ordinal_mae": "supervised_divergence_utility_ordinal_raw_mae",
+    }
+    return raw_columns.get(metric_name)
+
+
+def method_point_from_any_metric_schema(
+    reference_df: pd.DataFrame | None,
+    method_name: str,
+    x_column: str,
+    y_column: str,
+) -> tuple[float, float] | None:
+    point = reference_method_point(reference_df, method_name, x_column, y_column)
+    if point is not None:
+        return point
+    raw_x_column = raw_metric_column(x_column)
+    raw_y_column = raw_metric_column(y_column)
+    if raw_x_column is None or raw_y_column is None:
+        return None
+    return reference_method_point(reference_df, method_name, raw_x_column, raw_y_column)
+
+
+def transformed_method_point(
+    dataset_name: str,
+    method_name: str,
+    x_column: str,
+    y_column: str,
+    fallback_frames: list[pd.DataFrame] | None = None,
+) -> tuple[float, float] | None:
+    if fallback_frames:
+        for frame in fallback_frames:
+            point = method_point_from_any_metric_schema(frame, method_name, x_column, y_column)
+            if point is not None:
+                return point
+    for path in sorted(Path("mds").glob(f"{dataset_name}_logs_*.csv")):
+        try:
+            frame = pd.read_csv(path)
+        except Exception:
+            continue
+        point = method_point_from_any_metric_schema(frame, method_name, x_column, y_column)
+        if point is not None:
+            return point
+    return None
 
 
 def add_central_tendency_line(
@@ -500,16 +588,6 @@ def sort_param_values(values: set[object], param_name: str | None, param_specs: 
     return ordered
 
 
-def endpoint_row_for_baseline_extension(
-    ordered_rows: pd.DataFrame,
-    shade_param: str | None,
-    param_specs: dict[str, dict[str, object]],
-) -> pd.Series:
-    if len(ordered_rows) == 0:
-        raise ValueError("ordered_rows must not be empty")
-    return ordered_rows.iloc[-1]
-
-
 def select_shade_param(params: dict[str, object]) -> str | None:
     keys = sorted(params.keys())
     if not keys:
@@ -529,21 +607,52 @@ def base_color_group_key(method: str, params_dict: dict[str, object], param_keys
     return f"{method}+{param_keys_sig}"
 
 
-def format_param_label(params_dict: dict[str, object]) -> str:
-    if not params_dict:
-        return ""
-    parts = []
-    for key, value in params_dict.items():
-        pretty_key = _param_label_map.get(key, key)
-        parts.append(f"{pretty_key}={value}")
-    return ", ".join(parts)
+def configured_param_keys(method_spec: dict[str, object]) -> set[str]:
+    keys: set[str] = set()
+    for field_name in ("params", "params_one_run"):
+        field_value = method_spec.get(field_name)
+        if isinstance(field_value, list):
+            for entry in field_value:
+                if isinstance(entry, str):
+                    keys.add(entry)
+        elif isinstance(field_value, dict):
+            for key in field_value.keys():
+                if isinstance(key, str):
+                    keys.add(key)
+    return keys
 
 
-def point_legend_label(method: str, params_dict: dict[str, object]) -> str:
-    params_label = format_param_label(params_dict)
-    if not params_label:
-        return method
-    return f"{method}({params_label})"
+def configured_method_display_name(
+    method_group_name: str,
+    method_name: str,
+    params_dict: dict[str, object],
+    shade_param: str | None,
+    method_display_specs: dict[str, list[dict[str, object]]],
+) -> str:
+    group_specs = method_display_specs.get(method_group_name, [])
+    candidates = [
+        spec for spec in group_specs
+        if isinstance(spec.get("method"), str) and spec.get("method") == method_name
+    ]
+    if not candidates:
+        return method_name
+
+    conservative_keys = {"rho", "lambda", "k"}
+    active_keys = {key for key in params_dict.keys() if isinstance(key, str)}
+    if isinstance(shade_param, str):
+        active_keys.add(shade_param)
+
+    def score(spec: dict[str, object]) -> tuple[int, int]:
+        spec_keys = configured_param_keys(spec)
+        matching_keys = len(spec_keys & active_keys)
+        conservative_match = len((spec_keys & conservative_keys) & active_keys)
+        return (conservative_match, matching_keys)
+
+    best_spec = max(candidates, key=score)
+    print_as = best_spec.get("print_as")
+    if isinstance(print_as, str) and print_as.strip():
+        return print_as.strip()
+    return method_name
 
 
 def facet_values_by_epsilon(
@@ -557,8 +666,7 @@ def facet_values_by_epsilon(
     }
     if not values:
         return []
-    ordered = sort_param_values(values, "epsilon", param_specs)
-    return ordered
+    return sort_param_values(values, "epsilon", param_specs)
 
 
 def panel_df_for_epsilon(df: pd.DataFrame, epsilon_value: object | None) -> pd.DataFrame:
@@ -578,8 +686,18 @@ def panel_df_for_epsilon(df: pd.DataFrame, epsilon_value: object | None) -> pd.D
     return panel
 
 
+def format_param_label(params_dict: dict[str, object]) -> str:
+    if not params_dict:
+        return ""
+    parts = []
+    for key, value in params_dict.items():
+        pretty_key = _param_label_map.get(key, key)
+        parts.append(f"{pretty_key}={value}")
+    return ", ".join(parts)
+
+
 def series_legend_label(
-    method: str,
+    method_display_name: str,
     params_dict: dict[str, object],
     shade_param: str | None,
 ) -> str:
@@ -589,10 +707,10 @@ def series_legend_label(
     params_label = format_param_label(fixed_params)
     if isinstance(shade_param, str) and shade_param in params_dict:
         sweep_label = f"{_param_label_map.get(shade_param, shade_param)} sweep"
-        return f"{method} ({params_label}; {sweep_label})" if params_label else f"{method} ({sweep_label})"
+        return f"{method_display_name} ({params_label}; {sweep_label})" if params_label else f"{method_display_name}"
     if params_label:
-        return f"{method}({params_label})"
-    return method
+        return f"{method_display_name}({params_label})"
+    return method_display_name
 
 
 def annotate_series_endpoints(
@@ -613,7 +731,7 @@ def annotate_series_endpoints(
     y_span = max(y_values) - min(y_values)
     x_offset = x_span * 0.02 if x_span > 0 else 0.01
     y_offset = y_span * 0.02 if y_span > 0 else 0.01
-    for row in rows:
+    for row_index, row in enumerate(rows):
         params_dict = row["plot_params_dict"]
         if not isinstance(params_dict, dict) or shade_param not in params_dict:
             continue
@@ -621,32 +739,25 @@ def annotate_series_endpoints(
         if label in seen_values:
             continue
         seen_values.add(label)
+        label_x = float(row["P_plot"]) + x_offset
+        label_y = float(row["U_plot"]) + y_offset
+        if row_index == 0 and shade_param in {"rho", "lambda", "k"}:
+            label_x = float(row["P_plot"]) - (x_offset * 1.8 if x_offset > 0 else 0.02)
+            label_y = float(row["U_plot"]) - (y_offset * 1.2 if y_offset > 0 else 0.015)
         ax.annotate(
             label,
             (float(row["P_plot"]), float(row["U_plot"])),
-            xytext=(float(row["P_plot"]) + x_offset, float(row["U_plot"]) + y_offset),
+            xytext=(label_x, label_y),
             textcoords="data",
             color=color,
             fontsize=8,
         )
 
 
-def set_zoomed_limits(ax: plt.Axes, panel_df: pd.DataFrame, extra_y_values: list[float] | None = None) -> None:
-    x_values = [float(value) for value in panel_df["P_plot"]]
-    y_values = [float(value) for value in panel_df["U_plot"]]
-    if extra_y_values:
-        y_values.extend(float(value) for value in extra_y_values)
-    x_min, x_max = min(x_values), max(x_values)
-    y_min, y_max = min(y_values), max(y_values)
-    x_span = x_max - x_min
-    y_span = y_max - y_min
-    x_padding = x_span * 0.08 if x_span > 0 else max(abs(x_max) * 0.05, 0.01)
-    y_padding = y_span * 0.08 if y_span > 0 else max(abs(y_max) * 0.05, 0.01)
-    ax.set_xlim(x_min - x_padding, x_max + x_padding)
-    ax.set_ylim(y_min - y_padding, y_max + y_padding)
-
-
-def zoomed_limits_for_df(panel_df: pd.DataFrame, extra_y_values: list[float] | None = None) -> tuple[tuple[float, float], tuple[float, float]]:
+def zoomed_limits_for_df(
+    panel_df: pd.DataFrame,
+    extra_y_values: list[float] | None = None,
+) -> tuple[tuple[float, float], tuple[float, float]]:
     x_values = [float(value) for value in panel_df["P_plot"]]
     y_values = [float(value) for value in panel_df["U_plot"]]
     if extra_y_values:
@@ -660,55 +771,25 @@ def zoomed_limits_for_df(panel_df: pd.DataFrame, extra_y_values: list[float] | N
     return (x_min - x_padding, x_max + x_padding), (y_min - y_padding, y_max + y_padding)
 
 
-def draw_threshold_bridge(
+def set_zoomed_limits(
     ax: plt.Axes,
     panel_df: pd.DataFrame,
-    ordered_rows: pd.DataFrame,
-    grouped_method_name: str,
-    shade_param: str | None,
-    base_color: tuple[float, float, float],
-    param_specs: dict[str, dict[str, object]],
+    extra_y_values: list[float] | None = None,
 ) -> None:
-    if not isinstance(shade_param, str):
-        return
-    if len(ordered_rows) == 0:
-        return
-    base_candidates = panel_df[
-        (panel_df["method"] == grouped_method_name)
-        & (panel_df["plot_params_dict"].apply(lambda params: isinstance(params, dict) and len(params) == 0))
-    ]
-    if base_candidates.empty:
-        return
-    endpoint = ordered_rows.iloc[-1]
-    base_row = base_candidates.iloc[0]
-    ax.plot(
-        [float(endpoint["P_plot"]), float(base_row["P_plot"])],
-        [float(endpoint["U_plot"]), float(base_row["U_plot"])],
-        color=base_color,
-        linewidth=1.6,
-        alpha=0.85,
-        linestyle="--",
-        label="_nolegend_",
-    )
-    ax.annotate(
-        "full",
-        (float(base_row["P_plot"]), float(base_row["U_plot"])),
-        xytext=(6, 6),
-        textcoords="offset points",
-        color=base_color,
-        fontsize=8,
-    )
+    x_limits, y_limits = zoomed_limits_for_df(panel_df, extra_y_values=extra_y_values)
+    ax.set_xlim(*x_limits)
+    ax.set_ylim(*y_limits)
 
 
 def create_tradeoff_axes(num_panels: int) -> tuple[plt.Figure, list[plt.Axes]]:
     if num_panels == 5:
         fig = plt.figure(figsize=(18, 12))
-        grid = fig.add_gridspec(2, 6)
-        first = fig.add_subplot(grid[0, 1:3])
-        second = fig.add_subplot(grid[0, 3:5], sharex=first, sharey=first)
-        third = fig.add_subplot(grid[1, 0:2], sharex=first, sharey=first)
-        fourth = fig.add_subplot(grid[1, 2:4], sharex=first, sharey=first)
-        fifth = fig.add_subplot(grid[1, 4:6], sharex=first, sharey=first)
+        grid = fig.add_gridspec(2, 23)
+        first = fig.add_subplot(grid[0, 4:11])
+        second = fig.add_subplot(grid[0, 12:19], sharex=first, sharey=first)
+        third = fig.add_subplot(grid[1, 0:7], sharex=first, sharey=first)
+        fourth = fig.add_subplot(grid[1, 8:15], sharex=first, sharey=first)
+        fifth = fig.add_subplot(grid[1, 16:23], sharex=first, sharey=first)
         return fig, [first, second, third, fourth, fifth]
 
     if num_panels <= 3:
@@ -722,6 +803,7 @@ def create_tradeoff_axes(num_panels: int) -> tuple[plt.Figure, list[plt.Axes]]:
     for extra_ax in flat_axes[num_panels:]:
         extra_ax.set_visible(False)
     return fig, flat_axes[:num_panels]
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate privacy-utility tradeoff plots")
@@ -741,23 +823,29 @@ if __name__ == "__main__":
     dataset_metric_bounds = read_dataset_metric_bounds()
     dataset_print_labels = read_dataset_print_labels()
     method_group_labels = read_method_group_labels()
+    method_display_specs = read_method_display_specs()
+    method_group_names = configured_method_group_names()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for dataset_name in dataset_names:
         metric_bounds = dataset_metric_bounds.get(dataset_name, {})
         reference_df = read_dataset_reference_frame(dataset_name)
-        method_names = discover_method_names(dataset_name)
+        method_names = [name for name in discover_method_names(dataset_name) if name in method_group_names]
         for method_name in method_names:
             method_group_label = method_group_labels.get(method_name, method_name)
             dataset_label = dataset_print_labels.get(dataset_name, dataset_name.replace("_", "-").upper())
             file_name = f"mds/{dataset_name}_logs_{method_name}.csv"
             file_path = Path(file_name)
             for x_name, x_column, y_name, y_column in targets:
-                df = read_csv_file(file_path, x_column, y_column)
-                if df is None:
+                raw_df = read_csv_file(file_path, x_column, y_column)
+                if raw_df is None:
                     continue
                 print(f"Dataset: {dataset_name}, Method Group: {method_group_label}, X: {x_column}, Y: {y_column}")
 
+                df = raw_df.copy()
                 df["params_dict"] = df["params"].apply(parse_params)
+                df = df[df["method"] != "baseline"].copy()
+                if df.empty:
+                    continue
                 epsilon_panels = facet_values_by_epsilon(df, param_specs)
                 panel_values: list[object | None] = epsilon_panels if epsilon_panels else [None]
                 fig, axes = create_tradeoff_axes(len(panel_values))
@@ -778,11 +866,6 @@ if __name__ == "__main__":
                         lambda row: base_color_group_key(row["method"], row["plot_params_dict"], row["param_keys_signature"]),
                         axis=1,
                     )
-                    baseline_df = panel_df[panel_df["method"] == "baseline"]
-                    baseline_point: tuple[float, float] | None = None
-                    if not baseline_df.empty:
-                        baseline_row = baseline_df.iloc[0]
-                        baseline_point = (float(baseline_row["P_plot"]), float(baseline_row["U_plot"]))
 
                     shade_level_map: dict[str, dict[object, float]] = {}
                     for base_group, group_df in panel_df.groupby("base_color_group", sort=False):
@@ -809,6 +892,13 @@ if __name__ == "__main__":
                         first_row = group_df.iloc[0]
                         grouped_method_name = str(first_row["method"])
                         shade_param = first_row["shade_param"]
+                        method_display_name = configured_method_display_name(
+                            method_name,
+                            grouped_method_name,
+                            first_row["plot_params_dict"],
+                            shade_param,
+                            method_display_specs,
+                        )
                         base_color = get_base_color(base_group, color_cache)
                         method_marker = get_group_marker(base_group, marker_cache)
 
@@ -822,7 +912,11 @@ if __name__ == "__main__":
                                 ordered_rows = ordered_rows.iloc[::-1]
 
                         has_line = len(ordered_rows) >= 2
-                        series_label = series_legend_label(grouped_method_name, first_row["plot_params_dict"], shade_param)
+                        series_label = series_legend_label(
+                            method_display_name,
+                            first_row["plot_params_dict"],
+                            shade_param,
+                        )
                         if has_line:
                             ax.plot(
                                 ordered_rows["P_plot"],
@@ -832,28 +926,6 @@ if __name__ == "__main__":
                                 alpha=0.9,
                                 label=series_label,
                             )
-
-                        if has_line and baseline_point is not None and grouped_method_name != "baseline":
-                            endpoint = endpoint_row_for_baseline_extension(ordered_rows, shade_param, param_specs)
-                            ax.plot(
-                                [float(endpoint["P_plot"]), baseline_point[0]],
-                                [float(endpoint["U_plot"]), baseline_point[1]],
-                                color=base_color,
-                                linewidth=1.4,
-                                alpha=0.8,
-                                linestyle=":",
-                                label="_nolegend_",
-                            )
-
-                        draw_threshold_bridge(
-                            ax,
-                            panel_df,
-                            ordered_rows,
-                            grouped_method_name,
-                            shade_param,
-                            base_color,
-                            param_specs,
-                        )
 
                         first_point = True
                         for _, row in ordered_rows.iterrows():
@@ -914,12 +986,19 @@ if __name__ == "__main__":
 
                 if len(panel_values) > 1:
                     combined_df = pd.concat(panel_frames, ignore_index=True)
-                    x_limits, y_limits = zoomed_limits_for_df(combined_df, extra_y_values=extra_y_values)
+                    x_limits, y_limits = zoomed_limits_for_df(
+                        combined_df,
+                        extra_y_values=extra_y_values,
+                    )
                     for ax in axes:
                         ax.set_xlim(*x_limits)
                         ax.set_ylim(*y_limits)
                 else:
-                    set_zoomed_limits(axes[0], panel_frames[0], extra_y_values=extra_y_values)
+                    set_zoomed_limits(
+                        axes[0],
+                        panel_frames[0],
+                        extra_y_values=extra_y_values,
+                    )
 
                 fig.suptitle(f"Privacy-Utility Tradeoff in {dataset_label}", fontsize=14, y=0.98)
                 fig.text(0.5, 0.94, method_group_label, ha="center", va="center", fontsize=10)
