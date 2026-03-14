@@ -145,7 +145,7 @@ def read_method_specs() -> list[dict[str, Any]]:
 
 
 def read_method_labels() -> dict[str, str]:
-    labels: dict[str, str] = {"baseline": "Original"}
+    labels: dict[str, str] = {"baseline": "Original", "dummy": "Dummy"}
     for method_set in read_method_specs():
         for method_spec in method_set.get("methods", []):
             if not isinstance(method_spec, dict):
@@ -321,6 +321,8 @@ def compact_params(
 def method_color(method: str, color_cache: dict[str, tuple[float, float, float]]) -> tuple[float, float, float]:
     if method == "baseline":
         return mcolors.to_rgb("#7f7f7f")
+    if method == "dummy":
+        return mcolors.to_rgb("#a9a9a9")
     if method not in color_cache:
         color_cache[method] = mcolors.to_rgb(_palette[len(color_cache) % len(_palette)])
     return color_cache[method]
@@ -444,11 +446,15 @@ def filter_method_set_rows(dataset: str, frame: pd.DataFrame, method_set: dict[s
     if not dataset_matches_scope(dataset, method_set.get("datasets")):
         return frame.iloc[0:0].copy()
     methods = method_set.get("methods", [])
+    always_include_methods = {"dummy"}
     mask = frame.apply(
-        lambda row: any(
-            matches_method_spec(dataset, row["params_dict"], str(row["method"]), method_spec)
-            for method_spec in methods
-            if isinstance(method_spec, dict)
+        lambda row: (
+            str(row["method"]) in always_include_methods
+            or any(
+                matches_method_spec(dataset, row["params_dict"], str(row["method"]), method_spec)
+                for method_spec in methods
+                if isinstance(method_spec, dict)
+            )
         ),
         axis=1,
     )
@@ -661,16 +667,18 @@ def global_variant_labels(
 
         if method_name == "baseline":
             rank = 0
+        elif method_name == "dummy":
+            rank = 1
         elif active_threshold_param is not None and method_name == "presidio" and methods_with_threshold:
-            rank = 1
+            rank = 2
         elif is_threshold_variant:
-            rank = 2
-        elif is_full_variant:
             rank = 3
+        elif is_full_variant:
+            rank = 4
         elif method_name == "presidio":
-            rank = 1
-        else:
             rank = 2
+        else:
+            rank = 3
         hparam_rank = 0 if has_ordered_hparam else 1
         if label not in seen:
             seen[label] = (rank, base_label, hparam_rank, params_signature, params_label)
@@ -771,6 +779,7 @@ def plot_drilldown(
         base_label_resolver=label_resolver,
     )
     baseline_label = method_labels.get("baseline", "baseline")
+    dummy_label = method_labels.get("dummy", "dummy")
 
     panel_count = len(panels)
     for panel_index, (ax, epsilon_value) in enumerate(zip(axes, panels)):
@@ -817,8 +826,18 @@ def plot_drilldown(
         for bar_index, method_name in enumerate(panel_methods):
             if method_name == "baseline":
                 bars[bar_index].set_hatch("//")
-        if ordered_labels and ordered_labels[0].startswith(baseline_label):
-            ax.axhline(0.5, color="#444444", linewidth=1.0, alpha=0.8)
+            elif method_name == "dummy":
+                bars[bar_index].set_hatch("\\\\")
+                bars[bar_index].set_linewidth(1.0)
+                bars[bar_index].set_edgecolor("#555555")
+        anchor_count = 0
+        for label in ordered_labels:
+            if label.startswith(baseline_label) or label.startswith(dummy_label):
+                anchor_count += 1
+            else:
+                break
+        if anchor_count > 0:
+            ax.axhline(anchor_count - 0.5, color="#444444", linewidth=1.0, alpha=0.8)
 
         ax.set_yticks(list(range(len(ordered_labels))))
         ax.set_yticklabels(ordered_labels, fontsize=9)
@@ -833,16 +852,23 @@ def plot_drilldown(
         if panel_values:
             add_value_annotations(ax, panel_positions, panel_values, [""] * len(panel_values))
         ax.grid(axis="x", alpha=0.25)
-        if epsilon_value is None:
-            ax.set_title(f"{dataset_label} | {method_set_label} | {metric_label}", fontsize=12, pad=14)
+        if len(panels) > 1:
+            if epsilon_value is None:
+                ax.set_title("all epsilon", fontsize=11, pad=12)
+            else:
+                epsilon_label = str(param_specs.get("epsilon", {}).get("print_as") or "epsilon")
+                ax.set_title(f"{epsilon_label}={format_param_value(epsilon_value)}", fontsize=11, pad=12)
         else:
-            epsilon_label = str(param_specs.get("epsilon", {}).get("print_as") or "epsilon")
-            ax.set_title(
-                f"{dataset_label} | {method_set_label} | {metric_label} | "
-                f"{epsilon_label}={format_param_value(epsilon_value)}",
-                fontsize=12,
-                pad=14,
-            )
+            if epsilon_value is None:
+                ax.set_title(f"{dataset_label} | {method_set_label} | {metric_label}", fontsize=12, pad=14)
+            else:
+                epsilon_label = str(param_specs.get("epsilon", {}).get("print_as") or "epsilon")
+                ax.set_title(
+                    f"{dataset_label} | {method_set_label} | {metric_label} | "
+                    f"{epsilon_label}={format_param_value(epsilon_value)}",
+                    fontsize=12,
+                    pad=14,
+                )
         ax.set_xlabel(metric_label)
 
     if all_values:
@@ -854,7 +880,11 @@ def plot_drilldown(
     assert_identical_panel_xlimits(axes)
     assert_identical_panel_ylabels(axes)
 
-    fig.tight_layout(rect=[0.22, 0.03, 0.98, 0.98])
+    if len(panels) > 1:
+        fig.suptitle(f"{dataset_label} | {method_set_label} | {metric_label}", fontsize=14, y=SUPTITLE_Y)
+        fig.tight_layout(rect=[0.22, 0.03, 0.98, TIGHT_LAYOUT_RECT[3]])
+    else:
+        fig.tight_layout(rect=[0.22, 0.03, 0.98, 0.98])
 
     output_path = OUTPUT_DIR / "drilldown" / dataset_name / str(method_set["name"]) / f"{metric_output}.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)

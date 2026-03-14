@@ -851,6 +851,8 @@ def create_tradeoff_axes(num_panels: int) -> tuple[plt.Figure, list[plt.Axes]]:
         row_size=(8.0, 7.0),
         grid_size=(8.0, 6.0),
     )
+    if num_panels == 1:
+        fig.set_size_inches(fig.get_figwidth() * 1.35, fig.get_figheight(), forward=True)
     return fig, axes
 
 if __name__ == "__main__":
@@ -1012,23 +1014,9 @@ if __name__ == "__main__":
                     add_central_tendency_line(ax, reference_source_df, y_column)
                     ax.set_xlabel(f"Privacy ({x_column})")
                     ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
-                    if len(panel_values) > 1:
-                        if epsilon_value is not None:
-                            ax.set_title(f"ε={epsilon_value}", fontsize=12, pad=14)
-                    else:
-                        if epsilon_value is None:
-                            ax.set_title(
-                                f"Privacy-Utility Tradeoff in {dataset_label} | {method_group_label}",
-                                fontsize=12,
-                                pad=14,
-                            )
-                        else:
-                            ax.set_title(
-                                f"Privacy-Utility Tradeoff in {dataset_label} | "
-                                f"{method_group_label} | ε={epsilon_value}",
-                                fontsize=12,
-                                pad=14,
-                            )
+                    # Improve readability of axis tick labels (numeric/category tick text).
+                    ax.tick_params(axis="x", labelsize=14)
+                    ax.tick_params(axis="y", labelsize=14)
                     ax.grid(alpha=0.25)
 
                     handles, labels = ax.get_legend_handles_labels()
@@ -1074,8 +1062,6 @@ if __name__ == "__main__":
                     )
 
                 if len(panel_values) > 1:
-                    fig.suptitle(f"Privacy-Utility Tradeoff in {dataset_label}", fontsize=14, y=SUPTITLE_Y)
-                    fig.text(0.5, SUBTITLE_Y, method_group_label, ha="center", va="center", fontsize=10)
                     fig.tight_layout(rect=TIGHT_LAYOUT_RECT)
                 else:
                     fig.tight_layout(rect=[0.03, 0.03, 0.97, 0.98])

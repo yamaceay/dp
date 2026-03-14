@@ -10,6 +10,16 @@
       "full_accuracy": 0.9790794979079498,
       "more_mean_reciprocal_rank": 0.9968619246861925,
       "more_accuracy": 0.99581589958159
+    },
+    "utility": {
+      "label_acc": 0.9793303017775941,
+      "label_macro_f1": 0.9794255899444719,
+      "label_f1": 0.9794255899444719
+    },
+    "supervised_divergence": {
+      "label_acc": 0.9731293923108723,
+      "label_macro_f1": 0.9722031519983906,
+      "label_f1": 0.9722031519983906
     }
   },
   {
@@ -5874,6 +5884,22 @@
       "full_accuracy": 0.8095238095238095,
       "more_mean_reciprocal_rank": 0.9056791854629719,
       "more_accuracy": 0.8818897637795275
+    },
+    "utility": {
+      "country_acc": 0.9881703470031545,
+      "country_macro_f1": 0.975727046579007,
+      "country_f1": 0.975727046579007,
+      "year_acc": 0.26419558359621453,
+      "year_macro_mae": 1.6918436061994298,
+      "year_mae": 1.641167192429022
+    },
+    "supervised_divergence": {
+      "country_acc": 0.9929022082018928,
+      "country_macro_f1": 0.9867838612143381,
+      "country_f1": 0.9867838612143381,
+      "year_acc": 0.2476340694006309,
+      "year_macro_mae": 1.7919841745038778,
+      "year_mae": 1.75
     }
   },
   {
@@ -14980,6 +15006,36 @@
       "train_total_time_s": 0.0,
       "real_anon_total_time_s": 141.47,
       "avg_anon_time_s": 0.11156940063091482
+    }
+  },
+  {
+    "dataset": "db_bio",
+    "method": "dummy",
+    "params": {},
+    "utility": {
+      "label_acc": 0.054981397271599834,
+      "label_dummy_strategy": "mode"
+    },
+    "supervised_divergence": {
+      "label_acc": 0.054981397271599834,
+      "label_dummy_strategy": "mode"
+    }
+  },
+  {
+    "dataset": "tab",
+    "method": "dummy",
+    "params": {},
+    "utility": {
+      "country_acc": 0.32965299684542587,
+      "country_dummy_strategy": "mode",
+      "year_mae": 2.2996845425867507,
+      "year_dummy_strategy": "median"
+    },
+    "supervised_divergence": {
+      "country_acc": 0.32965299684542587,
+      "country_dummy_strategy": "mode",
+      "year_mae": 2.2996845425867507,
+      "year_dummy_strategy": "median"
     }
   }
 ]

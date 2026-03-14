@@ -122,6 +122,8 @@ class UtilityExperimentLogParser(ExperimentLogParser):
         dummy_metric_name: str | None = None
         dummy_metric_overall: float | None = None
         dummy_strategy: str | None = None
+        baseline_row_metrics: Dict[str, Any] | None = None
+        dummy_row_metrics: Dict[str, Any] | None = None
         with Path(log_file).open("r", encoding="utf-8") as f:
             for line in f:
                 result = json.loads(line)
@@ -139,6 +141,15 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         dummy_strategy = None
                     else:
                         dummy_metric_name, dummy_metric_overall, dummy_strategy = dummy_metric
+                    baseline_row_metrics = filter_utility_metrics(baseline_metric_overall, metrics, feature)
+                    if dummy_metric_name is not None and dummy_metric_overall is not None:
+                        dummy_row_metrics = {
+                            f"{feature}_{dummy_metric_name}": dummy_metric_overall,
+                        }
+                        if dummy_strategy is not None:
+                            dummy_row_metrics[f"{feature}_dummy_strategy"] = dummy_strategy
+                    else:
+                        dummy_row_metrics = None
                     continue
                 if record_type != "evaluation":
                     continue
@@ -163,6 +174,26 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         },
                     }
                 )
+        if baseline_row_metrics:
+            results.append(
+                {
+                    "dataset": dataset,
+                    "feature": feature,
+                    "method": "baseline",
+                    "params": {},
+                    section_name: dict(baseline_row_metrics),
+                }
+            )
+        if dummy_row_metrics:
+            results.append(
+                {
+                    "dataset": dataset,
+                    "feature": feature,
+                    "method": "dummy",
+                    "params": {},
+                    section_name: dict(dummy_row_metrics),
+                }
+            )
         return results
 
 class PrivacyExperimentLogParser(ExperimentLogParser):

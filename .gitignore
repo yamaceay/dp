@@ -1,7 +1,3 @@
-docs/presi
-docs/thesis
-guidelines_typst.md
-
 # Python
 **/__pycache__/**
 *.pyc

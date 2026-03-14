@@ -242,6 +242,7 @@ class FlatDatasetLogs:
         }
         method_order = [
             "baseline",
+            "dummy",
             "presidio",
             "spacy",
             "manual",
