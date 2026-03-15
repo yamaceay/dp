@@ -1014,6 +1014,8 @@ if __name__ == "__main__":
                     add_central_tendency_line(ax, reference_source_df, y_column)
                     ax.set_xlabel(f"Privacy ({x_column})")
                     ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
+                    if len(panel_values) > 1 and epsilon_value is not None:
+                        ax.set_title(f"ε={epsilon_value}", fontsize=12, pad=8)
                     # Improve readability of axis tick labels (numeric/category tick text).
                     ax.tick_params(axis="x", labelsize=14)
                     ax.tick_params(axis="y", labelsize=14)
@@ -1062,7 +1064,8 @@ if __name__ == "__main__":
                     )
 
                 if len(panel_values) > 1:
-                    fig.tight_layout(rect=TIGHT_LAYOUT_RECT)
+                    # Use tighter margins when faceting by epsilon to reduce vertical white space.
+                    fig.tight_layout(rect=[0.03, 0.03, 0.97, 0.97])
                 else:
                     fig.tight_layout(rect=[0.03, 0.03, 0.97, 0.98])
                 output_dir = OUTPUT_DIR / method_name / dataset_name / x_name

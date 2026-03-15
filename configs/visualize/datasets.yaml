@@ -17,6 +17,18 @@ dataset_sets:
         rename_as: P_full
         best: 0
         worst: 1
+      - name: privacy_exact_accuracy
+        rename_as: TRIR_exact
+        best: 0
+        worst: 1
+      - name: privacy_more_accuracy
+        rename_as: TRIR_more
+        best: 0
+        worst: 1
+      - name: privacy_full_accuracy
+        rename_as: TRIR_full
+        best: 0
+        worst: 1
       - name: utility_utility_nominal_raw_acc
         rename_as: U_nominal_acc
         best: 1
