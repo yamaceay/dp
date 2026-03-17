@@ -30,12 +30,18 @@ class PIIDetector:
         use_chunking: bool = True,
         labels: Optional[List[str]] = None,
         max_length: int = 512,
+        aggregation_strategy: str = "simple",
+        ignore_labels: Optional[List[str]] = None,
+        force_non_o_prediction: bool = False,
         device: Optional[Union[str, int]] = None,
     ):
         self.model_name = model_name
         self.max_length = max_length
         self.use_chunking = use_chunking
         self.chunker = None
+        self.aggregation_strategy = str(aggregation_strategy)
+        self.ignore_labels = list(ignore_labels) if ignore_labels is not None else None
+        self.force_non_o_prediction = bool(force_non_o_prediction)
         
         self.device = resolve_device(device)
         
@@ -60,6 +66,52 @@ class PIIDetector:
             print(f"✓ PIIDetector initialized with {len(self.labels)} labels on {self.device}")
         else:
             print(f"✓ PIIDetector initialized without labels on {self.device}")
+
+    @staticmethod
+    def _prediction_label(prediction: Dict[str, Any]) -> str:
+        entity_group = prediction.get("entity_group")
+        if isinstance(entity_group, str) and entity_group:
+            return entity_group
+        entity = prediction.get("entity")
+        if isinstance(entity, str) and entity:
+            return entity
+        return "ENTITY"
+
+    def _predict_force_non_o(self, text: str) -> List[Dict[str, Any]]:
+        encoded = self.tokenizer(
+            text,
+            truncation=True,
+            max_length=self.max_length,
+            return_offsets_mapping=True,
+            return_tensors="pt",
+        )
+        offset_mapping = encoded.pop("offset_mapping")[0].tolist()
+        model_inputs = {k: v.to(self.device) for k, v in encoded.items()}
+        self.model.eval()
+        with torch.no_grad():
+            logits = self.model(**model_inputs).logits[0]
+            probs = torch.softmax(logits, dim=-1)
+
+        o_label_id = self.label_to_id.get("O")
+        spans: List[Dict[str, Any]] = []
+        for token_idx, offset in enumerate(offset_mapping):
+            start = int(offset[0])
+            end = int(offset[1])
+            if end <= start:
+                continue
+            token_logits = logits[token_idx]
+            if o_label_id is not None and logits.shape[-1] > 1:
+                masked = token_logits.clone()
+                masked[o_label_id] = torch.finfo(masked.dtype).min
+                pred_id = int(torch.argmax(masked).item())
+            else:
+                pred_id = int(torch.argmax(token_logits).item())
+            label = self.id_to_label.get(pred_id, str(pred_id))
+            if self.ignore_labels is not None and label in self.ignore_labels:
+                continue
+            score = float(probs[token_idx, pred_id].item())
+            spans.append({"start": start, "end": end, "label": label, "score": score})
+        return spans
     
     def set_train_dataset(self, records: List[DatasetRecord]) -> None:
         self.train_records = records
@@ -316,34 +368,84 @@ class PIIDetector:
         
         self._late_initialize()
         
-        if self.pipeline is None:
-            self.pipeline = pipeline(
-                "token-classification",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                device=self.device,
-                aggregation_strategy="simple",
-            )
+        if not self.force_non_o_prediction and self.pipeline is None:
+            if self.ignore_labels is None:
+                self.pipeline = pipeline(
+                    "token-classification",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    device=self.device,
+                    aggregation_strategy=self.aggregation_strategy,
+                )
+            else:
+                self.pipeline = pipeline(
+                    "token-classification",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    device=self.device,
+                    aggregation_strategy=self.aggregation_strategy,
+                    ignore_labels=self.ignore_labels,
+                )
         
         results = []
         
         for record in records:
-            if self.use_chunking and self.chunker is not None:
-                aggregator = SpanMergeAggregator()
-                
+            if self.force_non_o_prediction:
+                if self.use_chunking and self.chunker is not None:
+                    span_dicts: List[Dict[str, Any]] = []
+                    for chunk in self.chunker.chunk(record.text):
+                        chunk_spans = self._predict_force_non_o(chunk.text)
+                        for chunk_span in chunk_spans:
+                            span_dicts.append(
+                                {
+                                    "start": chunk_span["start"] + chunk.start,
+                                    "end": chunk_span["end"] + chunk.start,
+                                    "label": chunk_span["label"],
+                                    "score": chunk_span["score"],
+                                }
+                            )
+                else:
+                    span_dicts = self._predict_force_non_o(record.text)
+                spans = [
+                    TextAnnotation(
+                        start=s["start"],
+                        end=s["end"],
+                        label=s["label"],
+                        text=record.text[s["start"]:s["end"]],
+                        confidence=s["score"],
+                    )
+                    for s in span_dicts
+                ]
+            elif self.use_chunking and self.chunker is not None:
                 def detect(text):
                     preds = self.pipeline(text)
                     return [
                         {
                             "start": p["start"],
                             "end": p["end"],
-                            "label": p["entity_group"],
-                            "score": p["score"]
+                            "label": self._prediction_label(p),
+                            "score": float(p.get("score", 0.0)),
                         }
                         for p in preds
+                        if "start" in p and "end" in p
                     ]
-                
-                span_dicts = process_with_chunking(record.text, self.chunker, detect, aggregator)
+
+                if self.aggregation_strategy == "none":
+                    span_dicts = []
+                    for chunk in self.chunker.chunk(record.text):
+                        chunk_preds = detect(chunk.text)
+                        for chunk_pred in chunk_preds:
+                            span_dicts.append(
+                                {
+                                    "start": chunk_pred["start"] + chunk.start,
+                                    "end": chunk_pred["end"] + chunk.start,
+                                    "label": chunk_pred["label"],
+                                    "score": chunk_pred["score"],
+                                }
+                            )
+                else:
+                    aggregator = SpanMergeAggregator()
+                    span_dicts = process_with_chunking(record.text, self.chunker, detect, aggregator)
                 spans = [
                     TextAnnotation(
                         start=s["start"],
@@ -358,13 +460,15 @@ class PIIDetector:
                 predictions = self.pipeline(record.text)
                 spans = []
                 for pred in predictions:
+                    if "start" not in pred or "end" not in pred:
+                        continue
                     spans.append(
                         TextAnnotation(
                             start=pred["start"],
                             end=pred["end"],
-                            label=pred["entity_group"],
+                            label=self._prediction_label(pred),
                             text=record.text[pred["start"]:pred["end"]],
-                            confidence=pred["score"],
+                            confidence=float(pred.get("score", 0.0)),
                         )
                     )
             

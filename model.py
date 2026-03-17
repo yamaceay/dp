@@ -278,8 +278,19 @@ def build_selector(selector_config: dict, runtime_bundle=None):
         pii_path = selector_config.get("pii_annotator")
         if not pii_path:
             raise ValueError("PIIOnlyUnit requires 'pii_annotator' in config")
-        pii_chunking = selector_config.get("pii_chunking", {}).get("enabled", False)
-        detector = PIIDetector(model_name=pii_path, use_chunking=pii_chunking)
+        pii_chunking_cfg = selector_config.get("pii_chunking", {})
+        pii_chunking = bool(pii_chunking_cfg.get("enabled", False)) if isinstance(pii_chunking_cfg, dict) else False
+        pii_aggregation_strategy = str(selector_config.get("pii_aggregation_strategy", "simple"))
+        pii_ignore_labels_raw = selector_config.get("pii_ignore_labels")
+        pii_ignore_labels = list(pii_ignore_labels_raw) if isinstance(pii_ignore_labels_raw, list) else None
+        pii_force_non_o_prediction = bool(selector_config.get("pii_force_non_o_prediction", False))
+        detector = PIIDetector(
+            model_name=pii_path,
+            use_chunking=pii_chunking,
+            aggregation_strategy=pii_aggregation_strategy,
+            ignore_labels=pii_ignore_labels,
+            force_non_o_prediction=pii_force_non_o_prediction,
+        )
         unit = PIIOnlyUnit(pii_detector=detector)
         if runtime_bundle and hasattr(runtime_bundle, 'pii_confidence_values') and runtime_bundle.pii_confidence_values:
             unit.set_thresholds(runtime_bundle.pii_confidence_values, name="lambda")

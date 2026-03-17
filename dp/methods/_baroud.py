@@ -12,17 +12,37 @@ from dp.utils.selector.pii_only_selector import PIIOnlyUnit
 class BaroudAnonymizer(Anonymizer):
     MODEL_NAME = "baroud"
 
-    def __init__(self, *args, pii_annotator: Optional[str] = None, mask_text: str = "[{label}]", **kwargs):
+    def __init__(
+        self,
+        *args,
+        pii_annotator: Optional[str] = None,
+        pii_use_chunking: bool = True,
+        pii_aggregation_strategy: str = "none",
+        pii_ignore_labels: Optional[List[str]] = None,
+        pii_force_non_o_prediction: bool = True,
+        mask_text: str = "[{label}]",
+        **kwargs,
+    ):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
         
         self.pii_annotator = pii_annotator
+        self.pii_use_chunking = bool(pii_use_chunking)
+        self.pii_aggregation_strategy = str(pii_aggregation_strategy)
+        self.pii_ignore_labels = list(pii_ignore_labels) if pii_ignore_labels is not None else None
+        self.pii_force_non_o_prediction = bool(pii_force_non_o_prediction)
         self.mask_text = mask_text
         self._unit: Optional[PIIOnlyUnit] = None
         self._annotations_cache: Dict[str, List[TextAnnotation]] = {}
         
         if self.pii_annotator:
             from dp.utils.pii_detector import PIIDetector
-            pii_detector = PIIDetector(model_name=self.pii_annotator, use_chunking=False)
+            pii_detector = PIIDetector(
+                model_name=self.pii_annotator,
+                use_chunking=self.pii_use_chunking,
+                aggregation_strategy=self.pii_aggregation_strategy,
+                ignore_labels=self.pii_ignore_labels,
+                force_non_o_prediction=self.pii_force_non_o_prediction,
+            )
             self._unit = PIIOnlyUnit(pii_detector=pii_detector)
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
@@ -63,6 +83,7 @@ class BaroudAnonymizer(Anonymizer):
             
             label = ann.label or "MASK"
             replacement = self.mask_text.format(label=label)
+            ledger.set_active_edit_source(f"{entry.start}:{entry.end}")
             ledger.replace(idx, replacement)
             runtime_stats["masked"] += 1
 
@@ -99,9 +120,11 @@ class BaroudAnonymizer(Anonymizer):
         for step in self._unit.anonymize(text, spans, apply_fn):
             threshold = step.threshold
             hp: BucketDict = {"lambda": threshold}
+            available_total = len(self._unit.select_indices(text, spans, threshold))
             
             private_text = step.text
             ledger = step.ledger
+            ledger.set_emit_edit_sources(True)
             
             result_edits = ledger.result_edits_metadata()
             result_spans: List[TextAnnotation] = []
@@ -114,10 +137,20 @@ class BaroudAnonymizer(Anonymizer):
                 original_text = str(edit.get("text", ""))
                 replacement = str(edit.get("replacement", ""))
                 source_ann = None
-                for src_span, ann in ann_by_source_span.items():
-                    if text[src_span[0]:src_span[1]] == original_text:
-                        source_ann = ann
-                        break
+                source = edit.get("source")
+                if isinstance(source, str):
+                    parts = source.split(":", 1)
+                    if len(parts) == 2:
+                        try:
+                            source_span = (int(parts[0]), int(parts[1]))
+                            source_ann = ann_by_source_span.get(source_span)
+                        except ValueError:
+                            source_ann = None
+                if source_ann is None:
+                    for src_span, ann in ann_by_source_span.items():
+                        if text[src_span[0]:src_span[1]] == original_text:
+                            source_ann = ann
+                            break
                 result_spans.append(
                     TextAnnotation(
                         start=span[0],
@@ -134,7 +167,7 @@ class BaroudAnonymizer(Anonymizer):
                 "method": self._model_name,
                 "lambda": threshold,
                 "masked": runtime_stats["masked"],
-                "total": len(spans),
+                "total": available_total,
                 **step.metadata,
             }
             token_edits = [TokenEdit.from_mapping(e) for e in result_edits]

@@ -8,8 +8,5 @@ explainer:
 precomputation:
   risk_scores: data/reddit/tri_risk/shap.jsonl
 
-tri_chunking:
-  enabled: true
-
 token_selection:
   name: until_k
