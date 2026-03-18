@@ -13,7 +13,7 @@ method_sets:
         datasets: ["tab"]
       - method: "baroud"
         print_as: "IPI"
-        params_one_run: {"lambda": [0.5, 0.9]}
+        params_one_run: {"lambda": [0.8, 0.9, 0.95, 0.98, 0.99]}
         datasets: ["tab"]
       - method: "petre_shap"
         print_as: "PETRE+Pr"
@@ -84,7 +84,7 @@ method_sets:
       - method: "dpmlm_shap"
         print_as: "λ-DP-MLM-X+Pr"
         params: ["epsilon"]
-        params_one_run: {"lambda": [0.5, 0.9]}
+        params_one_run: {"lambda": [0.8, 0.9, 0.95, 0.98, 0.99]}
   - name: "token_level_rewriters_with_threshold_rho"
     print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter rho"
     methods:
