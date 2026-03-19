@@ -329,7 +329,7 @@ def method_color(method: str, color_cache: dict[str, tuple[float, float, float]]
 
 
 def load_dataset_frame(dataset_name: str) -> pd.DataFrame:
-    path = INPUT_DIR / f"{dataset_name}_logs.csv"
+    path = INPUT_DIR / dataset_name / "logs.csv"
     if not path.exists():
         raise FileNotFoundError(path)
     frame = pd.read_csv(path)

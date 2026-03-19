@@ -1,5 +1,4 @@
 from typing import Optional
-import math
 import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
@@ -12,18 +11,19 @@ import argparse
 import re
 
 from plot_layout import (
-    LAYOUT,
-    SUBTITLE_Y,
-    SUPTITLE_Y,
-    TIGHT_LAYOUT_RECT,
     create_panel_axes,
     order_is_descending,
 )
+
+FIXED_EPSILON_PANELS: list[float | None] = [None, 10, 25, 50, 100, 250]
 
 X_AXIS_OPTIONS = {
     "p_exact": "P_exact",
     "p_more": "P_more",
     "p_full": "P_full",
+    "trir_exact": "TRIR_exact",
+    "trir_more": "TRIR_more",
+    "trir_full": "TRIR_full",
 }
 
 Y_AXIS_OPTIONS = {
@@ -31,6 +31,10 @@ Y_AXIS_OPTIONS = {
     "u_ordinal": "U_ordinal_mae",
     "sd_nominal": "SD_nominal_acc",
     "sd_ordinal": "SD_ordinal_mae",
+    "d_bertscore": "D_bertscore",
+    "d_cosine": "D_cosine",
+    "d_pp": "D_pp",
+    "t_anon_avg_s": "T_anon_avg_s",
 }
 
 dataset_names = [
@@ -282,10 +286,16 @@ def metric_label_with_unit_and_direction(
 def metric_name_and_unit(metric_name: str) -> tuple[str, str | None]:
     if metric_name in {"P_exact", "P_more", "P_full"}:
         return metric_name, "MRR"
+    if metric_name in {"TRIR_exact", "TRIR_more", "TRIR_full"}:
+        return metric_name, "Acc"
     if metric_name in {"U_nominal_acc", "SD_nominal_acc", "U_nominal_raw", "SD_nominal_raw"}:
         return metric_name.replace("_raw", "").replace("_acc", ""), "ACC"
     if metric_name in {"U_ordinal_mae", "SD_ordinal_mae", "U_ordinal_raw", "SD_ordinal_raw"}:
         return metric_name.replace("_raw", "").replace("_mae", ""), "MAE"
+    if metric_name in {"D_bertscore", "D_cosine", "D_pp"}:
+        return metric_name, None
+    if metric_name == "T_anon_avg_s":
+        return "T_anon", "s"
     return metric_name, None
 
 
@@ -295,6 +305,10 @@ def y_axis_assessment_label(y_column: str, metric_bounds: dict[str, tuple[float,
         return f"Utility ({metric_label})"
     if y_column.startswith("SD_"):
         return f"Supervised divergence ({metric_label})"
+    if y_column.startswith("D_"):
+        return f"Divergence ({metric_label})"
+    if y_column.startswith("T_"):
+        return f"Time ({metric_label})"
     return metric_label
 
 
@@ -388,10 +402,17 @@ def raw_metric_column(metric_name: str) -> str | None:
         "P_exact": "privacy_exact_mean_reciprocal_rank",
         "P_more": "privacy_more_mean_reciprocal_rank",
         "P_full": "privacy_full_mean_reciprocal_rank",
+        "TRIR_exact": "privacy_exact_accuracy",
+        "TRIR_more": "privacy_more_accuracy",
+        "TRIR_full": "privacy_full_accuracy",
         "U_nominal_acc": "utility_utility_nominal_raw_acc",
         "U_ordinal_mae": "utility_utility_ordinal_raw_mae",
         "SD_nominal_acc": "supervised_divergence_utility_nominal_raw_acc",
         "SD_ordinal_mae": "supervised_divergence_utility_ordinal_raw_mae",
+        "D_bertscore": "divergence_bertscore",
+        "D_cosine": "divergence_cosine",
+        "D_pp": "divergence_pp",
+        "T_anon_avg_s": "runtime_avg_anon_time_s",
     }
     return raw_columns.get(metric_name)
 
@@ -424,7 +445,7 @@ def transformed_method_point(
             point = method_point_from_any_metric_schema(frame, method_name, x_column, y_column)
             if point is not None:
                 return point
-    for path in sorted(Path("mds").glob(f"{dataset_name}_logs_*.csv")):
+    for path in sorted(Path("mds").glob(f"{dataset_name}/*.csv")):
         try:
             frame = pd.read_csv(path)
         except Exception:
@@ -508,13 +529,13 @@ def read_csv_file(path: Path, x_column: str, y_column: str) -> Optional[pd.DataF
             print(f"Skipping file without valid {x_column}/{y_column} values: {path}")
             return None
         return filtered
-    except Exception as e:
+    except Exception:
         print(f"Error reading CSV file {path}")
         return None
 
 
 def read_dataset_reference_frame(dataset_name: str) -> Optional[pd.DataFrame]:
-    path = Path(f"mds/{dataset_name}_logs.csv")
+    path = Path(f"mds/{dataset_name}/logs.csv")
     if not path.exists():
         return None
     try:
@@ -560,12 +581,19 @@ def resolve_plot_targets(args: argparse.Namespace) -> list[tuple[str, str, str, 
         ("p_exact", "p_exact"),
         ("p_more", "p_more"),
         ("p_full", "p_full"),
+        ("trir_exact", "trir_exact"),
+        ("trir_more", "trir_more"),
+        ("trir_full", "trir_full"),
     ]
     y_options = [
         ("u_nominal", "u_nominal"),
         ("u_ordinal", "u_ordinal"),
         ("sd_nominal", "sd_nominal"),
         ("sd_ordinal", "sd_ordinal"),
+        ("d_bertscore", "d_bertscore"),
+        ("d_cosine", "d_cosine"),
+        ("d_pp", "d_pp"),
+        ("t_anon_avg_s", "t_anon_avg_s"),
     ]
     x_name, _ = _prompt_choice("select x-axis:", x_options)
     y_name, _ = _prompt_choice("select y-axis:", y_options)
@@ -573,15 +601,11 @@ def resolve_plot_targets(args: argparse.Namespace) -> list[tuple[str, str, str, 
 
 
 def discover_method_names(dataset_name: str) -> list[str]:
-    prefix = f"{dataset_name}_logs_"
-    suffix = ".csv"
     methods: list[str] = []
-    for path in sorted(Path("mds").glob(f"{dataset_name}_logs_*.csv")):
-        name = path.name
-        if not name.startswith(prefix) or not name.endswith(suffix):
+    for path in sorted(Path("mds").glob(f"{dataset_name}/*.csv")):
+        if path.stem == "logs":
             continue
-        method_name = name[len(prefix):-len(suffix)]
-        methods.append(method_name)
+        methods.append(path.stem)
     return methods
 
 
@@ -717,29 +741,16 @@ def configured_method_display_name(
     return method_name
 
 
-def facet_values_by_epsilon(
-    df: pd.DataFrame,
-    param_specs: dict[str, dict[str, object]],
-) -> list[object]:
-    values = {
-        params["epsilon"]
-        for params in df["params_dict"]
-        if isinstance(params, dict) and "epsilon" in params and len(params) >= 2
-    }
-    if not values:
-        return []
-    return sort_param_values(values, "epsilon", param_specs)
-
-
-def panel_df_for_epsilon(df: pd.DataFrame, epsilon_value: object | None) -> pd.DataFrame:
+def panel_df_for_epsilon(df: pd.DataFrame, epsilon_value: float | None) -> pd.DataFrame:
     if epsilon_value is None:
-        panel = df.copy()
+        mask = df["params_dict"].apply(
+            lambda params: isinstance(params, dict) and "epsilon" not in params
+        )
+        panel = df[mask].copy()
         panel["plot_params_dict"] = panel["params_dict"]
         return panel
     mask = df["params_dict"].apply(
-        lambda params: not isinstance(params, dict)
-        or "epsilon" not in params
-        or params.get("epsilon") == epsilon_value
+        lambda params: isinstance(params, dict) and params.get("epsilon") == epsilon_value
     )
     panel = df[mask].copy()
     panel["plot_params_dict"] = panel["params_dict"].apply(
@@ -819,11 +830,14 @@ def annotate_series_endpoints(
 def zoomed_limits_for_df(
     panel_df: pd.DataFrame,
     extra_y_values: list[float] | None = None,
+    extra_x_values: list[float] | None = None,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     x_values = [float(value) for value in panel_df["P_plot"]]
     y_values = [float(value) for value in panel_df["U_plot"]]
     if extra_y_values:
         y_values.extend(float(value) for value in extra_y_values)
+    if extra_x_values:
+        x_values.extend(float(value) for value in extra_x_values)
     x_min, x_max = min(x_values), max(x_values)
     y_min, y_max = min(y_values), max(y_values)
     x_span = x_max - x_min
@@ -833,27 +847,8 @@ def zoomed_limits_for_df(
     return (x_min - x_padding, x_max + x_padding), (y_min - y_padding, y_max + y_padding)
 
 
-def set_zoomed_limits(
-    ax: plt.Axes,
-    panel_df: pd.DataFrame,
-    extra_y_values: list[float] | None = None,
-) -> None:
-    x_limits, y_limits = zoomed_limits_for_df(panel_df, extra_y_values=extra_y_values)
-    ax.set_xlim(*x_limits)
-    ax.set_ylim(*y_limits)
-
-
-def create_tradeoff_axes(num_panels: int) -> tuple[plt.Figure, list[plt.Axes]]:
-    fig, axes = create_panel_axes(
-        num_panels,
-        sharex=True,
-        sharey=True,
-        row_size=(8.0, 7.0),
-        grid_size=(8.0, 6.0),
-    )
-    if num_panels == 1:
-        fig.set_size_inches(fig.get_figwidth() * 1.35, fig.get_figheight(), forward=True)
-    return fig, axes
+def create_tradeoff_axes() -> tuple[plt.Figure, list[plt.Axes]]:
+    return create_panel_axes(6, sharex=True, sharey=True, grid_size=(7.5, 6.0))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate privacy-utility tradeoff plots")
@@ -884,7 +879,7 @@ if __name__ == "__main__":
         for method_name in method_names:
             method_group_label = method_group_labels.get(method_name, method_name)
             dataset_label = dataset_print_labels.get(dataset_name, dataset_name.replace("_", "-").upper())
-            file_name = f"mds/{dataset_name}_logs_{method_name}.csv"
+            file_name = f"mds/{dataset_name}/{method_name}.csv"
             file_path = Path(file_name)
             for x_name, x_column, y_name, y_column in targets:
                 raw_df = read_csv_file(file_path, x_column, y_column)
@@ -906,16 +901,76 @@ if __name__ == "__main__":
                 df = df[df["method"] != "baseline"].copy()
                 if df.empty:
                     continue
-                epsilon_panels = facet_values_by_epsilon(df, param_specs)
-                panel_values: list[object | None] = epsilon_panels if epsilon_panels else [None]
-                fig, axes = create_tradeoff_axes(len(panel_values))
+
+                _secondary = {"k", "rho", "lambda"}
+                _has_secondary = any(
+                    isinstance(p, dict) and any(k in p for k in _secondary)
+                    for p in df["params_dict"]
+                )
+
+                if _has_secondary:
+                    panel_values: list[float | None] = FIXED_EPSILON_PANELS
+                    fig, axes = create_tradeoff_axes()
+                    panel_frames: list[pd.DataFrame] = [panel_df_for_epsilon(df, eps) for eps in panel_values]
+                else:
+                    panel_values = [None]
+                    fig, axes = create_panel_axes(1, sharex=True, sharey=True, grid_size=(8.0, 6.5))
+                    _all = df.copy()
+                    _all["plot_params_dict"] = _all["params_dict"]
+                    panel_frames = [_all]
+
                 color_cache: dict[str, tuple[float, float, float]] = {}
                 marker_cache: dict[str, str] = {}
-                panel_frames: list[pd.DataFrame] = [panel_df_for_epsilon(df, epsilon_value) for epsilon_value in panel_values]
                 reference_source_df = reference_df if reference_df is not None else df
                 extra_y_values = reference_y_values(reference_source_df, y_column)
 
-                for panel_index, (ax, epsilon_value, panel_df) in enumerate(zip(axes, panel_values, panel_frames)):
+                presidio_point = None
+                if not method_is_excluded("presidio", excluded_methods):
+                    presidio_point = method_point_from_any_metric_schema(
+                        reference_source_df, "presidio", x_column, y_column
+                    )
+                    if presidio_point is None:
+                        presidio_point = transformed_method_point(
+                            dataset_name, "presidio", x_column, y_column,
+                            fallback_frames=[reference_source_df],
+                        )
+                if presidio_point is not None:
+                    extra_y_values = list(extra_y_values) + [presidio_point[1]]
+
+                all_handles: list = []
+                all_labels: list[str] = []
+                ref_handles: list = []
+                ref_labels: list[str] = []
+                seen_legend_labels: set[str] = set()
+
+                for ax, epsilon_value, panel_df in zip(axes, panel_values, panel_frames):
+                    if _has_secondary:
+                        if epsilon_value is None:
+                            ax.set_facecolor("#F5F5F5")
+                            ax.set_title("ε = 0  (masking)", fontsize=11, pad=8)
+                        else:
+                            ax.set_title(f"ε = {int(epsilon_value)}", fontsize=11, pad=8)
+
+                    if presidio_point is not None:
+                        sc = ax.scatter(
+                            *presidio_point,
+                            marker="*",
+                            s=220,
+                            color=PRESIDIO_COLOR,
+                            zorder=7,
+                            label="Presidio",
+                        )
+                        if "Presidio" not in seen_legend_labels:
+                            seen_legend_labels.add("Presidio")
+                            all_handles.append(sc)
+                            all_labels.append("Presidio")
+
+                    if panel_df.empty:
+                        ax.set_xlabel(f"Privacy ({x_column})")
+                        ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
+                        ax.grid(alpha=0.25)
+                        continue
+
                     panel_df["param_keys_signature"] = panel_df["plot_params_dict"].apply(param_keys_signature)
                     panel_df["method_param_key"] = panel_df.apply(
                         lambda row: f"{row['method']}+{row['param_keys_signature']}",
@@ -978,7 +1033,7 @@ if __name__ == "__main__":
                             shade_param,
                         )
                         if has_line:
-                            ax.plot(
+                            h, = ax.plot(
                                 ordered_rows["P_plot"],
                                 ordered_rows["U_plot"],
                                 color=base_color,
@@ -986,6 +1041,10 @@ if __name__ == "__main__":
                                 alpha=0.9,
                                 label=series_label,
                             )
+                            if series_label not in seen_legend_labels:
+                                seen_legend_labels.add(series_label)
+                                all_handles.append(h)
+                                all_labels.append(series_label)
 
                         first_point = True
                         for _, row in ordered_rows.iterrows():
@@ -996,7 +1055,7 @@ if __name__ == "__main__":
                             shade_level = shade_level_map.get(base_group, {}).get(shade_value, 0.45)
                             point_color = shade_color(base_color, shade_level)
 
-                            ax.scatter(
+                            sc = ax.scatter(
                                 row["P_plot"],
                                 row["U_plot"],
                                 marker=method_marker,
@@ -1007,68 +1066,56 @@ if __name__ == "__main__":
                                 s=90,
                                 label=series_label if first_point and not has_line else "_nolegend_",
                             )
+                            if first_point and not has_line and series_label not in seen_legend_labels:
+                                seen_legend_labels.add(series_label)
+                                all_handles.append(sc)
+                                all_labels.append(series_label)
                             first_point = False
 
                         annotate_series_endpoints(ax, ordered_rows, shade_param, base_color)
 
+                    lines_before = set(id(l) for l in ax.lines)
                     add_central_tendency_line(ax, reference_source_df, y_column)
+                    for line in ax.lines:
+                        if id(line) not in lines_before:
+                            lbl = line.get_label()
+                            if lbl and not lbl.startswith("_") and lbl not in seen_legend_labels:
+                                seen_legend_labels.add(lbl)
+                                ref_handles.append(line)
+                                ref_labels.append(lbl)
+
                     ax.set_xlabel(f"Privacy ({x_column})")
                     ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
-                    if len(panel_values) > 1 and epsilon_value is not None:
-                        ax.set_title(f"ε={epsilon_value}", fontsize=12, pad=8)
-                    # Improve readability of axis tick labels (numeric/category tick text).
                     ax.tick_params(axis="x", labelsize=14)
                     ax.tick_params(axis="y", labelsize=14)
                     ax.grid(alpha=0.25)
 
-                    handles, labels = ax.get_legend_handles_labels()
-                    dedup_handles = []
-                    dedup_labels = []
-                    seen_labels = set()
-                    for handle, label in zip(handles, labels):
-                        if label == "_nolegend_" or label in seen_labels:
-                            continue
-                        seen_labels.add(label)
-                        dedup_handles.append(handle)
-                        dedup_labels.append(label)
-                    should_show_legend = True
-                    if len(panel_values) == 5:
-                        should_show_legend = panel_index == 1
-
-                    if dedup_labels and should_show_legend:
-                        legend = ax.legend(
-                            dedup_handles,
-                            dedup_labels,
-                            title="Series",
-                            bbox_to_anchor=(1.02, 1),
-                            loc="upper left",
-                            fontsize=9,
-                            ncol=1,
-                        )
-                        legend.get_title().set_fontsize(10)
-
-                if len(panel_values) > 1:
-                    combined_df = pd.concat(panel_frames, ignore_index=True)
-                    x_limits, y_limits = zoomed_limits_for_df(
-                        combined_df,
-                        extra_y_values=extra_y_values,
-                    )
+                non_empty = [pf for pf in panel_frames if not pf.empty]
+                if non_empty:
+                    combined_df = pd.concat(non_empty, ignore_index=True)
+                    extra_x = [presidio_point[0]] if presidio_point is not None else None
+                    extra_y = list(extra_y_values) + ([presidio_point[1]] if presidio_point is not None else [])
+                    x_limits, y_limits = zoomed_limits_for_df(combined_df, extra_y_values=extra_y, extra_x_values=extra_x)
                     for ax in axes:
                         ax.set_xlim(*x_limits)
                         ax.set_ylim(*y_limits)
-                else:
-                    set_zoomed_limits(
-                        axes[0],
-                        panel_frames[0],
-                        extra_y_values=extra_y_values,
-                    )
 
-                if len(panel_values) > 1:
-                    # Use tighter margins when faceting by epsilon to reduce vertical white space.
-                    fig.tight_layout(rect=[0.03, 0.03, 0.97, 0.97])
+                merged_handles = all_handles + ref_handles
+                merged_labels = all_labels + ref_labels
+                if merged_handles:
+                    fig.legend(
+                        merged_handles, merged_labels,
+                        loc="lower center",
+                        bbox_to_anchor=(0.5, 0.0),
+                        ncol=min(len(merged_handles), 4),
+                        fontsize=11,
+                        framealpha=0.9,
+                        borderaxespad=0.2,
+                    )
+                    fig.tight_layout(rect=[0.02, 0.07, 0.98, 0.97])
                 else:
-                    fig.tight_layout(rect=[0.03, 0.03, 0.97, 0.98])
-                output_dir = OUTPUT_DIR / method_name / dataset_name / x_name
+                    fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.97])
+                output_dir = OUTPUT_DIR / dataset_name / method_name / x_name
                 output_dir.mkdir(parents=True, exist_ok=True)
                 output_path = output_dir / f"{y_name}.png"
                 fig.savefig(output_path, dpi=200)

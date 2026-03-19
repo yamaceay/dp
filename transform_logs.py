@@ -306,6 +306,7 @@ class MarkdownDatasetLogsWriter:
         return frames
 
     def _write_frame(self, frame: pd.DataFrame, base_path: Path) -> list[Path]:
+        base_path.parent.mkdir(parents=True, exist_ok=True)
         markdown_path = base_path.with_suffix(".md")
         csv_path = base_path.with_suffix(".csv")
         json_path = base_path.with_suffix(".json")
@@ -346,7 +347,7 @@ class MarkdownDatasetLogsWriter:
     def write_dataset_tables(self) -> list[Path]:
         written: list[Path] = []
         for dataset, frame in self._dataset_frames().items():
-            written.extend(self._write_frame(frame, self.output_dir / f"{dataset}_logs"))
+            written.extend(self._write_frame(frame, self.output_dir / dataset / "logs"))
         return written
 
     def write_method_set_tables(self, method_sets_file: str | Path) -> list[Path]:
@@ -366,7 +367,7 @@ class MarkdownDatasetLogsWriter:
                     continue
                 frame = pd.DataFrame(filtered_logs)
                 frame = self._project_method_set_frame(dataset, frame)
-                written.extend(self._write_frame(frame, self.output_dir / f"{dataset}_logs_{set_name}"))
+                written.extend(self._write_frame(frame, self.output_dir / dataset / set_name))
         return written
 
     def _matches_any_method_spec(
@@ -442,16 +443,13 @@ def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
     dataset_projection_config = read_dataset_projection_config(DATASET_SETS_CONFIG_PATH)
     dataset_print_labels = read_dataset_print_labels_config(DATASET_SETS_CONFIG_PATH)
     entries: list[dict[str, str]] = []
-    for path in sorted(output_dir.glob("*.md")):
-        stem = path.stem
-        dataset, section_suffix = stem.split("_logs", 1)
+    for path in sorted(output_dir.glob("*/*.md")):
+        dataset = path.parent.name
+        section = path.stem
         if dataset not in ENABLED_DATASETS:
             continue
-        section = "all" if not section_suffix else section_suffix.lstrip("_")
-        if section == "all":
+        if section == "logs":
             continue
-        csv_file = path.with_suffix(".csv").name
-        json_file = path.with_suffix(".json").name
         heatmap_columns = []
         for score in dataset_projection_config.get(dataset, []):
             heatmap_columns.append(
@@ -462,7 +460,7 @@ def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
                     "worst": score.get("worst"),
                 }
             )
-        json_path = output_dir / json_file
+        json_path = path.with_suffix(".json")
         if json_path.exists():
             with open(json_path, "r") as f:
                 table_json = json.load(f)
@@ -477,9 +475,9 @@ def build_typst_tables_manifest(output_dir: Path) -> list[dict[str, Any]]:
                 )
         entries.append(
             {
-                "file": path.name,
-                "csv_file": csv_file,
-                "json_file": json_file,
+                "file": str(path.relative_to(output_dir)),
+                "csv_file": str(path.with_suffix(".csv").relative_to(output_dir)),
+                "json_file": str(path.with_suffix(".json").relative_to(output_dir)),
                 "dataset": dataset,
                 "section": section,
                 "title": typst_table_title(dataset, section, dataset_print_labels),
