@@ -25,6 +25,8 @@ method_sets:
     methods:
       - method: "baseline"
         print_as: "Original"
+      - method: "presidio"
+        print_as: "Presidio"
       - method: "dpmlm_uniform"
         print_as: "DP-MLM"
         params: ["epsilon"]
@@ -41,16 +43,16 @@ method_sets:
         print_as: "Original"
       - method: "presidio"
         print_as: "Presidio"
-      - method: "dpmlm_shap"
-        print_as: "DP-MLM-X+Pr"
-        params: ["epsilon"]
+      - method: "petre_shap"
+        print_as: "PETRE+Pr"
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
       - method: "dpmlm_shap"
         print_as: "k-DP-MLM-X+Pr"
         params: ["epsilon"]
         params_one_run: {"k": [2, 3, 5, 7, 10]}
-      - method: "petre_shap"
-        print_as: "PETRE+Pr"
-        params_one_run: {"k": [2, 3, 5, 7, 10]}
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]
   - name: "token_level_rewriters_with_threshold_lambda"
     datasets: ["tab"]
     print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter lambda"
@@ -59,17 +61,17 @@ method_sets:
         print_as: "Original"
       - method: "presidio"
         print_as: "Presidio"
-      - method: "dpmlm_shap"
-        print_as: "DP-MLM-X+Pr"
-        params: ["epsilon"]
+      - method: "baroud"
+        print_as: "IPI+Pr"
+        params_one_run: {"lambda": [0.8, 0.9, 0.95, 0.98, 0.99]}
+        datasets: ["tab"]
       - method: "dpmlm_shap"
         print_as: "λ-DP-MLM-X+Pr"
         params: ["epsilon"]
         params_one_run: {"lambda": [0.8, 0.9, 0.95, 0.98, 0.99]}
-      - method: "baroud"
-        print_as: "IPI"
-        params_one_run: {"lambda": [0.8, 0.9, 0.95, 0.98, 0.99]}
-        datasets: ["tab"]
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]
   - name: "token_level_rewriters_with_threshold_rho"
     print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter rho"
     methods:
@@ -77,13 +79,13 @@ method_sets:
         print_as: "Original"
       - method: "presidio"
         print_as: "Presidio"
-      - method: "dpmlm_shap"
-        print_as: "DP-MLM-X+Pr"
-        params: ["epsilon"]
+      - method: "risk_shap"
+        print_as: "Risk+Pr"
+        params_one_run: {"rho": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}
       - method: "dpmlm_shap"
         print_as: "ρ-DP-MLM-X+Pr"
         params: ["epsilon"]
         params_one_run: {"rho": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}
-      - method: "risk_shap"
-        print_as: "Risk+Pr"
-        params_one_run: {"rho": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]

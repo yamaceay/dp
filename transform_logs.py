@@ -342,6 +342,12 @@ class MarkdownDatasetLogsWriter:
 
         projected = frame[columns].copy()
         projected = projected.rename(columns=rename_map)
+        for score in scores or []:
+            renamed_col = rename_map.get(score["name"], score["name"])
+            exclude_methods = score.get("exclude", [])
+            if exclude_methods and renamed_col in projected.columns:
+                mask = projected["method"].isin(exclude_methods)
+                projected.loc[mask, renamed_col] = None
         return projected
 
     def write_dataset_tables(self) -> list[Path]:
@@ -365,10 +371,22 @@ class MarkdownDatasetLogsWriter:
                 filtered_logs = [item for item in logs if self._matches_any_method_spec(item, methods)]
                 if not filtered_logs:
                     continue
+                filtered_logs = self._sort_by_method_set_order(filtered_logs, methods)
                 frame = pd.DataFrame(filtered_logs)
                 frame = self._project_method_set_frame(dataset, frame)
                 written.extend(self._write_frame(frame, self.output_dir / dataset / set_name))
         return written
+
+    def _sort_by_method_set_order(
+        self, items: list[dict[str, Any]], method_specs: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        def spec_index(item: dict[str, Any]) -> int:
+            for i, spec in enumerate(method_specs):
+                if self._matches_method_spec(item, spec):
+                    return i
+            return len(method_specs)
+
+        return sorted(items, key=spec_index)
 
     def _matches_any_method_spec(
         self,

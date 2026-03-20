@@ -45,10 +45,6 @@ dataset_sets:
         rename_as: SD_ordinal_mae
         best: 0
         worst: 1
-      - name: runtime_avg_anon_time_s
-        rename_as: T_anon_avg_s
-        best: 0
-        worst: float("inf")
       - name: divergence_bertscore
         rename_as: D_bertscore
         best: 0
@@ -65,9 +61,13 @@ dataset_sets:
         rename_as: D_pp
         best: 0
         worst: 1
-        exclude: 
+        exclude:
           - baseline
           - spacy
           - presidio
           - manual
           - baroud
+      - name: runtime_avg_anon_time_s
+        rename_as: T_anon_avg_s
+        best: 0
+        worst: float("inf")
