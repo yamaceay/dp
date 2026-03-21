@@ -30,19 +30,19 @@ dataset_sets:
         best: 0
         worst: 1
       - name: utility_utility_nominal_raw_acc
-        rename_as: U_nominal_acc
+        rename_as: U_acc
         best: 1
         worst: 0
       - name: utility_utility_ordinal_raw_mae
-        rename_as: U_ordinal_mae
+        rename_as: U_mae
         best: 0
         worst: 1
       - name: supervised_divergence_utility_nominal_raw_acc
-        rename_as: SD_nominal_acc
+        rename_as: SD_acc
         best: 1
         worst: 0
       - name: supervised_divergence_utility_ordinal_raw_mae
-        rename_as: SD_ordinal_mae
+        rename_as: SD_mae
         best: 0
         worst: 1
       - name: divergence_bertscore
