@@ -89,6 +89,29 @@ class BaroudAnonymizer(Anonymizer):
 
         return apply_fn
 
+    def _tokenizer_total_tokens(self, text: str) -> int:
+        if self._unit is None or not hasattr(self._unit, "pii_detector"):
+            return None
+        tokenizer = getattr(self._unit.pii_detector, "tokenizer", None)
+        if tokenizer is None:
+            return None
+        try:
+            encoded = tokenizer(
+                text,
+                add_special_tokens=False,
+                return_offsets_mapping=True,
+                truncation=False,
+            )
+            offsets = encoded.get("offset_mapping")
+            if offsets is not None:
+                return int(sum(1 for start, end in offsets if int(end) > int(start)))
+            input_ids = encoded.get("input_ids")
+            if input_ids is not None:
+                return int(len(input_ids))
+        except Exception:
+            pass
+        return None
+
     def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
         anns = self._annotations_cache.get(self.hash_text(text), [])
         
@@ -110,6 +133,7 @@ class BaroudAnonymizer(Anonymizer):
         
         runtime_stats: Dict[str, int] = {"masked": 0}
         apply_fn = self._make_apply_fn(text, anns, runtime_stats)
+        tokenizer_total = self._tokenizer_total_tokens(text)
         
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
         
@@ -120,7 +144,6 @@ class BaroudAnonymizer(Anonymizer):
         for step in self._unit.anonymize(text, spans, apply_fn):
             threshold = step.threshold
             hp: BucketDict = {"lambda": threshold}
-            available_total = len(self._unit.select_indices(text, spans, threshold))
             
             private_text = step.text
             ledger = step.ledger
@@ -167,7 +190,7 @@ class BaroudAnonymizer(Anonymizer):
                 "method": self._model_name,
                 "lambda": threshold,
                 "masked": runtime_stats["masked"],
-                "total": available_total,
+                "total": tokenizer_total,
                 **step.metadata,
             }
             token_edits = [TokenEdit.from_mapping(e) for e in result_edits]

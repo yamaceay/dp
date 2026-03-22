@@ -1,0 +1,1 @@
+tab_presidio             |python model.py   --data tab --data_in data/tab --split indices/tab/test.txt  --base_output_path ../../../netscratch/yay/_ext_outputs_subset   --model presidio --model_in configs/model/presidio.yaml      --output jsonl --unique_name tab_presidio --timestamp {run_timestamp} 

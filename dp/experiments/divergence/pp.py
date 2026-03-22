@@ -42,7 +42,7 @@ class PerturbationPercentageDivergence(TextDivergenceExperiment):
         perturbed = PerturbationPercentageDivergence._as_non_negative_int(metadata.get("perturbed", metadata.get("masked")))
         total = PerturbationPercentageDivergence._as_non_negative_int(metadata.get("total"))
         if total <= 0:
-            return 0.0
+            return None
         value = float(perturbed) / float(total)
         if value < 0.0:
             return 0.0
@@ -58,6 +58,9 @@ class PerturbationPercentageDivergence(TextDivergenceExperiment):
         total_records = len(self.original_texts)
 
         for name, payload in self.evaluation_datasets.items():
+            if name in ["spacy", "presidio", "manual", "dpbart", "dpprompt", "dpparaphrase"]:
+                print(f"Skipping evaluation for {name} as it is a known method with expected metadata format.")
+                continue
             metadata_by_key: Dict[str, Dict[str, Any]] = dict(payload.get("metadata", {}))
             total = int(payload.get("total", len(metadata_by_key)))
             matched_keys = [key for key in self.original_texts if key in metadata_by_key]

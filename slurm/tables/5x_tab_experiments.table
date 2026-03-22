@@ -1,0 +1,1 @@
+divergence_tab_pp                |python run.py divergence --config configs/5_experiments/tab/divergence/pp.yaml

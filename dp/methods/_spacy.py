@@ -91,7 +91,7 @@ class SpacyAnonymizer(Anonymizer):
             last = ann.end
         out_parts.append(text[last:])
         anonymized = "".join(out_parts)
-        metadata = {"method": "spacy", "masked": len(filtered), "total": len(filtered)}
+        metadata = {"method": "spacy", "masked": len(filtered)}
         return AnonymizationResult(
             text=anonymized,
             annotations=TextAnnotations(spans=result_spans),
