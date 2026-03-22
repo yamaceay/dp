@@ -1,1 +1,6 @@
-divergence_tab_pp                |python run.py divergence --config configs/5_experiments/tab/divergence/pp.yaml
+privacy_tab                      |python run.py privacy --config configs/5_experiments/tab/privacy/exact_subset.yaml
+divergence_tab_pp                |python run.py divergence --config configs/5_experiments/tab/divergence/pp_subset.yaml
+divergence_tab_bertscore         |python run.py divergence --config configs/5_experiments/tab/divergence/bertscore_subset.yaml
+divergence_tab_cosine            |python run.py divergence --config configs/5_experiments/tab/divergence/cosine_subset.yaml
+supervised_divergence_tab_country|python run.py utility --config configs/5_experiments/tab/supervised_divergence/country_subset.yaml
+supervised_divergence_tab_year   |python run.py utility --config configs/5_experiments/tab/supervised_divergence/year_subset.yaml

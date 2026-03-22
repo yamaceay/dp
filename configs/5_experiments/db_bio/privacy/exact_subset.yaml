@@ -1,5 +1,6 @@
 dataset: db_bio
 data_in: data/db_bio
+split: indices/db_bio/test.txt
 annotations_in:
   - ../../../netscratch/yay/_ext_outputs_subset/db_bio
 tri:

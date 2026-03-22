@@ -1,1 +1,5 @@
-divergence_db_bio_pp              |python run.py divergence --config configs/5_experiments/db_bio/divergence/pp.yaml
+privacy_db_bio                    |python run.py privacy --config configs/5_experiments/db_bio/privacy/exact_subset.yaml
+divergence_db_bio_pp              |python run.py divergence --config configs/5_experiments/db_bio/divergence/pp_subset.yaml
+divergence_db_bio_bertscore       |python run.py divergence --config configs/5_experiments/db_bio/divergence/bertscore_subset.yaml
+divergence_db_bio_cosine          |python run.py divergence --config configs/5_experiments/db_bio/divergence/cosine_subset.yaml
+supervised_divergence_db_bio_label|python run.py utility --config configs/5_experiments/db_bio/supervised_divergence/label_subset.yaml
