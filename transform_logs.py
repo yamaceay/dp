@@ -234,8 +234,6 @@ class FlatDatasetLogs:
     
     def sort_by_method_order(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         param_specs = read_param_specs_config(PARAM_SETS_CONFIG_PATH)
-        param_order = [spec["name"] for spec in param_specs]
-        param_order_index = {name: index for index, name in enumerate(param_order)}
         param_print_order = {
             spec["name"]: spec.get("print_order", "low_to_high")
             for spec in param_specs
@@ -260,23 +258,16 @@ class FlatDatasetLogs:
             params = item["params"] or {}
             method_index = method_order.index(method) if method in method_order else len(method_order)
 
-            ordered_param_keys = sorted(
-                params.keys(),
-                key=lambda key: (param_order_index.get(key, len(param_order)), key),
-            )
-            param_indices = [param_order_index.get(k, len(param_order)) for k in ordered_param_keys]
+            ordered_params = sorted(params.items(), key=lambda kv: kv[0].lower())
+            normalized_params: list[tuple[str, tuple[int, int | float | str]]] = []
+            for param_name, raw_value in ordered_params:
+                value = sortable_param_value(raw_value)
+                if isinstance(value, (int, float)) and param_print_order.get(param_name) == "high_to_low":
+                    value = -value
+                value_type_rank = 0 if isinstance(value, (int, float)) else 1
+                normalized_params.append((param_name, (value_type_rank, value)))
 
-            param_values: list[int | float | str] = []
-            for param in param_order:
-                if param in params:
-                    param_value = sortable_param_value(params[param])
-                    if isinstance(param_value, (int, float)):
-                        if param_print_order.get(param) == "high_to_low":
-                            param_value = -param_value
-                    param_values.append(param_value)
-                else:
-                    param_values.append(0 if param_print_order.get(param) != "high_to_low" else 0)
-            item["_sort_key"] = (method_index, param_indices, tuple(param_values))
+            item["_sort_key"] = (method_index, tuple(normalized_params))
         
         sorted_items = sorted(items, key=lambda x: x["_sort_key"])
         for item in sorted_items:
@@ -563,9 +554,7 @@ def read_param_specs_config(path: str | Path) -> list[dict[str, Any]]:
 
 
 def order_params_dict(params: dict[str, Any]) -> dict[str, Any]:
-    param_specs = read_param_specs_config(PARAM_SETS_CONFIG_PATH)
-    order_index = {spec["name"]: index for index, spec in enumerate(param_specs)}
-    ordered_keys = sorted(params.keys(), key=lambda key: (order_index.get(key, len(order_index)), key))
+    ordered_keys = sorted(params.keys(), key=lambda key: key.lower())
     return {key: params[key] for key in ordered_keys}
 
 
