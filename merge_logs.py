@@ -421,6 +421,7 @@ class LogGrouper:
 
             section = grouped[key].setdefault(type_of_experiment, {})
             assert isinstance(section, dict), f"Unexpected section type for key {type_of_experiment}"
+            print(metrics)
             for metric_name, metric_value in metrics.items():
                 if metric_name in section:
                     assert section[metric_name] == metric_value, f"Conflicting value for {metric_name}: {section[metric_name]} vs {metric_value}"
