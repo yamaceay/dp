@@ -1,9 +1,9 @@
 dataset: db_bio
 data_in: data/db_bio
 split: indices/db_bio/test.txt
+annotations_splitted: true
 annotations_in:
   - ../../../netscratch/yay/_ext_outputs_subset/db_bio
-annotations_splitted: true
 tri:
   universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/exact/exact
   max_length: 512
