@@ -21,6 +21,9 @@ def parse_privacy_profile_from_log_name(log_name: str) -> str | None:
         return "exact"
     if re.search(r"^full\.jsonl$", log_name):
         return "full"
+    match = re.match(r"^([a-z0-9]+)_subset\.jsonl$", log_name)
+    if match:
+        return f"{match.group(1)}_subset"
     return None
 
 
@@ -201,6 +204,10 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
         results: List[Dict[str, Any]] = []
         log_name = Path(log_file).name
         privacy_profile = parse_privacy_profile_from_log_name(log_name)
+        split: str | None = None
+        if privacy_profile and privacy_profile.endswith("_subset"):
+            privacy_profile = privacy_profile[: -len("_subset")]
+            split = "test"
         test_indices = _load_test_indices(dataset) if privacy_profile == "full" else set()
         original_rank_rows: List[Dict[str, Any]] = []
         evaluation_rank_rows: Dict[str, List[Dict[str, Any]]] = {}
@@ -242,19 +249,20 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
                     "mean_reciprocal_rank": float(score.get("mean_reciprocal_rank", 0.0)),
                     "accuracy": float(score.get("accuracy", 0.0)),
                 }
-            results.append(
-                {
-                    "dataset": dataset,
-                    "method": "baseline",
-                    "params": {},
-                    "privacy_profile": privacy_profile,
-                    "count": summary["count"],
-                    "privacy": {
-                        "mean_reciprocal_rank": summary["mean_reciprocal_rank"],
-                        "accuracy": summary["accuracy"],
-                    },
-                }
-            )
+            row: Dict[str, Any] = {
+                "dataset": dataset,
+                "method": "baseline",
+                "params": {},
+                "privacy_profile": privacy_profile,
+                "count": summary["count"],
+                "privacy": {
+                    "mean_reciprocal_rank": summary["mean_reciprocal_rank"],
+                    "accuracy": summary["accuracy"],
+                },
+            }
+            if split is not None:
+                row["split"] = split
+            results.append(row)
 
         for result in evaluation_rows:
             source = str(result.get("source", ""))
@@ -278,23 +286,29 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
                     "mean_reciprocal_rank": float(raw_summary.get("mean_reciprocal_rank", 0.0)),
                     "accuracy": float(raw_summary.get("accuracy", 0.0)),
                 }
-            results.append(
-                {
-                    "dataset": dataset,
-                    "method": method,
-                    "params": params,
-                    "privacy_profile": privacy_profile,
-                    "count": summary["count"],
-                    "privacy": {
-                        "mean_reciprocal_rank": summary["mean_reciprocal_rank"],
-                        "accuracy": summary["accuracy"],
-                    },
-                }
-            )
+            row = {
+                "dataset": dataset,
+                "method": method,
+                "params": params,
+                "privacy_profile": privacy_profile,
+                "count": summary["count"],
+                "privacy": {
+                    "mean_reciprocal_rank": summary["mean_reciprocal_rank"],
+                    "accuracy": summary["accuracy"],
+                },
+            }
+            if split is not None:
+                row["split"] = split
+            results.append(row)
         return results
 
 class DivergenceExperimentLogParser(ExperimentLogParser):
     def parse(log_file: str, dataset: str, metric: str) -> List[Dict[str, Any]]:
+        split: str | None = None
+        actual_metric = metric
+        if metric.endswith("_subset"):
+            actual_metric = metric[: -len("_subset")]
+            split = "test"
         results: List[Dict[str, Any]] = []
         with Path(log_file).open("r", encoding="utf-8") as f:
             for line in f:
@@ -306,17 +320,18 @@ class DivergenceExperimentLogParser(ExperimentLogParser):
                 key = normalize_source_key(source, dataset)
                 method, params = parse_params_from_key(key)
                 divergence = result["summary"]
-                results.append(
-                    {
-                        "dataset": dataset,
-                        "method": method,
-                        "params": params,
-                        "count": divergence["count"],
-                        "divergence": {
-                            metric: divergence["divergence_mean"],
-                        },
-                    }
-                )
+                row: Dict[str, Any] = {
+                    "dataset": dataset,
+                    "method": method,
+                    "params": params,
+                    "count": divergence["count"],
+                    "divergence": {
+                        actual_metric: divergence["divergence_mean"],
+                    },
+                }
+                if split is not None:
+                    row["split"] = split
+                results.append(row)
         return results
 
 def maybe_feature(result: Dict[str, Any]) -> str | None:
@@ -381,7 +396,7 @@ def add_real_anonymization_runtime(grouped_results: List[Dict[str, Any]]) -> Lis
 
 class LogGrouper:
     def group(results: List[Dict[str, Any]]) -> Dict[tuple, List[Dict[str, Any]]]:
-        grouped: Dict[Tuple[str, str, frozenset, str | None], Dict[str, Any]] = {}
+        grouped: Dict[Tuple[str, str, frozenset, str | None, str | None], Dict[str, Any]] = {}
         valid_types = ["privacy", "utility", "supervised_divergence", "divergence", "runtime"]
         for result in results:
             assert all(field in result for field in ["dataset", "method", "params"]), f"Missing required fields in result: {result}"
@@ -391,11 +406,14 @@ class LogGrouper:
             group = maybe_group(result)
             if group:
                 identifiers["group"] = group
+            split: str | None = result.get("split")
 
-            key = (identifiers["dataset"], identifiers["method"], frozenset(identifiers["params"].items()), identifiers.get("group"))
+            key = (identifiers["dataset"], identifiers["method"], frozenset(identifiers["params"].items()), identifiers.get("group"), split)
             grouped.setdefault(key, {"dataset": identifiers["dataset"], "method": identifiers["method"], "params": identifiers["params"]})
             if "group" in identifiers:
                 grouped[key]["group"] = identifiers["group"]
+            if split is not None:
+                grouped[key]["split"] = split
 
             for type_of_experiment in valid_types:
                 if type_of_experiment in result:
@@ -421,7 +439,6 @@ class LogGrouper:
 
             section = grouped[key].setdefault(type_of_experiment, {})
             assert isinstance(section, dict), f"Unexpected section type for key {type_of_experiment}"
-            print(metrics)
             for metric_name, metric_value in metrics.items():
                 if metric_name in section:
                     assert section[metric_name] == metric_value, f"Conflicting value for {metric_name}: {section[metric_name]} vs {metric_value}"

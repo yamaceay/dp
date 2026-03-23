@@ -89,3 +89,30 @@ method_sets:
       - method: "dpmlm_shap"
         print_as: "DP-MLM-X+Pr"
         params: ["epsilon"]
+  - name: "token_level_rewriters_with_threshold_k_cross_dataset"
+    print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter k, different attacker assumptions"
+    split: "test"
+    methods:
+      - method: "baseline"
+        print_as: "Original"
+      - method: "presidio"
+        print_as: "Presidio"
+      - method: "petre_shap"
+        print_as: "PETRE+Pr[full]"
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+      - method: "petre_shap"
+        print_as: "PETRE+Pr[exact]"
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+        split: "test"
+      - method: "dpmlm_shap"
+        print_as: "k-DP-MLM-X+Pr[full]"
+        params: ["epsilon"]
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+      - method: "dpmlm_shap"
+        print_as: "k-DP-MLM-X+Pr[exact]"
+        params: ["epsilon"]
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+        split: "test"
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]

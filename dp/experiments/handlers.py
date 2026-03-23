@@ -65,6 +65,7 @@ class UtilityCtx(NamedTuple):
     identifier: Optional[str]
     source_splits: List[Dict[str, Any]]
     task_id: Optional[int]
+    annotations_splitted: bool = False
 
 
 class DivergenceCtx(NamedTuple):
@@ -288,6 +289,7 @@ def _prepare_utility(params: ConfigDict) -> UtilityCtx:
             except Exception:
                 pass
     identifier = params.get("identifier")
+    annotations_splitted = bool(params.get("annotations_splitted", False))
     return UtilityCtx(
         dataset,
         data_in,
@@ -305,6 +307,7 @@ def _prepare_utility(params: ConfigDict) -> UtilityCtx:
         identifier,
         source_splits,
         task_id,
+        annotations_splitted,
     )
 
 
@@ -479,9 +482,13 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     sources = collect_jsonl_sources(*ctx.annotations, task_id=ctx.task_id)
     if not sources:
         raise RuntimeError("no anonymized output files discovered")
+    split_only_records = records
     split_keys, split_records = _resolve_split_keys(ctx, params)
     records = split_records or records
-    index_to_key = _build_index_to_key(ctx.dataset, ctx.data_in, params.get("max_records"))
+    if ctx.annotations_splitted and ctx.split:
+        index_to_key = {idx: _record_key(rec, idx) for idx, rec in enumerate(split_only_records)}
+    else:
+        index_to_key = _build_index_to_key(ctx.dataset, ctx.data_in, params.get("max_records"))
     protocol = str(params.get("protocol", "utility")).strip().lower() or "utility"
     evaluation_texts = None
     if protocol not in {"utility", "supervised_divergence"}:

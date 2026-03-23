@@ -215,6 +215,7 @@ class FlatDatasetLogs:
                 "dataset": item["dataset"],
                 "method": item["method"],
                 "params": order_params_dict(params),
+                "split": item.get("split"),
             }
             for section in ("privacy", "utility", "supervised_divergence", "divergence", "runtime"):
                 for metric, value in item.get(section, {}).items():
@@ -405,6 +406,13 @@ class MarkdownDatasetLogsWriter:
         expected_method = method_spec["method"]
         if item["method"] != expected_method:
             return False
+
+        if "split" in method_spec:
+            if item.get("split") != method_spec["split"]:
+                return False
+        else:
+            if item.get("split") is not None:
+                return False
 
         params = item["params"] or {}
         if not isinstance(params, dict):
