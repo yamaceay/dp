@@ -31,7 +31,9 @@ from dp.experiments.divergence.io import (
 from dp.experiments.divergence.reporting import build_divergence_report, create_divergence_outputter
 from dp.experiments.privacy.io import (
     build_privacy_evaluation_dataset_from_indexed_texts,
+    build_privacy_evaluation_dataset_from_texts,
     read_indexed_texts_from_jsonl,
+    read_texts_from_jsonl,
 )
 from dp.experiments.privacy.reporting import build_privacy_report, create_privacy_outputter
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
@@ -95,6 +97,7 @@ class PrivacyCtx(NamedTuple):
     output_format: str
     output_file: Optional[str]
     task_id: Optional[int]
+    annotations_splitted: bool = False
 
 
 def load_records(dataset: str, data_in: Optional[str], max_records: Optional[int], split: Optional[str] = None) -> List[DatasetRecord]:
@@ -355,7 +358,8 @@ def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
         progress = True
     output_format = str(params.get("output_format", "text"))
     output_file = params.get("output_file")
-    return PrivacyCtx(dataset, data_in, split, annotations, tri_pipeline, max_records, mask_token, tri_max_length, tri_device, bool(progress), output_format, output_file, task_id)
+    annotations_splitted = bool(params.get("annotations_splitted", False))
+    return PrivacyCtx(dataset, data_in, split, annotations, tri_pipeline, max_records, mask_token, tri_max_length, tri_device, bool(progress), output_format, output_file, task_id, annotations_splitted)
 
 
 def build_divergence_experiment(metric_type: str, metric_params: Dict[str, Any]) -> TextDivergenceExperiment:
@@ -859,34 +863,42 @@ def handle_privacy(args: Any, config: ConfigDict) -> None:
     records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=ctx.split)
     if not records:
         raise RuntimeError("no records loaded")
-    reference_records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=None)
-    if not reference_records:
-        raise RuntimeError("no reference records loaded")
     sources = collect_jsonl_sources(*ctx.annotations, task_id=ctx.task_id)
     if not sources:
         raise RuntimeError("no annotation files discovered")
     evaluation_datasets: Dict[str, List[DatasetRecord]] = {}
     evaluation_counts: Dict[str, int] = {}
-    for name, path in sources.items():
-        indexed_texts = read_indexed_texts_from_jsonl(path)
-        if len(indexed_texts) == len(records):
-            alignment_mode = "direct"
-        elif len(indexed_texts) == len(reference_records):
-            alignment_mode = "projected-from-full"
-        else:
-            alignment_mode = "invalid"
-        print(
-            "Privacy alignment "
-            f"source={name} mode={alignment_mode} "
-            f"rows={len(indexed_texts)} split_records={len(records)} full_records={len(reference_records)}"
-        )
-        dataset_records = build_privacy_evaluation_dataset_from_indexed_texts(
-            records,
-            indexed_texts,
-            reference_records=reference_records,
-        )
-        evaluation_datasets[name] = dataset_records
-        evaluation_counts[name] = len(dataset_records)
+    if ctx.annotations_splitted and ctx.split:
+        for name, path in sources.items():
+            texts = read_texts_from_jsonl(path)
+            print(f"Privacy alignment source={name} mode=splitted rows={len(texts)} split_records={len(records)}")
+            dataset_records = build_privacy_evaluation_dataset_from_texts(records, texts)
+            evaluation_datasets[name] = dataset_records
+            evaluation_counts[name] = len(dataset_records)
+    else:
+        reference_records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=None)
+        if not reference_records:
+            raise RuntimeError("no reference records loaded")
+        for name, path in sources.items():
+            indexed_texts = read_indexed_texts_from_jsonl(path)
+            if len(indexed_texts) == len(records):
+                alignment_mode = "direct"
+            elif len(indexed_texts) == len(reference_records):
+                alignment_mode = "projected-from-full"
+            else:
+                alignment_mode = "invalid"
+            print(
+                "Privacy alignment "
+                f"source={name} mode={alignment_mode} "
+                f"rows={len(indexed_texts)} split_records={len(records)} full_records={len(reference_records)}"
+            )
+            dataset_records = build_privacy_evaluation_dataset_from_indexed_texts(
+                records,
+                indexed_texts,
+                reference_records=reference_records,
+            )
+            evaluation_datasets[name] = dataset_records
+            evaluation_counts[name] = len(dataset_records)
     experiment = TextPrivacyExperiment(
         tri_pipeline=ctx.tri_pipeline,
         tri_max_length=ctx.tri_max_length,

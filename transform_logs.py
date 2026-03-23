@@ -407,12 +407,13 @@ class MarkdownDatasetLogsWriter:
         if item["method"] != expected_method:
             return False
 
-        if "split" in method_spec:
-            if item.get("split") != method_spec["split"]:
+        split_spec = method_spec.get("split")
+        item_split = item.get("split")
+        if split_spec is not None and item_split is not None:
+            if split_spec != item_split:
                 return False
-        else:
-            if item.get("split") is not None:
-                return False
+        elif split_spec is not None or item_split is not None:
+            return False
 
         params = item["params"] or {}
         if not isinstance(params, dict):
