@@ -25,7 +25,6 @@ from tqdm import tqdm
 
 from dp.loaders import get_adapter
 from dp.utils.explainer import ShapExplainer, ShapType
-from dp.utils.explainer.base import load_tri_label_mapping
 from dp.utils.memory import clear_memory
 
 
@@ -84,7 +83,7 @@ def _assess_record(
     mask_token: str,
 ) -> list[StepRecord]:
     n = len(offsets)
-    steps_to_run = min(n, max_steps)
+    steps_to_run = n if max_steps is None else min(n, max_steps)
 
     static_order = list(np.argsort(static_scores)[::-1])
 
@@ -158,7 +157,7 @@ def main() -> None:
     output_dir = Path(cfg["output_dir"])
     mask_token: str = cfg.get("mask_token", "[MASK]")
     max_records: int | None = args.max_records or cfg.get("max_records")
-    max_steps: int = args.max_steps or cfg.get("max_steps", 20)
+    max_steps: int | None = args.max_steps or cfg.get("max_steps") or None
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "drift.jsonl"
@@ -172,7 +171,8 @@ def main() -> None:
         records = records[:max_records]
 
     explainer = ShapExplainer(model_name=explainer_in, explainer_type=explainer_type)
-    label_mapping, _ = load_tri_label_mapping(explainer)
+    explainer._load_pipeline()
+    label_mapping = explainer.label_to_id
 
     for record in tqdm(records, desc="Assessing drift"):
         if record.uid not in shap_data:
