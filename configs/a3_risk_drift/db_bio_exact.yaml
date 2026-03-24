@@ -6,4 +6,5 @@ explainer: shap
 explainer_in: tri_pipelines/db_bio/_checkpoints/exact_deid/exact_deid
 shap_in: data/db_bio/tri_risk/shap_subset.jsonl
 output_dir: logs/risk_drift/db_bio/exact
+max_steps: 30
 mask_token: "[MASK]"

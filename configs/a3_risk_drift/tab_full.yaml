@@ -6,4 +6,5 @@ explainer: shap
 explainer_in: tri_pipelines/tab/_checkpoints/full_deid/full_deid
 shap_in: data/tab/tri_risk/shap.jsonl
 output_dir: logs/risk_drift/tab/full
+max_steps: 30
 mask_token: "[MASK]"
