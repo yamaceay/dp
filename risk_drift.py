@@ -85,7 +85,7 @@ def _assess_record(
     n = len(offsets)
     steps_to_run = n if max_steps is None else min(n, max_steps)
 
-    static_order = list(np.argsort(static_scores)[::-1])
+    static_order = [int(i) for i in np.argsort(static_scores)[::-1]]
 
     current_text = text
     current_offsets = list(offsets)
