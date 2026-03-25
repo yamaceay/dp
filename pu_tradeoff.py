@@ -249,12 +249,6 @@ def read_method_group_metrics() -> dict[str, set[str]]:
     return result
 
 
-def attacker_split_from_x_column(x_column: str) -> str | None:
-    if x_column.endswith("_exact"):
-        return "test"
-    return None
-
-
 def configured_method_group_names() -> list[str]:
     with open(METHODS_CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f)
@@ -703,12 +697,13 @@ def select_shade_param(params: dict[str, object]) -> str | None:
     return keys[0]
 
 
-def base_color_group_key(method: str, params_dict: dict[str, object], param_keys_sig: str) -> str:
+def base_color_group_key(method: str, params_dict: dict[str, object], param_keys_sig: str, split: str | None = None) -> str:
     keys = sorted(params_dict.keys())
+    split_suffix = f"+split={split}" if split is not None else ""
     if len(keys) >= 2 and "epsilon" in keys:
         non_epsilon_keys = [key for key in keys if key != "epsilon"]
-        return f"{method}+{param_keys_sig}+{param_values_signature(params_dict, non_epsilon_keys)}"
-    return f"{method}+{param_keys_sig}"
+        return f"{method}+{param_keys_sig}+{param_values_signature(params_dict, non_epsilon_keys)}{split_suffix}"
+    return f"{method}+{param_keys_sig}{split_suffix}"
 
 
 def configured_param_keys(method_spec: dict[str, object]) -> set[str]:
@@ -732,7 +727,7 @@ def configured_method_display_name(
     params_dict: dict[str, object],
     shade_param: str | None,
     method_display_specs: dict[str, list[dict[str, object]]],
-    x_column: str = "",
+    x_attacker_split: str | None,
 ) -> str:
     group_specs = method_display_specs.get(method_group_name, [])
     candidates = [
@@ -742,7 +737,6 @@ def configured_method_display_name(
     if not candidates:
         return method_name
 
-    x_attacker_split = attacker_split_from_x_column(x_column)
     split_filtered = [
         spec for spec in candidates
         if spec.get("split") == x_attacker_split
@@ -875,6 +869,7 @@ def zoomed_limits_for_df(
     return (x_min - x_padding, x_max + x_padding), (y_min - y_padding, y_max + y_padding)
 
 
+
 def create_tradeoff_axes() -> tuple[plt.Figure, list[plt.Axes]]:
     return create_panel_axes(6, sharex=True, sharey=True, grid_size=(7.5, 6.0))
 
@@ -917,14 +912,6 @@ if __name__ == "__main__":
                 raw_df = read_csv_file(file_path, x_column, y_column)
                 if raw_df is None:
                     continue
-                if "split" in raw_df.columns:
-                    x_attacker_split = attacker_split_from_x_column(x_column)
-                    if x_attacker_split is None:
-                        raw_df = raw_df[raw_df["split"].isna()].copy()
-                    else:
-                        raw_df = raw_df[raw_df["split"] == x_attacker_split].copy()
-                    if raw_df.empty:
-                        continue
                 metric_exclusions = dataset_metric_exclusions.get(dataset_name, {})
                 excluded_methods = set(metric_exclusions.get(x_column, set())) | set(metric_exclusions.get(y_column, set()))
                 if excluded_methods:
@@ -1018,7 +1005,12 @@ if __name__ == "__main__":
                     )
                     panel_df["shade_param"] = panel_df["plot_params_dict"].apply(select_shade_param)
                     panel_df["base_color_group"] = panel_df.apply(
-                        lambda row: base_color_group_key(row["method"], row["plot_params_dict"], row["param_keys_signature"]),
+                        lambda row: base_color_group_key(
+                            row["method"],
+                            row["plot_params_dict"],
+                            row["param_keys_signature"],
+                            split=row["split"] if "split" in row.index and not pd.isna(row["split"]) else None,
+                        ),
                         axis=1,
                     )
 
@@ -1047,13 +1039,16 @@ if __name__ == "__main__":
                         first_row = group_df.iloc[0]
                         grouped_method_name = str(first_row["method"])
                         shade_param = first_row["shade_param"]
+                        row_split = first_row.get("split") if "split" in first_row.index else None
+                        if row_split is not None and pd.isna(row_split):
+                            row_split = None
                         method_display_name = configured_method_display_name(
                             method_name,
                             grouped_method_name,
                             first_row["plot_params_dict"],
                             shade_param,
                             method_display_specs,
-                            x_column=x_column,
+                            row_split,
                         )
                         base_color = get_base_color(base_group, color_cache)
                         method_marker = get_group_marker(base_group, marker_cache)
