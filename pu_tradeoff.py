@@ -27,10 +27,10 @@ X_AXIS_OPTIONS = {
 }
 
 Y_AXIS_OPTIONS = {
-    "u_nominal": "U_nominal_acc",
-    "u_ordinal": "U_ordinal_mae",
-    "sd_nominal": "SD_nominal_acc",
-    "sd_ordinal": "SD_ordinal_mae",
+    "u_nominal": "U_acc",
+    "u_ordinal": "U_mae",
+    "sd_nominal": "SD_acc",
+    "sd_ordinal": "SD_mae",
     "d_bertscore": "D_bertscore",
     "d_cosine": "D_cosine",
     "d_pp": "D_pp",
@@ -237,6 +237,24 @@ def read_method_display_specs() -> dict[str, list[dict[str, object]]]:
     return specs
 
 
+def read_method_group_metrics() -> dict[str, set[str]]:
+    with open(METHODS_CONFIG_PATH, "r") as f:
+        config = yaml.safe_load(f)
+    result: dict[str, set[str]] = {}
+    for method_set in config.get("method_sets", []):
+        name = method_set.get("name")
+        metrics = method_set.get("metrics")
+        if isinstance(name, str) and isinstance(metrics, list):
+            result[name] = {str(m) for m in metrics if isinstance(m, str)}
+    return result
+
+
+def attacker_split_from_x_column(x_column: str) -> str | None:
+    if x_column.endswith("_exact"):
+        return "test"
+    return None
+
+
 def configured_method_group_names() -> list[str]:
     with open(METHODS_CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f)
@@ -288,10 +306,10 @@ def metric_name_and_unit(metric_name: str) -> tuple[str, str | None]:
         return metric_name, "MRR"
     if metric_name in {"TRIR_exact", "TRIR_more", "TRIR_full"}:
         return metric_name, "Acc"
-    if metric_name in {"U_nominal_acc", "SD_nominal_acc", "U_nominal_raw", "SD_nominal_raw"}:
-        return metric_name.replace("_raw", "").replace("_acc", ""), "ACC"
-    if metric_name in {"U_ordinal_mae", "SD_ordinal_mae", "U_ordinal_raw", "SD_ordinal_raw"}:
-        return metric_name.replace("_raw", "").replace("_mae", ""), "MAE"
+    if metric_name in {"U_acc", "SD_acc"}:
+        return metric_name.replace("_acc", ""), "ACC"
+    if metric_name in {"U_mae", "SD_mae"}:
+        return metric_name.replace("_mae", ""), "MAE"
     if metric_name in {"D_bertscore", "D_cosine", "D_pp"}:
         return metric_name, None
     if metric_name == "T_anon_avg_s":
@@ -313,13 +331,13 @@ def y_axis_assessment_label(y_column: str, metric_bounds: dict[str, tuple[float,
 
 
 def y_metric_context(y_column: str) -> tuple[str, str] | None:
-    if y_column in {"U_nominal_acc", "U_nominal_raw"}:
+    if y_column == "U_acc":
         return ("utility", "acc")
-    if y_column in {"U_ordinal_mae", "U_ordinal_raw"}:
+    if y_column == "U_mae":
         return ("utility", "mae")
-    if y_column in {"SD_nominal_acc", "SD_nominal_raw"}:
+    if y_column == "SD_acc":
         return ("supervised_divergence", "acc")
-    if y_column in {"SD_ordinal_mae", "SD_ordinal_raw"}:
+    if y_column == "SD_mae":
         return ("supervised_divergence", "mae")
     return None
 
@@ -405,10 +423,10 @@ def raw_metric_column(metric_name: str) -> str | None:
         "TRIR_exact": "privacy_exact_accuracy",
         "TRIR_more": "privacy_more_accuracy",
         "TRIR_full": "privacy_full_accuracy",
-        "U_nominal_acc": "utility_utility_nominal_raw_acc",
-        "U_ordinal_mae": "utility_utility_ordinal_raw_mae",
-        "SD_nominal_acc": "supervised_divergence_utility_nominal_raw_acc",
-        "SD_ordinal_mae": "supervised_divergence_utility_ordinal_raw_mae",
+        "U_acc": "utility_utility_nominal_raw_acc",
+        "U_mae": "utility_utility_ordinal_raw_mae",
+        "SD_acc": "supervised_divergence_utility_nominal_raw_acc",
+        "SD_mae": "supervised_divergence_utility_ordinal_raw_mae",
         "D_bertscore": "divergence_bertscore",
         "D_cosine": "divergence_cosine",
         "D_pp": "divergence_pp",
@@ -714,6 +732,7 @@ def configured_method_display_name(
     params_dict: dict[str, object],
     shade_param: str | None,
     method_display_specs: dict[str, list[dict[str, object]]],
+    x_column: str = "",
 ) -> str:
     group_specs = method_display_specs.get(method_group_name, [])
     candidates = [
@@ -722,6 +741,15 @@ def configured_method_display_name(
     ]
     if not candidates:
         return method_name
+
+    x_attacker_split = attacker_split_from_x_column(x_column)
+    split_filtered = [
+        spec for spec in candidates
+        if spec.get("split") == x_attacker_split
+        or (x_attacker_split is None and "split" not in spec)
+    ]
+    if split_filtered:
+        candidates = split_filtered
 
     conservative_keys = {"rho", "lambda", "k"}
     active_keys = {key for key in params_dict.keys() if isinstance(key, str)}
@@ -871,6 +899,7 @@ if __name__ == "__main__":
     method_group_labels = read_method_group_labels()
     method_display_specs = read_method_display_specs()
     method_group_names = configured_method_group_names()
+    method_group_metrics = read_method_group_metrics()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for dataset_name in dataset_names:
         metric_bounds = dataset_metric_bounds.get(dataset_name, {})
@@ -882,9 +911,20 @@ if __name__ == "__main__":
             file_name = f"mds/{dataset_name}/{method_name}.csv"
             file_path = Path(file_name)
             for x_name, x_column, y_name, y_column in targets:
+                group_metrics = method_group_metrics.get(method_name)
+                if group_metrics is not None and (x_column not in group_metrics or y_column not in group_metrics):
+                    continue
                 raw_df = read_csv_file(file_path, x_column, y_column)
                 if raw_df is None:
                     continue
+                if "split" in raw_df.columns:
+                    x_attacker_split = attacker_split_from_x_column(x_column)
+                    if x_attacker_split is None:
+                        raw_df = raw_df[raw_df["split"].isna()].copy()
+                    else:
+                        raw_df = raw_df[raw_df["split"] == x_attacker_split].copy()
+                    if raw_df.empty:
+                        continue
                 metric_exclusions = dataset_metric_exclusions.get(dataset_name, {})
                 excluded_methods = set(metric_exclusions.get(x_column, set())) | set(metric_exclusions.get(y_column, set()))
                 if excluded_methods:
@@ -1013,6 +1053,7 @@ if __name__ == "__main__":
                             first_row["plot_params_dict"],
                             shade_param,
                             method_display_specs,
+                            x_column=x_column,
                         )
                         base_color = get_base_color(base_group, color_cache)
                         method_marker = get_group_marker(base_group, marker_cache)

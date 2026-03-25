@@ -92,6 +92,12 @@ method_sets:
   - name: "token_level_rewriters_with_threshold_k_cross_dataset"
     print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter k, different attacker assumptions"
     split: "test"
+    metrics: 
+      - SD_acc
+      - SD_mae
+      - P_exact
+      - P_more
+      - D_pp
     methods:
       - method: "baseline"
         print_as: "Original"

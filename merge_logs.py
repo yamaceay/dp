@@ -120,6 +120,11 @@ class UtilityExperimentLogParser(ExperimentLogParser):
         metrics: List[str],
         section_name: str = "utility",
     ) -> List[Dict[str, Any]]:
+        split: str | None = None
+        actual_feature = feature
+        if feature.endswith("_subset"):
+            actual_feature = feature[: -len("_subset")]
+            split = "test"
         results: List[Dict[str, Any]] = []
         baseline_metric_overall: Dict[str, float] = {}
         dummy_metric_name: str | None = None
@@ -144,13 +149,13 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                         dummy_strategy = None
                     else:
                         dummy_metric_name, dummy_metric_overall, dummy_strategy = dummy_metric
-                    baseline_row_metrics = filter_utility_metrics(baseline_metric_overall, metrics, feature)
+                    baseline_row_metrics = filter_utility_metrics(baseline_metric_overall, metrics, actual_feature)
                     if dummy_metric_name is not None and dummy_metric_overall is not None:
                         dummy_row_metrics = {
-                            f"{feature}_{dummy_metric_name}": dummy_metric_overall,
+                            f"{actual_feature}_{dummy_metric_name}": dummy_metric_overall,
                         }
                         if dummy_strategy is not None:
-                            dummy_row_metrics[f"{feature}_dummy_strategy"] = dummy_strategy
+                            dummy_row_metrics[f"{actual_feature}_dummy_strategy"] = dummy_strategy
                     else:
                         dummy_row_metrics = None
                     continue
@@ -159,44 +164,47 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                 source = str(result.get("source", ""))
                 key = normalize_source_key(source, dataset)
                 method, params = parse_params_from_key(key)
-                utility_metrics = filter_utility_metrics(result["overall_results"]["metrics"], metrics, feature)
+                utility_metrics = filter_utility_metrics(result["overall_results"]["metrics"], metrics, actual_feature)
                 for metric_name, baseline_value in baseline_metric_overall.items():
-                    utility_metrics[f"{feature}_baseline_{metric_name}"] = baseline_value
+                    utility_metrics[f"{actual_feature}_baseline_{metric_name}"] = baseline_value
                 if dummy_metric_name is not None and dummy_metric_overall is not None:
-                    utility_metrics[f"{feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
+                    utility_metrics[f"{actual_feature}_dummy_{dummy_metric_name}"] = dummy_metric_overall
                 if dummy_strategy is not None:
-                    utility_metrics[f"{feature}_dummy_strategy"] = dummy_strategy
-                results.append(
-                    {
-                        "dataset": dataset,
-                        "feature": feature,
-                        "method": method,
-                        "params": params,
-                        section_name: {
-                            **utility_metrics,
-                        },
-                    }
-                )
+                    utility_metrics[f"{actual_feature}_dummy_strategy"] = dummy_strategy
+                row: Dict[str, Any] = {
+                    "dataset": dataset,
+                    "feature": actual_feature,
+                    "method": method,
+                    "params": params,
+                    section_name: {
+                        **utility_metrics,
+                    },
+                }
+                if split is not None:
+                    row["split"] = split
+                results.append(row)
         if baseline_row_metrics:
-            results.append(
-                {
-                    "dataset": dataset,
-                    "feature": feature,
-                    "method": "baseline",
-                    "params": {},
-                    section_name: dict(baseline_row_metrics),
-                }
-            )
+            row = {
+                "dataset": dataset,
+                "feature": actual_feature,
+                "method": "baseline",
+                "params": {},
+                section_name: dict(baseline_row_metrics),
+            }
+            if split is not None:
+                row["split"] = split
+            results.append(row)
         if dummy_row_metrics:
-            results.append(
-                {
-                    "dataset": dataset,
-                    "feature": feature,
-                    "method": "dummy",
-                    "params": {},
-                    section_name: dict(dummy_row_metrics),
-                }
-            )
+            row = {
+                "dataset": dataset,
+                "feature": actual_feature,
+                "method": "dummy",
+                "params": {},
+                section_name: dict(dummy_row_metrics),
+            }
+            if split is not None:
+                row["split"] = split
+            results.append(row)
         return results
 
 class PrivacyExperimentLogParser(ExperimentLogParser):

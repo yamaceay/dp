@@ -318,7 +318,7 @@ class MarkdownDatasetLogsWriter:
 
     def _project_method_set_frame(self, dataset: str, frame: pd.DataFrame) -> pd.DataFrame:
         scores = self.dataset_projection_config.get(dataset)
-        required_columns = ["method", "params"]
+        required_columns = ["method", "params", "split"]
         columns: list[str] = list(required_columns)
         rename_map: dict[str, str] = {}
         for score in scores or []:
