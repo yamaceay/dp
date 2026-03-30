@@ -750,11 +750,12 @@ def configured_method_display_name(
     if isinstance(shade_param, str):
         active_keys.add(shade_param)
 
-    def score(spec: dict[str, object]) -> tuple[int, int]:
+    def score(spec: dict[str, object]) -> tuple[int, int, int]:
         spec_keys = configured_param_keys(spec)
         matching_keys = len(spec_keys & active_keys)
         conservative_match = len((spec_keys & conservative_keys) & active_keys)
-        return (conservative_match, matching_keys)
+        unmatched_conservative = len((spec_keys & conservative_keys) - active_keys)
+        return (conservative_match, matching_keys, -unmatched_conservative)
 
     best_spec = max(candidates, key=score)
     print_as = best_spec.get("print_as")

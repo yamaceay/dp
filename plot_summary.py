@@ -31,8 +31,8 @@ OTHER_THRESHOLD_PARAMS: frozenset[str] = frozenset({"k", "rho", "lambda"})
 METRICS: list[str] = [
     "P_exact", "P_more", "P_full",
     "TRIR_exact", "TRIR_more", "TRIR_full",
-    "U_nominal_acc", "U_ordinal_mae",
-    "SD_nominal_acc", "SD_ordinal_mae",
+    "U_acc", "U_mae",
+    "SD_acc", "SD_mae",
     "D_bertscore", "D_cosine", "D_pp",
     "T_anon_avg_s",
 ]
@@ -41,8 +41,8 @@ FIXED_EPSILON_PANELS: list[float | None] = [None, 10, 25, 50, 100, 250]
 
 X_AXIS_OPTIONS: list[str] = ["P_exact", "P_more", "P_full", "TRIR_exact", "TRIR_more", "TRIR_full"]
 Y_AXIS_OPTIONS: list[str] = [
-    "U_nominal_acc", "U_ordinal_mae",
-    "SD_nominal_acc", "SD_ordinal_mae",
+    "U_acc", "U_mae",
+    "SD_acc", "SD_mae",
     "D_bertscore", "D_cosine", "D_pp",
     "T_anon_avg_s",
 ]
@@ -61,10 +61,10 @@ METRIC_AXIS_LABELS: dict[str, str] = {
     "TRIR_exact": "TRIR_exact (Acc ↓ better)",
     "TRIR_more": "TRIR_more (Acc ↓ better)",
     "TRIR_full": "TRIR_full (Acc ↓ better)",
-    "U_nominal_acc": "U_nominal (Acc ↑ better)",
-    "U_ordinal_mae": "U_ordinal (MAE norm.  [0 = dummy,  1 = original])",
-    "SD_nominal_acc": "SD_nominal (Acc ↑ better)",
-    "SD_ordinal_mae": "SD_ordinal (MAE norm.  [0 = dummy,  1 = original])",
+    "U_acc": "U_acc (Acc ↑ better)",
+    "U_mae": "U_mae (MAE ↓ better)",
+    "SD_acc": "SD_acc (Acc ↑ better)",
+    "SD_mae": "SD_mae (MAE ↓ better)",
     "D_bertscore": "D_bertscore (↓ better)",
     "D_cosine": "D_cosine (↓ better)",
     "D_pp": "D_pp (↓ better)",
