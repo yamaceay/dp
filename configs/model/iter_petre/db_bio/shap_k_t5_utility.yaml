@@ -1,0 +1,20 @@
+params:
+  ks: ["*"]
+
+T: 5
+
+precomputation:
+  result_in: ../../../netscratch/yay/_ext_outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio.jsonl
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full/full
+
+utility_explainer:
+  tri_pipeline: ../../../netscratch/yay/utility_pipelines/db_bio/_checkpoints/full/full
+  alpha: 1.0
+
+token_selection:
+  name: until_k
+
+verbose: true

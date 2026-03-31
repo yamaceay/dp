@@ -34,6 +34,7 @@ class Anonymizer(ABC):
 
         self._dataset_records: Optional[Iterable[DatasetRecord]] = None
         self._explainer: Optional[TokenExplainer] = None
+        self._utility_explainer: Optional[TokenExplainer] = None
         self._selector: Optional[AnonymizerUnit] = None
         self._splitter: Optional[TextSplitter] = None
         self.device = resolve_device(kwargs.get("device"))
@@ -66,6 +67,9 @@ class Anonymizer(ABC):
 
     def set_explainer(self, explainer: TokenExplainer) -> None:
         self._explainer = explainer
+
+    def set_utility_explainer(self, explainer: TokenExplainer) -> None:
+        self._utility_explainer = explainer
 
     def set_selector(self, selector: AnonymizerUnit) -> None:
         self._selector = selector

@@ -7,7 +7,7 @@ from dp.methods._dpmlm import DPMlmAnonymizer
 from dp.methods.anonymizer import AnonymizationResult
 from dp.methods.constants import Buckets, BucketDict, buckets_to_dicts
 from dp.utils.token_ledger import TokenLedger
-from dp.utils.risk import _scores_to_inverse_probs
+from dp.utils.risk import _scores_to_inverse_probs, combine_privacy_utility_scores, top_predicted_label
 from dp.utils.memory import clear_memory
 from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 
@@ -15,11 +15,12 @@ from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 class IterDPMlmAnonymizer(DPMlmAnonymizer):
     MODEL_NAME = "iter_dpmlm"
 
-    def __init__(self, *args, T: Union[int, float] = math.inf, **kwargs) -> None:
+    def __init__(self, *args, T: Union[int, float] = math.inf, utility_alpha: float = 1.0, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if T != math.inf and (not isinstance(T, int) or T < 1):
             raise ValueError("T must be a positive integer or math.inf")
         self.T = T
+        self.utility_alpha = float(utility_alpha)
 
     def _compute_current_offsets(self, ledger: TokenLedger, n: int) -> List[Tuple[int, int]]:
         result: List[Optional[Tuple[int, int]]] = [None] * n
@@ -59,9 +60,18 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
             return np.zeros(n, dtype=float)
 
         surviving_indices, surviving_offsets = zip(*surviving)
-        raw_scores = self._explainer.explain(
+        privacy_raw = self._explainer.explain(
             current_text, list(surviving_offsets), target_label=target_label_str
         )
+
+        if self._utility_explainer is not None:
+            utility_label = top_predicted_label(self._utility_explainer, current_text)
+            utility_raw = self._utility_explainer.explain(
+                current_text, list(surviving_offsets), target_label=utility_label
+            )
+            raw_scores = combine_privacy_utility_scores(privacy_raw, utility_raw, self.utility_alpha)
+        else:
+            raw_scores = privacy_raw
 
         scores = np.zeros(n, dtype=float)
         for pos, orig_idx in enumerate(surviving_indices):

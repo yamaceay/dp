@@ -259,6 +259,14 @@ def extract_explainer_config(model_config: dict) -> Dict[str, Any]:
     }
 
 
+def extract_utility_explainer_config(model_config: dict) -> Dict[str, Any]:
+    block = model_config.pop("utility_explainer", {}) or {}
+    return {
+        "tri_pipeline": block.get("tri_pipeline"),
+        "alpha": float(block.get("alpha", 1.0)),
+    }
+
+
 def extract_precompute_config(model_config: dict) -> Dict[str, Any]:
     block = model_config.pop("precomputation", {}) or {}
     return {
@@ -329,7 +337,7 @@ def build_explainer(explainer_config: dict, model_config: dict, capabilities, mo
 
     return ShapExplainer(model_name=tri_pipeline, explainer_type=explainer_type)
 
-def configure_model(model: Anonymizer, model_config: dict, explainer_config: dict, selector_config: dict, runtime_bundle, capabilities, model_name: str, records: List[DatasetRecord]):
+def configure_model(model: Anonymizer, model_config: dict, explainer_config: dict, utility_explainer_config: dict, selector_config: dict, runtime_bundle, capabilities, model_name: str, records: List[DatasetRecord]):
     if explainer_config.get("risk_temperature") is not None:
         if "risk_temperature" not in selector_config:
             selector_config["temperature"] = explainer_config["risk_temperature"]
@@ -360,6 +368,12 @@ def configure_model(model: Anonymizer, model_config: dict, explainer_config: dic
 
     if capabilities.must_use_scoring or capabilities.can_use_scoring:
         model.set_explainer(build_explainer(explainer_config, model_config, capabilities, model_name))
+
+    if utility_explainer_config.get("tri_pipeline") and hasattr(model, "set_utility_explainer"):
+        utility_explainer = ShapExplainer(model_name=utility_explainer_config["tri_pipeline"], explainer_type=ShapType.DEFAULT)
+        model.set_utility_explainer(utility_explainer)
+        if hasattr(model, "utility_alpha"):
+            model.utility_alpha = utility_explainer_config["alpha"]
 
 def compute_dataset_indices(dataset_len: int, data_kwargs: Dict[str, Any]) -> List[int]:
     start = data_kwargs.get("start") or 0
@@ -506,6 +520,7 @@ if __name__ == "__main__":
     validate_runtime_params(model_config, runtime_bundle)
     capabilities = get_capabilities(args.model)
     explainer_config = extract_explainer_config(model_config)
+    utility_explainer_config = extract_utility_explainer_config(model_config)
 
     selector_config = extract_selector_config(model_config)
     dpmlm_selector_name = selector_config.get("name") if isinstance(selector_config, dict) else None
@@ -531,7 +546,7 @@ if __name__ == "__main__":
             raise ValueError(f"{args.model} requires dataset records for this configuration")
         model.add_dataset_records(records)
 
-    configure_model(model, model_config, explainer_config, selector_config, runtime_bundle, capabilities, args.model, records)
+    configure_model(model, model_config, explainer_config, utility_explainer_config, selector_config, runtime_bundle, capabilities, args.model, records)
     
     output_handler_cls = OUTPUT_HANDLER_REGISTRY.get(args.output, OUTPUT_HANDLER_REGISTRY["print"])
     batch_timestamp = args.timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
