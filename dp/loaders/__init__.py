@@ -10,6 +10,7 @@ from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, TextA
 from dp.loaders._tab import TabDatasetAdapter
 from dp.loaders._reddit import RedditDatasetAdapter
 from dp.loaders._yelp import YelpDatasetAdapter
+from dp.loaders._mimic import MimicDatasetAdapter
 
 try:
     from dp.loaders._dbbio import DBBioDatasetAdapter
@@ -35,6 +36,7 @@ ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "tab": TabDatasetAdapter,
     "reddit": RedditDatasetAdapter,
     "yelp": YelpDatasetAdapter,
+    "mimic": MimicDatasetAdapter,
 }
 if DBBioDatasetAdapter is not None:
     ADAPTER_REGISTRY["db_bio"] = DBBioDatasetAdapter

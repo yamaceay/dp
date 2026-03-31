@@ -1,0 +1,13 @@
+params:
+  ks: ["*"]
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/yelp/_checkpoints/full/full
+
+precomputation:
+  risk_scores: data/yelp/tri_risk/shap.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs/yelp/presidio/{run_timestamp}_yelp_presidio.jsonl
+
+token_selection:
+  name: until_k

@@ -1,0 +1,20 @@
+params:
+  epsilon: "*"
+  ks: ["*"]
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/mimic/_checkpoints/full/full
+  risk_temperature: 0.1
+
+precomputation:
+  risk_scores: data/mimic/tri_risk/shap.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs/mimic/presidio/{run_timestamp}_mimic_presidio.jsonl
+
+dpmlm_chunking:
+  enabled: true
+  max_tokens: 256
+  overlap_tokens: 128
+
+token_selection:
+  name: until_k

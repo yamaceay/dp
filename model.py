@@ -20,7 +20,7 @@ from dp.utils.tasking import resolve_task_id, apply_task_template
 
 available_models = list(MODEL_REGISTRY.keys())
 available_datasets = list(ADAPTER_REGISTRY.keys())
-SPLIT_ENABLED_DATASETS = {"tab", "db_bio"}
+SPLIT_ENABLED_DATASETS = {"tab", "db_bio", "yelp", "mimic"}
 
 
 def add_data_args(parser: argparse.ArgumentParser) -> List[str]:
