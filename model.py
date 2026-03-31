@@ -199,7 +199,7 @@ def validate_runtime_params(model_config: dict, runtime_bundle: object) -> None:
 
 
 def _data_source_for_model(model_name: str, has_result_in: bool) -> str:
-    supports_anonymized = {"dpmlm", "petre", "risk"}
+    supports_anonymized = {"dpmlm", "iter_dpmlm", "iter_petre", "petre", "risk"}
     if model_name in supports_anonymized and has_result_in:
         return "anonymized"
     return "original"
@@ -399,7 +399,7 @@ def initialize_builder_params(anonymizer: Anonymizer, runtime_bundle):
     from dp.utils.selector import ByRiskUnit, PIIOnlyUnit, UntilKUnit
     model_name = getattr(anonymizer, "MODEL_NAME", None)
 
-    if model_name == "dpmlm":
+    if model_name in {"dpmlm", "iter_dpmlm"}:
         if getattr(runtime_bundle, "epsilon_value", None) is None:
             return []
         buckets = [EpsilonParam(epsilon=runtime_bundle.epsilon_value)]
@@ -428,7 +428,7 @@ def initialize_builder_params(anonymizer: Anonymizer, runtime_bundle):
             return []
         return [RhoParams(rhos=runtime_bundle.risk_tolerance_values)]
 
-    if model_name == "petre":
+    if model_name in {"petre", "iter_petre"}:
         if not getattr(runtime_bundle, "k_values", None):
             return []
         return [KParams(ks=runtime_bundle.k_values)]
@@ -513,7 +513,7 @@ if __name__ == "__main__":
     dpmlm_has_tri_explainer = bool(explainer_config.get("tri_pipeline"))
     dpmlm_has_result_in = bool(data_kwargs.get("result_in"))
     dpmlm_requires_dataset = (
-        args.model == "dpmlm"
+        args.model in {"dpmlm", "iter_dpmlm"}
         and (
             dpmlm_selector_name == "until_k"
             or dpmlm_has_precomputed_risk
