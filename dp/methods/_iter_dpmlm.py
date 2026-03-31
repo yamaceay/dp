@@ -161,6 +161,7 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
         original_text: str,
         offsets: List[Tuple[int, int]],
         eps_val: float,
+        used_precomputed: bool,
         runtime_stats: Dict[str, int],
         threshold_type: Optional[str],
         threshold: Any,
@@ -304,7 +305,8 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
                         if current_rank >= target_k:
                             outputs.append(self._build_output(
                                 hp=matching_hp, ledger=ledger, original_text=text,
-                                offsets=offsets, eps_val=eps_val, runtime_stats=runtime_stats,
+                                offsets=offsets, eps_val=eps_val, used_precomputed=used_precomputed,
+                                runtime_stats=runtime_stats,
                                 threshold_type="k", threshold=target_k,
                                 extra_meta={"rank": current_rank, "selector": "until_k",
                                             "processed_count": len(processed)},
@@ -351,7 +353,8 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
 
                         outputs.append(self._build_output(
                             hp=matching_hp, ledger=ledger, original_text=text,
-                            offsets=offsets, eps_val=eps_val, runtime_stats=runtime_stats,
+                            offsets=offsets, eps_val=eps_val, used_precomputed=used_precomputed,
+                            runtime_stats=runtime_stats,
                             threshold_type="k", threshold=target_k,
                             extra_meta={"rank": current_rank, "selector": "until_k",
                                         "processed_count": len(processed)},
@@ -397,7 +400,8 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
 
                     outputs.append(self._build_output(
                         hp=eps_combos[0], ledger=ledger, original_text=text,
-                        offsets=offsets, eps_val=eps_val, runtime_stats=runtime_stats,
+                        offsets=offsets, eps_val=eps_val, used_precomputed=used_precomputed,
+                        runtime_stats=runtime_stats,
                         threshold_type=None, threshold=None,
                         extra_meta={"selector": "all", "processed_count": n},
                     ))
