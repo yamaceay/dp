@@ -14,11 +14,12 @@ from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 class IterPetreAnonymizer(PetreAnonymizer):
     MODEL_NAME = "iter_petre"
 
-    def __init__(self, *args, T: Union[int, float] = 1, **kwargs) -> None:
+    def __init__(self, *args, T: Union[int, float] = math.inf, verbose: bool = False, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if T != math.inf and (not isinstance(T, int) or T < 1):
             raise ValueError("T must be a positive integer or math.inf")
         self.T = T
+        self.verbose = bool(verbose)
 
     def _compute_current_offsets(self, ledger: TokenLedger, n: int) -> List[Tuple[int, int]]:
         result: List[Optional[Tuple[int, int]]] = [None] * n
@@ -64,6 +65,26 @@ class IterPetreAnonymizer(PetreAnonymizer):
         for pos, orig_idx in enumerate(surviving_indices):
             scores[orig_idx] = float(raw_scores[pos])
         return scores
+
+    def _print_step_risk_scores(
+        self,
+        step: int,
+        shap_scores: np.ndarray,
+        unprocessed: set,
+        text: str,
+        offsets: List[Tuple[int, int]],
+        record_ref: str,
+        refreshed: bool,
+    ) -> None:
+        if not self.verbose:
+            return
+        top = sorted(unprocessed, key=lambda i: float(shap_scores[i]), reverse=True)[:5]
+        refresh_marker = " [refreshed]" if refreshed else ""
+        tokens = [f"{text[offsets[i][0]:offsets[i][1]]}({shap_scores[i]:.4f})" for i in top]
+        print(
+            f"[iter_petre][verbose] record={record_ref} step={step}{refresh_marker} "
+            f"remaining={len(unprocessed)} top5={tokens}"
+        )
 
     def _apply_mask(
         self,
@@ -204,6 +225,12 @@ class IterPetreAnonymizer(PetreAnonymizer):
                         shap_scores = self._refresh_shap_scores(
                             ledger, text, n, target_label_str
                         )
+
+                    record_ref = record_uid or record_name or "<unknown>"
+                    self._print_step_risk_scores(
+                        step_count, shap_scores, unprocessed, text, offsets,
+                        record_ref, needs_refresh,
+                    )
 
                     candidates = sorted(
                         unprocessed,

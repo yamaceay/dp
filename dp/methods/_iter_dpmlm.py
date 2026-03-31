@@ -15,7 +15,7 @@ from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 class IterDPMlmAnonymizer(DPMlmAnonymizer):
     MODEL_NAME = "iter_dpmlm"
 
-    def __init__(self, *args, T: Union[int, float] = 1, **kwargs) -> None:
+    def __init__(self, *args, T: Union[int, float] = math.inf, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if T != math.inf and (not isinstance(T, int) or T < 1):
             raise ValueError("T must be a positive integer or math.inf")
