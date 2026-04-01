@@ -1,9 +1,11 @@
 dataset: tab
 data_in: data/tab
 split: indices/tab/test.txt
-explainer: shap
+result_in: ../../../netscratch/yay/_ext_outputs/tab/presidio/{run_timestamp}_tab_presidio.jsonl
+explainer_type: shap
 explainer_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/exact_deid/exact_deid
-shap_in: data/tab/tri_risk/shap_subset.jsonl
+shap_in: data/tab/tri_risk/shap.jsonl
 output_dir: logs/risk_drift/tab/exact
+t_values: [1, 2, 5, 10, null]   # null = inf (precomputed)
 max_steps: 30
 mask_token: "[MASK]"

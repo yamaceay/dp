@@ -1,22 +1,34 @@
 """
-Measures how much SHAP scores drift as tokens are iteratively masked.
+Compares token-selection trajectories across multiple T values pairwise.
 
-For each record, two orderings are compared:
-  static  — tokens ranked once by precomputed SHAP scores, never updated
-  dynamic — after each masking step, SHAP is re-computed on the modified text
-             and the next token is chosen from the updated ranking
+For each record, one independent masking trajectory is run per T value:
+  T=1   — SHAP re-computed every step (fully dynamic)
+  T=k   — SHAP re-computed every k steps
+  T=inf — precomputed scores used as-is, never refreshed
 
-At every step the following are recorded:
-  wasserstein  — Earth Mover's Distance between static and dynamic scores
-                 over the set of tokens not yet handled
-  jaccard      — overlap between the accumulated static and dynamic token sets
+Trajectories diverge because each picks tokens according to its own score ranking,
+which drifts after each refresh (or lack thereof).
+
+At each step, for all (T_a, T_b) pairs:
+  wasserstein  — EMD between n-length score vectors (0 for already-masked positions)
+  jaccard      — set overlap between tokens accumulated so far by each trajectory
+
+All trajectories operate on the de-identified text (result_in), consistent with
+how risk scores were precomputed. SHAP refreshes are run on the partially masked
+de-identified text, matching the domain the classifier was trained on.
+
+GPU memory is cleared after each SHAP recomputation.
+
+Output: JSONL, one line per record.
 """
 
 import argparse
 import json
-from dataclasses import asdict, dataclass
+import math
+from dataclasses import dataclass, field
+from itertools import combinations
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import yaml
@@ -24,18 +36,70 @@ from scipy.stats import wasserstein_distance
 from tqdm import tqdm
 
 from dp.loaders import get_adapter
+from dp.loaders.results import build_dataset_from_results
 from dp.utils.explainer import ShapExplainer, ShapType
 from dp.utils.memory import clear_memory
+from dp.utils.splitter import TextSplitter
+from dp.utils.token_ledger import TokenLedger
 
 
 @dataclass
-class StepRecord:
-    step: int
-    n_remaining: int
-    wasserstein: float
-    jaccard: float
-    static_orig_idx: int
-    dynamic_orig_idx: int
+class Trajectory:
+    t: float
+    ledger: TokenLedger
+    remaining_orig: list[int]
+    scores: np.ndarray
+    accumulated: set[int] = field(default_factory=set)
+
+    def padded_scores(self) -> np.ndarray:
+        v = np.zeros(len(self.scores), dtype=float)
+        for i in self.remaining_orig:
+            v[i] = float(self.scores[i])
+        return v
+
+
+def _compute_current_offsets(ledger: TokenLedger, n: int) -> list[tuple[int, int]]:
+    result: list[Optional[tuple[int, int]]] = [None] * n
+    sorted_entries = sorted(ledger._entries, key=lambda e: e.start)
+    cursor = 0
+    gap_idx = 0
+    gaps = ledger._gaps
+    for entry in sorted_entries:
+        while gap_idx < len(gaps) and gaps[gap_idx].start < entry.start:
+            cursor += len(gaps[gap_idx].text)
+            gap_idx += 1
+        if not entry.deleted:
+            result[entry.index] = (cursor, cursor + len(entry.text))
+            cursor += len(entry.text)
+    for i in range(n):
+        if result[i] is None:
+            result[i] = (0, 0)
+    return result  # type: ignore
+
+
+def _refresh_scores(
+    ledger: TokenLedger,
+    deid_text: str,
+    n: int,
+    remaining: list[int],
+    explainer: ShapExplainer,
+    target_label: str,
+) -> np.ndarray:
+    current_text = ledger.render_offsets(deid_text)
+    current_offsets = _compute_current_offsets(ledger, n)
+    surviving = [(i, current_offsets[i]) for i in range(n) if not ledger.entry(i).deleted]
+    if not surviving:
+        return np.zeros(n, dtype=float)
+    surv_idx, surv_offs = zip(*surviving)
+    raw = explainer.explain(current_text, list(surv_offs), target_label=target_label)
+    full_scores = np.zeros(n, dtype=float)
+    for pos, orig_i in enumerate(surv_idx):
+        full_scores[orig_i] = float(raw[pos])
+    remaining_set = set(remaining)
+    for i in range(n):
+        if i not in remaining_set:
+            full_scores[i] = 0.0
+    return full_scores
 
 
 def _load_shap_jsonl(path: Path) -> dict[str, dict[str, Any]]:
@@ -43,7 +107,7 @@ def _load_shap_jsonl(path: Path) -> dict[str, dict[str, Any]]:
     with path.open(encoding="utf-8") as f:
         for line in f:
             entry = json.loads(line)
-            entries[entry["uid"]] = entry
+            entries[str(entry["uid"])] = entry
     return entries
 
 
@@ -52,88 +116,85 @@ def _jaccard(a: set[int], b: set[int]) -> float:
     return len(a & b) / len(union) if union else 1.0
 
 
-def _mask_and_adjust(
-    text: str,
-    offsets: list[tuple[int, int]],
-    local_idx: int,
-    mask_token: str,
-) -> tuple[str, list[tuple[int, int]]]:
-    s, e = offsets[local_idx]
-    new_text = text[:s] + mask_token + text[e:]
-    delta = len(mask_token) - (e - s)
-    adjusted: list[tuple[int, int]] = []
-    for i, (os, oe) in enumerate(offsets):
-        if i == local_idx:
-            continue
-        if os >= e:
-            adjusted.append((os + delta, oe + delta))
-        else:
-            adjusted.append((os, oe))
-    return new_text, adjusted
+def _pair_key(t_a: float, t_b: float) -> str:
+    def _fmt(t: float) -> str:
+        return "inf" if math.isinf(t) else str(int(t))
+    return f"{_fmt(t_a)}_vs_{_fmt(t_b)}"
 
 
 def _assess_record(
-    uid: str,
-    text: str,
-    offsets: list[tuple[int, int]],
+    deid_text: str,
+    deid_offsets: list[tuple[int, int]],
     static_scores: np.ndarray,
-    explainer: ShapExplainer,
+    t_values: list[float],
+    explainer: Optional[ShapExplainer],
     target_label: str,
-    max_steps: int,
+    max_steps: Optional[int],
     mask_token: str,
-) -> list[StepRecord]:
-    n = len(offsets)
+) -> list[dict[str, Any]]:
+    n = len(deid_offsets)
     steps_to_run = n if max_steps is None else min(n, max_steps)
+    t_pairs = list(combinations(t_values, 2))
 
-    static_order = [int(i) for i in np.argsort(static_scores)[::-1]]
+    trajectories: dict[float, Trajectory] = {
+        t: Trajectory(
+            t=t,
+            ledger=TokenLedger(deid_text, deid_offsets),
+            remaining_orig=list(range(n)),
+            scores=static_scores.copy(),
+        )
+        for t in t_values
+    }
 
-    current_text = text
-    current_offsets = list(offsets)
-    remaining_orig: list[int] = list(range(n))
-    dyn_scores = static_scores.copy()
-
-    static_set: set[int] = set()
-    dynamic_set: set[int] = set()
-    results: list[StepRecord] = []
+    step_records: list[dict[str, Any]] = []
+    initial_live_scores: Optional[np.ndarray] = None
 
     for step in range(steps_to_run):
-        static_orig = static_order[step]
-        static_set.add(static_orig)
+        for t, traj in trajectories.items():
+            if not traj.remaining_orig:
+                continue
+            if math.isinf(t):
+                scores = static_scores.copy()
+                remaining_set = set(traj.remaining_orig)
+                for i in range(n):
+                    if i not in remaining_set:
+                        scores[i] = 0.0
+                traj.scores = scores
+            elif step % int(t) == 0:
+                if explainer is None:
+                    raise ValueError("explainer_in required for finite T")
+                if step == 0 and initial_live_scores is not None:
+                    traj.scores = initial_live_scores.copy()
+                else:
+                    traj.scores = _refresh_scores(
+                        traj.ledger, deid_text, n, traj.remaining_orig,
+                        explainer, target_label,
+                    )
+                    clear_memory()
+                    if step == 0:
+                        initial_live_scores = traj.scores.copy()
 
-        local_dyn = int(np.argmax(dyn_scores))
-        dynamic_orig = remaining_orig[local_dyn]
-        dynamic_set.add(dynamic_orig)
+        pair_metrics: dict[str, dict[str, float]] = {}
+        for t_a, t_b in t_pairs:
+            pair_metrics[_pair_key(t_a, t_b)] = {
+                "wasserstein": float(wasserstein_distance(
+                    trajectories[t_a].padded_scores(),
+                    trajectories[t_b].padded_scores(),
+                )),
+                "jaccard": _jaccard(trajectories[t_a].accumulated, trajectories[t_b].accumulated),
+            }
+        step_records.append({"step": step, "pairs": pair_metrics})
 
-        remaining_static = static_scores[remaining_orig]
-        wd = float(wasserstein_distance(remaining_static, dyn_scores))
-        j = _jaccard(static_set, dynamic_set)
+        for t, traj in trajectories.items():
+            if not traj.remaining_orig:
+                continue
+            orig_best = max(traj.remaining_orig, key=lambda i: float(traj.scores[i]))
+            traj.accumulated.add(orig_best)
+            traj.ledger.replace(orig_best, mask_token)
+            traj.remaining_orig.remove(orig_best)
+            traj.scores[orig_best] = 0.0
 
-        results.append(StepRecord(
-            step=step,
-            n_remaining=len(remaining_orig),
-            wasserstein=wd,
-            jaccard=j,
-            static_orig_idx=static_orig,
-            dynamic_orig_idx=dynamic_orig,
-        ))
-
-        current_text, current_offsets = _mask_and_adjust(
-            current_text, current_offsets, local_dyn, mask_token
-        )
-        remaining_orig.pop(local_dyn)
-
-        if not remaining_orig:
-            break
-
-        try:
-            dyn_scores = explainer.explain(
-                current_text, current_offsets, target_label=target_label
-            )
-            clear_memory()
-        except Exception:
-            dyn_scores = static_scores[remaining_orig]
-
-    return results
+    return step_records
 
 
 def _load_config(path: str) -> dict[str, Any]:
@@ -151,13 +212,17 @@ def main() -> None:
     dataset: str = cfg["dataset"]
     data_in: str = cfg["data_in"]
     split: str | None = cfg.get("split")
-    explainer_type = ShapType(cfg.get("explainer", "shap"))
-    explainer_in: str = cfg["explainer_in"]
+    result_in: str = cfg["result_in"]
+    explainer_type = ShapType(cfg.get("explainer_type", "shap"))
+    explainer_in: str | None = cfg.get("explainer_in")
     shap_in = Path(cfg["shap_in"])
     output_dir = Path(cfg["output_dir"])
     mask_token: str = cfg.get("mask_token", "[MASK]")
     max_records: int | None = args.max_records or cfg.get("max_records")
     max_steps: int | None = args.max_steps or cfg.get("max_steps") or None
+
+    raw_t_values: list[int | None] = cfg.get("t_values", [1, None])
+    t_values: list[float] = [math.inf if v is None else float(v) for v in raw_t_values]
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "drift.jsonl"
@@ -165,45 +230,72 @@ def main() -> None:
 
     shap_data = _load_shap_jsonl(shap_in)
 
+    splitter = TextSplitter()
+
+    all_original = list(get_adapter(dataset, data=dataset, data_in=data_in).iter_records())
+    deid_records, _ = build_dataset_from_results(result_in, all_original)
+    deid_by_uid: dict[str, str] = {str(r.uid): r.text for r in deid_records}
+
     adapter = get_adapter(dataset, data=dataset, data_in=data_in, split=split)
     records = list(adapter.iter_records())
     if max_records is not None:
         records = records[:max_records]
 
-    explainer = ShapExplainer(model_name=explainer_in, explainer_type=explainer_type)
-    explainer._load_pipeline()
-    label_mapping = explainer.label_to_id
+    needs_live_shap = any(not math.isinf(t) for t in t_values)
+    explainer: Optional[ShapExplainer] = None
+    label_mapping: dict[str, int] = {}
+    if needs_live_shap:
+        if explainer_in is None:
+            raise ValueError("explainer_in required when any T value is finite")
+        explainer = ShapExplainer(model_name=explainer_in, explainer_type=explainer_type)
+        explainer._load_pipeline()
+        label_mapping = explainer.label_to_id
 
-    for record in tqdm(records, desc="Assessing drift"):
-        if record.uid not in shap_data:
+    t_labels = ["inf" if math.isinf(t) else str(int(t)) for t in t_values]
+
+    for record in tqdm(records, desc="T-drift"):
+        uid_str = str(record.uid)
+        if uid_str not in shap_data:
+            continue
+        if uid_str not in deid_by_uid:
             continue
 
-        entry = shap_data[record.uid]
+        deid_text = deid_by_uid[uid_str]
+        deid_offsets = [(s, e) for s, e, _ in splitter.tokenize_with_spans(deid_text)]
+
+        entry = shap_data[uid_str]
         raw_offsets: list[tuple[int, int]] = [tuple(o) for o in entry["offsets"]]
-        positional_order = sorted(range(len(raw_offsets)), key=lambda i: raw_offsets[i][0])
-        offsets = [raw_offsets[i] for i in positional_order]
-        scores = np.array(entry["scores"])[positional_order]
-
-        target_label_id = label_mapping.get(record.name)
-        if target_label_id is None:
+        if len(raw_offsets) != len(deid_offsets):
             continue
+
+        positional_order = sorted(range(len(raw_offsets)), key=lambda i: raw_offsets[i][0])
+        static_scores = np.array(entry["scores"], dtype=float)[positional_order]
+
+        if needs_live_shap:
+            target_label_id = label_mapping.get(record.name)
+            if target_label_id is None:
+                continue
+            target_label = f"LABEL_{target_label_id}"
+        else:
+            target_label = ""
 
         steps = _assess_record(
-            uid=record.uid,
-            text=record.text,
-            offsets=offsets,
-            static_scores=scores,
+            deid_text=deid_text,
+            deid_offsets=deid_offsets,
+            static_scores=static_scores,
+            t_values=t_values,
             explainer=explainer,
-            target_label=f"LABEL_{target_label_id}",
+            target_label=target_label,
             max_steps=max_steps,
             mask_token=mask_token,
         )
 
         with output_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps({
-                "uid": record.uid,
-                "n_tokens": len(offsets),
-                "steps": [asdict(s) for s in steps],
+                "uid": uid_str,
+                "n_tokens": len(deid_offsets),
+                "t_values": t_labels,
+                "steps": steps,
             }) + "\n")
 
 
