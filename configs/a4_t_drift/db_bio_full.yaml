@@ -1,0 +1,10 @@
+dataset: db_bio
+data_in: data/db_bio
+split: indices/db_bio/test.txt
+explainer_type: shap
+explainer_in: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full/full
+shap_in: data/db_bio/tri_risk/shap.jsonl
+output_dir: logs/t_drift/db_bio/full
+t_values: [1, 2, 5, 10, null]   # null = inf (precomputed)
+max_steps: 30
+mask_token: "[MASK]"
