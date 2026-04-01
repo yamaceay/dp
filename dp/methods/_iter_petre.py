@@ -169,9 +169,10 @@ class IterPetreAnonymizer(PetreAnonymizer):
         outputs: List[Tuple[BucketDict, AnonymizationResult]] = []
 
         precomputed_offsets = self._resolve_precomputed_offsets(record_name, record_uid)
-        if precomputed_offsets is None:
-            raise ValueError("IterPetreAnonymizer requires precomputed offsets for each record")
-        offsets = precomputed_offsets
+        if precomputed_offsets is not None:
+            offsets = precomputed_offsets
+        else:
+            offsets = [(start, end) for start, end, _ in self.splitter.tokenize_with_spans(text)]
         n = len(offsets)
 
         static_shap_scores: Optional[np.ndarray] = None
