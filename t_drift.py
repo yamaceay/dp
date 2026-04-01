@@ -36,7 +36,7 @@ from scipy.stats import wasserstein_distance
 from tqdm import tqdm
 
 from dp.loaders import get_adapter
-from dp.loaders.results import load_result_records
+from dp.loaders.results import build_dataset_from_results, load_result_records
 from dp.utils.explainer import ShapExplainer, ShapType
 from dp.utils.memory import clear_memory
 from dp.utils.splitter import TextSplitter
@@ -230,13 +230,11 @@ def main() -> None:
 
     shap_data = _load_shap_jsonl(shap_in)
 
-    result_records = load_result_records(result_in)
-    deid_by_idx: dict[int, str] = {}
-    for rr in result_records:
-        if rr.idx is not None:
-            deid_by_idx[rr.idx] = rr.text
-
     splitter = TextSplitter()
+
+    all_original = list(get_adapter(dataset, data=dataset, data_in=data_in).iter_records())
+    deid_records, _ = build_dataset_from_results(result_in, all_original)
+    deid_by_uid: dict[str, str] = {str(r.uid): r.text for r in deid_records}
 
     adapter = get_adapter(dataset, data=dataset, data_in=data_in, split=split)
     records = list(adapter.iter_records())
@@ -255,14 +253,14 @@ def main() -> None:
 
     t_labels = ["inf" if math.isinf(t) else str(int(t)) for t in t_values]
 
-    for idx, record in enumerate(tqdm(records, desc="T-drift")):
+    for record in tqdm(records, desc="T-drift"):
         uid_str = str(record.uid)
         if uid_str not in shap_data:
             continue
-        if idx not in deid_by_idx:
+        if uid_str not in deid_by_uid:
             continue
 
-        deid_text = deid_by_idx[idx]
+        deid_text = deid_by_uid[uid_str]
         deid_offsets = [(s, e) for s, e, _ in splitter.tokenize_with_spans(deid_text)]
 
         entry = shap_data[uid_str]
