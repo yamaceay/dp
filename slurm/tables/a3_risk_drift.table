@@ -1,4 +1,4 @@
-risk_drift_db_bio_full  |python risk_drift.py --config configs/a4_risk_drift/db_bio_full.yaml
-risk_drift_tab_full     |python risk_drift.py --config configs/a4_risk_drift/tab_full.yaml
-risk_drift_db_bio_exact |python risk_drift.py --config configs/a4_risk_drift/db_bio_exact.yaml
-risk_drift_tab_exact    |python risk_drift.py --config configs/a4_risk_drift/tab_exact.yaml
+risk_drift_db_bio_full  |python risk_drift.py --config configs/a3_risk_drift/db_bio_full.yaml
+risk_drift_tab_full     |python risk_drift.py --config configs/a3_risk_drift/tab_full.yaml
+risk_drift_db_bio_exact |python risk_drift.py --config configs/a3_risk_drift/db_bio_exact.yaml
+risk_drift_tab_exact    |python risk_drift.py --config configs/a3_risk_drift/tab_exact.yaml
