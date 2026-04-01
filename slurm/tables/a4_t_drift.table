@@ -1,0 +1,2 @@
+t_drift_db_bio_full  |python t_drift.py --config configs/a4_t_drift/db_bio_full.yaml
+t_drift_tab_full     |python t_drift.py --config configs/a4_t_drift/tab_full.yaml
