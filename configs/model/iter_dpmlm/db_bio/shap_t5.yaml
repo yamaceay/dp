@@ -4,7 +4,8 @@ params:
 T: 5
 
 precomputation:
-  result_in: ../../../netscratch/yay/_ext_outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio.jsonl
+  risk_scores: data/db_bio/tri_risk/shap_subset.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs_subset/db_bio/presidio/{run_timestamp}_db_bio_presidio.jsonl
 
 explainer:
   name: shap

@@ -1,5 +1,5 @@
 params:
-  ks: ["*"]
+  epsilon: "*"
 
 T: .inf
 
@@ -10,8 +10,11 @@ precomputation:
 explainer:
   name: shap
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full/full
+  risk_temperature: 0.1
 
-token_selection:
-  name: until_k
+dpmlm_chunking:
+  enabled: true
+  max_tokens: 256
+  overlap_tokens: 128
 
 verbose: true
