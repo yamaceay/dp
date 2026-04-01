@@ -1,9 +1,9 @@
 dataset: tab
 data_in: data/tab
 split: indices/tab/test.txt
+result_in: ../../../netscratch/yay/_ext_outputs/tab/presidio/{run_timestamp}_tab_presidio.jsonl
 explainer_type: shap
 explainer_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/full_deid/full_deid
-result_in: ../../../netscratch/yay/_ext_outputs/tab/presidio/{run_timestamp}_tab_presidio.jsonl
 shap_in: data/tab/tri_risk/shap.jsonl
 output_dir: logs/t_drift/tab/full
 t_values: [1, 2, 5, 10, null]   # null = inf (precomputed)
