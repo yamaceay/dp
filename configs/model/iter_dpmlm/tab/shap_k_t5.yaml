@@ -5,8 +5,8 @@ params:
 T: 5
 
 precomputation:
-  risk_scores: data/tab/tri_risk/shap_subset.jsonl
-  result_in: ../../../netscratch/yay/_ext_outputs_subset/tab/presidio/{run_timestamp}_tab_presidio.jsonl
+  risk_scores: data/tab/tri_risk/shap.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs/tab/presidio/{run_timestamp}_tab_presidio.jsonl
 
 explainer:
   name: shap

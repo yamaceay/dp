@@ -9,7 +9,7 @@ precomputation:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/full/full
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/exact/exact
 
 token_selection:
   name: until_k

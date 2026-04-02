@@ -1,7 +1,7 @@
 params:
   ks: ["*"]
 
-T: .inf
+T: 5
 
 precomputation:
   risk_scores: data/db_bio/tri_risk/shap_subset.jsonl
@@ -9,7 +9,7 @@ precomputation:
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full/full
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/exact/exact
 
 token_selection:
   name: until_k

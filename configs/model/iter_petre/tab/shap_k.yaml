@@ -1,7 +1,7 @@
 params:
-  epsilon: "*"
+  ks: ["*"]
 
-T: 5
+T: .inf
 
 precomputation:
   risk_scores: data/tab/tri_risk/shap.jsonl
@@ -10,11 +10,8 @@ precomputation:
 explainer:
   name: shap
   tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/full/full
-  risk_temperature: 0.1
 
-dpmlm_chunking:
-  enabled: true
-  max_tokens: 256
-  overlap_tokens: 128
+token_selection:
+  name: until_k
 
 verbose: true

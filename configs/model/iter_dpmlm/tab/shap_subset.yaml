@@ -5,7 +5,7 @@ T: .inf
 
 explainer:
   name: shap
-  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/full/full
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/exact/exact
   risk_temperature: 0.1
 
 precomputation:
