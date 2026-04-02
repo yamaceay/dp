@@ -18,7 +18,6 @@ W_SCALE = 1e4
 N_COMMON = 100
 T_ORDER: dict[str, int] = {"1": 0, "2": 1, "5": 2, "10": 3, "inf": 4}
 T_DISP: dict[str, str] = {"1": "1", "2": "2", "5": "5", "10": "10", "inf": r"\infty"}
-T_LABELS: dict[str, str] = {k: rf"$t={v}$" for k, v in T_DISP.items()}
 
 # Pairs ordered from semantically closest to furthest t-distance.
 # Finite pairs ordered by log₂(t_b/t_a); inf pairs ordered by descending t_a
@@ -32,9 +31,9 @@ PAIR_ORDER = [
 ]
 
 
-def pair_label(pair: str) -> str:
+def pair_label(pair: str, t_disp: dict[str, str]) -> str:
     a, b = pair.split("_vs_")
-    return rf"$t={T_DISP[a]}$ vs $t={T_DISP[b]}$"
+    return rf"$t={t_disp[a]}$ vs $t={t_disp[b]}$"
 
 
 def pair_colors(n: int) -> list:
@@ -74,6 +73,7 @@ def plot_trajectories(
     j_interp: dict[str, np.ndarray],
     frac_common: np.ndarray,
     max_steps: int,
+    t_disp: dict[str, str],
     out_path: Path,
 ) -> None:
     ordered = [p for p in PAIR_ORDER if p in pair_keys]
@@ -83,7 +83,7 @@ def plot_trajectories(
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 
     for pair, color in zip(ordered, colors):
-        label = pair_label(pair)
+        label = pair_label(pair, t_disp)
         w_med = np.median(w_interp[pair], axis=0)
         j_mean = j_interp[pair].mean(axis=0)
         axes[0].plot(frac_common, w_med * W_SCALE, color=color, linewidth=1.6, label=label)
@@ -119,11 +119,12 @@ def plot_heatmaps(
     wasserstein: dict[str, np.ndarray],
     jaccard: dict[str, np.ndarray],
     max_steps: int,
+    t_disp: dict[str, str],
     out_path: Path,
 ) -> None:
     ordered_t = sorted(t_values, key=lambda x: T_ORDER[x])
     n_t = len(ordered_t)
-    t_labels = [T_LABELS[t] for t in ordered_t]
+    t_labels = [rf"$t={t_disp[t]}$" for t in ordered_t]
 
     w_mat = np.full((n_t, n_t), np.nan)
     j_mat = np.full((n_t, n_t), np.nan)
@@ -174,6 +175,7 @@ def plot(drift_path: Path, out_dir: Path) -> None:
     pair_keys = list(wasserstein.keys())
 
     n_steps = next(iter(wasserstein.values())).shape[1]
+    t_disp = {**T_DISP, "inf": str(n_steps)}
     steps = np.arange(n_steps)
     frac = steps[np.newaxis, :] / n_tokens[:, np.newaxis]
     frac_common = np.linspace(0, float(frac.max()), N_COMMON)
@@ -181,9 +183,9 @@ def plot(drift_path: Path, out_dir: Path) -> None:
     w_interp = {p: interpolate_rows(wasserstein[p], frac, frac_common) for p in pair_keys}
     j_interp = {p: interpolate_rows(jaccard[p], frac, frac_common) for p in pair_keys}
 
-    plot_trajectories(pair_keys, w_interp, j_interp, frac_common, n_steps,
+    plot_trajectories(pair_keys, w_interp, j_interp, frac_common, n_steps, t_disp,
                       out_dir / "drift_by_t_distance.png")
-    plot_heatmaps(pair_keys, t_values, wasserstein, jaccard, n_steps,
+    plot_heatmaps(pair_keys, t_values, wasserstein, jaccard, n_steps, t_disp,
                   out_dir / "drift_heatmap.png")
 
 
