@@ -1,0 +1,27 @@
+dataset: reddit
+data_in: data/reddit
+debug: false
+annotations_in:
+- outputs/reddit
+target:
+  key: feature_label
+  type: nominal
+selection_criteria:
+  feature: relationship_status
+group_by: hardness
+random_state: 42
+head:
+  type: bert_classifier
+  params:
+    epochs: 2
+    batch_size: 4
+    model_name: distilbert-base-uncased
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/exact/reddit_8_16_0.0001/finetuning/{checkpoint}
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/reddit/relationship_status_anonymized
+    primary_metric: macro_f1
+    encoder_lr: 1e-6
+    head_lr: 1e-3
+output:
+  format: jsonl
+  file: logs/utility/reddit/relationship_status.jsonl
+protocol: utility

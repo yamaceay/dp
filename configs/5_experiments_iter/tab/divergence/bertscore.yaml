@@ -1,0 +1,11 @@
+dataset: tab
+data_in: data/tab
+annotations_in:
+  - ../../../netscratch/yay/_ext_outputs/tab/*iter*/*
+metric:
+  type: bertscore
+  model_type: roberta-large
+  batch_size: 8
+output:
+  format: jsonl
+  file: logs/divergence/tab/bertscore.jsonl
