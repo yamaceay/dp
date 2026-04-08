@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple
+import time
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import torch
@@ -227,6 +230,199 @@ class BertHFPlumbing:
                 out = model(**enc)
                 outputs.append(out)
         return outputs
+
+    def _training_status_path(self, checkpoint_dir: str, status_file: str) -> Path:
+        return Path(checkpoint_dir) / str(status_file)
+
+    def _training_lock_path(self, checkpoint_dir: str, status_file: str) -> Path:
+        return Path(checkpoint_dir) / f"{status_file}.lock"
+
+    def _list_checkpoint_dirs(self, checkpoint_dir: str) -> List[Path]:
+        root = Path(checkpoint_dir)
+        if not root.exists():
+            return []
+        out: List[tuple[int, Path]] = []
+        for candidate in root.glob("checkpoint-*"):
+            if not candidate.is_dir():
+                continue
+            suffix = candidate.name.replace("checkpoint-", "", 1)
+            try:
+                step = int(suffix)
+            except Exception:
+                continue
+            out.append((step, candidate))
+        out.sort(key=lambda item: item[0])
+        return [p for _, p in out]
+
+    def _latest_checkpoint_dir(self, checkpoint_dir: str) -> Optional[Path]:
+        entries = self._list_checkpoint_dirs(checkpoint_dir)
+        if not entries:
+            return None
+        return entries[-1]
+
+    def _read_training_complete(self, path: Path) -> Optional[bool]:
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            text = path.read_text(encoding="utf-8").strip().lower()
+            if text in {"1", "true", "yes", "done", "complete", "completed"}:
+                return True
+            if text in {"0", "false", "no", "running", "incomplete"}:
+                return False
+            return None
+        if isinstance(payload, bool):
+            return payload
+        if isinstance(payload, dict):
+            for key in ("complete", "completed", "trained", "ready"):
+                value = payload.get(key)
+                if isinstance(value, bool):
+                    return value
+        return None
+
+    def _write_training_complete(self, path: Path, complete: bool) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"complete": bool(complete), "updated_at": int(time.time())}
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def _acquire_training_lock(self, path: Path) -> bool:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            return False
+        os.close(fd)
+        return True
+
+    def _release_training_lock(self, path: Path) -> None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
+
+    def _load_model_state_from_checkpoint(self, model: torch.nn.Module, checkpoint_dir: Path) -> bool:
+        safetensors_file = checkpoint_dir / "model.safetensors"
+        pytorch_file = checkpoint_dir / "pytorch_model.bin"
+        state_dict: Optional[Dict[str, Any]] = None
+        if safetensors_file.exists():
+            from safetensors.torch import load_file
+
+            state_dict = load_file(str(safetensors_file))
+        elif pytorch_file.exists():
+            state_dict = torch.load(str(pytorch_file), map_location="cpu")
+        if state_dict is None:
+            return False
+        model.load_state_dict(state_dict, strict=False)
+        return True
+
+    def _prepare_training_or_reuse(
+        self,
+        *,
+        model: torch.nn.Module,
+        checkpoint_dir: Optional[str],
+        status_file: str,
+        wait_for_completion: bool,
+        poll_interval_seconds: float,
+        wait_timeout_seconds: Optional[float],
+        mark_existing_complete: bool,
+    ) -> Tuple[bool, bool]:
+        if not checkpoint_dir:
+            return False, False
+
+        checkpoint_root = Path(checkpoint_dir)
+        checkpoint_root.mkdir(parents=True, exist_ok=True)
+        status_path = self._training_status_path(checkpoint_dir, status_file)
+        lock_path = self._training_lock_path(checkpoint_dir, status_file)
+
+        latest = self._latest_checkpoint_dir(checkpoint_dir)
+        status = self._read_training_complete(status_path)
+
+        if status is True and latest is not None and self._load_model_state_from_checkpoint(model, latest):
+            self._active_checkpoint = str(latest)
+            return True, False
+
+        if status is None and mark_existing_complete and latest is not None:
+            self._write_training_complete(status_path, True)
+            if self._load_model_state_from_checkpoint(model, latest):
+                self._active_checkpoint = str(latest)
+                return True, False
+
+        owns_lock = self._acquire_training_lock(lock_path)
+        if owns_lock:
+            self._write_training_complete(status_path, False)
+            return False, True
+        if not wait_for_completion:
+            return False, False
+
+        started = time.time()
+        sleep_time = max(0.2, float(poll_interval_seconds))
+        while True:
+            latest = self._latest_checkpoint_dir(checkpoint_dir)
+            status = self._read_training_complete(status_path)
+            if status is True and latest is not None and self._load_model_state_from_checkpoint(model, latest):
+                self._active_checkpoint = str(latest)
+                return True, False
+            if wait_timeout_seconds is not None and (time.time() - started) >= float(wait_timeout_seconds):
+                raise TimeoutError(f"timed out waiting for completed model in {checkpoint_dir}")
+            time.sleep(sleep_time)
+
+    def _finalize_training_status(
+        self,
+        *,
+        checkpoint_dir: Optional[str],
+        status_file: str,
+        lock_owned: bool,
+        complete: bool,
+    ) -> None:
+        if not checkpoint_dir:
+            return
+        status_path = self._training_status_path(checkpoint_dir, status_file)
+        lock_path = self._training_lock_path(checkpoint_dir, status_file)
+        if lock_owned:
+            self._write_training_complete(status_path, complete)
+            self._release_training_lock(lock_path)
+
+    def _run_training_with_reuse(
+        self,
+        *,
+        model: torch.nn.Module,
+        checkpoint_dir: Optional[str],
+        status_file: str,
+        wait_for_completion: bool,
+        poll_interval_seconds: float,
+        wait_timeout_seconds: Optional[float],
+        mark_existing_complete: bool,
+        train_fn: Callable[[], None],
+    ) -> bool:
+        reused, lock_owned = self._prepare_training_or_reuse(
+            model=model,
+            checkpoint_dir=checkpoint_dir,
+            status_file=status_file,
+            wait_for_completion=wait_for_completion,
+            poll_interval_seconds=poll_interval_seconds,
+            wait_timeout_seconds=wait_timeout_seconds,
+            mark_existing_complete=mark_existing_complete,
+        )
+        if reused:
+            return True
+        try:
+            train_fn()
+        except Exception:
+            self._finalize_training_status(
+                checkpoint_dir=checkpoint_dir,
+                status_file=status_file,
+                lock_owned=lock_owned,
+                complete=False,
+            )
+            raise
+        self._finalize_training_status(
+            checkpoint_dir=checkpoint_dir,
+            status_file=status_file,
+            lock_owned=lock_owned,
+            complete=True,
+        )
+        return False
 
     def cleanup_plumbing(self, model_attr_names: Sequence[str]) -> None:
         for name in model_attr_names:

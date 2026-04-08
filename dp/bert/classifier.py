@@ -57,6 +57,11 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         warmup_ratio: Optional[float] = None,
         other_label: Optional[str] = None,
         other_count: int = 1,
+        training_status_file: str = "training_status.json",
+        wait_for_training_completion: bool = True,
+        training_poll_interval_seconds: float = 10.0,
+        training_wait_timeout_seconds: Optional[float] = None,
+        mark_existing_checkpoint_complete: bool = True,
     ):
         SupervisedDownstreamHead.__init__(self, name="bert_classifier", primary_metric=primary_metric)
         BertHFPlumbing.__init__(self, device=device)
@@ -115,6 +120,11 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.warmup_ratio = float(warmup_ratio) if warmup_ratio is not None else None
         self.other_label = str(other_label) if other_label is not None else None
         self.other_count = int(other_count)
+        self.training_status_file = str(training_status_file)
+        self.wait_for_training_completion = bool(wait_for_training_completion)
+        self.training_poll_interval_seconds = float(training_poll_interval_seconds)
+        self.training_wait_timeout_seconds = float(training_wait_timeout_seconds) if training_wait_timeout_seconds is not None else None
+        self.mark_existing_checkpoint_complete = bool(mark_existing_checkpoint_complete)
         self._model: Optional[torch.nn.Module] = None
         self._label_list: Optional[List[str]] = None
         self._label_to_id: Optional[Dict[str, int]] = None
@@ -266,76 +276,88 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self._maybe_enable_stopwords(self.mask_stopwords)
 
         self._model = self._create_model(len(self._label_list), other_label_id=other_label_id)
+        def _train_impl() -> None:
+            train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
+            val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
+            train_dataset = EncodedDataset(train_encodings, train_encoded, label_dtype=torch.long)
+            val_dataset = EncodedDataset(val_encodings, val_encoded, label_dtype=torch.long)
 
-        train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
-        val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
-        train_dataset = EncodedDataset(train_encodings, train_encoded, label_dtype=torch.long)
-        val_dataset = EncodedDataset(val_encodings, val_encoded, label_dtype=torch.long)
+            def compute_metrics(eval_pred: EvalPrediction):
+                from sklearn.metrics import precision_recall_fscore_support
+                logits = eval_pred.predictions
+                labels = eval_pred.label_ids
+                preds = np.argmax(logits, axis=1)
 
-        def compute_metrics(eval_pred: EvalPrediction):
-            from sklearn.metrics import precision_recall_fscore_support
-            logits = eval_pred.predictions
-            labels = eval_pred.label_ids
-            preds = np.argmax(logits, axis=1)
+                per_class_precision, per_class_recall, per_class_f1, per_class_support = precision_recall_fscore_support(
+                    labels, preds, average=None, zero_division=0
+                )
+                valid_mask = per_class_support > 0
+                macro_f1 = float(per_class_f1[valid_mask].mean()) if valid_mask.any() else 0.0
+                balanced_acc = float(per_class_recall[valid_mask].mean()) if valid_mask.any() else 0.0
+                overall_acc = float((preds == labels).mean())
 
-            per_class_precision, per_class_recall, per_class_f1, per_class_support = precision_recall_fscore_support(
-                labels, preds, average=None, zero_division=0
+                return {
+                    "macro_f1": macro_f1,
+                    "balanced_acc": balanced_acc,
+                    "acc": overall_acc,
+                }
+
+            spec = HFTrainSpec(
+                metric_name="macro_f1",
+                minimize_metric=False,
+                weight_decay_effective=self.weight_decay,
+                compute_metrics=compute_metrics,
             )
-            valid_mask = per_class_support > 0
-            macro_f1 = float(per_class_f1[valid_mask].mean()) if valid_mask.any() else 0.0
-            balanced_acc = float(per_class_recall[valid_mask].mean()) if valid_mask.any() else 0.0
-            overall_acc = float((preds == labels).mean())
+            custom_early_stopping = None
+            if stop_evaluator is not None:
+                metric_name_for_stop = stop_metric_name or spec.metric_name
+                custom_early_stopping = ExternalEvalEarlyStoppingCallback(
+                    early_stopping_patience=self.early_stop_patience,
+                    early_stopping_threshold=self.early_stop_threshold,
+                    metric_name=metric_name_for_stop,
+                    minimize=bool(stop_metric_minimize),
+                    evaluator=stop_evaluator,
+                    label=stop_label,
+                )
 
-            return {
-                "macro_f1": macro_f1,
-                "balanced_acc": balanced_acc,
-                "acc": overall_acc,
-            }
-
-        spec = HFTrainSpec(
-            metric_name="macro_f1",
-            minimize_metric=False,
-            weight_decay_effective=self.weight_decay,
-            compute_metrics=compute_metrics,
-        )
-        custom_early_stopping = None
-        if stop_evaluator is not None:
-            metric_name_for_stop = stop_metric_name or spec.metric_name
-            custom_early_stopping = ExternalEvalEarlyStoppingCallback(
-                early_stopping_patience=self.early_stop_patience,
-                early_stopping_threshold=self.early_stop_threshold,
-                metric_name=metric_name_for_stop,
-                minimize=bool(stop_metric_minimize),
-                evaluator=stop_evaluator,
-                label=stop_label,
+            self._trainer, early_stopping = self._make_trainer(
+                model=self._model,
+                train_dataset=train_dataset,
+                val_dataset=val_dataset,
+                spec=spec,
+                checkpoint_dir=self.checkpoint_dir,
+                epochs=self.epochs,
+                batch_size=self.batch_size,
+                warmup_steps=self.warmup_steps,
+                head_lr=self.head_lr,
+                gradient_clip=self.gradient_clip,
+                optimizer_type=self.optimizer_type,
+                scheduler_type=self.scheduler_type,
+                encoder_lr=self.encoder_lr,
+                weight_decay=self.weight_decay,
+                warmup_ratio=self.warmup_ratio,
+                early_stop_patience=self.early_stop_patience,
+                early_stop_threshold=self.early_stop_threshold,
+                save_checkpoints=self.save_checkpoints,
+                early_stopping_callback=custom_early_stopping,
             )
-
-        self._trainer, early_stopping = self._make_trainer(
+            self._trainer.train()
+            if self.save_checkpoints and early_stopping.best_metric is not None:
+                print(f"Restored best model with macro_f1: {early_stopping.best_metric:.4f}")
+            elif early_stopping.best_metric is not None:
+                print(f"Best observed macro_f1: {early_stopping.best_metric:.4f}")
+        reused = self._run_training_with_reuse(
             model=self._model,
-            train_dataset=train_dataset,
-            val_dataset=val_dataset,
-            spec=spec,
             checkpoint_dir=self.checkpoint_dir,
-            epochs=self.epochs,
-            batch_size=self.batch_size,
-            warmup_steps=self.warmup_steps,
-            head_lr=self.head_lr,
-            gradient_clip=self.gradient_clip,
-            optimizer_type=self.optimizer_type,
-            scheduler_type=self.scheduler_type,
-            encoder_lr=self.encoder_lr,
-            weight_decay=self.weight_decay,
-            warmup_ratio=self.warmup_ratio,
-            early_stop_patience=self.early_stop_patience,
-            early_stop_threshold=self.early_stop_threshold,
-            save_checkpoints=self.save_checkpoints,
-            early_stopping_callback=custom_early_stopping,
+            status_file=self.training_status_file,
+            wait_for_completion=self.wait_for_training_completion,
+            poll_interval_seconds=self.training_poll_interval_seconds,
+            wait_timeout_seconds=self.training_wait_timeout_seconds,
+            mark_existing_complete=self.mark_existing_checkpoint_complete,
+            train_fn=_train_impl,
         )
-        self._trainer.train()
-        if self.save_checkpoints and early_stopping.best_metric is not None:
-            print(f"Restored best model with macro_f1: {early_stopping.best_metric:.4f}")
-        elif early_stopping.best_metric is not None:
-            print(f"Best observed macro_f1: {early_stopping.best_metric:.4f}")
+        if reused:
+            return
 
     def predict(self, x: Any) -> Sequence[Any]:
         if self._model is None or self._tokenizer is None:

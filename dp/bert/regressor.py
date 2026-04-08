@@ -42,6 +42,11 @@ class BertRegressorHead(SupervisedDownstreamHead, BertHFPlumbing):
         scheduler_type: str = "linear",
         weight_decay: float = 0.01,
         warmup_ratio: Optional[float] = None,
+        training_status_file: str = "training_status.json",
+        wait_for_training_completion: bool = True,
+        training_poll_interval_seconds: float = 10.0,
+        training_wait_timeout_seconds: Optional[float] = None,
+        mark_existing_checkpoint_complete: bool = True,
     ):
         SupervisedDownstreamHead.__init__(self, name="bert_regressor", primary_metric=primary_metric)
         BertHFPlumbing.__init__(self, device=device)
@@ -83,6 +88,11 @@ class BertRegressorHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.scheduler_type = str(scheduler_type)
         self.weight_decay = float(weight_decay)
         self.warmup_ratio = float(warmup_ratio) if warmup_ratio is not None else None
+        self.training_status_file = str(training_status_file)
+        self.wait_for_training_completion = bool(wait_for_training_completion)
+        self.training_poll_interval_seconds = float(training_poll_interval_seconds)
+        self.training_wait_timeout_seconds = float(training_wait_timeout_seconds) if training_wait_timeout_seconds is not None else None
+        self.mark_existing_checkpoint_complete = bool(mark_existing_checkpoint_complete)
         self._model: Optional[torch.nn.Module] = None
         self._target_mean: Optional[float] = None
         self._target_std: Optional[float] = None
@@ -146,61 +156,73 @@ class BertRegressorHead(SupervisedDownstreamHead, BertHFPlumbing):
         )
         self._load_tokenizer_with_fallback(model_name=self.model_name, init_checkpoint=self.init_checkpoint)
         self._model = self._create_model()
+        def _train_impl() -> None:
+            train_encodings = self._encode_texts(train_texts, mask_stopwords=False)
+            val_encodings = self._encode_texts(val_texts, mask_stopwords=False)
+            train_dataset = EncodedDataset(train_encodings, train_labels_normalized, label_dtype=torch.float)
+            val_dataset = EncodedDataset(val_encodings, val_labels_normalized, label_dtype=torch.float)
 
-        train_encodings = self._encode_texts(train_texts, mask_stopwords=False)
-        val_encodings = self._encode_texts(val_texts, mask_stopwords=False)
-        train_dataset = EncodedDataset(train_encodings, train_labels_normalized, label_dtype=torch.float)
-        val_dataset = EncodedDataset(val_encodings, val_labels_normalized, label_dtype=torch.float)
+            def compute_metrics(eval_pred: EvalPrediction):
+                preds = eval_pred.predictions
+                labels = eval_pred.label_ids
 
-        def compute_metrics(eval_pred: EvalPrediction):
-            preds = eval_pred.predictions
-            labels = eval_pred.label_ids
+                if self.normalize_targets and self._target_mean is not None and self._target_std is not None:
+                    preds = preds * self._target_std + self._target_mean
+                    labels = labels * self._target_std + self._target_mean
 
-            if self.normalize_targets and self._target_mean is not None and self._target_std is not None:
-                preds = preds * self._target_std + self._target_mean
-                labels = labels * self._target_std + self._target_mean
+                mse = float(np.mean((preds - labels) ** 2))
+                rmse = float(np.sqrt(mse))
+                denom = float(np.sum((labels - labels.mean()) ** 2))
+                r2 = float(1 - (np.sum((labels - preds) ** 2) / denom)) if denom > 0 else 0.0
 
-            mse = float(np.mean((preds - labels) ** 2))
-            rmse = float(np.sqrt(mse))
-            denom = float(np.sum((labels - labels.mean()) ** 2))
-            r2 = float(1 - (np.sum((labels - preds) ** 2) / denom)) if denom > 0 else 0.0
+                return {
+                    "rmse": rmse,
+                    "r2": r2,
+                }
 
-            return {
-                "rmse": rmse,
-                "r2": r2,
-            }
-
-        spec = HFTrainSpec(
-            metric_name="r2",
-            minimize_metric=False,
-            weight_decay_effective=self.weight_decay,
-            compute_metrics=compute_metrics,
-        )
-        self._trainer, early_stopping = self._make_trainer(
+            spec = HFTrainSpec(
+                metric_name="r2",
+                minimize_metric=False,
+                weight_decay_effective=self.weight_decay,
+                compute_metrics=compute_metrics,
+            )
+            self._trainer, early_stopping = self._make_trainer(
+                model=self._model,
+                train_dataset=train_dataset,
+                val_dataset=val_dataset,
+                spec=spec,
+                checkpoint_dir=self.checkpoint_dir,
+                epochs=self.epochs,
+                batch_size=self.batch_size,
+                warmup_steps=self.warmup_steps,
+                head_lr=self.head_lr,
+                gradient_clip=self.gradient_clip,
+                optimizer_type=self.optimizer_type,
+                scheduler_type=self.scheduler_type,
+                encoder_lr=self.encoder_lr,
+                weight_decay=self.weight_decay,
+                warmup_ratio=self.warmup_ratio,
+                early_stop_patience=self.early_stop_patience,
+                early_stop_threshold=self.early_stop_threshold,
+                save_checkpoints=self.save_checkpoints,
+            )
+            self._trainer.train()
+            if self.save_checkpoints and early_stopping.best_metric is not None:
+                print(f"Restored best model with r2: {early_stopping.best_metric:.4f}")
+            elif early_stopping.best_metric is not None:
+                print(f"Best observed r2: {early_stopping.best_metric:.4f}")
+        reused = self._run_training_with_reuse(
             model=self._model,
-            train_dataset=train_dataset,
-            val_dataset=val_dataset,
-            spec=spec,
             checkpoint_dir=self.checkpoint_dir,
-            epochs=self.epochs,
-            batch_size=self.batch_size,
-            warmup_steps=self.warmup_steps,
-            head_lr=self.head_lr,
-            gradient_clip=self.gradient_clip,
-            optimizer_type=self.optimizer_type,
-            scheduler_type=self.scheduler_type,
-            encoder_lr=self.encoder_lr,
-            weight_decay=self.weight_decay,
-            warmup_ratio=self.warmup_ratio,
-            early_stop_patience=self.early_stop_patience,
-            early_stop_threshold=self.early_stop_threshold,
-            save_checkpoints=self.save_checkpoints,
+            status_file=self.training_status_file,
+            wait_for_completion=self.wait_for_training_completion,
+            poll_interval_seconds=self.training_poll_interval_seconds,
+            wait_timeout_seconds=self.training_wait_timeout_seconds,
+            mark_existing_complete=self.mark_existing_checkpoint_complete,
+            train_fn=_train_impl,
         )
-        self._trainer.train()
-        if self.save_checkpoints and early_stopping.best_metric is not None:
-            print(f"Restored best model with r2: {early_stopping.best_metric:.4f}")
-        elif early_stopping.best_metric is not None:
-            print(f"Best observed r2: {early_stopping.best_metric:.4f}")
+        if reused:
+            return
 
     def predict(self, x: Any) -> Sequence[float]:
         if self._model is None or self._tokenizer is None:

@@ -42,6 +42,11 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         pretraining_batch_size: Optional[int] = None,
         pretraining_learning_rate: float = 5e-5,
         pretraining_mlm_probability: float = 0.15,
+        training_status_file: str = "training_status.json",
+        wait_for_training_completion: bool = True,
+        training_poll_interval_seconds: float = 10.0,
+        training_wait_timeout_seconds: Optional[float] = None,
+        mark_existing_checkpoint_complete: bool = True,
     ):
         SupervisedDownstreamHead.__init__(self, name="bert_ordinal", primary_metric=primary_metric)
         BertHFPlumbing.__init__(self, device=device)
@@ -85,6 +90,11 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.pretraining_batch_size = int(pretraining_batch_size) if pretraining_batch_size is not None else self.batch_size
         self.pretraining_learning_rate = float(pretraining_learning_rate)
         self.pretraining_mlm_probability = float(pretraining_mlm_probability)
+        self.training_status_file = str(training_status_file)
+        self.wait_for_training_completion = bool(wait_for_training_completion)
+        self.training_poll_interval_seconds = float(training_poll_interval_seconds)
+        self.training_wait_timeout_seconds = float(training_wait_timeout_seconds) if training_wait_timeout_seconds is not None else None
+        self.mark_existing_checkpoint_complete = bool(mark_existing_checkpoint_complete)
 
         self._model: Optional[torch.nn.Module] = None
         self._label_order: Optional[List[str]] = None
@@ -170,61 +180,73 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         self._maybe_enable_stopwords(self.mask_stopwords)
 
         self._model = self._create_model(num_classes)
+        def _train_impl() -> None:
+            train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
+            val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
+            train_dataset = EncodedDataset(train_encodings, train_targets, label_dtype=torch.long)
+            val_dataset = EncodedDataset(val_encodings, val_targets, label_dtype=torch.long)
 
-        train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
-        val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
-        train_dataset = EncodedDataset(train_encodings, train_targets, label_dtype=torch.long)
-        val_dataset = EncodedDataset(val_encodings, val_targets, label_dtype=torch.long)
+            def compute_metrics(eval_pred: EvalPrediction) -> Dict[str, float]:
+                logits = np.asarray(eval_pred.predictions)
+                labels = np.asarray(eval_pred.label_ids).astype(int)
+                probs = 1.0 / (1.0 + np.exp(-logits))
+                class_preds = (probs > 0.5).sum(axis=1).astype(int)
 
-        def compute_metrics(eval_pred: EvalPrediction) -> Dict[str, float]:
-            logits = np.asarray(eval_pred.predictions)
-            labels = np.asarray(eval_pred.label_ids).astype(int)
-            probs = 1.0 / (1.0 + np.exp(-logits))
-            class_preds = (probs > 0.5).sum(axis=1).astype(int)
+                unique_classes = sorted(set(labels.tolist()))
+                per_class_mae: List[float] = []
+                for cls in unique_classes:
+                    mask = labels == cls
+                    if mask.sum() > 0:
+                        per_class_mae.append(float(np.abs(labels[mask] - class_preds[mask]).mean()))
 
-            unique_classes = sorted(set(labels.tolist()))
-            per_class_mae: List[float] = []
-            for cls in unique_classes:
-                mask = labels == cls
-                if mask.sum() > 0:
-                    per_class_mae.append(float(np.abs(labels[mask] - class_preds[mask]).mean()))
+                macro_mae = float(np.mean(per_class_mae)) if per_class_mae else float("inf")
+                overall_mae = float(np.mean(np.abs(labels - class_preds)))
+                return {"macro_mae": macro_mae, "mae": overall_mae}
 
-            macro_mae = float(np.mean(per_class_mae)) if per_class_mae else float("inf")
-            overall_mae = float(np.mean(np.abs(labels - class_preds)))
-            return {"macro_mae": macro_mae, "mae": overall_mae}
-
-        wd_eff = self.weight_decay if self.weight_decay is not None else 0.01
-        spec = HFTrainSpec(
-            metric_name="macro_mae",
-            minimize_metric=True,
-            weight_decay_effective=wd_eff,
-            compute_metrics=compute_metrics,
-        )
-        self._trainer, early_stopping = self._make_trainer(
+            wd_eff = self.weight_decay if self.weight_decay is not None else 0.01
+            spec = HFTrainSpec(
+                metric_name="macro_mae",
+                minimize_metric=True,
+                weight_decay_effective=wd_eff,
+                compute_metrics=compute_metrics,
+            )
+            self._trainer, early_stopping = self._make_trainer(
+                model=self._model,
+                train_dataset=train_dataset,
+                val_dataset=val_dataset,
+                spec=spec,
+                checkpoint_dir=self.checkpoint_dir,
+                epochs=self.epochs,
+                batch_size=self.batch_size,
+                warmup_steps=self.warmup_steps,
+                head_lr=self.head_lr,
+                gradient_clip=self.gradient_clip,
+                optimizer_type=self.optimizer_type,
+                scheduler_type=self.scheduler_type,
+                encoder_lr=self.encoder_lr,
+                weight_decay=wd_eff,
+                warmup_ratio=self.warmup_ratio,
+                early_stop_patience=self.early_stop_patience,
+                early_stop_threshold=self.early_stop_threshold,
+                save_checkpoints=self.save_checkpoints,
+            )
+            self._trainer.train()
+            if self.save_checkpoints and early_stopping.best_metric is not None:
+                print(f"Restored best model with macro_mae: {early_stopping.best_metric:.4f}")
+            elif early_stopping.best_metric is not None:
+                print(f"Best observed macro_mae: {early_stopping.best_metric:.4f}")
+        reused = self._run_training_with_reuse(
             model=self._model,
-            train_dataset=train_dataset,
-            val_dataset=val_dataset,
-            spec=spec,
             checkpoint_dir=self.checkpoint_dir,
-            epochs=self.epochs,
-            batch_size=self.batch_size,
-            warmup_steps=self.warmup_steps,
-            head_lr=self.head_lr,
-            gradient_clip=self.gradient_clip,
-            optimizer_type=self.optimizer_type,
-            scheduler_type=self.scheduler_type,
-            encoder_lr=self.encoder_lr,
-            weight_decay=wd_eff,
-            warmup_ratio=self.warmup_ratio,
-            early_stop_patience=self.early_stop_patience,
-            early_stop_threshold=self.early_stop_threshold,
-            save_checkpoints=self.save_checkpoints,
+            status_file=self.training_status_file,
+            wait_for_completion=self.wait_for_training_completion,
+            poll_interval_seconds=self.training_poll_interval_seconds,
+            wait_timeout_seconds=self.training_wait_timeout_seconds,
+            mark_existing_complete=self.mark_existing_checkpoint_complete,
+            train_fn=_train_impl,
         )
-        self._trainer.train()
-        if self.save_checkpoints and early_stopping.best_metric is not None:
-            print(f"Restored best model with macro_mae: {early_stopping.best_metric:.4f}")
-        elif early_stopping.best_metric is not None:
-            print(f"Best observed macro_mae: {early_stopping.best_metric:.4f}")
+        if reused:
+            return
 
     def predict(self, x: Any) -> Sequence[Any]:
         if self._model is None or self._tokenizer is None:
