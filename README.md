@@ -1,93 +1,99 @@
-# Differentially Private Text Anonymization Toolkit
+# Differentially Private Text Anonymization
 
-This repository brings together differential privacy (DP), k-anonymity, heuristic redaction, and empirical re-identification attacks in a single toolkit. The codebase powers experiments on long-form documents (e.g., asylum decisions, consumer reviews) as well as short social media posts and is meant to serve both as a reproducible benchmark and as a starting point for new anonymization research.
+This repository implements and benchmarks risk-aware text anonymization methods, with a focus on DP-MLM-X — a token-level differential privacy approach that allocates privacy budget according to per-token re-identification risk rather than uniformly. It accompanies a Master's thesis evaluating privacy-utility trade-offs across multiple anonymization strategies on two English text datasets.
 
-## Highlights
-- **Multiple privacy controls**: pure DP rewriting (DP-MLM, DP-BART, DP-Prompt, DP-Paraphrase), k-anonymity via PETRE, confidence-thresholded masking, and risk-aware masking.
-- **Dataset adapters**: unified loaders for TAB, Trustpilot, DB-Bio, and Reddit style JSON/JSONL corpora, each emitting `DatasetRecord` objects with annotations and metadata.
-- **Token selection + explainability**: plug-in risk scorers (`Uniform`, `Greedy`, `SHAP`) and selectors (`PIIOnly`, `ByRisk`, `UntilK`, `All`) coordinate which tokens are modified.
-- **Runtime grid search**: YAML-driven parameter sweeps for ε, k, λ, and ρ that stay synchronized with model configs through the runtime bundle loader.
-- **Evaluation hooks**: built-in scripts for PII detector training, TRI (Text Re-Identification) attackers, and reporting utilities that score privacy, divergence, and downstream utility.
+## Table of Contents
+
+- [Overview](#overview)
+- [Pipeline](#pipeline)
+- [Methods](#methods)
+- [Datasets](#datasets)
+- [Installation](#installation)
+- [Data Preparation](#data-preparation)
+- [Running Anonymization](#running-anonymization)
+- [Evaluation](#evaluation)
+- [Reproducing the Thesis](#reproducing-the-thesis)
+
+---
+
+## Overview
+
+The core idea is to replace uniform DP noise injection with risk-aware budget allocation: tokens with higher re-identification risk receive more perturbation, while low-risk tokens are left closer to their original form. Risk scores are derived from a trained Text Re-Identification (TRI) model via SHAP attribution.
+
+The codebase supports a full experiment pipeline: dataset loading, PII detection, TRI model training, risk precomputation, anonymization, and evaluation of privacy, utility, and divergence.
+
+---
+
+## Pipeline
+
+Each experiment follows these ordered stages:
+
+1. **De-identification** — mask direct identifiers (names, locations) using Presidio before further processing.
+2. **Background knowledge generation** — summarize original records with `facebook/bart-large-cnn` to simulate attacker background knowledge.
+3. **TRI model training** — fine-tune a `distilbert-base-uncased` classifier to re-identify individuals from text.
+4. **Risk precomputation** — run SHAP attribution over the TRI model to assign per-token risk scores (`risk.py`).
+5. **Anonymization** — apply the selected method using the risk scores and configured stopping conditions.
+6. **Evaluation** — measure privacy (MRR, TRIR), utility (accuracy, MAE), and divergence (cosine similarity, BERTScore, PP) via `run.py`.
+
+Logs from each stage are merged into analysis-ready artifacts by `merge_logs.py`, then exported to thesis CSV tables by `docs/thesis/data_export.py`.
+
+---
+
+## Methods
+
+| Name | Type | Key idea |
+|------|------|----------|
+| `spacy`, `presidio` | Masking | Entity-based deterministic masking |
+| `manual` | Masking | Dataset-provided annotation spans |
+| `baroud` | Masking | Trainable PII detector with λ confidence threshold |
+| `risk` | Masking | Risk-scored masking until cumulative risk ≤ ρ |
+| `petre` | k-anonymity | Iterative masking until TRI attacker rank ≥ k |
+| `dpmlm` | DP rewriting | Risk-aware DP masked language model (DP-MLM-X) |
+| `dpbart` | DP rewriting | Gaussian noise on BART encoder logits |
+| `dpprompt` | DP rewriting | Prompted seq2seq with clipped logits |
+| `dpparaphrase` | DP rewriting | Autoregressive rewriting with DP noise |
+
+DP-MLM-X variants (`k-`, `ρ-`, `λ-DP-MLM-X`) combine risk-aware budget allocation with configurable stopping conditions. Method configs live in `configs/model/`, runtime parameter sweeps (ε, λ, ρ, k) in `configs/runtime/`.
+
+---
+
+## Datasets
+
+| Dataset | Description |
+|---------|-------------|
+| **TAB** | 1268 ECHR case documents with PII span annotations and utility labels (year, countries). |
+| **DB-Bio** | 2419 Wikipedia biographies of public figures with DBpedia class labels. |
+
+Both are used with their original train/validation/test splits for all pipeline stages.
+
+---
 
 ## Installation
 
 ```bash
-git clone https://github.com/yay/dp.git
+git clone https://github.com/yamaceay/dp.git
 cd dp
-
-# Install the dp package and core dependencies
-uv venv
+uv sync
 source .venv/bin/activate
-uv pip install -e .
-uv pip install -r requirements.txt
-
-# Optional extras
-python -m spacy download en_core_web_sm   # needed for spaCy baselines
-uv pip install presidio-analyzer          # needed for Presidio baselines
-uv pip install "en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.0/en_core_web_lg-3.7.0-py3-none-any.whl"
+python -m spacy download en_core_web_sm
 ```
 
-GPU acceleration is recommended for transformer-based anonymizers, TRI attackers, and SHAP explainers. Set `PYTORCH_ENABLE_MPS_FALLBACK=1` when running on Apple Silicon with the MPS backend.
+Requires Python 3.12.3, CUDA-capable GPU, and matching GPU driver. Set `PYTORCH_ENABLE_MPS_FALLBACK=1` for Apple Silicon.
 
-## Data preparation
+---
 
-Raw corpora are **not** shipped with the repository. Each dataset adapter expects a normalized JSON/JSONL export:
+## Data Preparation
 
-| Adapter | Path hint | Expected fields |
-| --- | --- | --- |
-| `tab` | `data/TAB/splitted/{train,dev,test}.json` | `doc_id`, `text`, nested `annotations` with `entity_mentions`, and `meta.applicant` for record names. |
-| `db_bio` | `data/DB_Bio/...` | Biomedical abstracts with entity spans. |
-| `reddit` | JSONL file with `response`, `personality`, and auxiliary attributes per line. |
+Datasets are not shipped with the repository. Place them at:
 
-The adapters live in `dp/loaders/` and always emit a `DatasetRecord` with `.text`, `.uid`, `.name`, optional `.spans`, and `.metadata`. Use `--max_records`, `--start`, `--end`, and `--step` to subsample large corpora without rewriting files.
+| Dataset | Path |
+|---------|------|
+| TAB | `data/TAB/splitted/{train,dev,test}.json` |
+| DB-Bio | `data/DB_Bio/` (Arrow format) |
 
-## System overview
+---
 
-1. `model.py` parses CLI arguments, loads dataset adapters, model configs (`configs/model`), and runtime bundles (`configs/runtime`).
-2. An `Anonymizer` subclass (see `dp/methods`) is instantiated. It exposes a builder that wires in dataset records, explainers, selectors, token splitters, and output handlers.
-3. Token selection happens through `dp.utils.selector` units. They maintain a `TokenLedger`, call `apply_fn` hooks, and emit `AnonymizationStep`s as thresholds change.
-4. Token risk scores come from `dp.utils.explainer` implementations (uniform, greedy perturbation, or SHAP over TRI classifiers). Risk-aware methods can ingest precomputed JSONL files produced by `risk.py`.
-5. Output is streamed to `dp/utils/output.py` handlers (`print` or `jsonl`) that encode metadata, spans, and token edit histories in `outputs/{dataset}/{model}/timestamp*.jsonl`.
-
-## Implemented anonymization methods
-
-| Name | Module | Technique | Notes |
-| --- | --- | --- | --- |
-| `spacy` | `dp/methods/_spacy.py` | Deterministic entity masking with spaCy NER. | Masks tokens as `[LABEL]`. Optionally filter by entity labels. |
-| `presidio` | `dp/methods/_presidio.py` | Microsoft Presidio analyzer. | Falls back to a placeholder if Presidio is unavailable. |
-| `manual` | `dp/methods/_manual.py` | Uses dataset-provided spans. | Requires dataset mode (`--indices`) and annotations. |
-| `baroud` | `dp/methods/_baroud.py` | Trainable PII detector + λ thresholding. | Wraps `PIIOnlyUnit`; sweeps λ via runtime configs. |
-| `risk` | `dp/methods/_risk.py` | Risk-scored masking. | Needs a `TokenExplainer` (e.g., Greedy/SHAP) or precomputed scores and accepts ρ sweeps. |
-| `petre` | `dp/methods/_petre.py` | PETRE k-anonymity with TRI ranking. | Iteratively masks high-risk spans until TRI rank ≥ k. |
-| `dpmlm` | `dp/methods/_dpmlm.py` | DP masked language model editing. | Supports explainers, selectors, and k/λ/ρ sweeps plus precomputed risk. |
-| `dpbart` | `dp/methods/_dpbart.py` | Logit clipping + Gaussian noise on BART encodings. | Requires ε runtime param and optional δ tuning. |
-| `dpprompt` | `dp/methods/_dpprompt.py` | Prompted seq2seq rewriting with clipped logits. | Generates paraphrases with ε-calibrated temperature. |
-| `dpparaphrase` | `dp/methods/_dpparaphrase.py` | Autoregressive rewriting with chunking-aware DP noise. | Supports tokenizer-aware chunking for overlong inputs. |
-
-Method capabilities are recorded in `dp/methods/constants.py` and enforced via `MODEL_REGISTRY`/`MODEL_CAPABILITIES` (e.g., PETRE requires dataset mode, DP-Prompt forbids token-level selectors).
-
-## Token explainers and selectors
-
-- **Explainers (`dp/utils/explainer`)**: `UniformExplainer` assigns equal risk, `GreedyExplainer` measures TRI score drops when masking tokens, and `ShapExplainer` uses SHAP over TRI classifiers. All expose `.explain(text, offsets)` and integrate with TRI detectors stored under `models/tri_pipelines`.
-- **Selectors (`dp/utils/selector`)**: `PIIOnlyUnit` filters tokens above a λ confidence threshold, `ByRiskUnit` masks high-risk spans until remaining probability mass ≤ ρ, `UntilKUnit` keeps anonymizing until the TRI attacker rank exceeds k, and `AllUnit` simply applies edits everywhere.
-- **Token splitting**: `dp/utils/splitter.TextSplitter` and `dp/utils/chunking` provide character-span aware tokenization and chunking strategies used by selectors, explainers, and DP generators.
-
-Configure these components inside the model YAMLs under `configs/model/**`. Typical blocks include `token_selection`, `explainer`, `precomputation`, and chunking policies.
-
-## Runtime configuration and parameter grids
-
-`runtime/load_runtime_bundle` ingests one or more YAML files (globs allowed) and merges:
-
-- `configs/runtime/dp/eps_*.yaml` for ε.
-- `configs/runtime/pii_confidence/lambda_*.yaml` for λ thresholds.
-- `configs/runtime/risk_tolerance/rho_*.yaml` for ρ tolerances.
-- `configs/runtime/k_anon/k_*.yaml` for target k values.
-
-Model configs may whitelist which runtime suffixes are valid through a `params` block, preventing accidental mismatches between sweeps and models. At execution time, `buckets_to_dicts` expands k/λ/ρ combinations into grid searches; single-value ε is required for DP models.
-
-## Running anonymization
-
-### Dataset-driven runs
+## Running Anonymization
 
 ```bash
 python model.py \
@@ -96,102 +102,33 @@ python model.py \
   --model dpmlm \
   --model_in configs/model/dpmlm/tab/greedy_risk.yaml \
   --runtime_in configs/runtime/dp/eps_100.yaml configs/runtime/risk_tolerance/rho_090.yaml \
-  --output jsonl \
-  --max_records 32
+  --output jsonl
 ```
 
-Key arguments:
+On HPC, use the Slurm job tables in `slurm/tables/` to reproduce the full experiment batches.
 
-- `--texts` or `--indices`: mutually exclusive ways to specify inputs. Use indices with dataset-aware models (manual, petre, dpmlm when risk scores are tied to record IDs).
-- `--annotations`/`--annotations_in`: attach pre-computed spans (spaCy, Presidio, manual) if a method requires them.
-- `--runtime_in`: accepts multiple files or globs; values appear in `result.metadata.hyperparams`.
-- `--output`: output handler name (`print` or `jsonl`) as registered in `dp/utils/output.py`.
-- `--unique_name`: appended to filenames inside `outputs/{dataset}/{model}/`.
+---
 
-### Free-form text anonymization
+## Evaluation
 
 ```bash
-python model.py \
-  --model dpprompt \
-  --model_in configs/model/dpprompt.yaml \
-  --runtime_in configs/runtime/dp/eps_010.yaml \
-  --texts "John Doe lives in Seattle and works for Acme Corp."
+python run.py --config configs/experiments/privacy_tab.yaml
+python run.py --config configs/experiments/utility_tab.yaml
+python run.py --config configs/experiments/divergence_tab.yaml
 ```
 
-DP models expect `EpsilonParam` buckets, so make sure the runtime bundle contains exactly one ε entry.
+`run.py` reads anonymized JSONL outputs from `outputs/`, computes metrics, and writes structured logs for downstream analysis.
 
-## Training utilities and supporting scripts
+---
 
-### PII detector training (`pii.py`)
-- Loads adapters for TAB/Trustpilot/DB-Bio.
-- Trains Hugging Face token classifiers with optional Nervaluate evaluation.
-- Saves checkpoints under `models/pii_detectors/{dataset}/{timestamp}`.
-- Modes: `train`, `evaluate`, `predict`.
+## Reproducing the Thesis
 
-### TRI attacker training (`tri_by_deid.py`, `tri_by_bk.py`, `tri_by_split.py`)
-- Build datasets of anonymized texts by reading JSON/JSONL annotations produced by anonymizers.
-- Support MLM pretraining + fine-tuning with configurable epochs, batch sizes, and early stopping.
-- Outputs to `models/tri_pipelines/{dataset}/{timestamp}` which are later referenced by explainers and PETRE’s rank evaluator.
+Pinned revision: `https://github.com/yamaceay/dp/tree/d36fc7af2aae6269d2a55987c9fed9cd942d7712`
 
-### Risk scoring (`risk.py`)
-- Applies Greedy or SHAP explainers to each record and dumps JSONL entries containing `uid`, `offsets`, and `scores`.
-- These files can be fed back into DP-MLM or PETRE via the `precomputation.risk_scores` config block to skip repeated inference.
-
-## Evaluation pipelines (`run.py`)
-
-`run.py` orchestrates three experiment families defined under `configs/5_experiments`:
-
-- **Privacy**: builds adversarial datasets from anonymized JSONL files and evaluates TRI success rates (`privacy_*.yaml`).
-- **Divergence**: computes semantic similarity metrics (BERTScore, cosine TF-IDF) between original and anonymized texts.
-- **Utility**: trains downstream classifiers/regressors (e.g., country/year prediction on TAB) to quantify retained task performance.
-
-Each config chooses datasets, annotation sources, metrics, and output sinks. Use `--mode {report,score}` as documented in `dp/experiments/*`.
-
-## Outputs and logs
-
-- `outputs/{dataset}/{model}/timestamp[_?param].jsonl` – structured records with anonymized text, spans, annotations, metadata, and per-token edit logs.
-- `logs/` – training or evaluation logs produced by auxiliary scripts.
-- `models/` – checkpoints for TRI pipelines and PII detectors referenced across configs.
-
-Output files capture:
-
-```json
-{
-  "idx": 42,
-  "text": "...anonymized text...",
-  "spans": [{"start": 0, "end": 4, "label": "PERSON"}],
-  "annotations": {
-    "spans": [...],
-    "token_edits": [{"kind": "replace", "span": [0,4], "text": "[PERSON]"}]
-  },
-  "metadata": {
-    "unique_name": "demo",
-    "hyperparams": {"epsilon": 1, "rho": 0.9},
-    "_grid_param": "rho",
-    "_grid_value": 0.9
-  }
-}
-```
-
-## Repository layout
-
-```
-dp/
-├── methods/             # DP, k-anon, and heuristic anonymizers plus registry/capabilities
-├── loaders/             # Dataset adapters, annotation helpers, batching utilities
-├── utils/               # Selectors, explainers, chunking, output handlers, PII detector
-├── tri/                 # TRI attacker implementations (deid, background knowledge, split)
-├── experiments/         # Privacy/divergence/utility experiment configs and runners
-└── __init__.py
-configs/
-├── model/               # Method-specific YAML configs
-├── runtime/             # ε/λ/ρ/k runtime sweeps
-└── experiments/         # Reporting presets for run.py
-models/                  # Saved TRI pipelines and PII detectors
-outputs/                 # JSONL anonymized corpora grouped by dataset/model
-tests/                   # Unit tests for annotations and token ledgers
-```
-
-## Development guidelines
-
-`guidelines.md` documents the coding standards enforced in this repo: self-explanatory code, strict typing, minimal dependencies, and builder-style composition. Follow those conventions when adding new anonymizers, selectors, or experiments.
+1. Check out the pinned revision above.
+2. Run `uv sync` and verify GPU and CUDA availability.
+3. Place TAB and DB-Bio in the expected `data/` paths with original splits.
+4. Run the pipeline stages via local scripts or Slurm job tables in `slurm/tables/`.
+5. Merge logs and regenerate thesis CSV exports: `python3 docs/thesis/data_export.py`.
+6. Regenerate figures: `python3 plot_summary.py`, `python3 pu_tradeoff.py` (and related scripts).
+7. Compile the thesis (`docs/thesis/`) and verify tables and figures match the regenerated artifacts.
