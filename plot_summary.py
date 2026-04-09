@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from plot_layout import create_panel_axes
+from progress_utils import new_progress
 
 MDS_DIR = Path("mds")
 OUTPUT_DIR = Path("images/summary")
@@ -262,7 +263,7 @@ def plot_showdown(
     y_metric: str,
     x_ref: tuple[Optional[float], Optional[float]],
     y_ref: tuple[Optional[float], Optional[float]],
-) -> None:
+) -> Path:
     fig, axes = create_panel_axes(6, sharex=True, sharey=True, grid_size=(7.5, 6.0))
 
     masking_curves: list[tuple[str, list[tuple[float, float]]]] = []
@@ -373,7 +374,7 @@ def plot_showdown(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
-    print(f"saved: {out_path}")
+    return out_path
 
 
 def prompt_choice(prompt: str, options: list[str]) -> str:
@@ -407,11 +408,21 @@ def main() -> None:
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    for x_var, y_var in resolve_pairs(args):
-        for dataset in DATASET_LABELS:
-            x_ref = get_mae_references(dataset, x_var) if x_var in MAE_METRICS else (None, None)
-            y_ref = get_mae_references(dataset, y_var) if y_var in MAE_METRICS else (None, None)
-            plot_showdown(dataset, x_var, y_var, x_ref, y_ref)
+    pairs = resolve_pairs(args)
+    plan = [(x_var, y_var, dataset) for x_var, y_var in pairs for dataset in DATASET_LABELS]
+    progress = new_progress(total=len(plan), desc="plot_summary", unit="plot")
+    saved_count = 0
+
+    for x_var, y_var, dataset in plan:
+        progress.set_postfix_str(f"{dataset}:{x_var}->{y_var}")
+        x_ref = get_mae_references(dataset, x_var) if x_var in MAE_METRICS else (None, None)
+        y_ref = get_mae_references(dataset, y_var) if y_var in MAE_METRICS else (None, None)
+        plot_showdown(dataset, x_var, y_var, x_ref, y_ref)
+        saved_count += 1
+        progress.update(1)
+
+    progress.close()
+    print(f"plot_summary: saved={saved_count}, total={len(plan)}")
 
 
 if __name__ == "__main__":

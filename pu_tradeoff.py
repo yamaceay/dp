@@ -14,6 +14,7 @@ from plot_layout import (
     create_panel_axes,
     order_is_descending,
 )
+from progress_utils import new_progress
 
 FIXED_EPSILON_PANELS: list[float | None] = [None, 10, 25, 50, 100, 250]
 
@@ -524,25 +525,29 @@ def add_central_tendency_line(
         label=f"{label} ({dummy_value:.3f})",
     )
 
-def read_csv_file(path: Path, x_column: str, y_column: str) -> Optional[pd.DataFrame]:
+def read_csv_file(path: Path, x_column: str, y_column: str, verbose: bool = False) -> Optional[pd.DataFrame]:
     try:
         df = pd.read_csv(path)
         if x_column not in df.columns:
-            print(f"Skipping file without {x_column}: {path}")
+            if verbose:
+                print(f"Skipping file without {x_column}: {path}")
             return None
         if y_column not in df.columns:
-            print(f"Skipping file without {y_column}: {path}")
+            if verbose:
+                print(f"Skipping file without {y_column}: {path}")
             return None
         filtered = df.copy()
         filtered["P_plot"] = pd.to_numeric(filtered[x_column], errors="coerce")
         filtered["U_plot"] = pd.to_numeric(filtered[y_column], errors="coerce")
         filtered = filtered.dropna(subset=["P_plot", "U_plot"])
         if filtered.empty:
-            print(f"Skipping file without valid {x_column}/{y_column} values: {path}")
+            if verbose:
+                print(f"Skipping file without valid {x_column}/{y_column} values: {path}")
             return None
         return filtered
     except Exception:
-        print(f"Error reading CSV file {path}")
+        if verbose:
+            print(f"Error reading CSV file {path}")
         return None
 
 
@@ -897,264 +902,283 @@ if __name__ == "__main__":
     method_group_names = configured_method_group_names()
     method_group_metrics = read_method_group_metrics()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    plan: list[tuple[str, str, str, str, str, str]] = []
     for dataset_name in dataset_names:
-        metric_bounds = dataset_metric_bounds.get(dataset_name, {})
-        reference_df = read_dataset_reference_frame(dataset_name)
         method_names = [name for name in discover_method_names(dataset_name) if name in method_group_names]
         for method_name in method_names:
-            method_group_label = method_group_labels.get(method_name, method_name)
-            dataset_label = dataset_print_labels.get(dataset_name, dataset_name.replace("_", "-").upper())
-            file_name = f"mds/{dataset_name}/{method_name}.csv"
-            file_path = Path(file_name)
+            group_metrics = method_group_metrics.get(method_name)
             for x_name, x_column, y_name, y_column in targets:
-                group_metrics = method_group_metrics.get(method_name)
                 if group_metrics is not None and (x_column not in group_metrics or y_column not in group_metrics):
                     continue
-                raw_df = read_csv_file(file_path, x_column, y_column)
-                if raw_df is None:
-                    continue
-                metric_exclusions = dataset_metric_exclusions.get(dataset_name, {})
-                excluded_methods = set(metric_exclusions.get(x_column, set())) | set(metric_exclusions.get(y_column, set()))
-                if excluded_methods:
-                    exclusion_mask = raw_df["method"].astype(str).apply(
-                        lambda method: not method_is_excluded(method, excluded_methods)
-                    )
-                    raw_df = raw_df[exclusion_mask].copy()
-                    if raw_df.empty:
-                        continue
-                print(f"Dataset: {dataset_name}, Method Group: {method_group_label}, X: {x_column}, Y: {y_column}")
+                plan.append((dataset_name, method_name, x_name, x_column, y_name, y_column))
 
-                df = raw_df.copy()
-                df["params_dict"] = df["params"].apply(parse_params)
-                df = df[df["method"] != "baseline"].copy()
-                if df.empty:
-                    continue
+    progress = new_progress(total=len(plan), desc="pu_tradeoff", unit="plot")
+    saved_count = 0
+    skipped_count = 0
 
-                _secondary = {"k", "rho", "lambda"}
-                _has_secondary = any(
-                    isinstance(p, dict) and any(k in p for k in _secondary)
-                    for p in df["params_dict"]
+    for dataset_name, method_name, x_name, x_column, y_name, y_column in plan:
+        progress.set_postfix_str(f"{dataset_name}:{method_name}:{x_name}->{y_name}")
+        metric_bounds = dataset_metric_bounds.get(dataset_name, {})
+        reference_df = read_dataset_reference_frame(dataset_name)
+        method_group_label = method_group_labels.get(method_name, method_name)
+        dataset_label = dataset_print_labels.get(dataset_name, dataset_name.replace("_", "-").upper())
+        file_name = f"mds/{dataset_name}/{method_name}.csv"
+        file_path = Path(file_name)
+        raw_df = read_csv_file(file_path, x_column, y_column, verbose=False)
+        if raw_df is None:
+            skipped_count += 1
+            progress.update(1)
+            continue
+
+        metric_exclusions = dataset_metric_exclusions.get(dataset_name, {})
+        excluded_methods = set(metric_exclusions.get(x_column, set())) | set(metric_exclusions.get(y_column, set()))
+        if excluded_methods:
+            exclusion_mask = raw_df["method"].astype(str).apply(
+                lambda method: not method_is_excluded(method, excluded_methods)
+            )
+            raw_df = raw_df[exclusion_mask].copy()
+            if raw_df.empty:
+                skipped_count += 1
+                progress.update(1)
+                continue
+
+        df = raw_df.copy()
+        df["params_dict"] = df["params"].apply(parse_params)
+        df = df[df["method"] != "baseline"].copy()
+        if df.empty:
+            skipped_count += 1
+            progress.update(1)
+            continue
+
+        _secondary = {"k", "rho", "lambda"}
+        _has_secondary = any(
+            isinstance(p, dict) and any(k in p for k in _secondary)
+            for p in df["params_dict"]
+        )
+
+        if _has_secondary:
+            panel_values: list[float | None] = FIXED_EPSILON_PANELS
+            fig, axes = create_tradeoff_axes()
+            panel_frames: list[pd.DataFrame] = [panel_df_for_epsilon(df, eps) for eps in panel_values]
+        else:
+            panel_values = [None]
+            fig, axes = create_panel_axes(1, sharex=True, sharey=True, grid_size=(8.0, 6.5))
+            _all = df.copy()
+            _all["plot_params_dict"] = _all["params_dict"]
+            panel_frames = [_all]
+
+        color_cache: dict[str, tuple[float, float, float]] = {}
+        marker_cache: dict[str, str] = {}
+        reference_source_df = reference_df if reference_df is not None else df
+        extra_y_values = reference_y_values(reference_source_df, y_column)
+
+        presidio_point = None
+        if not method_is_excluded("presidio", excluded_methods):
+            presidio_point = method_point_from_any_metric_schema(
+                reference_source_df, "presidio", x_column, y_column
+            )
+            if presidio_point is None:
+                presidio_point = transformed_method_point(
+                    dataset_name, "presidio", x_column, y_column,
+                    fallback_frames=[reference_source_df],
                 )
+        if presidio_point is not None:
+            extra_y_values = list(extra_y_values) + [presidio_point[1]]
 
-                if _has_secondary:
-                    panel_values: list[float | None] = FIXED_EPSILON_PANELS
-                    fig, axes = create_tradeoff_axes()
-                    panel_frames: list[pd.DataFrame] = [panel_df_for_epsilon(df, eps) for eps in panel_values]
+        all_handles: list = []
+        all_labels: list[str] = []
+        ref_handles: list = []
+        ref_labels: list[str] = []
+        seen_legend_labels: set[str] = set()
+
+        for ax, epsilon_value, panel_df in zip(axes, panel_values, panel_frames):
+            if _has_secondary:
+                if epsilon_value is None:
+                    ax.set_facecolor("#F5F5F5")
+                    ax.set_title("ε = 0  (masking)", fontsize=11, pad=8)
                 else:
-                    panel_values = [None]
-                    fig, axes = create_panel_axes(1, sharex=True, sharey=True, grid_size=(8.0, 6.5))
-                    _all = df.copy()
-                    _all["plot_params_dict"] = _all["params_dict"]
-                    panel_frames = [_all]
+                    ax.set_title(f"ε = {int(epsilon_value)}", fontsize=11, pad=8)
 
-                color_cache: dict[str, tuple[float, float, float]] = {}
-                marker_cache: dict[str, str] = {}
-                reference_source_df = reference_df if reference_df is not None else df
-                extra_y_values = reference_y_values(reference_source_df, y_column)
+            if presidio_point is not None:
+                sc = ax.scatter(
+                    *presidio_point,
+                    marker="*",
+                    s=220,
+                    color=PRESIDIO_COLOR,
+                    zorder=7,
+                    label="Presidio",
+                )
+                if "Presidio" not in seen_legend_labels:
+                    seen_legend_labels.add("Presidio")
+                    all_handles.append(sc)
+                    all_labels.append("Presidio")
 
-                presidio_point = None
-                if not method_is_excluded("presidio", excluded_methods):
-                    presidio_point = method_point_from_any_metric_schema(
-                        reference_source_df, "presidio", x_column, y_column
-                    )
-                    if presidio_point is None:
-                        presidio_point = transformed_method_point(
-                            dataset_name, "presidio", x_column, y_column,
-                            fallback_frames=[reference_source_df],
-                        )
-                if presidio_point is not None:
-                    extra_y_values = list(extra_y_values) + [presidio_point[1]]
+            if panel_df.empty:
+                ax.set_xlabel(f"Privacy ({x_column})")
+                ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
+                ax.grid(alpha=0.25)
+                continue
 
-                all_handles: list = []
-                all_labels: list[str] = []
-                ref_handles: list = []
-                ref_labels: list[str] = []
-                seen_legend_labels: set[str] = set()
+            panel_df["param_keys_signature"] = panel_df["plot_params_dict"].apply(param_keys_signature)
+            panel_df["method_param_key"] = panel_df.apply(
+                lambda row: f"{row['method']}+{row['param_keys_signature']}",
+                axis=1,
+            )
+            panel_df["shade_param"] = panel_df["plot_params_dict"].apply(select_shade_param)
+            panel_df["base_color_group"] = panel_df.apply(
+                lambda row: base_color_group_key(
+                    row["method"],
+                    row["plot_params_dict"],
+                    row["param_keys_signature"],
+                    split=row["split"] if "split" in row.index and not pd.isna(row["split"]) else None,
+                ),
+                axis=1,
+            )
 
-                for ax, epsilon_value, panel_df in zip(axes, panel_values, panel_frames):
-                    if _has_secondary:
-                        if epsilon_value is None:
-                            ax.set_facecolor("#F5F5F5")
-                            ax.set_title("ε = 0  (masking)", fontsize=11, pad=8)
-                        else:
-                            ax.set_title(f"ε = {int(epsilon_value)}", fontsize=11, pad=8)
-
-                    if presidio_point is not None:
-                        sc = ax.scatter(
-                            *presidio_point,
-                            marker="*",
-                            s=220,
-                            color=PRESIDIO_COLOR,
-                            zorder=7,
-                            label="Presidio",
-                        )
-                        if "Presidio" not in seen_legend_labels:
-                            seen_legend_labels.add("Presidio")
-                            all_handles.append(sc)
-                            all_labels.append("Presidio")
-
-                    if panel_df.empty:
-                        ax.set_xlabel(f"Privacy ({x_column})")
-                        ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
-                        ax.grid(alpha=0.25)
-                        continue
-
-                    panel_df["param_keys_signature"] = panel_df["plot_params_dict"].apply(param_keys_signature)
-                    panel_df["method_param_key"] = panel_df.apply(
-                        lambda row: f"{row['method']}+{row['param_keys_signature']}",
-                        axis=1,
-                    )
-                    panel_df["shade_param"] = panel_df["plot_params_dict"].apply(select_shade_param)
-                    panel_df["base_color_group"] = panel_df.apply(
-                        lambda row: base_color_group_key(
-                            row["method"],
-                            row["plot_params_dict"],
-                            row["param_keys_signature"],
-                            split=row["split"] if "split" in row.index and not pd.isna(row["split"]) else None,
-                        ),
-                        axis=1,
-                    )
-
-                    shade_level_map: dict[str, dict[object, float]] = {}
-                    for base_group, group_df in panel_df.groupby("base_color_group", sort=False):
-                        shade_param = group_df["shade_param"].iloc[0]
-                        if not isinstance(shade_param, str):
-                            shade_level_map[base_group] = {}
-                            continue
-                        shade_values = []
-                        for params_dict in group_df["plot_params_dict"]:
-                            if shade_param in params_dict:
-                                shade_values.append(params_dict[shade_param])
-                        unique_values = sort_param_values(set(shade_values), shade_param, param_specs)
-                        if not unique_values:
-                            shade_level_map[base_group] = {}
-                        elif len(unique_values) == 1:
-                            shade_level_map[base_group] = {unique_values[0]: 0.45}
-                        else:
-                            shade_level_map[base_group] = {
-                                value: idx / (len(unique_values) - 1)
-                                for idx, value in enumerate(unique_values)
-                            }
-
-                    for base_group, group_df in panel_df.groupby("base_color_group", sort=False):
-                        first_row = group_df.iloc[0]
-                        grouped_method_name = str(first_row["method"])
-                        shade_param = first_row["shade_param"]
-                        row_split = first_row.get("split") if "split" in first_row.index else None
-                        if row_split is not None and pd.isna(row_split):
-                            row_split = None
-                        method_display_name = configured_method_display_name(
-                            method_name,
-                            grouped_method_name,
-                            first_row["plot_params_dict"],
-                            shade_param,
-                            method_display_specs,
-                            row_split,
-                        )
-                        base_color = get_base_color(base_group, color_cache)
-                        method_marker = get_group_marker(base_group, marker_cache)
-
-                        ordered_rows = group_df.copy()
-                        if isinstance(shade_param, str):
-                            ordered_rows["__shade_sort__"] = ordered_rows["plot_params_dict"].apply(
-                                lambda params: sort_param_value_for_shading(params.get(shade_param))
-                            )
-                            ordered_rows = ordered_rows.sort_values("__shade_sort__")
-                            if order_is_descending(shade_param, param_specs):
-                                ordered_rows = ordered_rows.iloc[::-1]
-
-                        has_line = len(ordered_rows) >= 2
-                        series_label = series_legend_label(
-                            method_display_name,
-                            first_row["plot_params_dict"],
-                            shade_param,
-                        )
-                        if has_line:
-                            h, = ax.plot(
-                                ordered_rows["P_plot"],
-                                ordered_rows["U_plot"],
-                                color=base_color,
-                                linewidth=1.8,
-                                alpha=0.9,
-                                label=series_label,
-                            )
-                            if series_label not in seen_legend_labels:
-                                seen_legend_labels.add(series_label)
-                                all_handles.append(h)
-                                all_labels.append(series_label)
-
-                        first_point = True
-                        for _, row in ordered_rows.iterrows():
-                            params_dict = row["plot_params_dict"]
-                            shade_value = None
-                            if isinstance(shade_param, str):
-                                shade_value = params_dict.get(shade_param)
-                            shade_level = shade_level_map.get(base_group, {}).get(shade_value, 0.45)
-                            point_color = shade_color(base_color, shade_level)
-
-                            sc = ax.scatter(
-                                row["P_plot"],
-                                row["U_plot"],
-                                marker=method_marker,
-                                color=point_color,
-                                edgecolor=base_color,
-                                linewidth=0.8,
-                                alpha=0.98,
-                                s=90,
-                                label=series_label if first_point and not has_line else "_nolegend_",
-                            )
-                            if first_point and not has_line and series_label not in seen_legend_labels:
-                                seen_legend_labels.add(series_label)
-                                all_handles.append(sc)
-                                all_labels.append(series_label)
-                            first_point = False
-
-                        annotate_series_endpoints(ax, ordered_rows, shade_param, base_color)
-
-                    lines_before = set(id(l) for l in ax.lines)
-                    add_central_tendency_line(ax, reference_source_df, y_column)
-                    for line in ax.lines:
-                        if id(line) not in lines_before:
-                            lbl = line.get_label()
-                            if lbl and not lbl.startswith("_") and lbl not in seen_legend_labels:
-                                seen_legend_labels.add(lbl)
-                                ref_handles.append(line)
-                                ref_labels.append(lbl)
-
-                    ax.set_xlabel(f"Privacy ({x_column})")
-                    ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
-                    ax.tick_params(axis="x", labelsize=14)
-                    ax.tick_params(axis="y", labelsize=14)
-                    ax.grid(alpha=0.25)
-
-                non_empty = [pf for pf in panel_frames if not pf.empty]
-                if non_empty:
-                    combined_df = pd.concat(non_empty, ignore_index=True)
-                    extra_x = [presidio_point[0]] if presidio_point is not None else None
-                    extra_y = list(extra_y_values) + ([presidio_point[1]] if presidio_point is not None else [])
-                    x_limits, y_limits = zoomed_limits_for_df(combined_df, extra_y_values=extra_y, extra_x_values=extra_x)
-                    for ax in axes:
-                        ax.set_xlim(*x_limits)
-                        ax.set_ylim(*y_limits)
-
-                merged_handles = all_handles + ref_handles
-                merged_labels = all_labels + ref_labels
-                if merged_handles:
-                    fig.legend(
-                        merged_handles, merged_labels,
-                        loc="lower center",
-                        bbox_to_anchor=(0.5, 0.0),
-                        ncol=min(len(merged_handles), 4),
-                        fontsize=11,
-                        framealpha=0.9,
-                        borderaxespad=0.2,
-                    )
-                    fig.tight_layout(rect=[0.02, 0.07, 0.98, 0.97])
+            shade_level_map: dict[str, dict[object, float]] = {}
+            for base_group, group_df in panel_df.groupby("base_color_group", sort=False):
+                shade_param = group_df["shade_param"].iloc[0]
+                if not isinstance(shade_param, str):
+                    shade_level_map[base_group] = {}
+                    continue
+                shade_values = []
+                for params_dict in group_df["plot_params_dict"]:
+                    if shade_param in params_dict:
+                        shade_values.append(params_dict[shade_param])
+                unique_values = sort_param_values(set(shade_values), shade_param, param_specs)
+                if not unique_values:
+                    shade_level_map[base_group] = {}
+                elif len(unique_values) == 1:
+                    shade_level_map[base_group] = {unique_values[0]: 0.45}
                 else:
-                    fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.97])
-                output_dir = OUTPUT_DIR / dataset_name / method_name / x_name
-                output_dir.mkdir(parents=True, exist_ok=True)
-                output_path = output_dir / f"{y_name}.png"
-                fig.savefig(output_path, dpi=200)
-                print(f"Saved plot to {output_path}")
-                plt.close(fig)
+                    shade_level_map[base_group] = {
+                        value: idx / (len(unique_values) - 1)
+                        for idx, value in enumerate(unique_values)
+                    }
+
+            for base_group, group_df in panel_df.groupby("base_color_group", sort=False):
+                first_row = group_df.iloc[0]
+                grouped_method_name = str(first_row["method"])
+                shade_param = first_row["shade_param"]
+                row_split = first_row.get("split") if "split" in first_row.index else None
+                if row_split is not None and pd.isna(row_split):
+                    row_split = None
+                method_display_name = configured_method_display_name(
+                    method_name,
+                    grouped_method_name,
+                    first_row["plot_params_dict"],
+                    shade_param,
+                    method_display_specs,
+                    row_split,
+                )
+                base_color = get_base_color(base_group, color_cache)
+                method_marker = get_group_marker(base_group, marker_cache)
+
+                ordered_rows = group_df.copy()
+                if isinstance(shade_param, str):
+                    ordered_rows["__shade_sort__"] = ordered_rows["plot_params_dict"].apply(
+                        lambda params: sort_param_value_for_shading(params.get(shade_param))
+                    )
+                    ordered_rows = ordered_rows.sort_values("__shade_sort__")
+                    if order_is_descending(shade_param, param_specs):
+                        ordered_rows = ordered_rows.iloc[::-1]
+
+                has_line = len(ordered_rows) >= 2
+                series_label = series_legend_label(
+                    method_display_name,
+                    first_row["plot_params_dict"],
+                    shade_param,
+                )
+                if has_line:
+                    h, = ax.plot(
+                        ordered_rows["P_plot"],
+                        ordered_rows["U_plot"],
+                        color=base_color,
+                        linewidth=1.8,
+                        alpha=0.9,
+                        label=series_label,
+                    )
+                    if series_label not in seen_legend_labels:
+                        seen_legend_labels.add(series_label)
+                        all_handles.append(h)
+                        all_labels.append(series_label)
+
+                first_point = True
+                for _, row in ordered_rows.iterrows():
+                    params_dict = row["plot_params_dict"]
+                    shade_value = None
+                    if isinstance(shade_param, str):
+                        shade_value = params_dict.get(shade_param)
+                    shade_level = shade_level_map.get(base_group, {}).get(shade_value, 0.45)
+                    point_color = shade_color(base_color, shade_level)
+
+                    sc = ax.scatter(
+                        row["P_plot"],
+                        row["U_plot"],
+                        marker=method_marker,
+                        color=point_color,
+                        edgecolor=base_color,
+                        linewidth=0.8,
+                        alpha=0.98,
+                        s=90,
+                        label=series_label if first_point and not has_line else "_nolegend_",
+                    )
+                    if first_point and not has_line and series_label not in seen_legend_labels:
+                        seen_legend_labels.add(series_label)
+                        all_handles.append(sc)
+                        all_labels.append(series_label)
+                    first_point = False
+
+                annotate_series_endpoints(ax, ordered_rows, shade_param, base_color)
+
+            lines_before = set(id(l) for l in ax.lines)
+            add_central_tendency_line(ax, reference_source_df, y_column)
+            for line in ax.lines:
+                if id(line) not in lines_before:
+                    lbl = line.get_label()
+                    if lbl and not lbl.startswith("_") and lbl not in seen_legend_labels:
+                        seen_legend_labels.add(lbl)
+                        ref_handles.append(line)
+                        ref_labels.append(lbl)
+
+            ax.set_xlabel(f"Privacy ({x_column})")
+            ax.set_ylabel(y_axis_assessment_label(y_column, metric_bounds))
+            ax.tick_params(axis="x", labelsize=14)
+            ax.tick_params(axis="y", labelsize=14)
+            ax.grid(alpha=0.25)
+
+        non_empty = [pf for pf in panel_frames if not pf.empty]
+        if non_empty:
+            combined_df = pd.concat(non_empty, ignore_index=True)
+            extra_x = [presidio_point[0]] if presidio_point is not None else None
+            extra_y = list(extra_y_values) + ([presidio_point[1]] if presidio_point is not None else [])
+            x_limits, y_limits = zoomed_limits_for_df(combined_df, extra_y_values=extra_y, extra_x_values=extra_x)
+            for ax in axes:
+                ax.set_xlim(*x_limits)
+                ax.set_ylim(*y_limits)
+
+        merged_handles = all_handles + ref_handles
+        merged_labels = all_labels + ref_labels
+        if merged_handles:
+            fig.legend(
+                merged_handles, merged_labels,
+                loc="lower center",
+                bbox_to_anchor=(0.5, 0.0),
+                ncol=min(len(merged_handles), 4),
+                fontsize=11,
+                framealpha=0.9,
+                borderaxespad=0.2,
+            )
+            fig.tight_layout(rect=[0.02, 0.07, 0.98, 0.97])
+        else:
+            fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.97])
+        output_dir = OUTPUT_DIR / dataset_name / method_name / x_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"{y_name}.png"
+        fig.savefig(output_path, dpi=200)
+        plt.close(fig)
+        saved_count += 1
+        progress.update(1)
+
+    progress.close()
+    print(f"pu_tradeoff: saved={saved_count}, skipped={skipped_count}, total={len(plan)}")

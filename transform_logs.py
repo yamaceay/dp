@@ -6,6 +6,8 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from meta_scores import MetaScoreEngine, parse_meta_score_defs
+
 
 INPUT_LOGS_PATH = Path("merged_logs.json")
 OUTPUT_DIR = Path("mds")
@@ -369,6 +371,126 @@ class MarkdownDatasetLogsWriter:
                 written.extend(self._write_frame(frame, self.output_dir / dataset / set_name))
         return written
 
+    def write_meta_tables(self, method_sets_file: str | Path) -> list[Path]:
+        defs = parse_meta_score_defs(DATASET_SETS_CONFIG_PATH)
+        engine = MetaScoreEngine(defs)
+        meta_cols = engine.meta_columns()
+        keep = ["method", "params", "split"] + meta_cols
+
+        with open(method_sets_file, "r") as f:
+            config = yaml.safe_load(f)
+        method_sets = config.get("method_sets", [])
+
+        written: list[Path] = []
+        for dataset, raw_frame in self._dataset_frames().items():
+            projected = self._project_method_set_frame(dataset, raw_frame)
+            meta_frame = engine.compute(projected)
+            self._log_resolved_args(engine, dataset, "meta_logs")
+            self._write_meta_args_manifest(engine, dataset)
+            meta_only = meta_frame[[c for c in keep if c in meta_frame.columns]]
+            written.extend(self._write_frame(meta_only, self.output_dir / dataset / "meta_logs"))
+
+            for method_set in method_sets:
+                if not self._dataset_enabled_for_method_set(dataset, method_set):
+                    continue
+                set_name = method_set["name"]
+                methods = method_set.get("methods", [])
+                logs = self.flat_logs.by_dataset().get(dataset, [])
+                filtered_logs = [item for item in logs if self._matches_any_method_spec(item, methods)]
+                if not filtered_logs:
+                    continue
+                filtered_logs = self._sort_by_method_set_order(filtered_logs, methods)
+                frame = pd.DataFrame(filtered_logs)
+                projected_set = self._project_method_set_frame(dataset, frame)
+                meta_set = engine.compute(projected_set)
+                self._log_resolved_args(engine, dataset, set_name)
+                meta_set_only = meta_set[[c for c in keep if c in meta_set.columns]]
+                written.extend(self._write_frame(meta_set_only, self.output_dir / dataset / f"meta_{set_name}"))
+        return written
+
+    def _write_meta_args_manifest(self, engine: "MetaScoreEngine", dataset: str) -> None:
+        non_exact: dict[str, dict[str, Any]] = {}
+        defs_by_output: dict[str, list[Any]] = {}
+        for d in engine._defs:
+            defs_by_output.setdefault(d.output, []).append(d)
+
+        for output, args in engine.resolved_args.items():
+            defs_for_output = defs_by_output.get(output, [])
+            if not any(d.strategy != "exact_set" for d in defs_for_output):
+                continue
+            formula = self._meta_formula_for_output(
+                output=output,
+                defs_by_output=defs_by_output,
+                resolved_args=engine.resolved_args,
+            )
+            non_exact[output] = {"args": args, "formula": formula}
+
+        path = self.output_dir / dataset / "meta_args_manifest.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(non_exact, f, indent=2)
+
+    def _meta_formula_for_output(
+        self,
+        output: str,
+        defs_by_output: dict[str, list[Any]],
+        resolved_args: dict[str, list[str]],
+    ) -> str:
+        expr = self._meta_expr_for_output(output, defs_by_output, resolved_args, set())
+        return f"{output} = {expr}"
+
+    def _meta_expr_for_output(
+        self,
+        output: str,
+        defs_by_output: dict[str, list[Any]],
+        resolved_args: dict[str, list[str]],
+        stack: set[str],
+    ) -> str:
+        if output in stack:
+            return output
+        defs_for_output = defs_by_output.get(output, [])
+        if not defs_for_output:
+            return output
+
+        d = next((item for item in defs_for_output if item.split is None), defs_for_output[0])
+        args = tuple(resolved_args.get(output, [])) or d.args
+        stack.add(output)
+        rendered_args: list[str] = []
+        for arg in args:
+            if arg in defs_by_output:
+                rendered_args.append(f"({self._meta_expr_for_output(arg, defs_by_output, resolved_args, stack)})")
+            else:
+                rendered_args.append(arg)
+        stack.remove(output)
+
+        if d.op == "avg":
+            return f"avg({', '.join(rendered_args)})"
+        if d.op == "sum":
+            return " + ".join(rendered_args)
+        if d.op == "sub":
+            return " - ".join(rendered_args)
+        if d.op == "div":
+            return " / ".join(rendered_args)
+        return f"{d.op}({', '.join(rendered_args)})"
+
+    def _log_resolved_args(
+        self, engine: "MetaScoreEngine", dataset: str, table: str
+    ) -> None:
+        defs_by_output: dict[str, list[Any]] = {}
+        for d in engine._defs:
+            defs_by_output.setdefault(d.output, []).append(d)
+        for output, args in engine.resolved_args.items():
+            defs_for_output = [
+                d for d in engine._defs if d.output == output and d.strategy != "exact_set"
+            ]
+            if defs_for_output:
+                formula = self._meta_formula_for_output(
+                    output=output,
+                    defs_by_output=defs_by_output,
+                    resolved_args=engine.resolved_args,
+                )
+                print(f"[meta] {dataset}/{table}: {formula}")
+
     def _sort_by_method_set_order(
         self, items: list[dict[str, Any]], method_specs: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
@@ -594,6 +716,7 @@ if __name__ == "__main__":
     )
     writer.write_dataset_tables()
     writer.write_method_set_tables(METHOD_SETS_CONFIG_PATH)
+    writer.write_meta_tables(METHOD_SETS_CONFIG_PATH)
     with open(PARAMS_MANIFEST_PATH, "w") as f:
         json.dump(read_param_specs_config(PARAM_SETS_CONFIG_PATH), f, indent=2)
     with open(TYPST_TABLES_MANIFEST_PATH, "w") as f:

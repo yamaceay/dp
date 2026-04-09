@@ -27,6 +27,8 @@ from plot_layout import (
     param_directed_sort_key,
     style_x_axis,
 )
+from meta_scores import parse_meta_score_defs
+from progress_utils import new_progress
 
 INPUT_DIR = Path("mds")
 DATASET_CONFIG_PATH = Path("configs/visualize/datasets.yaml")
@@ -135,6 +137,53 @@ def read_dataset_specs() -> dict[str, dict[str, Any]]:
     return result
 
 
+def read_meta_dataset_specs() -> dict[str, dict[str, Any]]:
+    defs = parse_meta_score_defs(DATASET_CONFIG_PATH)
+    config = read_yaml(DATASET_CONFIG_PATH)
+    seen_outputs: list[str] = []
+    specs_by_output: dict[str, dict[str, Any]] = {}
+    for d in defs:
+        if d.output not in specs_by_output:
+            seen_outputs.append(d.output)
+            specs_by_output[d.output] = {
+                "name": d.output,
+                "label": d.output,
+                "best": d.best,
+                "worst": d.worst,
+                "category": d.category,
+                "exclude": [],
+            }
+    scores = [specs_by_output[o] for o in seen_outputs]
+    result: dict[str, dict[str, Any]] = {}
+    for dataset_set in config.get("dataset_sets", []):
+        if not isinstance(dataset_set, dict):
+            continue
+        scope = dataset_set.get("names")
+        dataset_names: list[tuple[str, str]] = []
+        if isinstance(scope, list):
+            for entry in scope:
+                if isinstance(entry, dict) and isinstance(entry.get("name"), str):
+                    dataset_names.append(
+                        (
+                            entry["name"],
+                            str(entry.get("print_as") or entry["name"].replace("_", "-").upper()),
+                        )
+                    )
+                elif isinstance(entry, str):
+                    dataset_names.append((entry, entry.replace("_", "-").upper()))
+        elif isinstance(dataset_set.get("name"), str):
+            dataset_name = str(dataset_set["name"])
+            dataset_names.append(
+                (
+                    dataset_name,
+                    str(dataset_set.get("print_as") or dataset_name.replace("_", "-").upper()),
+                )
+            )
+        for dataset_name, dataset_label in dataset_names:
+            result[dataset_name] = {"label": dataset_label, "scores": list(scores)}
+    return result
+
+
 def read_method_specs() -> list[dict[str, Any]]:
     config = read_yaml(METHODS_CONFIG_PATH)
     return [
@@ -168,6 +217,10 @@ def metric_output_name(metric_spec: dict[str, Any]) -> str:
     label = str(metric_spec.get("label") or metric_spec.get("name") or "metric")
     slug = re.sub(r"[^A-Za-z0-9._-]+", "_", label).strip("_")
     return slug or "metric"
+
+
+def metric_display_label(metric_spec: dict[str, Any]) -> str:
+    return str(metric_spec.get("display_label") or metric_spec.get("label") or metric_spec.get("name") or "metric")
 
 
 def metric_direction(metric_spec: dict[str, Any]) -> str:
@@ -328,8 +381,17 @@ def method_color(method: str, color_cache: dict[str, tuple[float, float, float]]
     return color_cache[method]
 
 
-def load_dataset_frame(dataset_name: str) -> pd.DataFrame:
-    path = INPUT_DIR / dataset_name / "logs.csv"
+def load_meta_args_manifest(dataset_name: str) -> dict[str, Any]:
+    path = INPUT_DIR / dataset_name / "meta_args_manifest.json"
+    if not path.exists():
+        return {}
+    with path.open("r") as f:
+        return json.load(f)
+
+
+def load_dataset_frame(dataset_name: str, meta: bool = False) -> pd.DataFrame:
+    filename = "meta_logs.csv" if meta else "logs.csv"
+    path = INPUT_DIR / dataset_name / filename
     if not path.exists():
         raise FileNotFoundError(path)
     frame = pd.read_csv(path)
@@ -760,7 +822,7 @@ def plot_drilldown(
     color_cache: dict[str, tuple[float, float, float]] = {}
     direction = metric_direction(metric_spec)
     ascending = direction == "min"
-    metric_label = str(metric_spec["label"])
+    metric_label = metric_display_label(metric_spec)
     method_set_label = str(method_set.get("print_as") or method_set["name"])
     all_values: list[float] = []
     excluded_params = {"epsilon"} if epsilon_values else set()
@@ -931,7 +993,7 @@ def plot_heatmap(
 
     method_name = str(working.iloc[0]["method"])
     method_label = method_labels.get(method_name, method_name)
-    metric_label = str(metric_spec["label"])
+    metric_label = metric_display_label(metric_spec)
     x_tick_labels = [format_param_value(value) for value in epsilon_values]
     y_tick_labels = [format_param_value(value) for value in secondary_values]
     secondary_label = str(param_specs.get(secondary_param, {}).get("print_as") or secondary_param)
@@ -1208,61 +1270,95 @@ def resolve_datasets(args: argparse.Namespace, dataset_specs: dict[str, dict[str
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate single-metric ranking and drill-down plots.")
     parser.add_argument("--datasets", nargs="*", default=None)
+    parser.add_argument("--meta", action="store_true", help="Use meta scores instead of raw scores.")
     args = parser.parse_args()
 
-    dataset_specs = read_dataset_specs()
+    dataset_specs = read_meta_dataset_specs() if args.meta else read_dataset_specs()
     method_labels = read_method_labels()
     method_sets = read_method_specs()
     param_specs = read_param_specs()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    for dataset_name in resolve_datasets(args, dataset_specs):
+    selected_datasets = resolve_datasets(args, dataset_specs)
+    runtime_total = 0 if args.meta else len(selected_datasets) * len(method_sets)
+    metric_total = sum(len(dataset_specs[d]["scores"]) for d in selected_datasets) * len(method_sets) * 2
+    progress = new_progress(total=runtime_total + metric_total, desc="single_metric_plots", unit="step")
+
+    for dataset_name in selected_datasets:
         dataset_spec = dataset_specs[dataset_name]
         dataset_label = str(dataset_spec["label"])
-        frame = load_dataset_frame(dataset_name)
-        for method_set in method_sets:
-            filtered = filter_method_set_rows(dataset_name, frame, method_set)
-            if filtered.empty:
-                continue
-            plot_runtime_stacked(
-                dataset_name,
-                dataset_label,
-                filtered,
-                method_set,
-                method_labels,
-                param_specs,
-            )
+        frame = load_dataset_frame(dataset_name, meta=args.meta)
+        meta_display_labels: dict[str, str] = {}
+        if args.meta:
+            meta_args = load_meta_args_manifest(dataset_name)
+            for score in dataset_spec["scores"]:
+                output = score["name"]
+                if output not in meta_args:
+                    continue
+                entry = meta_args[output]
+                if isinstance(entry, dict) and isinstance(entry.get("formula"), str):
+                    meta_display_labels[output] = str(entry["formula"])
+                    continue
+                if isinstance(entry, list):
+                    base_label = str(score.get("label") or output)
+                    meta_display_labels[output] = f"{base_label} [{', '.join(str(a) for a in entry)}]"
+        if not args.meta:
+            for method_set in method_sets:
+                progress.set_postfix_str(f"{dataset_name}:{method_set['name']}:runtime")
+                filtered = filter_method_set_rows(dataset_name, frame, method_set)
+                progress.update(1)
+                if filtered.empty:
+                    continue
+                plot_runtime_stacked(
+                    dataset_name,
+                    dataset_label,
+                    filtered,
+                    method_set,
+                    method_labels,
+                    param_specs,
+                )
         for metric_spec in dataset_spec["scores"]:
             metric_name = str(metric_spec["name"])
+            metric_plot_spec = dict(metric_spec)
+            if metric_name in meta_display_labels:
+                metric_plot_spec["display_label"] = meta_display_labels[metric_name]
             if metric_name not in frame.columns:
+                progress.update(2 * len(method_sets))
                 continue
-            if str(metric_spec.get("category")) == "runtime":
+            if str(metric_plot_spec.get("category")) == "runtime":
+                progress.update(2 * len(method_sets))
                 continue
-            metric_frame = apply_metric_exclusions(frame, metric_spec)
+            metric_frame = apply_metric_exclusions(frame, metric_plot_spec)
             if metric_frame.empty:
+                progress.update(2 * len(method_sets))
                 continue
             for method_set in method_sets:
+                progress.set_postfix_str(f"{dataset_name}:{method_set['name']}:{metric_name}")
                 filtered = filter_method_set_rows(dataset_name, metric_frame, method_set)
                 if filtered.empty:
+                    progress.update(2)
                     continue
                 plot_drilldown(
                     dataset_name,
                     dataset_label,
-                    metric_spec,
+                    metric_plot_spec,
                     filtered,
                     method_set,
                     method_labels,
                     param_specs,
                 )
+                progress.update(1)
                 plot_heatmap(
                     dataset_name,
                     dataset_label,
-                    metric_spec,
+                    metric_plot_spec,
                     filtered,
                     method_set,
                     method_labels,
                     param_specs,
                 )
+                progress.update(1)
+    progress.close()
 
 
 if __name__ == "__main__":
