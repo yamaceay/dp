@@ -37,26 +37,22 @@ dataset_sets:
         rename_as: U_mae
         best: 0
         worst: 1
-      - name: supervised_divergence_utility_nominal_raw_acc
-        rename_as: SD_acc
+      - name: supervised_similarity_utility_nominal_raw_acc
+        rename_as: SS_acc
         best: 1
         worst: 0
-      - name: supervised_divergence_utility_ordinal_raw_mae
-        rename_as: SD_mae
+      - name: supervised_similarity_utility_ordinal_raw_mae
+        rename_as: SS_mae
         best: 0
         worst: 1
       - name: divergence_bertscore
         rename_as: D_bertscore
         best: 0
         worst: 1
-        exclude:
-          - baseline
       - name: divergence_cosine
         rename_as: D_cosine
         best: 0
         worst: 1
-        exclude:
-          - baseline
       - name: divergence_pp
         rename_as: D_pp
         best: 0
@@ -75,25 +71,51 @@ dataset_sets:
       - avg: [P_exact, P_more, P_full]
         rename_as: P
         category: privacy
+      - avg: [rel_P_exact, rel_P_more, rel_P_full]
+        rename_as: rel_P
+        category: privacy
       - avg: [P_exact, P_more]
         rename_as: P
+        split: test
+        category: privacy
+      - avg: [rel_P_exact, rel_P_more]
+        rename_as: rel_P
         split: test
         category: privacy
       - avg: [TRIR_exact, TRIR_more, TRIR_full]
         rename_as: TRIR
         category: privacy
+      - avg: [rel_TRIR_exact, rel_TRIR_more, rel_TRIR_full]
+        rename_as: rel_TRIR
+        category: privacy
       - avg: [TRIR_exact, TRIR_more]
         rename_as: TRIR
+        split: test
+        category: privacy
+      - avg: [rel_TRIR_exact, rel_TRIR_more]
+        rename_as: rel_TRIR
         split: test
         category: privacy
       - avg: [U_acc]
         rename_as: U
         category: utility
-      - avg: [SD_acc]
-        rename_as: SD
+      - avg: [rel_U_acc, rel_U_mae]
+        rename_as: rel_U
         category: utility
+        strategy: smallest_subset
+      - avg: [SS_acc]
+        rename_as: SS
+        category: utility
+      - avg: [rel_SS_acc, rel_SS_mae]
+        rename_as: rel_SD
+        category: utility
+        strategy: smallest_subset
       - avg: [D_bertscore, D_cosine, D_pp]
         rename_as: D
+        category: divergence
+        strategy: smallest_subset
+      - avg: [rel_D_bertscore, rel_D_cosine, rel_D_pp]
+        rename_as: rel_D
         category: divergence
         strategy: smallest_subset
       - avg: [D_pp]
@@ -101,19 +123,14 @@ dataset_sets:
         split: test
         category: divergence
         strategy: smallest_subset
+      - avg: [rel_D_pp]
+        rename_as: rel_D
+        split: test
+        category: divergence
+        strategy: smallest_subset
       - avg: [T_anon_avg_s]
         rename_as: T
         category: runtime
-      - div: [P, original(P)]
-        rename_as: rel_P
-        best: 0
-        worst: float("inf")
-        category: privacy
-      - div: [U, original(U)]
-        rename_as: rel_U
-        best: 1
-        worst: 0
-        category: utility
-      - sub: [rel_U, rel_P]
-        rename_as: GAIN
-        category: compound
+      - avg: [rel_T_anon_avg_s]
+        rename_as: rel_T
+        category: runtime

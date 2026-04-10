@@ -349,7 +349,7 @@ def maybe_group(result: Dict[str, Any]) -> str | None:
     return result.get("group")
 
 def experiment_type(result: Dict[str, Any]) -> str:
-    for field in ["privacy", "utility", "supervised_divergence", "divergence"]:
+    for field in ["privacy", "utility", "supervised_similarity", "divergence"]:
         if field in result:
             return field
     raise ValueError(f"Could not determine experiment type for result: {result}")
@@ -405,7 +405,7 @@ def add_real_anonymization_runtime(grouped_results: List[Dict[str, Any]]) -> Lis
 class LogGrouper:
     def group(results: List[Dict[str, Any]]) -> Dict[tuple, List[Dict[str, Any]]]:
         grouped: Dict[Tuple[str, str, frozenset, str | None, str | None], Dict[str, Any]] = {}
-        valid_types = ["privacy", "utility", "supervised_divergence", "divergence", "runtime"]
+        valid_types = ["privacy", "utility", "supervised_similarity", "divergence", "runtime"]
         for result in results:
             assert all(field in result for field in ["dataset", "method", "params"]), f"Missing required fields in result: {result}"
             assert any(field in result for field in valid_types), f"Missing privacy/utility/divergence/runtime field in result: {result}"
@@ -486,8 +486,8 @@ if __name__ == "__main__":
 
     privacy_logs = iter_type_dataset_logs("privacy")
     utility_logs = [(log_file, dataset, feature_from_log_name(log_file.name)) for log_file, dataset in iter_type_dataset_logs("utility")]
-    supervised_divergence_logs = [
-        (log_file, dataset, feature_from_log_name(log_file.name)) for log_file, dataset in iter_type_dataset_logs("supervised_divergence")
+    supervised_similarity_logs = [
+        (log_file, dataset, feature_from_log_name(log_file.name)) for log_file, dataset in iter_type_dataset_logs("supervised_similarity")
     ]
     divergence_logs = [
         (log_file, dataset, divergence_metric_from_log_name(log_file.name)) for log_file, dataset in iter_type_dataset_logs("divergence")
@@ -513,8 +513,8 @@ if __name__ == "__main__":
         all_results.extend(PrivacyExperimentLogParser.parse(log_file, dataset))
     for log_file, dataset, feature in utility_logs:
         all_results.extend(UtilityExperimentLogParser.parse(log_file, dataset, feature, utility_metrics, section_name="utility"))
-    for log_file, dataset, feature in supervised_divergence_logs:
-        all_results.extend(UtilityExperimentLogParser.parse(log_file, dataset, feature, utility_metrics, section_name="supervised_divergence"))
+    for log_file, dataset, feature in supervised_similarity_logs:
+        all_results.extend(UtilityExperimentLogParser.parse(log_file, dataset, feature, utility_metrics, section_name="supervised_similarity"))
     for log_file, dataset, metric in divergence_logs:
         all_results.extend(DivergenceExperimentLogParser.parse(log_file, dataset, metric))
 

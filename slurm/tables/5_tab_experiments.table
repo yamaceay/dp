@@ -4,7 +4,7 @@ privacy_tab_full                 |python run.py privacy --config configs/5_exper
 divergence_tab_pp                |python run.py divergence --config configs/5_experiments/tab/divergence/pp.yaml
 divergence_tab_bertscore         |python run.py divergence --config configs/5_experiments/tab/divergence/bertscore.yaml
 divergence_tab_cosine            |python run.py divergence --config configs/5_experiments/tab/divergence/cosine.yaml
-supervised_divergence_tab_country|python run.py utility --config configs/5_experiments/tab/supervised_divergence/country.yaml
-supervised_divergence_tab_year   |python run.py utility --config configs/5_experiments/tab/supervised_divergence/year.yaml
+supervised_similarity_tab_country|python run.py utility --config configs/5_experiments/tab/supervised_similarity/country.yaml
+supervised_similarity_tab_year   |python run.py utility --config configs/5_experiments/tab/supervised_similarity/year.yaml
 utility_tab_country              |python run.py utility --config configs/5_experiments/tab/utility/country.yaml
 utility_tab_year                 |python run.py utility --config configs/5_experiments/tab/utility/year.yaml

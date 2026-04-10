@@ -30,8 +30,8 @@ X_AXIS_OPTIONS = {
 Y_AXIS_OPTIONS = {
     "u_nominal": "U_acc",
     "u_ordinal": "U_mae",
-    "sd_nominal": "SD_acc",
-    "sd_ordinal": "SD_mae",
+    "ss_nominal": "SS_acc",
+    "ss_ordinal": "SS_mae",
     "d_bertscore": "D_bertscore",
     "d_cosine": "D_cosine",
     "d_pp": "D_pp",
@@ -301,9 +301,9 @@ def metric_name_and_unit(metric_name: str) -> tuple[str, str | None]:
         return metric_name, "MRR"
     if metric_name in {"TRIR_exact", "TRIR_more", "TRIR_full"}:
         return metric_name, "Acc"
-    if metric_name in {"U_acc", "SD_acc"}:
+    if metric_name in {"U_acc", "SS_acc"}:
         return metric_name.replace("_acc", ""), "ACC"
-    if metric_name in {"U_mae", "SD_mae"}:
+    if metric_name in {"U_mae", "SS_mae"}:
         return metric_name.replace("_mae", ""), "MAE"
     if metric_name in {"D_bertscore", "D_cosine", "D_pp"}:
         return metric_name, None
@@ -316,8 +316,8 @@ def y_axis_assessment_label(y_column: str, metric_bounds: dict[str, tuple[float,
     metric_label = metric_label_with_unit_and_direction(y_column, metric_bounds)
     if y_column.startswith("U_"):
         return f"Utility ({metric_label})"
-    if y_column.startswith("SD_"):
-        return f"Supervised divergence ({metric_label})"
+    if y_column.startswith("SS_"):
+        return f"Supervised similarity ({metric_label})"
     if y_column.startswith("D_"):
         return f"Divergence ({metric_label})"
     if y_column.startswith("T_"):
@@ -330,10 +330,10 @@ def y_metric_context(y_column: str) -> tuple[str, str] | None:
         return ("utility", "acc")
     if y_column == "U_mae":
         return ("utility", "mae")
-    if y_column == "SD_acc":
-        return ("supervised_divergence", "acc")
-    if y_column == "SD_mae":
-        return ("supervised_divergence", "mae")
+    if y_column == "SS_acc":
+        return ("supervised_similarity", "acc")
+    if y_column == "SS_mae":
+        return ("supervised_similarity", "mae")
     return None
 
 
@@ -420,8 +420,8 @@ def raw_metric_column(metric_name: str) -> str | None:
         "TRIR_full": "privacy_full_accuracy",
         "U_acc": "utility_utility_nominal_raw_acc",
         "U_mae": "utility_utility_ordinal_raw_mae",
-        "SD_acc": "supervised_divergence_utility_nominal_raw_acc",
-        "SD_mae": "supervised_divergence_utility_ordinal_raw_mae",
+        "SS_acc": "supervised_similarity_utility_nominal_raw_acc",
+        "SS_mae": "supervised_similarity_utility_ordinal_raw_mae",
         "D_bertscore": "divergence_bertscore",
         "D_cosine": "divergence_cosine",
         "D_pp": "divergence_pp",
@@ -605,8 +605,8 @@ def resolve_plot_targets(args: argparse.Namespace) -> list[tuple[str, str, str, 
     y_options = [
         ("u_nominal", "u_nominal"),
         ("u_ordinal", "u_ordinal"),
-        ("sd_nominal", "sd_nominal"),
-        ("sd_ordinal", "sd_ordinal"),
+        ("ss_nominal", "ss_nominal"),
+        ("ss_ordinal", "ss_ordinal"),
         ("d_bertscore", "d_bertscore"),
         ("d_cosine", "d_cosine"),
         ("d_pp", "d_pp"),

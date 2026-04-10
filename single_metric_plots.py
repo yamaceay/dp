@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Callable
 
+import warnings
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -207,7 +209,7 @@ def read_method_labels() -> dict[str, str]:
 
 
 def metric_category(metric_name: str) -> str:
-    for prefix in ("privacy_", "utility_", "supervised_divergence_", "divergence_", "runtime_"):
+    for prefix in ("privacy_", "utility_", "supervised_similarity_", "divergence_", "runtime_"):
         if metric_name.startswith(prefix):
             return prefix[:-1]
     raise ValueError(f"Unsupported metric category: {metric_name}")
@@ -944,9 +946,13 @@ def plot_drilldown(
 
     if len(panels) > 1:
         fig.suptitle(f"{dataset_label} | {method_set_label} | {metric_label}", fontsize=14, y=SUPTITLE_Y)
-        fig.tight_layout(rect=[0.22, 0.03, 0.98, TIGHT_LAYOUT_RECT[3]])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            fig.tight_layout(rect=[0.22, 0.03, 0.98, TIGHT_LAYOUT_RECT[3]])
     else:
-        fig.tight_layout(rect=[0.22, 0.03, 0.98, 0.98])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            fig.tight_layout(rect=[0.22, 0.03, 0.98, 0.98])
 
     output_path = OUTPUT_DIR / "drilldown" / dataset_name / str(method_set["name"]) / f"{metric_output}.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1237,7 +1243,9 @@ def plot_runtime_stacked(
     legend.get_title().set_fontsize(10)
     fig.suptitle(f"{dataset_label} | Runtime assessment", fontsize=14, y=SUPTITLE_Y)
     fig.text(0.5, SUBTITLE_Y, method_set_label, ha="center", va="center", fontsize=10)
-    fig.tight_layout(rect=[0.03, 0.03, 0.90, TIGHT_LAYOUT_RECT[3]])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        fig.tight_layout(rect=[0.03, 0.03, 0.90, TIGHT_LAYOUT_RECT[3]])
 
     output_path = OUTPUT_DIR / "stacked" / dataset_name / str(method_set["name"]) / "runtime_pipeline.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)

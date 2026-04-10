@@ -1,4 +1,5 @@
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -40,7 +41,7 @@ class LogMetricsEnricher:
         enriched: list[dict[str, Any]] = []
         for item in self.data:
             item_copy = dict(item)
-            for section in ("utility", "supervised_divergence"):
+            for section in ("utility", "supervised_similarity"):
                 section_metrics = item_copy.get(section)
                 if not isinstance(section_metrics, dict):
                     continue
@@ -219,12 +220,13 @@ class FlatDatasetLogs:
                 "params": order_params_dict(params),
                 "split": item.get("split"),
             }
-            for section in ("privacy", "utility", "supervised_divergence", "divergence", "runtime"):
+            for section in ("privacy", "utility", "supervised_similarity", "divergence", "runtime"):
                 for metric, value in item.get(section, {}).items():
                     flat_item[f"{section}_{metric}"] = value
             if item["method"] == "baseline":
-                flat_item.setdefault("divergence_bertscore", 0.0)
-                flat_item.setdefault("divergence_cosine", 0.0)
+                flat_item["divergence_bertscore"] = 0.0
+                flat_item["divergence_cosine"] = 0.0
+                flat_item["runtime_avg_anon_time_s"] = 0.0
             flattened.append(flat_item)
         sorted_flattened = self.sort_by_method_order(flattened)
         return sorted_flattened
@@ -374,8 +376,8 @@ class MarkdownDatasetLogsWriter:
     def write_meta_tables(self, method_sets_file: str | Path) -> list[Path]:
         defs = parse_meta_score_defs(DATASET_SETS_CONFIG_PATH)
         engine = MetaScoreEngine(defs)
-        meta_cols = engine.meta_columns()
-        keep = ["method", "params", "split"] + meta_cols
+        meta_cols = [c for c in engine.meta_columns() if not c.startswith("rel_")]
+        keep = ["method", "params", "split"] + meta_cols + ["GAIN"]
 
         with open(method_sets_file, "r") as f:
             config = yaml.safe_load(f)
@@ -384,7 +386,9 @@ class MarkdownDatasetLogsWriter:
         written: list[Path] = []
         for dataset, raw_frame in self._dataset_frames().items():
             projected = self._project_method_set_frame(dataset, raw_frame)
-            meta_frame = engine.compute(projected)
+            computed = engine.compute(projected)
+            baseline = self._extract_baseline(computed)
+            meta_frame = self._add_gain(computed, baseline)
             self._log_resolved_args(engine, dataset, "meta_logs")
             self._write_meta_args_manifest(engine, dataset)
             meta_only = meta_frame[[c for c in keep if c in meta_frame.columns]]
@@ -402,11 +406,38 @@ class MarkdownDatasetLogsWriter:
                 filtered_logs = self._sort_by_method_set_order(filtered_logs, methods)
                 frame = pd.DataFrame(filtered_logs)
                 projected_set = self._project_method_set_frame(dataset, frame)
-                meta_set = engine.compute(projected_set)
+                meta_set = self._add_gain(engine.compute(projected_set), baseline)
                 self._log_resolved_args(engine, dataset, set_name)
                 meta_set_only = meta_set[[c for c in keep if c in meta_set.columns]]
                 written.extend(self._write_frame(meta_set_only, self.output_dir / dataset / f"meta_{set_name}"))
         return written
+
+    @staticmethod
+    def _extract_baseline(frame: pd.DataFrame) -> pd.Series | None:
+        mask = (frame["method"] == "baseline") & frame["split"].isna()
+        rows = frame[mask]
+        return rows.iloc[0] if not rows.empty else None
+
+    @staticmethod
+    def _add_gain(frame: pd.DataFrame, baseline: pd.Series | None = None) -> pd.DataFrame:
+        def _val(row: pd.Series, col: str) -> float:
+            v = row.get(col)
+            return float("nan") if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
+
+        def _gain_row(row: pd.Series) -> float:
+            p, u, ss, d = _val(row, "P"), _val(row, "U"), _val(row, "SS"), _val(row, "D")
+            if any(math.isnan(v) for v in (p, u, ss, d)):
+                return float("nan")
+            if baseline is not None:
+                pb, ub, ssb, db = _val(baseline, "P"), _val(baseline, "U"), _val(baseline, "SS"), _val(baseline, "D")
+                if any(math.isnan(v) for v in (pb, ub, ssb, db)):
+                    return float("nan")
+                return ((u - ub) + (ss - ssb) - (p - pb) - (d - db)) / 4.0
+            return (u + ss - p - d) / 4.0
+
+        frame = frame.copy()
+        frame["GAIN"] = frame.apply(_gain_row, axis=1)
+        return frame
 
     def _write_meta_args_manifest(self, engine: "MetaScoreEngine", dataset: str) -> None:
         non_exact: dict[str, dict[str, Any]] = {}

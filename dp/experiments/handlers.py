@@ -495,7 +495,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         index_to_key = _build_index_to_key(ctx.dataset, ctx.data_in, params.get("max_records"))
     protocol = str(params.get("protocol", "utility")).strip().lower() or "utility"
     evaluation_texts = None
-    if protocol not in {"utility", "supervised_divergence"}:
+    if protocol not in {"utility", "supervised_similarity"}:
         evaluation_texts = align_evaluation_texts(index_to_key, records, sources)
     if ctx.debug:
         print("Evaluation sources:")
@@ -524,7 +524,7 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     )
     resolved_model_name = str(getattr(model, "name", head_name or ctx.spec.default_head))
     resolved_primary_metric = str(getattr(model, "primary_metric", head_kwargs.get("primary_metric", "")))
-    if protocol in {"utility", "supervised_divergence"}:
+    if protocol in {"utility", "supervised_similarity"}:
         model.cleanup()
         vectorizer.cleanup()
         utility_cfg_raw = params.get("utility", {}) or {}

@@ -59,7 +59,7 @@ run_python_script() {
   if [[ "$meta_mode" == true ]] && [[ "$script" == "single_metric_plots.py" ]]; then
     args+=("--meta")
   fi
-  run_step "$PYTHON_BIN" "$script" "${args[@]}"
+  run_step "$PYTHON_BIN" "$script" ${args[@]+"${args[@]}"}
 }
 
 if [[ "$skip_transform" == false ]]; then

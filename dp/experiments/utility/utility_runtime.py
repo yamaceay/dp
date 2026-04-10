@@ -493,7 +493,7 @@ def run_utility_experiment(
     baseline_test_metrics: Dict[str, float]
     baseline_overall_metrics: Dict[str, float]
 
-    if protocol == "supervised_divergence" and not has_tuning:
+    if protocol == "supervised_similarity" and not has_tuning:
         selected_head_kwargs = dict(head_kwargs)
         selected_val_metrics = {}
         tuning_trials = []
@@ -558,8 +558,8 @@ def run_utility_experiment(
             return
         yield from iter_utility_evaluation_texts(index_to_key, evaluation_sources, selected_keys=selected_keys)
 
-    if protocol == "supervised_divergence":
-        _set_global_seed(_stable_seed(config.random_state, "supervised_divergence_shared"))
+    if protocol == "supervised_similarity":
+        _set_global_seed(_stable_seed(config.random_state, "supervised_similarity_shared"))
         shared_vectorizer, shared_model = spec.build_components(
             vectorizer_name=vectorizer_name,
             vectorizer_kwargs=vectorizer_kwargs,
@@ -595,9 +595,9 @@ def run_utility_experiment(
             anon_all_texts = [mapping[key] for key in all_keys_a]
             anon_all_labels = [label_by_key[key] for key in all_keys_a]
 
-            if protocol == "supervised_divergence":
+            if protocol == "supervised_similarity":
                 if shared_vectorizer is None or shared_model is None:
-                    raise RuntimeError("supervised_divergence model is not initialized")
+                    raise RuntimeError("supervised_similarity model is not initialized")
                 train_metrics = dict(shared_train_metrics)
                 val_metrics = dict(shared_val_metrics)
                 if anon_test_texts:
@@ -671,7 +671,7 @@ def run_utility_experiment(
             evaluations[name] = {
                 "metrics": metrics_primary,
                 "drops": drops_primary,
-                "train_matched": len(train_keys) if protocol == "supervised_divergence" else len(anon_train_texts),
+                "train_matched": len(train_keys) if protocol == "supervised_similarity" else len(anon_train_texts),
                 "train_total": len(train_keys),
                 "test_matched": len(anon_test_texts),
                 "test_total": len(test_keys),
@@ -680,13 +680,13 @@ def run_utility_experiment(
                 "train_results": {
                     "metrics": train_metrics,
                     "drops": _score_difference(baseline_train_metrics, train_metrics),
-                    "matched": len(train_keys) if protocol == "supervised_divergence" else len(anon_train_texts),
+                    "matched": len(train_keys) if protocol == "supervised_similarity" else len(anon_train_texts),
                     "total": len(train_keys),
                 },
                 "val_results": {
                     "metrics": val_metrics,
                     "drops": _score_difference(baseline_val_metrics, val_metrics),
-                    "matched": len(val_keys) if protocol == "supervised_divergence" else len(anon_val_texts),
+                    "matched": len(val_keys) if protocol == "supervised_similarity" else len(anon_val_texts),
                     "total": len(val_keys),
                 },
                 "test_results": {

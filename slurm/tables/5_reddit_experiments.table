@@ -1,14 +1,14 @@
 privacy_reddit                                  |python run.py privacy --config configs/5_experiments/reddit/privacy/exact.yaml
 divergence_reddit_bertscore                     |python run.py divergence --config configs/5_experiments/reddit/divergence/bertscore.yaml
 divergence_reddit_cosine                        |python run.py divergence --config configs/5_experiments/reddit/divergence/cosine.yaml
-supervised_divergence_reddit_age                |python run.py utility --config configs/5_experiments/reddit/supervised_divergence/age.yaml
-supervised_divergence_reddit_birth_city_country |python run.py utility --config configs/5_experiments/reddit/supervised_divergence/birth_city_country.yaml
-supervised_divergence_reddit_city_country       |python run.py utility --config configs/5_experiments/reddit/supervised_divergence/city_country.yaml
-supervised_divergence_reddit_education          |python run.py utility --config configs/5_experiments/reddit/supervised_divergence/education.yaml
-supervised_divergence_reddit_income_level       |python run.py utility --config configs/5_experiments/reddit/supervised_divergence/income_level.yaml
-supervised_divergence_reddit_occupation         |python run.py utility --config configs/5_experiments/reddit/supervised_divergence/occupation.yaml
-supervised_divergence_reddit_relationship_status|python run.py utility --config configs/5_experiments/reddit/supervised_divergence/relationship_status.yaml
-supervised_divergence_reddit_sex                |python run.py utility --config configs/5_experiments/reddit/supervised_divergence/sex.yaml
+supervised_similarity_reddit_age                |python run.py utility --config configs/5_experiments/reddit/supervised_similarity/age.yaml
+supervised_similarity_reddit_birth_city_country |python run.py utility --config configs/5_experiments/reddit/supervised_similarity/birth_city_country.yaml
+supervised_similarity_reddit_city_country       |python run.py utility --config configs/5_experiments/reddit/supervised_similarity/city_country.yaml
+supervised_similarity_reddit_education          |python run.py utility --config configs/5_experiments/reddit/supervised_similarity/education.yaml
+supervised_similarity_reddit_income_level       |python run.py utility --config configs/5_experiments/reddit/supervised_similarity/income_level.yaml
+supervised_similarity_reddit_occupation         |python run.py utility --config configs/5_experiments/reddit/supervised_similarity/occupation.yaml
+supervised_similarity_reddit_relationship_status|python run.py utility --config configs/5_experiments/reddit/supervised_similarity/relationship_status.yaml
+supervised_similarity_reddit_sex                |python run.py utility --config configs/5_experiments/reddit/supervised_similarity/sex.yaml
 utility_reddit_age                              |python run.py utility --config configs/5_experiments/reddit/utility/age.yaml
 utility_reddit_birth_city_country               |python run.py utility --config configs/5_experiments/reddit/utility/birth_city_country.yaml
 utility_reddit_city_country                     |python run.py utility --config configs/5_experiments/reddit/utility/city_country.yaml

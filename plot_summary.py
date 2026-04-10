@@ -33,7 +33,7 @@ METRICS: list[str] = [
     "P_exact", "P_more", "P_full",
     "TRIR_exact", "TRIR_more", "TRIR_full",
     "U_acc", "U_mae",
-    "SD_acc", "SD_mae",
+    "SS_acc", "SS_mae",
     "D_bertscore", "D_cosine", "D_pp",
     "T_anon_avg_s",
 ]
@@ -43,16 +43,16 @@ FIXED_EPSILON_PANELS: list[float | None] = [None, 10, 25, 50, 100, 250]
 X_AXIS_OPTIONS: list[str] = ["P_exact", "P_more", "P_full", "TRIR_exact", "TRIR_more", "TRIR_full"]
 Y_AXIS_OPTIONS: list[str] = [
     "U_acc", "U_mae",
-    "SD_acc", "SD_mae",
+    "SS_acc", "SS_mae",
     "D_bertscore", "D_cosine", "D_pp",
     "T_anon_avg_s",
 ]
 
-MAE_METRICS: frozenset[str] = frozenset({"U_ordinal_mae", "SD_ordinal_mae"})
+MAE_METRICS: frozenset[str] = frozenset({"U_ordinal_mae", "SS_ordinal_mae"})
 
 MAE_RAW_COLUMN: dict[str, str] = {
     "U_ordinal_mae": "utility_utility_ordinal_raw_mae",
-    "SD_ordinal_mae": "supervised_divergence_utility_ordinal_raw_mae",
+    "SS_ordinal_mae": "supervised_similarity_utility_ordinal_raw_mae",
 }
 
 METRIC_AXIS_LABELS: dict[str, str] = {
@@ -64,8 +64,8 @@ METRIC_AXIS_LABELS: dict[str, str] = {
     "TRIR_full": "TRIR_full (Acc ↓ better)",
     "U_acc": "U_acc (Acc ↑ better)",
     "U_mae": "U_mae (MAE ↓ better)",
-    "SD_acc": "SD_acc (Acc ↑ better)",
-    "SD_mae": "SD_mae (MAE ↓ better)",
+    "SS_acc": "SS_acc (Acc ↑ better)",
+    "SS_mae": "SS_mae (MAE ↓ better)",
     "D_bertscore": "D_bertscore (↓ better)",
     "D_cosine": "D_cosine (↓ better)",
     "D_pp": "D_pp (↓ better)",
@@ -231,7 +231,7 @@ def _y_references(
     y_metric: str,
     y_ref: tuple[Optional[float], Optional[float]],
 ) -> tuple[Optional[float], Optional[float]]:
-    if y_metric not in {"U_nominal_acc", "U_ordinal_mae", "SD_nominal_acc", "SD_ordinal_mae"}:
+    if y_metric not in {"U_nominal_acc", "U_ordinal_mae", "SS_nominal_acc", "SS_ordinal_mae"}:
         return None, None
     if y_metric in MAE_METRICS:
         if y_ref[0] is not None and y_ref[1] is not None:
@@ -239,7 +239,7 @@ def _y_references(
         return None, None
     raw_col: Optional[str] = {
         "U_nominal_acc": "utility_utility_nominal_raw_acc",
-        "SD_nominal_acc": "supervised_divergence_utility_nominal_raw_acc",
+        "SS_nominal_acc": "supervised_similarity_utility_nominal_raw_acc",
     }.get(y_metric)
     if raw_col is None:
         return None, None
