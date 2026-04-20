@@ -1,0 +1,1 @@
+reddit_exact|python data_for_tri.py --config configs/1_tri_preprocessing/reddit/exact.yaml

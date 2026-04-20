@@ -1,0 +1,12 @@
+dataset: db_bio
+data_in: data/db_bio
+annotations_in:
+  - ../../../netscratch/yay/_ext_outputs/db_bio/*iter*/*
+tri:
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full/full
+  max_length: 512
+mask_token: "[MASK]"
+output:
+  format: jsonl
+  file: logs/privacy/db_bio/full.jsonl
+progress: false

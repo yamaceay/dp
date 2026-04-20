@@ -1,0 +1,12 @@
+grid:
+  training:
+    learning_rate: [1.0e-5, 2.0e-5, 3.0e-5]
+    batch_size: [8, 16]
+    weight_decay: [0.01]
+    warmup_steps: [100]
+    gradient_accumulation_steps: [1]
+    seed: [42]
+  evaluation:
+    primary_mode: [partial]
+  selection:
+    metric: [partial_recall, strict_recall, exact_recall, type_recall]

@@ -1,0 +1,25 @@
+# Core dependencies
+datasets
+pyyaml
+
+# ML/DL frameworks
+# torch==2.2.2
+# torchvision==0.17.2
+transformers==4.39.3
+accelerate==0.30.0
+
+# NLP utilities
+nltk
+nervaluate
+scikit-learn
+bert-score
+shap
+coral_pytorch
+
+# Optional dependencies for specific anonymizers
+# SpaCy NER
+spacy
+
+# Presidio PII detection
+presidio-analyzer
+presidio-anonymizer

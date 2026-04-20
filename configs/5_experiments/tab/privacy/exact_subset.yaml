@@ -1,0 +1,14 @@
+dataset: tab
+data_in: data/tab
+split: indices/tab/test.txt
+annotations_splitted: true
+annotations_in:
+  - ../../../netscratch/yay/_ext_outputs_subset/tab
+tri:
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/exact/exact
+  max_length: 512
+mask_token: "[MASK]"
+output:
+  format: jsonl
+  file: logs/privacy/tab/exact_subset.jsonl
+progress: false

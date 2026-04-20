@@ -1,0 +1,4 @@
+data: tab
+data_in: data/tab
+risk_in: data/tab/tri_risk/shap.jsonl
+pipeline_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/full_deid/full_deid

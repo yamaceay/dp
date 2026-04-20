@@ -1,0 +1,17 @@
+params:
+  ks: ["*"]
+
+T: .inf
+
+precomputation:
+  risk_scores: data/db_bio/tri_risk/shap.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio.jsonl
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full/full
+
+token_selection:
+  name: until_k
+
+verbose: true

@@ -1,0 +1,11 @@
+dataset: db_bio
+data_in: data/db_bio
+split: indices/db_bio/test.txt
+result_in: ../../../netscratch/yay/_ext_outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio.jsonl
+explainer_type: shap
+explainer_in: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full_deid/full_deid
+shap_in: data/db_bio/tri_risk/shap.jsonl
+output_dir: logs/risk_drift/db_bio/full
+t_values: [1, 2, 5, 10, null]   # null = inf (precomputed)
+max_steps: 30
+mask_token: "[MASK]"

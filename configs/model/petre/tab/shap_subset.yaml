@@ -1,0 +1,13 @@
+params:
+  ks: ["*"]
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/exact/exact
+
+precomputation:
+  risk_scores: data/tab/tri_risk/shap_subset.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs_subset/tab/presidio/{run_timestamp}_tab_presidio.jsonl
+
+token_selection:
+  name: until_k

@@ -1,0 +1,12 @@
+param_sets:
+  - name: k
+    print_order: low_to_high
+  - name: rho
+    print_as: ρ
+    print_order: high_to_low
+  - name: lambda
+    print_as: λ
+    print_order: high_to_low
+  - name: epsilon
+    print_as: ε
+    print_order: low_to_high

@@ -1,0 +1,4 @@
+data: db_bio
+data_in: data/db_bio
+risk_in: data/db_bio/tri_risk/shap.jsonl
+pipeline_in: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full_deid/full_deid

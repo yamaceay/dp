@@ -1,0 +1,4 @@
+data: db_bio
+data_in: data/db_bio
+result_in: ../../../netscratch/yay/_ext_outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio.jsonl
+save_to_jsonl: data/db_bio/tri_preprocessing/full_deid.jsonl

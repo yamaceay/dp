@@ -1,0 +1,136 @@
+method_sets:
+  - name: "simple_maskers_and_rewriters"
+    print_as: "Baseline methods without stopping conditions"
+    methods:
+      - method: "baseline"
+        print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
+      - method: "presidio"
+        print_as: "Presidio"
+      - method: "spacy"
+        print_as: "SpaCy"
+      - method: "manual"
+        print_as: "Manual"
+        datasets: ["tab"]
+      - method: "dpbart"
+        print_as: "DP-BART"
+        params: ["epsilon"]
+      - method: "dpparaphrase"
+        print_as: "DP-Paraphrase"
+        params: ["epsilon"]
+      - method: "dpprompt"
+        print_as: "DP-Prompt"
+        params: ["epsilon"]
+  - name: "token_level_rewriters"
+    print_as: "DP Token-level rewriting methods with varying epsilon"
+    methods:
+      - method: "baseline"
+        print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
+      - method: "presidio"
+        print_as: "Presidio"
+      - method: "dpmlm_uniform"
+        print_as: "DP-MLM"
+        params: ["epsilon"]
+      - method: "dpmlm_shap_no_presidio"
+        print_as: "DP-MLM-X"
+        params: ["epsilon"]
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]
+  - name: "token_level_rewriters_with_threshold_k"
+    print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter k"
+    methods:
+      - method: "baseline"
+        print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
+      - method: "presidio"
+        print_as: "Presidio"
+      - method: "petre_shap"
+        print_as: "PETRE+Pr"
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+      - method: "dpmlm_shap"
+        print_as: "k-DP-MLM-X+Pr"
+        params: ["epsilon"]
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]
+  - name: "token_level_rewriters_with_threshold_lambda"
+    datasets: ["tab"]
+    print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter lambda"
+    methods:
+      - method: "baseline"
+        print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
+      - method: "presidio"
+        print_as: "Presidio"
+      - method: "baroud"
+        print_as: "IPI+Pr"
+        params_one_run: {"lambda": [0.8, 0.9, 0.95, 0.98, 0.99]}
+        datasets: ["tab"]
+      - method: "dpmlm_shap"
+        print_as: "λ-DP-MLM-X+Pr"
+        params: ["epsilon"]
+        params_one_run: {"lambda": [0.8, 0.9, 0.95, 0.98, 0.99]}
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]
+  - name: "token_level_rewriters_with_threshold_rho"
+    print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter rho"
+    methods:
+      - method: "baseline"
+        print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
+      - method: "presidio"
+        print_as: "Presidio"
+      - method: "risk_shap"
+        print_as: "Risk+Pr"
+        params_one_run: {"rho": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}
+      - method: "dpmlm_shap"
+        print_as: "ρ-DP-MLM-X+Pr"
+        params: ["epsilon"]
+        params_one_run: {"rho": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]
+  - name: "token_level_rewriters_with_threshold_k_cross_dataset"
+    print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter k, different attacker assumptions"
+    split: "test"
+    metrics:
+      - PU_acc
+      - PU_mae
+      - P_exact
+      - P_more
+      - D_pp
+    methods:
+      - method: "baseline"
+        print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
+      - method: "presidio"
+        print_as: "Presidio"
+      - method: "petre_shap"
+        print_as: "PETRE+Pr[full]"
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+      - method: "petre_shap"
+        print_as: "PETRE+Pr[exact]"
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+        split: "test"
+      - method: "dpmlm_shap"
+        print_as: "k-DP-MLM-X+Pr[full]"
+        params: ["epsilon"]
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+      - method: "dpmlm_shap"
+        print_as: "k-DP-MLM-X+Pr[exact]"
+        params: ["epsilon"]
+        params_one_run: {"k": [2, 3, 5, 7, 10]}
+        split: "test"
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]

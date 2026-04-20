@@ -1,0 +1,29 @@
+dataset: db_bio
+data_in: data/db_bio
+split: indices/db_bio/test.txt
+debug: true
+annotations_in:
+  - ../../../netscratch/yay/_ext_outputs/db_bio
+target:
+  key: label
+  type: nominal
+source_splits:
+  - split: indices/db_bio/train.txt
+    train: 1.0
+  - split: indices/db_bio/val.txt
+    val: 1.0
+random_state: 42
+protocol: pseudo_utility
+head:
+  type: bert_classifier
+  params:
+    epochs: 3
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/exact/exact/finetuning/{checkpoint}
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/db_bio/label
+    primary_metric: macro_f1
+    encoder_lr: 1e-6
+    head_lr: 1e-4
+    early_stop_patience: 2
+output:
+  format: jsonl
+  file: logs/pseudo_utility/db_bio/label.jsonl

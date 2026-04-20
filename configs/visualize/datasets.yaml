@@ -1,0 +1,146 @@
+dataset_sets:
+  - names: 
+    - name: tab
+      print_as: "TAB"
+    - name: db_bio
+      print_as: "DB-Bio"
+    scores:
+      - name: privacy_exact_mean_reciprocal_rank
+        rename_as: P_exact
+        best: 0
+        worst: 1
+      - name: privacy_more_mean_reciprocal_rank
+        rename_as: P_more
+        best: 0
+        worst: 1
+      - name: privacy_full_mean_reciprocal_rank
+        rename_as: P_full
+        best: 0
+        worst: 1
+      - name: privacy_exact_accuracy
+        rename_as: TRIR_exact
+        best: 0
+        worst: 1
+      - name: privacy_more_accuracy
+        rename_as: TRIR_more
+        best: 0
+        worst: 1
+      - name: privacy_full_accuracy
+        rename_as: TRIR_full
+        best: 0
+        worst: 1
+      - name: utility_utility_nominal_raw_acc
+        rename_as: U_acc
+        best: 1
+        worst: 0
+      - name: utility_utility_ordinal_raw_mae
+        rename_as: U_mae
+        best: 0
+        worst: 1
+      - name: pseudo_utility_utility_nominal_raw_acc
+        rename_as: PU_acc
+        best: 1
+        worst: 0
+      - name: pseudo_utility_utility_ordinal_raw_mae
+        rename_as: PU_mae
+        best: 0
+        worst: 1
+      - name: divergence_bertscore
+        rename_as: D_bertscore
+        best: 0
+        worst: 1
+      - name: divergence_cosine
+        rename_as: D_cosine
+        best: 0
+        worst: 1
+      - name: divergence_pp
+        rename_as: D_pp
+        best: 0
+        worst: 1
+        exclude:
+          - baseline
+          - spacy
+          - presidio
+          - manual
+          - baroud
+          - dpbart
+          - dpparaphrase
+          - dpprompt
+      - name: runtime_avg_anon_time_s
+        rename_as: T_anon_avg_s
+        best: 0
+        worst: float("inf")
+    meta_scores:
+      - avg: [P_exact, P_more, P_full]
+        rename_as: P
+        category: privacy
+      - avg: [rel_P_exact, rel_P_more, rel_P_full]
+        rename_as: rel_P
+        category: privacy
+      - avg: [P_exact, P_more]
+        rename_as: P
+        split: test
+        category: privacy
+      - avg: [rel_P_exact, rel_P_more]
+        rename_as: rel_P
+        split: test
+        category: privacy
+      - avg: [TRIR_exact, TRIR_more, TRIR_full]
+        rename_as: TRIR
+        category: privacy
+      - avg: [rel_TRIR_exact, rel_TRIR_more, rel_TRIR_full]
+        rename_as: rel_TRIR
+        category: privacy
+      - avg: [TRIR_exact, TRIR_more]
+        rename_as: TRIR
+        split: test
+        category: privacy
+      - avg: [rel_TRIR_exact, rel_TRIR_more]
+        rename_as: rel_TRIR
+        split: test
+        category: privacy
+      - avg: [U_acc]
+        rename_as: U
+        category: utility
+      - avg: [rel_U_acc, rel_U_mae]
+        rename_as: rel_U
+        category: utility
+        strategy: smallest_subset
+      - avg: [PU_acc]
+        rename_as: SS
+        category: utility
+      - avg: [rel_PU_acc, rel_PU_mae]
+        rename_as: rel_SS
+        category: utility
+        strategy: smallest_subset
+
+      - avg: [D_bertscore, D_cosine, D_pp]
+        rename_as: D
+        category: divergence
+        strategy: smallest_subset
+      - avg: [D_bertscore, D_cosine]
+        rename_as: D_text
+        category: divergence
+      - avg: [rel_D_bertscore, rel_D_cosine]
+        rename_as: rel_D_text
+        category: divergence
+      - avg: [rel_D_bertscore, rel_D_cosine, rel_D_pp]
+        rename_as: rel_D
+        category: divergence
+        strategy: smallest_subset
+      - avg: [D_pp]
+        rename_as: D
+        split: test
+        category: divergence
+        strategy: smallest_subset
+      - avg: [rel_D_pp]
+        rename_as: rel_D
+        split: test
+        category: divergence
+        strategy: smallest_subset
+      - avg: [T_anon_avg_s]
+        rename_as: T
+        category: runtime
+      - avg: [rel_T_anon_avg_s]
+        rename_as: rel_T
+        category: runtime

@@ -1,0 +1,8 @@
+dataset: db_bio
+data_in: data/db_bio
+explainer: shap
+explainer_in: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full_deid/full_deid
+result_in: ../../../netscratch/yay/_ext_outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio.jsonl
+save_to_jsonl: data/db_bio/tri_risk/shap.jsonl
+sort_by: scores
+offset_mode: original

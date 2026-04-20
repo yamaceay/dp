@@ -1,0 +1,20 @@
+params:
+  epsilon: "*"
+
+T: .inf
+
+precomputation:
+  risk_scores: data/db_bio/tri_risk/shap.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs/db_bio/presidio/{run_timestamp}_db_bio_presidio.jsonl
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/db_bio/_checkpoints/full/full
+  risk_temperature: 0.1
+
+dpmlm_chunking:
+  enabled: true
+  max_tokens: 256
+  overlap_tokens: 128
+
+verbose: true

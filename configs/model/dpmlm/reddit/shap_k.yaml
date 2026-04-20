@@ -1,0 +1,14 @@
+params:
+  epsilon: "*"
+  ks: ["*"]
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/reddit/_checkpoints/exact/reddit_8_16_0.0001
+  risk_temperature: 0.1
+
+precomputation:
+  risk_scores: data/reddit/tri_risk/shap.jsonl
+
+token_selection:
+  name: until_k
