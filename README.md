@@ -128,5 +128,5 @@ python run.py --config configs/experiments/divergence_tab.yaml
 3. Place TAB and DB-Bio in the expected `data/` paths with original splits.
 4. Run the pipeline stages via local scripts or Slurm job tables in `slurm/tables/`.
 5. Merge logs and regenerate thesis CSV exports: `python3 docs/thesis/data_export.py`.
-6. Regenerate figures: `python3 plot_summary.py`, `python3 pu_tradeoff.py` (and related scripts).
+6. Regenerate figures: `python3 plot_summary.py`, `python3 plot_pu_tradeoff.py` (and related scripts).
 7. Compile the thesis (`docs/thesis/`) and verify tables and figures match the regenerated artifacts.

@@ -727,6 +727,27 @@ def configured_param_keys(method_spec: dict[str, object]) -> set[str]:
     return keys
 
 
+def preseed_color_caches(
+    method_group_name: str,
+    method_display_specs: dict[str, list[dict[str, object]]],
+    has_secondary: bool,
+    color_cache: dict[str, tuple[float, float, float]],
+    marker_cache: dict[str, str],
+) -> None:
+    """Pre-register color/marker assignments in methods.yaml order before data-driven groupby."""
+    group_specs = method_display_specs.get(method_group_name, [])
+    for spec in group_specs:
+        method = spec.get("method")
+        if not isinstance(method, str) or method in ("baseline", "dummy"):
+            continue
+        param_keys = configured_param_keys(spec)
+        remaining_keys = (param_keys - {"epsilon"}) if has_secondary else param_keys
+        param_keys_sig = "+".join(sorted(remaining_keys))
+        color_key = f"{method}+{param_keys_sig}"
+        get_base_color(color_key, color_cache)
+        get_group_marker(color_key, marker_cache)
+
+
 def configured_method_display_name(
     method_group_name: str,
     method_name: str,
@@ -976,7 +997,7 @@ if __name__ == "__main__":
     if args.meta:
         _run_meta_tradeoff(
             args.datasets if args.datasets else dataset_names,
-            [("P", "U"), ("P", "SS"), ("P", "D")],
+            [("P", "U"), ("P", "PU"), ("P", "D")],
         )
         import sys; sys.exit(0)
 
@@ -1010,7 +1031,7 @@ if __name__ == "__main__":
                     continue
                 plan.append((dataset_name, method_name, x_name, x_column, y_name, y_column))
 
-    progress = new_progress(total=len(plan), desc="pu_tradeoff", unit="plot")
+    progress = new_progress(total=len(plan), desc="plot_pu_tradeoff", unit="plot")
     saved_count = 0
     skipped_count = 0
 
@@ -1067,6 +1088,7 @@ if __name__ == "__main__":
 
         color_cache: dict[str, tuple[float, float, float]] = {}
         marker_cache: dict[str, str] = {}
+        preseed_color_caches(method_name, method_display_specs, _has_secondary, color_cache, marker_cache)
         reference_source_df = reference_df if reference_df is not None else df
         extra_y_values = reference_y_values(reference_source_df, y_column)
 
@@ -1286,4 +1308,4 @@ if __name__ == "__main__":
         progress.update(1)
 
     progress.close()
-    print(f"pu_tradeoff: saved={saved_count}, skipped={skipped_count}, total={len(plan)}")
+    print(f"plot_pu_tradeoff: saved={saved_count}, skipped={skipped_count}, total={len(plan)}")

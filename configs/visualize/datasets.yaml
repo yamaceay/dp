@@ -62,7 +62,6 @@ dataset_sets:
           - spacy
           - presidio
           - manual
-          - baroud
           - dpbart
           - dpparaphrase
           - dpprompt
@@ -107,13 +106,12 @@ dataset_sets:
         category: utility
         strategy: smallest_subset
       - avg: [PU_acc]
-        rename_as: SS
+        rename_as: PU
         category: utility
       - avg: [rel_PU_acc, rel_PU_mae]
-        rename_as: rel_SS
+        rename_as: rel_PU
         category: utility
         strategy: smallest_subset
-
       - avg: [D_bertscore, D_cosine, D_pp]
         rename_as: D
         category: divergence

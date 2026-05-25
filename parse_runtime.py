@@ -7,11 +7,11 @@ from typing import Any, Dict, List
 from dp.utils.log_keys import parse_method_and_params_from_source_path
 
 REQUIRES_FULL = [
-    {"method": "petre", "params": ["k"]},
+    {"method": "petre_shap", "params": ["k"]},
     {"method": "dpmlm_shap", "params": ["epsilon", "k"]},
 ]
 REQUIRES_FULL_DEID = [
-    {"method": "petre", "params": ["k"]},
+    {"method": "petre_shap", "params": ["k"]},
     {"method": "risk", "params": ["rho"]},
     {"method": "dpmlm_shap", "params": ["epsilon"]},
     {"method": "dpmlm_shap", "params": ["epsilon", "k"]},
@@ -135,7 +135,7 @@ def run_step_0(root: Path) -> None:
                 params=params, 
                 deid_total_time_s=0.0,
             )
-            if any(matches_exact_requirement(method, params, req) for req in REQUIRES_FULL_DEID):
+            if any(matches_requirement(method, params, req) for req in REQUIRES_FULL_DEID):
                 new_row["deid_total_time_s"] = presidio_runtime
             new_rows.append(new_row)
             
@@ -352,7 +352,7 @@ def run_step_4(root: Path) -> None:
             method = anon_row["method"]
             params = anon_row["params"]
             risk_total_time = 0.0
-            if any(matches_exact_requirement(method, params, req) for req in REQUIRES_FULL_DEID):
+            if any(matches_requirement(method, params, req) for req in REQUIRES_FULL_DEID):
                 risk_total_time = dataset_runtime["risk_total_time_s"]
             rows.append({
                 "method": method,

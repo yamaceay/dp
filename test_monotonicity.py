@@ -14,14 +14,14 @@ PARAM_ORDER: dict[str, list] = {
 }
 
 # Thesis claims — how each metric should respond as the parameter increases:
-#   k ↑        more tokens masked    → P ↓  TRIR ↓  U ↓  SS ↓  D ↑
-#   rho ↑      stricter risk stop    → P ↑  TRIR ↑  U ↑  SS ↑  D ↓  (less masking)
-#   lambda ↑   stricter DP stop      → P ↑  TRIR ↑  U ↑  SS ↑  D ↓  (less masking)
+#   k ↑        more tokens masked    → P ↓  TRIR ↓  U ↓  PU ↓  D ↑
+#   rho ↑      stricter risk stop    → P ↑  TRIR ↑  U ↑  PU ↑  D ↓  (less masking)
+#   lambda ↑   stricter DP stop      → P ↑  TRIR ↑  U ↑  PU ↑  D ↓  (less masking)
 EXPECTED_DIRECTION: dict[str, dict[str, int]] = {
     "P":    {"k": -1, "rho": +1, "lambda": +1},
     "TRIR": {"k": -1, "rho": +1, "lambda": +1},
     "U":    {"k": -1, "rho": +1, "lambda": +1},
-    "SS":   {"k": -1, "rho": +1, "lambda": +1},
+    "PU":   {"k": -1, "rho": +1, "lambda": +1},
     "D":    {"k": +1, "rho": -1, "lambda": -1},
 }
 
@@ -132,7 +132,7 @@ def main() -> None:
     print(header + "\n")
 
     total_pass, total_fail = 0, 0
-    for metric in ["P", "TRIR", "U", "SS", "D"]:
+    for metric in ["P", "TRIR", "U", "PU", "D"]:
         p, f = check_metric(metric, label_prefix=args.label)
         total_pass += p
         total_fail += f

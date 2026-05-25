@@ -7,12 +7,17 @@ from typing import Any, Dict, List, Tuple
 
 from dp.utils.log_keys import normalize_source_key, parse_params_from_key
 
-SEQUENTIAL_PROGRESS_PARAMS = {"k", "rho"}
+SEQUENTIAL_PROGRESS_PARAMS = {"k", "rho", "lambda"}
+CONSTANT_RUNTIME_METHODS = {"baroud", "risk_shap"}
 
 dataset_lengths = {
     "db_bio": 2419,
     "tab": 1268,
 }
+
+ignored_methods = [
+    "dpmlm_shap_no_presidio",
+]
 
 def parse_privacy_profile_from_log_name(log_name: str) -> str | None:
     if re.search(r"^more\.jsonl$", log_name):
@@ -164,6 +169,8 @@ class UtilityExperimentLogParser(ExperimentLogParser):
                 source = str(result.get("source", ""))
                 key = normalize_source_key(source, dataset)
                 method, params = parse_params_from_key(key)
+                if method in ignored_methods:
+                    continue
                 utility_metrics = filter_utility_metrics(result["overall_results"]["metrics"], metrics, actual_feature)
                 for metric_name, baseline_value in baseline_metric_overall.items():
                     utility_metrics[f"{actual_feature}_baseline_{metric_name}"] = baseline_value
@@ -276,6 +283,8 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
             source = str(result.get("source", ""))
             key = normalize_source_key(source, dataset)
             method, params = parse_params_from_key(key)
+            if method in ignored_methods:
+                continue
             if privacy_profile == "full":
                 evaluation_name = str(result.get("name") or "")
                 rank_rows = evaluation_rank_rows.get(evaluation_name, [])
@@ -327,6 +336,8 @@ class DivergenceExperimentLogParser(ExperimentLogParser):
                 source = str(result.get("source", ""))
                 key = normalize_source_key(source, dataset)
                 method, params = parse_params_from_key(key)
+                if method in ignored_methods:
+                    continue
                 divergence = result["summary"]
                 row: Dict[str, Any] = {
                     "dataset": dataset,
@@ -355,25 +366,29 @@ def experiment_type(result: Dict[str, Any]) -> str:
     raise ValueError(f"Could not determine experiment type for result: {result}")
 
 
-def _group_key_without_progress_params(dataset: str, method: str, params: Dict[str, Any]) -> tuple[str, str, frozenset[tuple[str, Any]]]:
+def _group_key_without_progress_params(dataset: str, method: str, params: Dict[str, Any]) -> tuple:
+    progress_param = next((p for p in SEQUENTIAL_PROGRESS_PARAMS if p in params), None)
     filtered_params = {k: v for k, v in params.items() if k not in SEQUENTIAL_PROGRESS_PARAMS}
-    return dataset, method, frozenset(filtered_params.items())
+    return dataset, method, frozenset(filtered_params.items()), progress_param
 
 
 def add_real_anonymization_runtime(grouped_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    max_pp_by_group: Dict[tuple[str, str, frozenset[tuple[str, Any]]], float] = {}
+    max_pp_by_group: Dict[tuple, float] = {}
 
     for row in grouped_results:
         divergence = row.get("divergence")
         params = row.get("params")
+        method = str(row.get("method"))
         if not isinstance(divergence, dict) or not isinstance(params, dict):
+            continue
+        if method in CONSTANT_RUNTIME_METHODS:
             continue
         if not any(param_name in params for param_name in SEQUENTIAL_PROGRESS_PARAMS):
             continue
         pp = divergence.get("pp")
         if not isinstance(pp, (int, float)):
             continue
-        key = _group_key_without_progress_params(str(row.get("dataset")), str(row.get("method")), params)
+        key = _group_key_without_progress_params(str(row.get("dataset")), method, params)
         max_pp_by_group[key] = max(float(pp), max_pp_by_group.get(key, float("-inf")))
 
     for row in grouped_results:
@@ -385,15 +400,25 @@ def add_real_anonymization_runtime(grouped_results: List[Dict[str, Any]]) -> Lis
             continue
 
         real_anon_total_time_s = float(anon_total_time_s)
+        method = str(row.get("method"))
         params = row.get("params")
         divergence = row.get("divergence")
-        if isinstance(params, dict) and isinstance(divergence, dict) and any(param_name in params for param_name in SEQUENTIAL_PROGRESS_PARAMS):
+        if method not in CONSTANT_RUNTIME_METHODS and isinstance(params, dict) and isinstance(divergence, dict) and any(param_name in params for param_name in SEQUENTIAL_PROGRESS_PARAMS):
             pp = divergence.get("pp")
             if isinstance(pp, (int, float)):
-                key = _group_key_without_progress_params(str(row.get("dataset")), str(row.get("method")), params)
+                key = _group_key_without_progress_params(str(row.get("dataset")), method, params)
                 max_pp = max_pp_by_group.get(key)
                 if isinstance(max_pp, float) and max_pp > 0.0:
                     real_anon_total_time_s = float(anon_total_time_s) * (float(pp) / max_pp)
+
+        # Per-record pipeline costs added on top of the raw anonymization time:
+        # - Presidio de-identification (run once per record before anonymization)
+        # - Risk precomputation (SHAP scores, run once per record)
+        # BK preprocessing and TRI training are excluded: they are one-time constants.
+        for time_key in ("deid_total_time_s", "risk_total_time_s"):
+            t = runtime.get(time_key)
+            if isinstance(t, (int, float)):
+                real_anon_total_time_s += float(t)
 
         runtime["real_anon_total_time_s"] = real_anon_total_time_s
         anon_texts_processed = runtime.get("anon_texts_processed")
@@ -522,10 +547,13 @@ if __name__ == "__main__":
         with log_file.open("r", encoding="utf-8") as f:
             for line in f:
                 entry = json.loads(line)
+                method, params = entry.pop("method"), entry.pop("params")
+                if method in ignored_methods:
+                    continue
                 all_results.append({
                     "dataset": dataset,
-                    "method": entry.pop("method"),
-                    "params": entry.pop("params"),
+                    "method": method,
+                    "params": params,
                     "runtime": {
                         **entry
                     },

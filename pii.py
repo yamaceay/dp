@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Optional, Tuple
@@ -155,18 +157,27 @@ def _resolve_path(project_root: Path, raw: str) -> Path:
     return p
 
 
-def load_splits(dataset: str, data_path: Path, max_records: Optional[int], data_ext: str) -> Tuple[list, list, list]:
-    def load_one(name: str) -> list:
-        path = data_path / f"{name}.{data_ext}"
-        if not path.exists():
-            return []
-        adapter = get_adapter(dataset, data_in=str(path), max_records=max_records)
-        return list(adapter.iter_records())
+def load_splits(dataset: str, data_path: Path, max_records: Optional[int]) -> Tuple[list, list, list]:
+    if not data_path.exists():
+        raise SystemExit(f"data_path does not exist: {data_path}")
 
-    train = load_one("train")
-    dev = load_one("dev")
-    test = load_one("test")
-    return train, dev, test
+    def load_one(split_name: str) -> list:
+        try:
+            adapter = get_adapter(
+                dataset,
+                data=dataset,
+                data_in=str(data_path),
+                split=split_name,
+                max_records=max_records,
+            )
+            return list(adapter.iter_records())
+        except ValueError as exc:
+            msg = str(exc)
+            if "Split file not found" in msg or "Missing split indices" in msg:
+                return []
+            raise
+
+    return load_one("train"), load_one("val"), load_one("test")
 
 
 def _normalize_grid_section(section: Any) -> dict[str, list[Any]]:
@@ -321,6 +332,56 @@ def _load_grid_config(project_root: Path, grid_path: Path) -> dict[str, dict[str
     return {"training": training, "evaluation": evaluation, "selection": selection}
 
 
+def _write_csv(path: Path, rows: list[dict]) -> None:
+    if not rows:
+        return
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+    w.writeheader()
+    w.writerows(rows)
+    path.write_text(buf.getvalue().replace("\r\n", "\n").replace("\r", "\n"))
+    print(f"  saved {path}")
+
+
+def _save_eval_csvs(metrics: dict[str, Any], out_dir: Path, modes: list[str]) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    per_cat = metrics.get("per_category", {})
+
+    overall_rows = []
+    for mode in modes:
+        row: dict[str, Any] = {"mode": mode}
+        row["micro_precision"] = metrics.get(f"{mode}_precision", "")
+        row["micro_recall"]    = metrics.get(f"{mode}_recall", "")
+        row["micro_f1"]        = metrics.get(f"{mode}_f1", "")
+        mode_cat = per_cat.get(mode, {})
+        if mode_cat:
+            vals = list(mode_cat.values())
+            row["macro_precision"] = sum(m["precision"] for m in vals) / len(vals)
+            row["macro_recall"]    = sum(m["recall"]    for m in vals) / len(vals)
+            row["macro_f1"]        = sum(m["f1"]        for m in vals) / len(vals)
+        else:
+            row["macro_precision"] = row["macro_recall"] = row["macro_f1"] = ""
+        overall_rows.append(row)
+    _write_csv(out_dir / "pii_overall.csv", overall_rows)
+
+    if per_cat:
+        all_entities = sorted({e for mode_data in per_cat.values() for e in mode_data})
+        per_entity_rows = []
+        for entity in all_entities:
+            row = {"entity": entity}
+            support: Any = ""
+            for mode in modes:
+                m = per_cat.get(mode, {}).get(entity, {})
+                row[f"{mode}_precision"] = m.get("precision", "")
+                row[f"{mode}_recall"]    = m.get("recall", "")
+                row[f"{mode}_f1"]        = m.get("f1", "")
+                if support == "" and "support" in m:
+                    support = m["support"]
+            row["support"] = support
+            per_entity_rows.append(row)
+        _write_csv(out_dir / "pii_per_entity.csv", per_entity_rows)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate", "predict", "grid"])
@@ -331,6 +392,8 @@ def main() -> int:
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--model-path", type=str, default=None)
     parser.add_argument("--max-runs", type=int, default=None)
+    parser.add_argument("--csv-out", type=str, default=None,
+                        help="Directory to write pii_overall.csv and pii_per_entity.csv")
     parser.add_argument(
         "--set",
         dest="set_overrides",
@@ -362,7 +425,7 @@ def main() -> int:
 
 
         train_records, dev_records, test_records = load_splits(
-            str(cfg["dataset"]), Path(cfg["data_path"]), cfg.get("max_records"), cfg.get("data_ext")
+            str(cfg["dataset"]), Path(cfg["data_path"]), cfg.get("max_records")
         )
         if not train_records:
             raise SystemExit("Missing train split")
@@ -410,7 +473,7 @@ def main() -> int:
 
     cfg = _load_training_config(PROJECT_ROOT, Path(args.training_in), env_path)
     _apply_set_overrides(cfg, args.set_overrides)
-    _, _, test_records = load_splits(str(cfg["dataset"]), Path(cfg["data_path"]), cfg.get("max_records"), cfg.get("data_ext"))
+    _, _, test_records = load_splits(str(cfg["dataset"]), Path(cfg["data_path"]), cfg.get("max_records"))
     if not test_records:
         raise SystemExit("Missing test split")
 
@@ -421,6 +484,12 @@ def main() -> int:
             modes=list(cfg["evaluation"]["modes"]),
         )
         print(metrics)
+        if args.csv_out:
+            _save_eval_csvs(
+                metrics,
+                Path(args.csv_out).expanduser().resolve(),
+                list(cfg["evaluation"]["modes"]),
+            )
         return 0
 
     sample = test_records[:5]

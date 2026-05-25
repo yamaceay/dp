@@ -1297,7 +1297,7 @@ def main() -> None:
     active_method_sets = [ms for ms in method_sets if selected_experiments is None or ms["name"] in selected_experiments]
     runtime_total = 0 if args.meta else len(selected_datasets) * len(active_method_sets)
     metric_total = sum(len(dataset_specs[d]["scores"]) for d in selected_datasets) * len(active_method_sets) * 2
-    progress = new_progress(total=runtime_total + metric_total, desc="single_metric_plots", unit="step")
+    progress = new_progress(total=runtime_total + metric_total, desc="plot_single_metrics", unit="step")
 
     for dataset_name in selected_datasets:
         dataset_spec = dataset_specs[dataset_name]

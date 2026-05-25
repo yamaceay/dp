@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import ast
 import argparse
+import csv
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -81,12 +83,20 @@ class VariantSpec:
     label: str
     csv_suffix: str
     datasets: Optional[frozenset[str]]
+    dp_panel_ref: bool = True  # show as dashed reference in ε > 0 panels
 
 
+# Ordered to match DP_VARIANTS (k, rho, lambda) so palette indices align.
 MASKING_VARIANTS: list[VariantSpec] = [
-    VariantSpec("risk_shap", "rho", "Risk+Pr (ρ)", "risk_maskers", None),
-    VariantSpec("petre_shap", "k", "PETRE+Pr (k)", "simple_maskers_and_rewriters", None),
-    VariantSpec("baroud", "lambda", "IPI (λ)", "simple_maskers_and_rewriters", frozenset({"tab"})),
+    VariantSpec("petre_shap", "k",      "PETRE+Pr (k)",  "token_level_rewriters_with_threshold_k",      None,                  dp_panel_ref=False),
+    VariantSpec("risk_shap",  "rho",    "Risk+Pr (ρ)",   "token_level_rewriters_with_threshold_rho",     None,                  dp_panel_ref=False),
+    VariantSpec("baroud",     "lambda", "IPI (λ)",       "token_level_rewriters_with_threshold_lambda",  frozenset({"tab"}),    dp_panel_ref=False),
+]
+
+# Unconstrained single-point markers for each ε panel (no stopping condition).
+UNCONSTRAINED_ENDPOINTS: list[tuple[str, str, str]] = [
+    ("dpmlm_uniform", "DP-MLM",      _PALETTE[3]),
+    ("dpmlm_shap",    "DP-MLM-X+Pr", _PALETTE[4]),
 ]
 
 DP_VARIANTS: list[VariantSpec] = [
@@ -169,10 +179,10 @@ def collect_variant_points(
     y_metric: str,
     x_ref: tuple[Optional[float], Optional[float]],
     y_ref: tuple[Optional[float], Optional[float]],
-) -> dict[Optional[float], list[tuple[float, float]]]:
+) -> dict[Optional[float], list[tuple[float, float, Optional[float]]]]:
     if x_metric not in df.columns or y_metric not in df.columns:
         return {}
-    groups: dict[Optional[float], list[tuple[float, float]]] = {}
+    groups: dict[Optional[float], list[tuple[float, float, Optional[float]]]] = {}
     for _, row in df.iterrows():
         if row.get("method") != variant.method:
             continue
@@ -184,7 +194,9 @@ def collect_variant_points(
         if x_val is None or y_val is None:
             continue
         epsilon: Optional[float] = float(params["epsilon"]) if "epsilon" in params else None
-        groups.setdefault(epsilon, []).append((x_val, y_val))
+        thr_raw = params.get(variant.threshold_param)
+        thr: Optional[float] = float(thr_raw) if thr_raw is not None else None
+        groups.setdefault(epsilon, []).append((x_val, y_val, thr))
     return groups
 
 
@@ -218,7 +230,7 @@ def collect_reference_point(
     return float(np.mean([p[0] for p in pts])), float(np.mean([p[1] for p in pts]))
 
 
-def trapezoidal_auc(points: list[tuple[float, float]]) -> float:
+def trapezoidal_auc(points: list[tuple]) -> float:
     if len(points) < 2:
         return float("nan")
     sorted_pts = sorted(points, key=lambda p: p[0])
@@ -232,23 +244,26 @@ def plot_showdown(
     y_metric: str,
     x_ref: tuple[Optional[float], Optional[float]],
     y_ref: tuple[Optional[float], Optional[float]],
-) -> Path:
+) -> list[dict]:
+    """Returns AUC records for the manifest; saves the plot as a side-effect."""
     fig, axes = create_panel_axes(6, sharex=True, sharey=True, grid_size=(7.5, 6.0))
+    auc_records: list[dict] = []
 
-    masking_curves: list[tuple[str, list[tuple[float, float]]]] = []
-    for variant in MASKING_VARIANTS:
+    # (variant_list_idx, label, pts, dp_panel_ref) — idx kept for stable palette colours
+    masking_data: list[tuple[int, str, list, bool]] = []
+    for idx, variant in enumerate(MASKING_VARIANTS):
         if variant.datasets is not None and dataset not in variant.datasets:
             continue
         df = load_csv(dataset, variant.csv_suffix)
         if df is None:
             continue
-        groups = collect_variant_points(df, variant, x_metric, y_metric, x_ref, y_ref)
-        pts = groups.get(None, [])
+        pts = collect_variant_points(df, variant, x_metric, y_metric, x_ref, y_ref).get(None, [])
         if pts:
-            masking_curves.append((variant.label, pts))
+            masking_data.append((idx, variant.label, pts, variant.dp_panel_ref))
 
-    dp_curves: list[tuple[str, dict[float, list[tuple[float, float]]]]] = []
-    for variant in DP_VARIANTS:
+    # (variant_list_idx, label, eps_groups)
+    dp_data: list[tuple[int, str, dict]] = []
+    for idx, variant in enumerate(DP_VARIANTS):
         if variant.datasets is not None and dataset not in variant.datasets:
             continue
         df = load_csv(dataset, variant.csv_suffix)
@@ -257,7 +272,7 @@ def plot_showdown(
         groups = collect_variant_points(df, variant, x_metric, y_metric, x_ref, y_ref)
         eps_groups = {k: v for k, v in groups.items() if k is not None}
         if eps_groups:
-            dp_curves.append((variant.label, eps_groups))
+            dp_data.append((idx, variant.label, eps_groups))
 
     _smr = load_csv(dataset, "simple_maskers_and_rewriters")
     reference_pts: dict[str, Optional[tuple[float, float]]] = {}
@@ -277,53 +292,88 @@ def plot_showdown(
             all_handles.append(h)
             all_labels.append(l)
 
+    def _draw_curve(ax, sorted_pts, color, label, *, dashed: bool) -> object:
+        ls = "--" if dashed else "-"
+        lw = 1.5 if dashed else 2.0
+        alpha_sc = 0.7 if dashed else 1.0
+        h, = ax.plot([p[0] for p in sorted_pts], [p[1] for p in sorted_pts],
+                     color=color, linewidth=lw, linestyle=ls, zorder=4 if not dashed else 3, label=label)
+        ax.scatter([p[0] for p in sorted_pts], [p[1] for p in sorted_pts],
+                   color=color, s=35 if not dashed else 20, zorder=5 if not dashed else 4, alpha=alpha_sc)
+        for x, y, thr in sorted_pts:
+            if thr is not None:
+                ax.annotate(f"{thr:g}", (x, y), textcoords="offset points",
+                            xytext=(3, 3), fontsize=6, color=color, alpha=0.85 if not dashed else 0.7)
+        return h
+
     for ax, epsilon_val in zip(axes, FIXED_EPSILON_PANELS):
         is_masking = epsilon_val is None
 
         if is_masking:
             ax.set_facecolor("#F5F5F5")
             ax.set_title("ε = 0  (masking)", fontsize=11)
-            for idx, (label, pts) in enumerate(masking_curves):
-                color = _PALETTE[idx % len(_PALETTE)]
+            for p_idx, label, pts, _dp_ref in masking_data:
+                color = _PALETTE[p_idx % len(_PALETTE)]
                 sorted_pts = sorted(pts, key=lambda p: p[0])
                 auc = trapezoidal_auc(sorted_pts)
-                auc_str = f"{auc:.3f}" if not np.isnan(auc) else "n/a"
-                lbl = f"{label}  AUC={auc_str}"
-                h, = ax.plot([p[0] for p in sorted_pts], [p[1] for p in sorted_pts],
-                             color=color, linewidth=2.0, zorder=4, label=lbl)
-                ax.scatter([p[0] for p in sorted_pts], [p[1] for p in sorted_pts],
-                           color=color, s=35, zorder=5)
-                _add_to_legend(h, lbl)
-            for _ref, (_lbl, _mkr, _sz, _col) in REFERENCE_STYLES.items():
-                _rpt = reference_pts.get(_ref)
-                if _rpt is None:
-                    continue
-                h = ax.scatter(*_rpt, marker=_mkr, s=_sz, color=_col, zorder=7, label=_lbl)
-                _add_to_legend(h, _lbl)
+                auc_records.append({"dataset": dataset, "x": x_metric, "y": y_metric,
+                                    "variant": label, "epsilon": "det",
+                                    "auc": round(auc, 5) if not np.isnan(auc) else None})
+                h = _draw_curve(ax, sorted_pts, color, label, dashed=True)
+                _add_to_legend(h, label)
         else:
             ax.set_title(f"ε = {int(epsilon_val)}", fontsize=11)
-            for idx, (label, eps_groups) in enumerate(dp_curves):
-                color = _PALETTE[idx % len(_PALETTE)]
+            for p_idx, label, eps_groups in dp_data:
+                color = _PALETTE[p_idx % len(_PALETTE)]
                 pts = eps_groups.get(epsilon_val, [])
                 if len(pts) < 2:
                     continue
                 sorted_pts = sorted(pts, key=lambda p: p[0])
                 auc = trapezoidal_auc(sorted_pts)
-                auc_str = f"{auc:.3f}" if not np.isnan(auc) else "n/a"
-                lbl = f"{label}  AUC={auc_str}"
-                h, = ax.plot([p[0] for p in sorted_pts], [p[1] for p in sorted_pts],
-                             color=color, linewidth=2.0, zorder=4, label=lbl)
-                ax.scatter([p[0] for p in sorted_pts], [p[1] for p in sorted_pts],
-                           color=color, s=35, zorder=5)
+                auc_records.append({"dataset": dataset, "x": x_metric, "y": y_metric,
+                                    "variant": label, "epsilon": epsilon_val,
+                                    "auc": round(auc, 5) if not np.isnan(auc) else None})
+                h = _draw_curve(ax, sorted_pts, color, label, dashed=False)
                 _add_to_legend(h, label)
+            # Deterministic reference curves (dp_panel_ref only) — dashed
+            for p_idx, label, pts, dp_ref in masking_data:
+                if not dp_ref or not pts:
+                    continue
+                color = _PALETTE[p_idx % len(_PALETTE)]
+                sorted_pts = sorted(pts, key=lambda p: p[0])
+                lbl = f"{label}  (det.)"
+                h = _draw_curve(ax, sorted_pts, color, lbl, dashed=True)
+                _add_to_legend(h, lbl)
+            # Unconstrained single-point markers
+            if _smr is not None:
+                for ep_method, ep_label, ep_color in UNCONSTRAINED_ENDPOINTS:
+                    ep_pt = collect_reference_point(
+                        _smr, ep_method, x_metric, y_metric, x_ref, y_ref, epsilon=epsilon_val
+                    )
+                    if ep_pt is None:
+                        continue
+                    lbl = f"{ep_label} (no stop)"
+                    h = ax.scatter(*ep_pt, marker="X", s=90, color=ep_color, zorder=6,
+                                   linewidths=0.6, edgecolors="white", label=lbl)
+                    _add_to_legend(h, lbl)
 
+        # Reference scatter in ALL panels — grounds the absolute scale
+        for _ref, (_lbl, _mkr, _sz, _col) in REFERENCE_STYLES.items():
+            _rpt = reference_pts.get(_ref)
+            if _rpt is None:
+                continue
+            h = ax.scatter(*_rpt, marker=_mkr, s=_sz, color=_col, zorder=7, label=_lbl)
+            _add_to_legend(h, _lbl)
+
+        # Vertical + horizontal reference lines for baseline and dummy
         for _ref, _vcolor, _vstyle in (
             ("baseline", "#2ca02c", "--"),
             ("dummy",    "#d62728", "-."),
         ):
             _rpt = reference_pts.get(_ref)
             if _rpt is not None:
-                ax.axvline(_rpt[0], color=_vcolor, linestyle=_vstyle, linewidth=1.0, alpha=0.45, zorder=2)
+                ax.axvline(_rpt[0], color=_vcolor, linestyle=_vstyle, linewidth=1.0, alpha=0.4, zorder=2)
+                ax.axhline(_rpt[1], color=_vcolor, linestyle=_vstyle, linewidth=1.0, alpha=0.4, zorder=2)
 
         ax.set_xlabel(METRIC_AXIS_LABELS.get(x_metric, x_metric), fontsize=10)
         ax.set_ylabel(METRIC_AXIS_LABELS.get(y_metric, y_metric), fontsize=10)
@@ -348,7 +398,7 @@ def plot_showdown(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
-    return out_path
+    return auc_records
 
 
 def prompt_choice(prompt: str, options: list[str]) -> str:
@@ -371,7 +421,7 @@ def resolve_pairs(args: argparse.Namespace) -> list[tuple[str, str]]:
 
 
 META_X_OPTIONS: list[str] = ["P"]
-META_Y_OPTIONS: list[str] = ["U", "SS", "D"]
+META_Y_OPTIONS: list[str] = ["U", "PU", "D"]
 
 
 def plot_meta_showdown(dataset: str, x_col: str, y_col: str) -> None:
@@ -448,16 +498,30 @@ def main() -> None:
     plan = [(x_var, y_var, ds) for x_var, y_var in pairs for ds in selected_datasets if ds in DATASET_LABELS]
     progress = new_progress(total=len(plan), desc="plot_summary", unit="plot")
     saved_count = 0
+    all_auc_records: list[dict] = []
 
     for x_var, y_var, dataset in plan:
         progress.set_postfix_str(f"{dataset}:{x_var}->{y_var}")
         x_ref = get_mae_references(dataset, x_var) if x_var in MAE_METRICS else (None, None)
         y_ref = get_mae_references(dataset, y_var) if y_var in MAE_METRICS else (None, None)
-        plot_showdown(dataset, x_var, y_var, x_ref, y_ref)
-        saved_count += 1
+        try:
+            records = plot_showdown(dataset, x_var, y_var, x_ref, y_ref)
+            all_auc_records.extend(records)
+            saved_count += 1
+        except Exception as exc:
+            print(f"\n[warn] {dataset}:{x_var}->{y_var} failed: {exc}", file=sys.stderr)
         progress.update(1)
 
     progress.close()
+
+    if all_auc_records:
+        manifest_path = OUTPUT_DIR / "auc_manifest.csv"
+        with open(manifest_path, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=["dataset", "x", "y", "variant", "epsilon", "auc"])
+            writer.writeheader()
+            writer.writerows(all_auc_records)
+        print(f"plot_summary: AUC manifest → {manifest_path}")
+
     print(f"plot_summary: saved={saved_count}, total={len(plan)}")
 
 

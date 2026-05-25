@@ -283,14 +283,14 @@ class FlatDatasetLogs:
             if item["method"] == "baseline":
                 flat_item["divergence_bertscore"] = 0.0
                 flat_item["divergence_cosine"] = 0.0
-                flat_item["divergence_pp"] = 0.0
                 flat_item["runtime_avg_anon_time_s"] = 0.0
+            if item["method"] == "manual":
+                flat_item["runtime_avg_anon_time_s"] = float("nan")
             if item["method"] == "dummy":
                 for metric, value in _compute_dummy_privacy(item["dataset"]).items():
                     flat_item[f"privacy_{metric}"] = value
                 flat_item["divergence_bertscore"] = 1.0
                 flat_item["divergence_cosine"] = 1.0
-                flat_item["divergence_pp"] = 1.0
             flattened.append(flat_item)
         sorted_flattened = self.sort_by_method_order(flattened)
         return sorted_flattened
@@ -541,11 +541,11 @@ class MarkdownDatasetLogsWriter:
         def _gain_row(row: pd.Series) -> float:
             rel_p  = _val(row, "rel_P")
             rel_u  = _val(row, "rel_U")
-            rel_ss = _val(row, "rel_SS")
+            rel_pu = _val(row, "rel_PU")
             rel_d  = _val(row, "rel_D_text")
-            if any(math.isnan(v) for v in (rel_p, rel_u, rel_ss, rel_d)):
+            if any(math.isnan(v) for v in (rel_p, rel_u, rel_pu, rel_d)):
                 return float("nan")
-            return (rel_u + rel_ss + (1.0 - rel_d) - 3.0 * rel_p) / 3.0
+            return (rel_u + rel_pu + (1.0 - rel_d) - 3.0 * rel_p) / 3.0
 
         frame = frame.copy()
         frame["GAIN"] = frame.apply(_gain_row, axis=1)

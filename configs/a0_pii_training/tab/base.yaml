@@ -1,6 +1,5 @@
 dataset: tab
-data_path: data/TAB/splitted
-data_ext: json
+data_path: data/tab
 model_name: roberta-base
 output_root: ../../../netscratch/yay/pii_detectors/tab
 

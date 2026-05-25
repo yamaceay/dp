@@ -158,6 +158,9 @@ class DPParaphraseAnonymizer(Anonymizer):
                     prompt,
                     max_new_tokens=max_new,
                     temperature=temperature,
+                    do_sample=True,
+                    top_k=0,
+                    top_p=1.0,
                 )[0]["generated_text"]
 
                 if generated.startswith(prompt):

@@ -53,8 +53,8 @@ run_step() {
 }
 
 META_AWARE_SCRIPTS=(
-  "single_metric_plots.py"
-  "pu_tradeoff.py"
+  "plot_single_metrics.py"
+  "plot_pu_tradeoff.py"
   "plot_summary.py"
 )
 
@@ -81,8 +81,10 @@ else
   echo "==> Skipping data transformation (--skip-transform)"
 fi
 
-run_python_script single_metric_plots.py
-run_python_script pu_tradeoff.py --all
+run_python_script plot_single_metrics.py
+run_python_script plot_pu_tradeoff.py --all
 run_python_script plot_summary.py --all
 run_python_script plot_drift.py
 run_python_script plot_mega_metrics.py
+
+run_step rsync -a images/ docs/thesis/images/

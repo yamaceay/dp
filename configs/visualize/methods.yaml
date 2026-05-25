@@ -22,24 +22,27 @@ method_sets:
       - method: "dpprompt"
         print_as: "DP-Prompt"
         params: ["epsilon"]
-  - name: "token_level_rewriters"
-    print_as: "DP Token-level rewriting methods with varying epsilon"
-    methods:
-      - method: "baseline"
-        print_as: "Original"
-      - method: "dummy"
-        print_as: "Dummy"
-      - method: "presidio"
-        print_as: "Presidio"
       - method: "dpmlm_uniform"
         print_as: "DP-MLM"
-        params: ["epsilon"]
-      - method: "dpmlm_shap_no_presidio"
-        print_as: "DP-MLM-X"
         params: ["epsilon"]
       - method: "dpmlm_shap"
         print_as: "DP-MLM-X+Pr"
         params: ["epsilon"]
+  # - name: "token_level_rewriters"
+  #   print_as: "DP Token-level rewriting methods with varying epsilon"
+  #   methods:
+  #     - method: "baseline"
+  #       print_as: "Original"
+  #     - method: "dummy"
+  #       print_as: "Dummy"
+  #     - method: "presidio"
+  #       print_as: "Presidio"
+  #     - method: "dpmlm_uniform"
+  #       print_as: "DP-MLM"
+  #       params: ["epsilon"]
+  #     - method: "dpmlm_shap"
+  #       print_as: "DP-MLM-X+Pr"
+  #       params: ["epsilon"]
   - name: "token_level_rewriters_with_threshold_k"
     print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter k"
     methods:
