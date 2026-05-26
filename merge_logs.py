@@ -29,6 +29,9 @@ def parse_privacy_profile_from_log_name(log_name: str) -> str | None:
     match = re.match(r"^([a-z0-9]+)_subset\.jsonl$", log_name)
     if match:
         return f"{match.group(1)}_subset"
+    match = re.match(r"^([a-z0-9]+)_k\.jsonl$", log_name)
+    if match:
+        return match.group(1)
     return None
 
 
@@ -130,6 +133,8 @@ class UtilityExperimentLogParser(ExperimentLogParser):
         if feature.endswith("_subset"):
             actual_feature = feature[: -len("_subset")]
             split = "test"
+        elif feature.endswith("_k"):
+            actual_feature = feature[: -len("_k")]
         results: List[Dict[str, Any]] = []
         baseline_metric_overall: Dict[str, float] = {}
         dummy_metric_name: str | None = None
@@ -326,6 +331,8 @@ class DivergenceExperimentLogParser(ExperimentLogParser):
         if metric.endswith("_subset"):
             actual_metric = metric[: -len("_subset")]
             split = "test"
+        elif metric.endswith("_k"):
+            actual_metric = metric[: -len("_k")]
         results: List[Dict[str, Any]] = []
         with Path(log_file).open("r", encoding="utf-8") as f:
             for line in f:
@@ -473,10 +480,7 @@ class LogGrouper:
             section = grouped[key].setdefault(type_of_experiment, {})
             assert isinstance(section, dict), f"Unexpected section type for key {type_of_experiment}"
             for metric_name, metric_value in metrics.items():
-                if metric_name in section:
-                    assert section[metric_name] == metric_value, f"Conflicting value for {metric_name}: {section[metric_name]} vs {metric_value}"
-                    continue
-                section[metric_name] = metric_value
+                section[metric_name] = metric_value  # last-in wins; _k logs sort after base logs
 
         return list(grouped.values())
 

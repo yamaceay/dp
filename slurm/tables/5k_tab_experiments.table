@@ -1,0 +1,10 @@
+privacy_tab_k                  |python run.py privacy --config configs/5_experiments/tab/privacy/exact_k.yaml
+privacy_tab_more_k             |python run.py privacy --config configs/5_experiments/tab/privacy/more_k.yaml
+privacy_tab_full_k             |python run.py privacy --config configs/5_experiments/tab/privacy/full_k.yaml
+divergence_tab_pp_k            |python run.py divergence --config configs/5_experiments/tab/divergence/pp_k.yaml
+divergence_tab_bertscore_k     |python run.py divergence --config configs/5_experiments/tab/divergence/bertscore_k.yaml
+divergence_tab_cosine_k        |python run.py divergence --config configs/5_experiments/tab/divergence/cosine_k.yaml
+pseudo_utility_tab_country_k   |python run.py utility --config configs/5_experiments/tab/pseudo_utility/country_k.yaml
+pseudo_utility_tab_year_k      |python run.py utility --config configs/5_experiments/tab/pseudo_utility/year_k.yaml
+utility_tab_country_k          |python run.py utility --config configs/5_experiments/tab/utility/country_k.yaml
+utility_tab_year_k             |python run.py utility --config configs/5_experiments/tab/utility/year_k.yaml
