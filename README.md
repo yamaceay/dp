@@ -1,132 +1,86 @@
-# Differentially Private Text Anonymization
+# Risk-Aware Differentially Private Text Anonymization
 
-This repository implements and benchmarks risk-aware text anonymization methods, with a focus on DP-MLM-X — a token-level differential privacy approach that allocates privacy budget according to per-token re-identification risk rather than uniformly. It accompanies a Master's thesis evaluating privacy-utility trade-offs across multiple anonymization strategies on two English text datasets.
+Code and pre-computed results for the paper. The main contribution is **DP-MLM-X**: a token-level differential privacy rewriter that allocates privacy budget proportionally to per-token re-identification risk, derived from SHAP attribution over a trained Text Re-Identification (TRI) classifier.
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Pipeline](#pipeline)
-- [Methods](#methods)
-- [Datasets](#datasets)
-- [Installation](#installation)
-- [Data Preparation](#data-preparation)
-- [Running Anonymization](#running-anonymization)
-- [Evaluation](#evaluation)
-- [Reproducing the Thesis](#reproducing-the-thesis)
-
----
-
-## Overview
-
-The core idea is to replace uniform DP noise injection with risk-aware budget allocation: tokens with higher re-identification risk receive more perturbation, while low-risk tokens are left closer to their original form. Risk scores are derived from a trained Text Re-Identification (TRI) model via SHAP attribution.
-
-The codebase supports a full experiment pipeline: dataset loading, PII detection, TRI model training, risk precomputation, anonymization, and evaluation of privacy, utility, and divergence.
-
----
-
-## Pipeline
-
-Each experiment follows these ordered stages:
-
-1. **De-identification** — mask direct identifiers (names, locations) using Presidio before further processing.
-2. **Background knowledge generation** — summarize original records with `facebook/bart-large-cnn` to simulate attacker background knowledge.
-3. **TRI model training** — fine-tune a `distilbert-base-uncased` classifier to re-identify individuals from text.
-4. **Risk precomputation** — run SHAP attribution over the TRI model to assign per-token risk scores (`risk.py`).
-5. **Anonymization** — apply the selected method using the risk scores and configured stopping conditions.
-6. **Evaluation** — measure privacy (MRR, TRIR), utility (accuracy, MAE), and divergence (cosine similarity, BERTScore, PP) via `run.py`.
-
-Logs from each stage are merged into analysis-ready artifacts by `merge_logs.py`, then exported to thesis CSV tables by `docs/thesis/data_export.py`.
+Benchmarked against masking baselines (Presidio, SpaCy, PETRE) and other DP rewriters (DP-BART, DP-Prompt, DP-Paraphrase) on two datasets across privacy, utility, and divergence metrics.
 
 ---
 
 ## Methods
 
-| Name | Type | Key idea |
-|------|------|----------|
-| `spacy`, `presidio` | Masking | Entity-based deterministic masking |
-| `manual` | Masking | Dataset-provided annotation spans |
-| `baroud` | Masking | Trainable PII detector with λ confidence threshold |
-| `risk` | Masking | Risk-scored masking until cumulative risk ≤ ρ |
-| `petre` | k-anonymity | Iterative masking until TRI attacker rank ≥ k |
-| `dpmlm` | DP rewriting | Risk-aware DP masked language model (DP-MLM-X) |
+| Method | Type | Description |
+|--------|------|-------------|
+| `presidio`, `spacy` | Masking | Entity-based NER masking |
+| `dummy` | Masking | Replace all tokens |
+| `risk` | Masking | Risk-scored token masking with ρ stopping threshold |
+| `petre` | k-anonymity | Iterative masking until TRI rank ≥ k |
+| `dpmlm` | DP rewriting | Risk-aware DP masked language model (**DP-MLM-X**) |
 | `dpbart` | DP rewriting | Gaussian noise on BART encoder logits |
 | `dpprompt` | DP rewriting | Prompted seq2seq with clipped logits |
 | `dpparaphrase` | DP rewriting | Autoregressive rewriting with DP noise |
 
-DP-MLM-X variants (`k-`, `ρ-`, `λ-DP-MLM-X`) combine risk-aware budget allocation with configurable stopping conditions. Method configs live in `configs/model/`, runtime parameter sweeps (ε, λ, ρ, k) in `configs/runtime/`.
+DP-MLM-X variants (k-, ρ-) combine risk-aware budget allocation with configurable stopping conditions. Model configs: `configs/model/`. Runtime sweeps (ε, k, ρ): `configs/runtime/`.
 
 ---
 
 ## Datasets
 
-| Dataset | Description |
-|---------|-------------|
-| **TAB** | 1268 ECHR case documents with PII span annotations and utility labels (year, countries). |
-| **DB-Bio** | 2419 Wikipedia biographies of public figures with DBpedia class labels. |
+| Dataset | Records | Labels |
+|---------|---------|--------|
+| **TAB** | 1268 ECHR case documents | Country, year classification |
+| **DB-Bio** | 2419 Wikipedia biographies | DBpedia class classification |
 
-Both are used with their original train/validation/test splits for all pipeline stages.
+Place datasets at:
+- `data/TAB/splitted/{train,dev,test}.json`
+- `data/DB_Bio/` (Arrow format)
 
 ---
 
 ## Installation
 
 ```bash
-git clone https://anonymous.4open.science/r/risk-aware-dp/dp.git
-cd dp
+git clone <repo> && cd dp
 uv sync
 source .venv/bin/activate
 python -m spacy download en_core_web_sm
 ```
 
-Requires Python 3.12.3, CUDA-capable GPU, and matching GPU driver. Set `PYTORCH_ENABLE_MPS_FALLBACK=1` for Apple Silicon.
+Requires Python 3.12.3 and a CUDA-capable GPU. Set `PYTORCH_ENABLE_MPS_FALLBACK=1` on Apple Silicon.
 
 ---
 
-## Data Preparation
+## Pipeline
 
-Datasets are not shipped with the repository. Place them at:
+Six ordered stages. The numbered Slurm job tables in `slurm/tables/` reproduce the full experiment batches on HPC:
 
-| Dataset | Path |
-|---------|------|
-| TAB | `data/TAB/splitted/{train,dev,test}.json` |
-| DB-Bio | `data/DB_Bio/` (Arrow format) |
+| Stage | Table prefix | Entry point | Description |
+|-------|-------------|-------------|-------------|
+| 0 | `0_*` | `model.py` | Simple masking (presidio, spacy, dummy) |
+| 1 | `1_*` | `data_for_tri.py` | Prepare TRI training data |
+| 2 | `2_*` | `exp.py` | Train TRI re-identification classifier |
+| 3 | `3_*` | `risk.py` | Precompute SHAP per-token risk scores |
+| 4 | `4_*` | `model.py` | DP and risk-aware anonymization |
+| 5 | `5_*` | `run.py` | Privacy, utility, and divergence evaluation |
 
----
-
-## Running Anonymization
+Example single run:
 
 ```bash
 python model.py \
-  --data tab \
-  --data_in data/TAB/splitted/test.json \
-  --model dpmlm \
-  --model_in configs/model/dpmlm/tab/greedy_risk.yaml \
-  --runtime_in configs/runtime/dp/eps_100.yaml configs/runtime/risk_tolerance/rho_090.yaml \
+  --data tab --data_in data/TAB/splitted/test.json \
+  --model dpmlm --model_in configs/model/dpmlm/tab/greedy_risk.yaml \
+  --runtime_in configs/runtime/dp/eps_100.yaml configs/runtime/k_anon/k_5.yaml \
   --output jsonl
 ```
 
-On HPC, use the Slurm job tables in `slurm/tables/` to reproduce the full experiment batches.
-
 ---
 
-## Evaluation
+## Reproducing Paper Results
+
+Pre-computed result CSVs are committed in `mds/`. To regenerate them from raw evaluation logs:
 
 ```bash
-python run.py --config configs/experiments/privacy_tab.yaml
-python run.py --config configs/experiments/utility_tab.yaml
-python run.py --config configs/experiments/divergence_tab.yaml
+bash scripts/post.sh          # parse → merge → transform → plot
+bash scripts/post.sh --skip-transform  # skip CSV regeneration, plot only
 ```
 
-`run.py` reads anonymized JSONL outputs from `outputs/`, computes metrics, and writes structured logs for downstream analysis.
-
----
-
-## Reproducing the Thesis
-
-1. Check out the latest revision.
-2. Run `uv sync` and verify GPU and CUDA availability.
-3. Place TAB and DB-Bio in the expected `data/` paths with original splits.
-4. Run the pipeline stages via local scripts or Slurm job tables in `slurm/tables/`.
-5. Merge logs and regenerate thesis CSV exports: `python3 docs/thesis/data_export.py`.
-6. Regenerate figures: `python3 plot_summary.py`, `python3 plot_pu_tradeoff.py` (and related scripts).
-7. Compile the thesis (`docs/thesis/`) and verify tables and figures match the regenerated artifacts.
+This runs `parse_runtime.py`, `merge_logs.py`, `transform_logs.py` (writes `mds/`), then `plot_shap_tokens.py` (reads `presidio/{db_bio,tab}.jsonl`).
