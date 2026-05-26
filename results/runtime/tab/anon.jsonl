@@ -1,0 +1,136 @@
+{"method": "dpmlm_uniform", "params": {"epsilon": 250}, "anon_total_time_s": 105138.58, "anon_texts_processed": 1268}
+{"method": "spacy", "params": {}, "anon_total_time_s": 141.47, "anon_texts_processed": 1268}
+{"method": "presidio", "params": {}, "anon_total_time_s": 128.03, "anon_texts_processed": 1268}
+{"method": "dpprompt", "params": {"epsilon": 10}, "anon_total_time_s": 18941.43, "anon_texts_processed": 1268}
+{"method": "dpprompt", "params": {"epsilon": 25}, "anon_total_time_s": 9199.87, "anon_texts_processed": 1268}
+{"method": "dpprompt", "params": {"epsilon": 50}, "anon_total_time_s": 476.3, "anon_texts_processed": 1268}
+{"method": "dpprompt", "params": {"epsilon": 100}, "anon_total_time_s": 675.42, "anon_texts_processed": 1268}
+{"method": "dpprompt", "params": {"epsilon": 250}, "anon_total_time_s": 966.08, "anon_texts_processed": 1268}
+{"method": "dpparaphrase", "params": {"epsilon": 10}, "anon_total_time_s": 14692.77, "anon_texts_processed": 1268}
+{"method": "dpparaphrase", "params": {"epsilon": 25}, "anon_total_time_s": 17925.13, "anon_texts_processed": 1268}
+{"method": "dpparaphrase", "params": {"epsilon": 50}, "anon_total_time_s": 18065.16, "anon_texts_processed": 1268}
+{"method": "dpparaphrase", "params": {"epsilon": 100}, "anon_total_time_s": 18195.34, "anon_texts_processed": 1268}
+{"method": "dpparaphrase", "params": {"epsilon": 250}, "anon_total_time_s": 14627.96, "anon_texts_processed": 1268}
+{"method": "dpbart", "params": {"epsilon": 10}, "anon_total_time_s": 4194.64, "anon_texts_processed": 1268}
+{"method": "dpbart", "params": {"epsilon": 25}, "anon_total_time_s": 2878.9, "anon_texts_processed": 1268}
+{"method": "dpbart", "params": {"epsilon": 50}, "anon_total_time_s": 3110.76, "anon_texts_processed": 1268}
+{"method": "dpbart", "params": {"epsilon": 100}, "anon_total_time_s": 3838.2, "anon_texts_processed": 1268}
+{"method": "dpbart", "params": {"epsilon": 250}, "anon_total_time_s": 4328.68, "anon_texts_processed": 1268}
+{"method": "dpmlm_uniform", "params": {"epsilon": 10}, "anon_total_time_s": 98706.04, "anon_texts_processed": 1268}
+{"method": "dpmlm_uniform", "params": {"epsilon": 25}, "anon_total_time_s": 111446.21, "anon_texts_processed": 1268}
+{"method": "dpmlm_uniform", "params": {"epsilon": 50}, "anon_total_time_s": 100820.76, "anon_texts_processed": 1268}
+{"method": "dpmlm_uniform", "params": {"epsilon": 100}, "anon_total_time_s": 53669.27, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.9}, "anon_total_time_s": 52632.36, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.8}, "anon_total_time_s": 52632.36, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.7}, "anon_total_time_s": 52632.36, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.6}, "anon_total_time_s": 52632.36, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.5}, "anon_total_time_s": 52632.36, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.4}, "anon_total_time_s": 52632.36, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.3}, "anon_total_time_s": 52632.36, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.2}, "anon_total_time_s": 52632.36, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.1}, "anon_total_time_s": 52632.36, "anon_texts_processed": 1268}
+{"method": "risk_shap", "params": {"rho": 0.9}, "anon_total_time_s": 83.0, "anon_texts_processed": 1268}
+{"method": "risk_shap", "params": {"rho": 0.8}, "anon_total_time_s": 83.0, "anon_texts_processed": 1268}
+{"method": "risk_shap", "params": {"rho": 0.7}, "anon_total_time_s": 83.0, "anon_texts_processed": 1268}
+{"method": "risk_shap", "params": {"rho": 0.6}, "anon_total_time_s": 83.0, "anon_texts_processed": 1268}
+{"method": "risk_shap", "params": {"rho": 0.5}, "anon_total_time_s": 83.0, "anon_texts_processed": 1268}
+{"method": "risk_shap", "params": {"rho": 0.4}, "anon_total_time_s": 83.0, "anon_texts_processed": 1268}
+{"method": "risk_shap", "params": {"rho": 0.3}, "anon_total_time_s": 83.0, "anon_texts_processed": 1268}
+{"method": "risk_shap", "params": {"rho": 0.2}, "anon_total_time_s": 83.0, "anon_texts_processed": 1268}
+{"method": "risk_shap", "params": {"rho": 0.1}, "anon_total_time_s": 83.0, "anon_texts_processed": 1268}
+{"method": "petre_shap", "params": {"k": 2}, "anon_total_time_s": 41983.65, "anon_texts_processed": 1268}
+{"method": "petre_shap", "params": {"k": 3}, "anon_total_time_s": 41983.65, "anon_texts_processed": 1268}
+{"method": "petre_shap", "params": {"k": 5}, "anon_total_time_s": 41983.65, "anon_texts_processed": 1268}
+{"method": "petre_shap", "params": {"k": 7}, "anon_total_time_s": 41983.65, "anon_texts_processed": 1268}
+{"method": "petre_shap", "params": {"k": 10}, "anon_total_time_s": 41983.65, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 2}, "anon_total_time_s": 51335.57, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 3}, "anon_total_time_s": 51335.57, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 5}, "anon_total_time_s": 51335.57, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 7}, "anon_total_time_s": 51335.57, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 10}, "anon_total_time_s": 51335.57, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 2}, "anon_total_time_s": 42352.18, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 3}, "anon_total_time_s": 42352.18, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 5}, "anon_total_time_s": 42352.18, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 7}, "anon_total_time_s": 42352.18, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 10}, "anon_total_time_s": 42352.18, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 2}, "anon_total_time_s": 42981.22, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 3}, "anon_total_time_s": 42981.22, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 5}, "anon_total_time_s": 42981.22, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 7}, "anon_total_time_s": 42981.22, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 10}, "anon_total_time_s": 42981.22, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 2}, "anon_total_time_s": 67306.42, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 3}, "anon_total_time_s": 67306.42, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 5}, "anon_total_time_s": 67306.42, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 7}, "anon_total_time_s": 67306.42, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 10}, "anon_total_time_s": 67306.42, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 2}, "anon_total_time_s": 46536.06, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 3}, "anon_total_time_s": 46536.06, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 5}, "anon_total_time_s": 46536.06, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 7}, "anon_total_time_s": 46536.06, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 10}, "anon_total_time_s": 46536.06, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10}, "anon_total_time_s": 82158.25, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25}, "anon_total_time_s": 61016.06, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50}, "anon_total_time_s": 44610.06, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100}, "anon_total_time_s": 104662.73, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250}, "anon_total_time_s": 59435.38, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.99}, "anon_total_time_s": 7997.47, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.98}, "anon_total_time_s": 7997.47, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.95}, "anon_total_time_s": 7997.47, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.9}, "anon_total_time_s": 7997.47, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.8}, "anon_total_time_s": 7997.47, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.99}, "anon_total_time_s": 8032.68, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.98}, "anon_total_time_s": 8032.68, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.95}, "anon_total_time_s": 8032.68, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.9}, "anon_total_time_s": 8032.68, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.8}, "anon_total_time_s": 8032.68, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.99}, "anon_total_time_s": 7118.19, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.98}, "anon_total_time_s": 7118.19, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.95}, "anon_total_time_s": 7118.19, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.9}, "anon_total_time_s": 7118.19, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.8}, "anon_total_time_s": 7118.19, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.99}, "anon_total_time_s": 7231.46, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.98}, "anon_total_time_s": 7231.46, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.95}, "anon_total_time_s": 7231.46, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.9}, "anon_total_time_s": 7231.46, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.8}, "anon_total_time_s": 7231.46, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.99}, "anon_total_time_s": 6686.91, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.98}, "anon_total_time_s": 6686.91, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.95}, "anon_total_time_s": 6686.91, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.9}, "anon_total_time_s": 6686.91, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.8}, "anon_total_time_s": 6686.91, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.9}, "anon_total_time_s": 50274.6, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.8}, "anon_total_time_s": 50274.6, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.7}, "anon_total_time_s": 50274.6, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.6}, "anon_total_time_s": 50274.6, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.5}, "anon_total_time_s": 50274.6, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.4}, "anon_total_time_s": 50274.6, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.3}, "anon_total_time_s": 50274.6, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.2}, "anon_total_time_s": 50274.6, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.1}, "anon_total_time_s": 50274.6, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.9}, "anon_total_time_s": 75708.74, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.8}, "anon_total_time_s": 75708.74, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.7}, "anon_total_time_s": 75708.74, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.6}, "anon_total_time_s": 75708.74, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.5}, "anon_total_time_s": 75708.74, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.4}, "anon_total_time_s": 75708.74, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.3}, "anon_total_time_s": 75708.74, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.2}, "anon_total_time_s": 75708.74, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.1}, "anon_total_time_s": 75708.74, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.9}, "anon_total_time_s": 89445.1, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.8}, "anon_total_time_s": 89445.1, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.7}, "anon_total_time_s": 89445.1, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.6}, "anon_total_time_s": 89445.1, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.5}, "anon_total_time_s": 89445.1, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.4}, "anon_total_time_s": 89445.1, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.3}, "anon_total_time_s": 89445.1, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.2}, "anon_total_time_s": 89445.1, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.1}, "anon_total_time_s": 89445.1, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.9}, "anon_total_time_s": 52628.69, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.8}, "anon_total_time_s": 52628.69, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.7}, "anon_total_time_s": 52628.69, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.6}, "anon_total_time_s": 52628.69, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.5}, "anon_total_time_s": 52628.69, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.4}, "anon_total_time_s": 52628.69, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.3}, "anon_total_time_s": 52628.69, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.2}, "anon_total_time_s": 52628.69, "anon_texts_processed": 1268}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.1}, "anon_total_time_s": 52628.69, "anon_texts_processed": 1268}

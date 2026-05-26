@@ -1,0 +1,111 @@
+{"method": "dpmlm_uniform", "params": {"epsilon": 250}, "risk_total_time_s": 0.0}
+{"method": "spacy", "params": {}, "risk_total_time_s": 0.0}
+{"method": "presidio", "params": {}, "risk_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 10}, "risk_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 25}, "risk_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 50}, "risk_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 100}, "risk_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 250}, "risk_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 10}, "risk_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 25}, "risk_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 50}, "risk_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 100}, "risk_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 250}, "risk_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 10}, "risk_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 25}, "risk_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 50}, "risk_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 100}, "risk_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 250}, "risk_total_time_s": 0.0}
+{"method": "dpmlm_uniform", "params": {"epsilon": 10}, "risk_total_time_s": 0.0}
+{"method": "dpmlm_uniform", "params": {"epsilon": 25}, "risk_total_time_s": 0.0}
+{"method": "dpmlm_uniform", "params": {"epsilon": 50}, "risk_total_time_s": 0.0}
+{"method": "dpmlm_uniform", "params": {"epsilon": 100}, "risk_total_time_s": 0.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.9}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.8}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.6}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.4}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.1}, "risk_total_time_s": 6657}
+{"method": "risk_shap", "params": {"rho": 0.9}, "risk_total_time_s": 6657}
+{"method": "risk_shap", "params": {"rho": 0.8}, "risk_total_time_s": 6657}
+{"method": "risk_shap", "params": {"rho": 0.7}, "risk_total_time_s": 6657}
+{"method": "risk_shap", "params": {"rho": 0.6}, "risk_total_time_s": 6657}
+{"method": "risk_shap", "params": {"rho": 0.5}, "risk_total_time_s": 6657}
+{"method": "risk_shap", "params": {"rho": 0.4}, "risk_total_time_s": 6657}
+{"method": "risk_shap", "params": {"rho": 0.3}, "risk_total_time_s": 6657}
+{"method": "risk_shap", "params": {"rho": 0.2}, "risk_total_time_s": 6657}
+{"method": "risk_shap", "params": {"rho": 0.1}, "risk_total_time_s": 6657}
+{"method": "petre_shap", "params": {"k": 2}, "risk_total_time_s": 6657}
+{"method": "petre_shap", "params": {"k": 3}, "risk_total_time_s": 6657}
+{"method": "petre_shap", "params": {"k": 5}, "risk_total_time_s": 6657}
+{"method": "petre_shap", "params": {"k": 7}, "risk_total_time_s": 6657}
+{"method": "petre_shap", "params": {"k": 10}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 10}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 10}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 10}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 10}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 10}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 250}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.9}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.8}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.6}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.4}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.1}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.9}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.8}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.6}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.4}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.1}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.9}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.8}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.6}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.4}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.1}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.9}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.8}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.7}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.6}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.5}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.4}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.3}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.2}, "risk_total_time_s": 6657}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.1}, "risk_total_time_s": 6657}

@@ -1,0 +1,136 @@
+{"method": "dpmlm_uniform", "params": {"epsilon": 250}, "bk_gen_total_time_s": 0.0}
+{"method": "spacy", "params": {}, "bk_gen_total_time_s": 0.0}
+{"method": "presidio", "params": {}, "bk_gen_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 10}, "bk_gen_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 25}, "bk_gen_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 50}, "bk_gen_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 100}, "bk_gen_total_time_s": 0.0}
+{"method": "dpprompt", "params": {"epsilon": 250}, "bk_gen_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 10}, "bk_gen_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 25}, "bk_gen_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 50}, "bk_gen_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 100}, "bk_gen_total_time_s": 0.0}
+{"method": "dpparaphrase", "params": {"epsilon": 250}, "bk_gen_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 10}, "bk_gen_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 25}, "bk_gen_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 50}, "bk_gen_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 100}, "bk_gen_total_time_s": 0.0}
+{"method": "dpbart", "params": {"epsilon": 250}, "bk_gen_total_time_s": 0.0}
+{"method": "dpmlm_uniform", "params": {"epsilon": 10}, "bk_gen_total_time_s": 0.0}
+{"method": "dpmlm_uniform", "params": {"epsilon": 25}, "bk_gen_total_time_s": 0.0}
+{"method": "dpmlm_uniform", "params": {"epsilon": 50}, "bk_gen_total_time_s": 0.0}
+{"method": "dpmlm_uniform", "params": {"epsilon": 100}, "bk_gen_total_time_s": 0.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.7}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.6}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.5}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.4}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.3}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.2}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "rho": 0.1}, "bk_gen_total_time_s": 24439.0}
+{"method": "risk_shap", "params": {"rho": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "risk_shap", "params": {"rho": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "risk_shap", "params": {"rho": 0.7}, "bk_gen_total_time_s": 24439.0}
+{"method": "risk_shap", "params": {"rho": 0.6}, "bk_gen_total_time_s": 24439.0}
+{"method": "risk_shap", "params": {"rho": 0.5}, "bk_gen_total_time_s": 24439.0}
+{"method": "risk_shap", "params": {"rho": 0.4}, "bk_gen_total_time_s": 24439.0}
+{"method": "risk_shap", "params": {"rho": 0.3}, "bk_gen_total_time_s": 24439.0}
+{"method": "risk_shap", "params": {"rho": 0.2}, "bk_gen_total_time_s": 24439.0}
+{"method": "risk_shap", "params": {"rho": 0.1}, "bk_gen_total_time_s": 24439.0}
+{"method": "petre_shap", "params": {"k": 2}, "bk_gen_total_time_s": 50930.0}
+{"method": "petre_shap", "params": {"k": 3}, "bk_gen_total_time_s": 50930.0}
+{"method": "petre_shap", "params": {"k": 5}, "bk_gen_total_time_s": 50930.0}
+{"method": "petre_shap", "params": {"k": 7}, "bk_gen_total_time_s": 50930.0}
+{"method": "petre_shap", "params": {"k": 10}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 2}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 3}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 5}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 7}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "k": 10}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 2}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 3}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 5}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 7}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "k": 10}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 2}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 3}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 5}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 7}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "k": 10}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 2}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 3}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 5}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 7}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "k": 10}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 2}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 3}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 5}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 7}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "k": 10}, "bk_gen_total_time_s": 50930.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.99}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.98}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.95}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "lambda": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.99}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.98}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.95}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "lambda": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.99}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.98}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.95}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "lambda": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.99}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.98}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.95}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "lambda": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.99}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.98}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.95}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 250, "lambda": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.7}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.6}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.5}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.4}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.3}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.2}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 10, "rho": 0.1}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.7}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.6}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.5}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.4}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.3}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.2}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 25, "rho": 0.1}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.7}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.6}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.5}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.4}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.3}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.2}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 50, "rho": 0.1}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.9}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.8}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.7}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.6}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.5}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.4}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.3}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.2}, "bk_gen_total_time_s": 24439.0}
+{"method": "dpmlm_shap", "params": {"epsilon": 100, "rho": 0.1}, "bk_gen_total_time_s": 24439.0}
