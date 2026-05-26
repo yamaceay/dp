@@ -1,9 +1,0 @@
-dataset: tab
-data_in: data/tab
-split: indices/tab/test.txt
-explainer: shap
-explainer_in: ../../../netscratch/yay/tri_pipelines/tab/_checkpoints/exact_deid/exact_deid
-result_in: ../../../netscratch/yay/_ext_outputs_subset/tab/presidio/{run_timestamp}_tab_presidio.jsonl
-save_to_jsonl: data/tab/tri_risk/shap_subset.jsonl
-sort_by: scores
-offset_mode: original

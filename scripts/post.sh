@@ -52,27 +52,6 @@ run_step() {
   "$@"
 }
 
-META_AWARE_SCRIPTS=(
-  "plot_single_metrics.py"
-  "plot_pu_tradeoff.py"
-  "plot_summary.py"
-)
-
-run_python_script() {
-  local script="$1"
-  shift
-  local args=("$@")
-  if [[ "$meta_mode" == true ]]; then
-    for ms in "${META_AWARE_SCRIPTS[@]}"; do
-      if [[ "$script" == "$ms" ]]; then
-        args+=("--meta")
-        break
-      fi
-    done
-  fi
-  run_step "$PYTHON_BIN" "$script" ${args[@]+"${args[@]}"}
-}
-
 if [[ "$skip_transform" == false ]]; then
   run_step "$PYTHON_BIN" parse_runtime.py
   run_step "$PYTHON_BIN" merge_logs.py
@@ -81,10 +60,4 @@ else
   echo "==> Skipping data transformation (--skip-transform)"
 fi
 
-run_python_script plot_single_metrics.py
-run_python_script plot_pu_tradeoff.py --all
-run_python_script plot_summary.py --all
-run_python_script plot_drift.py
-run_python_script plot_mega_metrics.py
-
-run_step rsync -a images/ docs/thesis/images/
+run_step "$PYTHON_BIN" plot_shap_tokens.py

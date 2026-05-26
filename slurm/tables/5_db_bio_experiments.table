@@ -4,5 +4,4 @@ privacy_db_bio_full               |python run.py privacy --config configs/5_expe
 divergence_db_bio_pp              |python run.py divergence --config configs/5_experiments/db_bio/divergence/pp.yaml
 divergence_db_bio_bertscore       |python run.py divergence --config configs/5_experiments/db_bio/divergence/bertscore.yaml
 divergence_db_bio_cosine          |python run.py divergence --config configs/5_experiments/db_bio/divergence/cosine.yaml
-pseudo_utility_db_bio_label|python run.py utility --config configs/5_experiments/db_bio/pseudo_utility/label.yaml
 utility_db_bio_label              |python run.py utility --config configs/5_experiments/db_bio/utility/label.yaml
