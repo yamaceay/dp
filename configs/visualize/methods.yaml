@@ -4,8 +4,6 @@ method_sets:
     methods:
       - method: "baseline"
         print_as: "Original"
-      - method: "dummy"
-        print_as: "Dummy"
       - method: "presidio"
         print_as: "Presidio"
       - method: "spacy"
@@ -30,8 +28,6 @@ method_sets:
   #   methods:
   #     - method: "baseline"
   #       print_as: "Original"
-  #     - method: "dummy"
-  #       print_as: "Dummy"
   #     - method: "presidio"
   #       print_as: "Presidio"
   #     - method: "dpmlm_uniform"
@@ -45,8 +41,6 @@ method_sets:
     methods:
       - method: "baseline"
         print_as: "Original"
-      - method: "dummy"
-        print_as: "Dummy"
       - method: "presidio"
         print_as: "Presidio"
       - method: "petre_shap"
@@ -64,8 +58,6 @@ method_sets:
     methods:
       - method: "baseline"
         print_as: "Original"
-      - method: "dummy"
-        print_as: "Dummy"
       - method: "presidio"
         print_as: "Presidio"
       - method: "risk_shap"
@@ -88,8 +80,6 @@ method_sets:
     methods:
       - method: "baseline"
         print_as: "Original"
-      - method: "dummy"
-        print_as: "Dummy"
       - method: "presidio"
         print_as: "Presidio"
       - method: "petre_shap"

@@ -11,7 +11,6 @@ Benchmarked against masking baselines (Presidio, SpaCy, PETRE) and other DP rewr
 | Method | Type | Description |
 |--------|------|-------------|
 | `presidio`, `spacy` | Masking | Entity-based NER masking |
-| `dummy` | Masking | Replace all tokens |
 | `risk` | Masking | Risk-scored token masking with ρ stopping threshold |
 | `petre` | k-anonymity | Iterative masking until TRI rank ≥ k |
 | `dpmlm` | DP rewriting | Risk-aware DP masked language model (**DP-MLM-X**) |
@@ -55,7 +54,7 @@ Six ordered stages. The numbered Slurm job tables in `slurm/tables/` reproduce t
 
 | Stage | Table prefix | Entry point | Description |
 |-------|-------------|-------------|-------------|
-| 0 | `0_*` | `model.py` | Simple masking (presidio, spacy, dummy) |
+| 0 | `0_*` | `model.py` | Simple masking (presidio, spacy) |
 | 1 | `1_*` | `data_for_tri.py` | Prepare TRI training data |
 | 2 | `2_*` | `exp.py` | Train TRI re-identification classifier |
 | 3 | `3_*` | `risk.py` | Precompute SHAP per-token risk scores |
@@ -76,7 +75,7 @@ python model.py \
 
 ## Reproducing Paper Results
 
-Pre-computed result CSVs are committed in `mds/`. To regenerate them from raw evaluation logs:
+Pre-computed result CSVs are committed in `mds/`. SHAP explanation figures are in `images/explanations/`. To regenerate CSVs and plots from raw evaluation logs:
 
 ```bash
 bash scripts/post.sh          # parse → merge → transform → plot
