@@ -1,4 +1,0 @@
-tab_orig_deid|python debug_tri.py --config configs/a2_debug_tri/tab/orig_deid.yaml
-tab_deid_orig|python debug_tri.py --config configs/a2_debug_tri/tab/deid_orig.yaml
-db_bio_orig_deid|python debug_tri.py --config configs/a2_debug_tri/db_bio/orig_deid.yaml
-db_bio_deid_orig|python debug_tri.py --config configs/a2_debug_tri/db_bio/deid_orig.yaml
