@@ -18,7 +18,7 @@ from dp.bert.hf_shared import (
 class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
     def __init__(
         self,
-        encoder_lr: float,
+        encoder_lr: Optional[float] = None,
         head_lr: Optional[float] = None,
         model_name: str = "distilbert-base-uncased",
         batch_size: int = 8,
@@ -63,7 +63,7 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
             raise ValueError(f"weight_decay must be >= 0, got {weight_decay}")
         if warmup_ratio is not None and (warmup_ratio < 0.0 or warmup_ratio >= 1.0):
             raise ValueError(f"warmup_ratio must be in [0, 1), got {warmup_ratio}")
-        if encoder_lr <= 0:
+        if encoder_lr is not None and encoder_lr <= 0:
             raise ValueError(f"encoder_lr must be positive, got {encoder_lr}")
         if head_lr is not None and head_lr <= 0:
             raise ValueError(f"head_lr must be positive, got {head_lr}")
@@ -71,8 +71,8 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
-        self.encoder_lr = float(encoder_lr)
-        self.head_lr = float(head_lr) if head_lr is not None else float(encoder_lr)
+        self.encoder_lr = float(encoder_lr) if encoder_lr is not None else None
+        self.head_lr = float(head_lr) if head_lr is not None else (float(encoder_lr) if encoder_lr is not None else None)
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
         self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
@@ -181,6 +181,8 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
 
         self._model = self._create_model(num_classes)
         def _train_impl() -> None:
+            if self.encoder_lr is None:
+                raise ValueError("encoder_lr is required for training but was not provided")
             train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
             val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
             train_dataset = EncodedDataset(train_encodings, train_targets, label_dtype=torch.long)

@@ -24,7 +24,7 @@ from dp.bert.losses import compute_focal_loss
 class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
     def __init__(
         self,
-        encoder_lr: float,
+        encoder_lr: Optional[float] = None,
         head_lr: Optional[float] = None,
         model_name: str = "distilbert-base-uncased",
         batch_size: int = 8,
@@ -88,12 +88,12 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
-        if encoder_lr <= 0:
+        if encoder_lr is not None and encoder_lr <= 0:
             raise ValueError(f"encoder_lr must be positive, got {encoder_lr}")
         if head_lr is not None and head_lr <= 0:
             raise ValueError(f"head_lr must be positive, got {head_lr}")
-        self.encoder_lr = float(encoder_lr)
-        self.head_lr = float(head_lr) if head_lr is not None else float(encoder_lr)
+        self.encoder_lr = float(encoder_lr) if encoder_lr is not None else None
+        self.head_lr = float(head_lr) if head_lr is not None else (float(encoder_lr) if encoder_lr is not None else None)
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
         self.label_smoothing = float(label_smoothing)
@@ -277,6 +277,8 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
 
         self._model = self._create_model(len(self._label_list), other_label_id=other_label_id)
         def _train_impl() -> None:
+            if self.encoder_lr is None:
+                raise ValueError("encoder_lr is required for training but was not provided")
             train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
             val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
             train_dataset = EncodedDataset(train_encodings, train_encoded, label_dtype=torch.long)
