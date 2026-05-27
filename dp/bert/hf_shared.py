@@ -353,12 +353,14 @@ class BertHFPlumbing:
         status = self._read_training_complete(status_path)
 
         if status is True and latest is not None and self._load_model_state_from_checkpoint(model, latest):
+            model.to(self.device)
             self._active_checkpoint = str(latest)
             return True, False
 
         if status is not True and mark_existing_complete and latest is not None:
             self._write_training_complete(status_path, True)
             if self._load_model_state_from_checkpoint(model, latest):
+                model.to(self.device)
                 self._active_checkpoint = str(latest)
                 return True, False
 
@@ -379,6 +381,7 @@ class BertHFPlumbing:
             latest = self._latest_checkpoint_dir(checkpoint_dir)
             status = self._read_training_complete(status_path)
             if status is True and latest is not None and self._load_model_state_from_checkpoint(model, latest):
+                model.to(self.device)
                 self._active_checkpoint = str(latest)
                 return True, False
             if wait_timeout_seconds is not None and (time.time() - started) >= float(wait_timeout_seconds):
