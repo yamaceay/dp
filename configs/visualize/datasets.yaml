@@ -126,12 +126,12 @@ dataset_sets:
         rename_as: rel_D
         category: divergence
         strategy: smallest_subset
-      - avg: [D_pp]
+      - avg: [D_bertscore, D_cosine, D_pp]
         rename_as: D
         split: test
         category: divergence
         strategy: smallest_subset
-      - avg: [rel_D_pp]
+      - avg: [rel_D_bertscore, rel_D_cosine, rel_D_pp]
         rename_as: rel_D
         split: test
         category: divergence
