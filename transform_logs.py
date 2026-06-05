@@ -337,7 +337,6 @@ class FlatDatasetLogs:
                 normalized_params.append((param_name, (value_type_rank, value)))
 
             item["_sort_key"] = (method_index, tuple(normalized_params))
-            print(item)
 
         sorted_items = sorted(items, key=lambda x: x["_sort_key"])
         for item in sorted_items:

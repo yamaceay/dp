@@ -233,8 +233,7 @@ def collect_reference_point(
 def trapezoidal_auc(points: list[tuple]) -> float:
     if len(points) < 2:
         return float("nan")
-    sorted_pts = sorted(points, key=lambda p: p[0])
-    return float(np.trapz([p[1] for p in sorted_pts], [p[0] for p in sorted_pts]))
+    return float(np.trapz([p[1] for p in points], [p[0] for p in points]))
 
 
 
@@ -314,12 +313,11 @@ def plot_showdown(
             ax.set_title("ε = 0  (masking)", fontsize=11)
             for p_idx, label, pts, _dp_ref in masking_data:
                 color = _PALETTE[p_idx % len(_PALETTE)]
-                sorted_pts = sorted(pts, key=lambda p: p[0])
-                auc = trapezoidal_auc(sorted_pts)
+                auc = trapezoidal_auc(pts)
                 auc_records.append({"dataset": dataset, "x": x_metric, "y": y_metric,
                                     "variant": label, "epsilon": "det",
                                     "auc": round(auc, 5) if not np.isnan(auc) else None})
-                h = _draw_curve(ax, sorted_pts, color, label, dashed=True)
+                h = _draw_curve(ax, pts, color, label, dashed=True)
                 _add_to_legend(h, label)
         else:
             ax.set_title(f"ε = {int(epsilon_val)}", fontsize=11)
@@ -328,21 +326,19 @@ def plot_showdown(
                 pts = eps_groups.get(epsilon_val, [])
                 if len(pts) < 2:
                     continue
-                sorted_pts = sorted(pts, key=lambda p: p[0])
-                auc = trapezoidal_auc(sorted_pts)
+                auc = trapezoidal_auc(pts)
                 auc_records.append({"dataset": dataset, "x": x_metric, "y": y_metric,
                                     "variant": label, "epsilon": epsilon_val,
                                     "auc": round(auc, 5) if not np.isnan(auc) else None})
-                h = _draw_curve(ax, sorted_pts, color, label, dashed=False)
+                h = _draw_curve(ax, pts, color, label, dashed=False)
                 _add_to_legend(h, label)
             # Deterministic reference curves (dp_panel_ref only) — dashed
             for p_idx, label, pts, dp_ref in masking_data:
                 if not dp_ref or not pts:
                     continue
                 color = _PALETTE[p_idx % len(_PALETTE)]
-                sorted_pts = sorted(pts, key=lambda p: p[0])
                 lbl = f"{label}  (det.)"
-                h = _draw_curve(ax, sorted_pts, color, lbl, dashed=True)
+                h = _draw_curve(ax, pts, color, lbl, dashed=True)
                 _add_to_legend(h, lbl)
             # Unconstrained single-point markers
             if _smr is not None:

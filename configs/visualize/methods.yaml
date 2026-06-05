@@ -54,11 +54,11 @@ method_sets:
         print_as: "Presidio"
       - method: "petre_shap"
         print_as: "PETRE+Pr"
-        params_one_run: {"k": [2, 3, 5, 7, 10, 15, 25]}
+        params_one_run: {"k": [2, 3, 5, 7, 10, 15]}
       - method: "dpmlm_shap"
         print_as: "k-DP-MLM-X+Pr"
         params: ["epsilon"]
-        params_one_run: {"k": [2, 3, 5, 7, 10, 15, 25]}
+        params_one_run: {"k": [2, 3, 5, 7, 10, 15]}
       - method: "dpmlm_shap"
         print_as: "DP-MLM-X+Pr"
         params: ["epsilon"]

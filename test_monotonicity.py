@@ -8,7 +8,7 @@ MANIFEST_DIR = Path("images/mega_metrics")
 
 PARAM_ORDER: dict[str, list] = {
     "epsilon": [10, 25, 50, 100, 250],
-    "k":       [2, 3, 5, 7, 10],
+    "k":       [2, 3, 5, 7, 10, 15, 25],
     "rho":     [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
     "lambda":  [0.8, 0.9, 0.95, 0.98, 0.99],
 }
@@ -132,7 +132,7 @@ def main() -> None:
     print(header + "\n")
 
     total_pass, total_fail = 0, 0
-    for metric in ["P", "TRIR", "U", "PU", "D"]:
+    for metric in ["P", "TRIR", "U", "PU", "D_text"]:
         p, f = check_metric(metric, label_prefix=args.label)
         total_pass += p
         total_fail += f
