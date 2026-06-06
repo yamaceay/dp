@@ -539,13 +539,11 @@ class MarkdownDatasetLogsWriter:
             return float("nan") if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
 
         def _gain_row(row: pd.Series) -> float:
-            rel_p  = _val(row, "rel_P")
-            rel_u  = _val(row, "rel_U")
-            rel_pu = _val(row, "rel_PU")
-            rel_d  = _val(row, "rel_D_text")
-            if any(math.isnan(v) for v in (rel_p, rel_u, rel_pu, rel_d)):
+            rel_p = _val(row, "rel_P")
+            rel_u = _val(row, "rel_U")
+            if any(math.isnan(v) for v in (rel_p, rel_u)):
                 return float("nan")
-            return (rel_u + rel_pu + (1.0 - rel_d) - 3.0 * rel_p) / 3.0
+            return rel_u - rel_p
 
         frame = frame.copy()
         frame["GAIN"] = frame.apply(_gain_row, axis=1)

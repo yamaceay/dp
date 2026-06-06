@@ -70,31 +70,31 @@ dataset_sets:
         best: 0
         worst: float("inf")
     meta_scores:
-      - avg: [P_exact, P_more, P_full]
+      - avg: [P_exact, P_full]
         rename_as: P
         category: privacy
-      - avg: [rel_P_exact, rel_P_more, rel_P_full]
+      - avg: [rel_P_exact, rel_P_full]
         rename_as: rel_P
         category: privacy
-      - avg: [P_exact, P_more]
+      - avg: [P_exact]
         rename_as: P
         split: test
         category: privacy
-      - avg: [rel_P_exact, rel_P_more]
+      - avg: [rel_P_exact]
         rename_as: rel_P
         split: test
         category: privacy
-      - avg: [TRIR_exact, TRIR_more, TRIR_full]
+      - avg: [TRIR_exact, TRIR_full]
         rename_as: TRIR
         category: privacy
-      - avg: [rel_TRIR_exact, rel_TRIR_more, rel_TRIR_full]
+      - avg: [rel_TRIR_exact, rel_TRIR_full]
         rename_as: rel_TRIR
         category: privacy
-      - avg: [TRIR_exact, TRIR_more]
+      - avg: [TRIR_exact]
         rename_as: TRIR
         split: test
         category: privacy
-      - avg: [rel_TRIR_exact, rel_TRIR_more]
+      - avg: [rel_TRIR_exact]
         rename_as: rel_TRIR
         split: test
         category: privacy
