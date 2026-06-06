@@ -18,11 +18,12 @@ PARAM_ORDER: dict[str, list] = {
 #   rho ↑      stricter risk stop    → P ↑  TRIR ↑  U ↑  PU ↑  D ↓  (less masking)
 #   lambda ↑   stricter DP stop      → P ↑  TRIR ↑  U ↑  PU ↑  D ↓  (less masking)
 EXPECTED_DIRECTION: dict[str, dict[str, int]] = {
-    "P":    {"k": -1, "rho": +1, "lambda": +1},
-    "TRIR": {"k": -1, "rho": +1, "lambda": +1},
-    "U":    {"k": -1, "rho": +1, "lambda": +1},
-    "PU":   {"k": -1, "rho": +1, "lambda": +1},
-    "D":    {"k": +1, "rho": -1, "lambda": -1},
+    "P":      {"k": -1, "rho": +1, "lambda": +1},
+    "TRIR":   {"k": -1, "rho": +1, "lambda": +1},
+    "U":      {"k": -1, "rho": +1, "lambda": +1},
+    "PU":     {"k": -1, "rho": +1, "lambda": +1},
+    "D":      {"k": +1, "rho": -1, "lambda": -1},
+    "D_text": {"k": +1, "rho": -1, "lambda": -1},
 }
 
 
