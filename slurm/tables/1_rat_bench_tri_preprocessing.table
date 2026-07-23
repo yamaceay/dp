@@ -1,0 +1,2 @@
+rat_bench_full_deid|python data_for_tri.py --config configs/1_tri_preprocessing/rat_bench/full_deid.yaml
+rat_bench_full|python data_for_tri.py --config configs/1_tri_preprocessing/rat_bench/full.yaml

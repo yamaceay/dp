@@ -1,0 +1,15 @@
+dataset: rat_bench_nobart
+data_path: data/rat_bench
+attacker_extensions: data/rat_bench_nobart/tri_preprocessing/full.jsonl
+model_name: distilbert-base-uncased
+output_root: ../../../netscratch/yay/tri_pipelines/rat_bench_nobart/_checkpoints/full
+max_records: null
+max_length: 512
+
+training:
+  finetuning_epochs: 20
+  batch_size: 16
+  use_pretraining: true
+  pretraining_epochs: 1
+  per_step: null
+  early_stop_threshold: 0.95

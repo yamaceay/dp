@@ -1,0 +1,29 @@
+dataset: rat_bench
+data_in: data/rat_bench
+split: indices/rat_bench/test.txt
+debug: true
+annotations_in:
+  - ../../../netscratch/yay/_ext_outputs/rat_bench
+target:
+  key: scenario
+  type: nominal
+source_splits:
+  - split: indices/rat_bench/train.txt
+    train: 1.0
+  - split: indices/rat_bench/val.txt
+    val: 1.0
+random_state: 42
+protocol: pseudo_utility
+head:
+  type: bert_classifier
+  params:
+    epochs: 3
+    init_checkpoint: ../../../netscratch/yay/tri_pipelines/rat_bench/_checkpoints/full/full/finetuning/{checkpoint}
+    checkpoint_dir: ../../../netscratch/yay/util_tri_pipelines/rat_bench/scenario
+    primary_metric: macro_f1
+    encoder_lr: 1e-6
+    head_lr: 1e-4
+    early_stop_patience: 2
+output:
+  format: jsonl
+  file: logs/pseudo_utility/rat_bench/scenario.jsonl

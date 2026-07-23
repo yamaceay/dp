@@ -1,0 +1,4 @@
+data: rat_bench_nobart
+data_in: data/rat_bench
+result_in: ../../../netscratch/yay/_ext_outputs/rat_bench/presidio/{run_timestamp}_rat_bench_presidio.jsonl
+save_to_jsonl: data/rat_bench_nobart/tri_preprocessing/full_deid.jsonl

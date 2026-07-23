@@ -1,0 +1,3 @@
+data: rat_bench_nobart
+data_in: data/rat_bench
+save_to_jsonl: data/rat_bench_nobart/tri_preprocessing/full.jsonl

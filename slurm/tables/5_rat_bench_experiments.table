@@ -1,0 +1,9 @@
+privacy_rat_bench_full|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full.yaml
+privacy_rat_bench_full_deid|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_deid.yaml
+privacy_rat_bench_full_nobart|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_nobart.yaml
+privacy_rat_bench_full_deid_nobart|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_deid_nobart.yaml
+divergence_rat_bench_pp|python run.py divergence --config configs/5_experiments/rat_bench/divergence/pp.yaml
+divergence_rat_bench_bertscore|python run.py divergence --config configs/5_experiments/rat_bench/divergence/bertscore.yaml
+divergence_rat_bench_cosine|python run.py divergence --config configs/5_experiments/rat_bench/divergence/cosine.yaml
+pseudo_utility_rat_bench_scenario|python run.py utility --config configs/5_experiments/rat_bench/pseudo_utility/scenario.yaml
+utility_rat_bench_scenario|python run.py utility --config configs/5_experiments/rat_bench/utility/scenario.yaml

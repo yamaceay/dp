@@ -16,6 +16,11 @@ try:
 except ModuleNotFoundError:  # Optional dependency: `datasets`
     DBBioDatasetAdapter = None  # type: ignore[assignment]
 
+try:
+    from dp.loaders._ratbench import RatBenchDatasetAdapter
+except ModuleNotFoundError:  # Optional dependency: `datasets`
+    RatBenchDatasetAdapter = None  # type: ignore[assignment]
+
 from dp.loaders.annotations import (
     read_annotations,
     write_annotations,
@@ -38,6 +43,8 @@ ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
 }
 if DBBioDatasetAdapter is not None:
     ADAPTER_REGISTRY["db_bio"] = DBBioDatasetAdapter
+if RatBenchDatasetAdapter is not None:
+    ADAPTER_REGISTRY["rat_bench"] = RatBenchDatasetAdapter
 
 def get_adapter(name: str, **kwargs) -> DatasetAdapter:
     """Instantiate a dataset adapter by name."""
