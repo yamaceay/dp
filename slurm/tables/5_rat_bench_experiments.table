@@ -5,5 +5,7 @@ privacy_rat_bench_full_deid_nobart|python run.py privacy --config configs/5_expe
 divergence_rat_bench_pp|python run.py divergence --config configs/5_experiments/rat_bench/divergence/pp.yaml
 divergence_rat_bench_bertscore|python run.py divergence --config configs/5_experiments/rat_bench/divergence/bertscore.yaml
 divergence_rat_bench_cosine|python run.py divergence --config configs/5_experiments/rat_bench/divergence/cosine.yaml
+divergence_rat_bench_grammar_wg|python run.py divergence --config configs/5_experiments/rat_bench/divergence/grammar_wg.yaml
+divergence_rat_bench_grammar_sg|python run.py divergence --config configs/5_experiments/rat_bench/divergence/grammar_sg.yaml
 pseudo_utility_rat_bench_scenario|python run.py utility --config configs/5_experiments/rat_bench/pseudo_utility/scenario.yaml
 utility_rat_bench_scenario|python run.py utility --config configs/5_experiments/rat_bench/utility/scenario.yaml

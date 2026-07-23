@@ -2,6 +2,7 @@ from dp.experiments.divergence.base import DivergenceMetric, TextDivergenceExper
 from dp.experiments.divergence.bertscore import BERTScoreDivergence, BERTScoreMetric
 from dp.experiments.divergence.cosine import CosineSimilarityDivergence, CosineSimilarityMetric
 from dp.experiments.divergence.pp import PerturbationPercentageDivergence, PerturbationPercentageMetric
+from dp.experiments.divergence.grammar import GrammaticalCorrectnessDivergence, GrammaticalCorrectnessMetric
 
 __all__ = [
     "DivergenceMetric",
@@ -12,4 +13,6 @@ __all__ = [
     "CosineSimilarityDivergence",
     "PerturbationPercentageMetric",
     "PerturbationPercentageDivergence",
+    "GrammaticalCorrectnessMetric",
+    "GrammaticalCorrectnessDivergence",
 ]

@@ -15,6 +15,7 @@ scikit-learn
 bert-score
 shap
 coral_pytorch
+language_tool_python
 
 # Optional dependencies for specific anonymizers
 # SpaCy NER

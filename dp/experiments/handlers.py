@@ -22,6 +22,7 @@ from dp.experiments.config import (
 from dp.experiments.divergence.base import TextDivergenceExperiment
 from dp.experiments.divergence.bertscore import BERTScoreDivergence
 from dp.experiments.divergence.cosine import CosineSimilarityDivergence
+from dp.experiments.divergence.grammar import GrammaticalCorrectnessDivergence
 from dp.experiments.divergence.pp import PerturbationPercentageDivergence
 from dp.experiments.divergence.io import (
     build_divergence_evaluation_inputs,
@@ -375,6 +376,10 @@ def build_divergence_experiment(metric_type: str, metric_params: Dict[str, Any])
         return CosineSimilarityDivergence(vectorizer=vectorizer)
     if metric_type == "pp":
         return PerturbationPercentageDivergence()
+    if metric_type in ("grammar", "grammar_wg", "grammar_sg"):
+        variant = "sg" if metric_type == "grammar_sg" else "wg"
+        language = metric_params.get("language", "en-US")
+        return GrammaticalCorrectnessDivergence(variant=variant, language=language)
     raise ValueError(f"unsupported divergence metric '{metric_type}'")
 
 
