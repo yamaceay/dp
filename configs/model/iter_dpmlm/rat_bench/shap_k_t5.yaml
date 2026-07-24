@@ -1,0 +1,24 @@
+params:
+  epsilon: "*"
+  ks: ["*"]
+
+T: 5
+
+precomputation:
+  risk_scores: data/rat_bench/tri_risk/shap.jsonl
+  result_in: ../../../netscratch/yay/_ext_outputs/rat_bench/presidio/{run_timestamp}_rat_bench_presidio.jsonl
+
+explainer:
+  name: shap
+  tri_pipeline: ../../../netscratch/yay/tri_pipelines/rat_bench/_checkpoints/full/full
+  risk_temperature: 0.1
+
+dpmlm_chunking:
+  enabled: true
+  max_tokens: 256
+  overlap_tokens: 128
+
+token_selection:
+  name: until_k
+
+verbose: true

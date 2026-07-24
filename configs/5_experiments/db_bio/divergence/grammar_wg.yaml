@@ -1,0 +1,10 @@
+dataset: db_bio
+data_in: data/db_bio
+annotations_in:
+  - ../../../netscratch/yay/_ext_outputs/db_bio
+metric:
+  type: grammar_wg
+  language: en-US
+output:
+  format: jsonl
+  file: logs/divergence/db_bio/grammar_wg.jsonl
