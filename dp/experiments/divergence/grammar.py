@@ -4,16 +4,18 @@ Implements WG (Word Grammaticality) and SG (Sentence Grammaticality) from:
   Cano & Habernal (2025) — "Differentially-private text generation degrades
   output language quality", arXiv 2509.11176.
 
-  GC  = 1 - (#errors / #tokens)
-  WG  = 1 - (total_errors / total_words)          [whole-sample normalisation]
-  SG  = mean over sentences of (1 - errors_s / words_s)
+Scored via a RoBERTa classifier fine-tuned on CoLA (Corpus of Linguistic
+Acceptability) rather than language_tool_python, which requires a local Java
+runtime (unavailable on cluster containers). Per sentence, GC is the model's
+p(acceptable):
+  SG  = mean over sentences of p(acceptable)_s                 [unweighted]
+  WG  = word-count-weighted mean over sentences of p(acceptable)_s
 
-Requires: pip install language_tool_python
-LanguageTool downloads a local server on first use (~250 MB, Java required).
+Requires: pip install torch transformers
 
 Usage as a divergence metric:
   "similarity" = GC score of the anonymised text (1 = perfect grammar).
-  "divergence" = 1 - GC  (grammatical error rate).
+  "divergence" = 1 - GC  (grammatical unacceptability rate).
 
 The original texts' GC is computed as a baseline and stored in metadata.
 """
@@ -48,8 +50,11 @@ def _split_sentences(text: str) -> List[str]:
     return [p for p in parts if p.strip()] or [text]
 
 
+COLA_MODEL = "cointegrated/roberta-large-cola-krishna2020"
+
+
 class GrammaticalCorrectnessMetric(DivergenceMetric):
-    """WG or SG grammatical correctness using LanguageTool."""
+    """WG or SG grammatical correctness using a CoLA-tuned acceptability classifier."""
 
     def __init__(self, variant: str = "wg", language: str = "en-US") -> None:
         if variant not in ("wg", "sg"):
@@ -57,34 +62,46 @@ class GrammaticalCorrectnessMetric(DivergenceMetric):
         super().__init__(f"grammar_{variant}")
         self.variant = variant
         self.language = language
-        self._tool: Any = None
+        self._tokenizer: Any = None
+        self._model: Any = None
 
-    def _get_tool(self) -> Any:
-        if self._tool is None:
+    def _get_model(self) -> Any:
+        if self._model is None:
             try:
-                import language_tool_python
+                import torch  # noqa: F401
+                from transformers import AutoModelForSequenceClassification, AutoTokenizer
             except ImportError as exc:
-                raise ImportError(
-                    "pip install language_tool_python  (requires Java runtime)"
-                ) from exc
-            self._tool = language_tool_python.LanguageTool(self.language)
-        return self._tool
+                raise ImportError("pip install torch transformers") from exc
+            self._tokenizer = AutoTokenizer.from_pretrained(COLA_MODEL)
+            self._model = AutoModelForSequenceClassification.from_pretrained(COLA_MODEL)
+            self._model.eval()
+        return self._tokenizer, self._model
 
     def clone(self) -> "GrammaticalCorrectnessMetric":
         return GrammaticalCorrectnessMetric(variant=self.variant, language=self.language)
 
+    def _acceptability(self, text: str) -> float:
+        import torch
+
+        tokenizer, model = self._get_model()
+        inputs = tokenizer(text, return_tensors="pt", truncation=True)
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        # LABEL_0 = acceptable (verified empirically, see grammar_poc.py)
+        return float(torch.softmax(logits, dim=-1)[0, 0])
+
     def _gc_wg(self, text: str) -> float:
-        tool = self._get_tool()
-        errors = len(tool.check(text))
-        return max(0.0, 1.0 - errors / _word_count(text))
+        sentences = _split_sentences(text)
+        if not sentences:
+            return 0.0
+        weights = [_word_count(s) for s in sentences]
+        scores = [self._acceptability(s) for s in sentences]
+        total_weight = sum(weights)
+        return sum(s * w for s, w in zip(scores, weights)) / total_weight
 
     def _gc_sg(self, text: str) -> float:
-        tool = self._get_tool()
         sentences = _split_sentences(text)
-        scores = []
-        for sent in sentences:
-            errors = len(tool.check(sent))
-            scores.append(max(0.0, 1.0 - errors / _word_count(sent)))
+        scores = [self._acceptability(s) for s in sentences]
         return mean(scores) if scores else 0.0
 
     def gc(self, text: str) -> float:
@@ -101,16 +118,13 @@ class GrammaticalCorrectnessMetric(DivergenceMetric):
             "name": self.name,
             "variant": self.variant,
             "language": self.language,
-            "definition": "GC = 1 - (#grammar_errors / #words)",
+            "model": COLA_MODEL,
+            "definition": "GC = mean p(acceptable) over sentences (CoLA classifier)",
         }
 
     def cleanup(self) -> None:
-        if self._tool is not None:
-            try:
-                self._tool.close()
-            except Exception:
-                pass
-            self._tool = None
+        self._tokenizer = None
+        self._model = None
 
 
 class GrammaticalCorrectnessDivergence(TextDivergenceExperiment):
