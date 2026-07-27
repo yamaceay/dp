@@ -1,0 +1,6 @@
+divergence_tab_grammar_wg        |python run.py divergence --config configs/5_experiments/tab/divergence/grammar_wg.yaml
+divergence_tab_grammar_sg        |python run.py divergence --config configs/5_experiments/tab/divergence/grammar_sg.yaml
+divergence_db_bio_grammar_wg     |python run.py divergence --config configs/5_experiments/db_bio/divergence/grammar_wg.yaml
+divergence_db_bio_grammar_sg     |python run.py divergence --config configs/5_experiments/db_bio/divergence/grammar_sg.yaml
+divergence_rat_bench_grammar_wg  |python run.py divergence --config configs/5_experiments/rat_bench/divergence/grammar_wg.yaml
+divergence_rat_bench_grammar_sg  |python run.py divergence --config configs/5_experiments/rat_bench/divergence/grammar_sg.yaml

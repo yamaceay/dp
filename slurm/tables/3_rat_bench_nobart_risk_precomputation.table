@@ -1,0 +1,1 @@
+rat_bench_nobart_shap|python risk.py --config configs/3_tri_risk_precomputation/rat_bench_nobart/shap.yaml

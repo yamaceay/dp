@@ -9,9 +9,9 @@ from scipy.stats import spearmanr, ttest_ind, wasserstein_distance
 from dp.utils.risk import _scores_to_inverse_probs
 
 
-Dataset = Literal["db_bio", "tab"]
+Dataset = Literal["db_bio", "tab", "rat_bench"]
 
-DATASETS: list[Dataset] = ["db_bio", "tab"]
+DATASETS: list[Dataset] = ["db_bio", "tab", "rat_bench"]
 
 DATA_DIR = Path("data")
 
@@ -140,9 +140,13 @@ def allocation_dispersion(
     }
 
 
-def analyze(dataset: Dataset) -> None:
-    full_path = DATA_DIR / dataset / "tri_risk" / "shap.jsonl"
-    exact_path = DATA_DIR / dataset / "tri_risk" / "shap_subset.jsonl"
+def analyze(dataset: Dataset, full_vs_exact: bool = False, bart_vs_nobart: bool = False) -> None:
+    if full_vs_exact:
+        full_path = DATA_DIR / dataset / "tri_risk" / "shap.jsonl"
+        exact_path = DATA_DIR / dataset / "tri_risk" / "shap_subset.jsonl"
+    elif bart_vs_nobart:
+        full_path = DATA_DIR / dataset / "tri_risk" / "shap.jsonl"
+        exact_path = DATA_DIR / dataset / "tri_risk" / "shap_nobart.jsonl"
 
     full = load_shap(full_path)
     exact = load_shap(exact_path)
