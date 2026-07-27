@@ -62,6 +62,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         training_poll_interval_seconds: float = 10.0,
         training_wait_timeout_seconds: Optional[float] = None,
         mark_existing_checkpoint_complete: bool = True,
+        seed: Optional[int] = None,
     ):
         SupervisedDownstreamHead.__init__(self, name="bert_classifier", primary_metric=primary_metric)
         BertHFPlumbing.__init__(self, device=device)
@@ -125,6 +126,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.training_poll_interval_seconds = float(training_poll_interval_seconds)
         self.training_wait_timeout_seconds = float(training_wait_timeout_seconds) if training_wait_timeout_seconds is not None else None
         self.mark_existing_checkpoint_complete = bool(mark_existing_checkpoint_complete)
+        self.seed = int(seed) if seed is not None else None
         self._model: Optional[torch.nn.Module] = None
         self._label_list: Optional[List[str]] = None
         self._label_to_id: Optional[Dict[str, int]] = None
@@ -271,6 +273,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             pretraining_batch_size=self.pretraining_batch_size,
             pretraining_learning_rate=self.pretraining_learning_rate,
             pretraining_mlm_probability=self.pretraining_mlm_probability,
+            seed=self.seed,
         )
         self._load_tokenizer_with_fallback(model_name=self.model_name, init_checkpoint=self.init_checkpoint)
         self._maybe_enable_stopwords(self.mask_stopwords)
@@ -342,6 +345,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
                 early_stop_threshold=self.early_stop_threshold,
                 save_checkpoints=self.save_checkpoints,
                 early_stopping_callback=custom_early_stopping,
+                seed=self.seed,
             )
             self._trainer.train()
             if self.save_checkpoints and early_stopping.best_metric is not None:

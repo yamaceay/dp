@@ -88,6 +88,7 @@ class BertHFPlumbing:
         pretraining_batch_size: int,
         pretraining_learning_rate: float,
         pretraining_mlm_probability: float,
+        seed: Optional[int] = None,
     ) -> None:
         self._active_checkpoint = None
         if not use_pretraining:
@@ -101,6 +102,7 @@ class BertHFPlumbing:
             batch_size=pretraining_batch_size,
             learning_rate=pretraining_learning_rate,
             mlm_probability=pretraining_mlm_probability,
+            seed=seed,
         )
 
     def _load_tokenizer_with_fallback(self, *, model_name: str, init_checkpoint: Optional[str]) -> None:
@@ -150,6 +152,7 @@ class BertHFPlumbing:
         save_checkpoints: bool = True,
         early_stopping_callback: Optional[TrainerCallback] = None,
         extra_callbacks: Optional[Sequence[TrainerCallback]] = None,
+        seed: Optional[int] = None,
     ) -> Tuple[Trainer, EarlyStoppingCallback]:
         output_dir = checkpoint_dir
         training_args = TrainingArguments(
@@ -168,6 +171,7 @@ class BertHFPlumbing:
             greater_is_better=(not spec.minimize_metric),
             max_grad_norm=gradient_clip,
             report_to="none",
+            seed=seed if seed is not None else 42,
         )
 
         steps_per_epoch = max(1, int(np.ceil(len(train_dataset) / batch_size)))
