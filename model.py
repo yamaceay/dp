@@ -314,13 +314,13 @@ def build_selector(selector_config: dict, runtime_bundle=None):
 
 def build_explainer(explainer_config: dict, model_config: dict, capabilities, model_name: str):
     explainer_name = explainer_config["name"]
-    
+
     if capabilities.must_use_scoring and explainer_name == "uniform":
         raise ValueError(f"{model_name} requires non-uniform explainability")
-    
+
     if explainer_name == "uniform":
         return UniformExplainer()
-    
+
     tri_pipeline = explainer_config.get("tri_pipeline")
     if not tri_pipeline:
         raise ValueError(f"{model_name} requires tri_pipeline path")
@@ -485,7 +485,7 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument("--task_id", type=int, default=None)
-    
+
     args = parser.parse_args()
     data_kwargs = {k: getattr(args, k) for k in data_keys}
     model_kwargs = {k: getattr(args, k) for k in model_keys}

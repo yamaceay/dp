@@ -13,6 +13,7 @@ CONSTANT_RUNTIME_METHODS = {"baroud", "risk_shap"}
 dataset_lengths = {
     "db_bio": 2419,
     "tab": 1268,
+    "rat_bench": 300,
 }
 
 ignored_methods = [
@@ -30,6 +31,12 @@ def parse_privacy_profile_from_log_name(log_name: str) -> str | None:
     if match:
         return f"{match.group(1)}_subset"
     match = re.match(r"^([a-z0-9]+)_k\.jsonl$", log_name)
+    if match:
+        return match.group(1)
+    # Fallback for ablation-suffixed names (e.g. rat_bench's full_deid.jsonl,
+    # full_nobart.jsonl, full_deid_nobart.jsonl): use the stem verbatim as the
+    # profile, instead of silently defaulting to "exact" downstream.
+    match = re.match(r"^([a-z0-9_]+)\.jsonl$", log_name)
     if match:
         return match.group(1)
     return None
@@ -58,7 +65,11 @@ def _summary_from_rank_rows(rows: List[Dict[str, Any]], test_indices: set[int]) 
         rank_value = row.get("rank")
         if not isinstance(index_value, int) or not isinstance(rank_value, (int, float)):
             continue
-        if test_indices and index_value not in test_indices:
+        # Log "index" fields are 1-based (dp/experiments/privacy_annotations.py builds
+        # them via enumerate(..., start=1)), while indices/{dataset}/test.txt holds
+        # 0-based dataset row positions (the convention used everywhere else, e.g.
+        # dp/loaders/base.py's split filtering). Convert before comparing.
+        if test_indices and (index_value - 1) not in test_indices:
             continue
         if rank_value <= 0:
             continue
@@ -228,7 +239,11 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
         if privacy_profile and privacy_profile.endswith("_subset"):
             privacy_profile = privacy_profile[: -len("_subset")]
             split = "test"
-        test_indices = _load_test_indices(dataset) if privacy_profile == "full" else set()
+        # Any "full_*" profile (full, full_deid, full_nobart, full_deid_nobart, ...) is a
+        # whole-corpus run and needs the same held-out test-set filtering as "full" itself,
+        # unlike "exact"/"more" which are natively pre-generated over only the test subset.
+        is_full_corpus_profile = bool(privacy_profile) and privacy_profile.startswith("full")
+        test_indices = _load_test_indices(dataset) if is_full_corpus_profile else set()
         original_rank_rows: List[Dict[str, Any]] = []
         evaluation_rank_rows: Dict[str, List[Dict[str, Any]]] = {}
         evaluation_rows: List[Dict[str, Any]] = []
@@ -253,7 +268,7 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
                 evaluation_rows.append(result)
 
         if experiment_row is not None:
-            if privacy_profile == "full":
+            if is_full_corpus_profile:
                 summary = _summary_from_rank_rows(original_rank_rows, test_indices)
                 if summary is None:
                     score = experiment_row.get("score", {})
@@ -290,7 +305,7 @@ class PrivacyExperimentLogParser(ExperimentLogParser):
             method, params = parse_params_from_key(key)
             if method in ignored_methods:
                 continue
-            if privacy_profile == "full":
+            if is_full_corpus_profile:
                 evaluation_name = str(result.get("name") or "")
                 rank_rows = evaluation_rank_rows.get(evaluation_name, [])
                 summary = _summary_from_rank_rows(rank_rows, test_indices)

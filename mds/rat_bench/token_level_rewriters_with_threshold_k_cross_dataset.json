@@ -1,0 +1,224 @@
+{
+  "columns": [
+    "method",
+    "params",
+    "split"
+  ],
+  "rows": [
+    {
+      "method": "baseline",
+      "params": {},
+      "split": null
+    },
+    {
+      "method": "dummy",
+      "params": {},
+      "split": null
+    },
+    {
+      "method": "presidio",
+      "params": {},
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 2
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 3
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 5
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 7
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 10
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 2
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 3
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 5
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 7
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 10
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 2
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 3
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 5
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 7
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 10
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 2
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 3
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 5
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 7
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 10
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 2
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 3
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 5
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 7
+      },
+      "split": null
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 10
+      },
+      "split": null
+    }
+  ]
+}

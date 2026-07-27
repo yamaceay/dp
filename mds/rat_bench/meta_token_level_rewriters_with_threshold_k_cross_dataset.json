@@ -1,0 +1,485 @@
+{
+  "columns": [
+    "method",
+    "params",
+    "split",
+    "P",
+    "TRIR",
+    "U",
+    "PU",
+    "D",
+    "D_text",
+    "T",
+    "GAIN",
+    "relative_gain"
+  ],
+  "rows": [
+    {
+      "method": "baseline",
+      "params": {},
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dummy",
+      "params": {},
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "presidio",
+      "params": {},
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 2
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 3
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 5
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 7
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 10,
+        "k": 10
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 2
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 3
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 5
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 7
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 25,
+        "k": 10
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 2
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 3
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 5
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 7
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 50,
+        "k": 10
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 2
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 3
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 5
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 7
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 100,
+        "k": 10
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 2
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 3
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 5
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 7
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dpmlm_shap",
+      "params": {
+        "epsilon": 250,
+        "k": 10
+      },
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    }
+  ]
+}

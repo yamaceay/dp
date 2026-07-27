@@ -41,9 +41,10 @@ def _compute_dummy_privacy(dataset: str) -> dict[str, float]:
         ("more", "more_mean_reciprocal_rank", "more_accuracy"),
         ("full", "full_mean_reciprocal_rank", "full_accuracy"),
     ]:
-        trir, mrr = _for_attacker(attacker)
-        result[mrr_key] = mrr
-        result[acc_key] = trir
+        if attacker in mrr_measures[dataset]:
+            trir, mrr = _for_attacker(attacker)
+            result[mrr_key] = mrr
+            result[acc_key] = trir
     return result
 
 
@@ -77,13 +78,19 @@ PARAMS_MANIFEST_PATH = OUTPUT_DIR / "params_manifest.json"
 TYPST_TABLES_MANIFEST_PATH = OUTPUT_DIR / "tables_manifest.json"
 INCLUDE_GROUPED_ROWS = False
 HIERARCHICAL_SPLIT_TABLES = True
-ENABLED_DATASETS = {"db_bio", "tab"}
+ENABLED_DATASETS = {"db_bio", "tab", "rat_bench"}
 
 dataset_lengths = {
     "db_bio": 2419,
     "tab": 1268,
+    "rat_bench": 300,
 }
 
+mrr_measures = {
+    "db_bio": ["full", "more", "exact"],
+    "tab": ["full", "more", "exact"],
+    "rat_bench": ["full"],
+}
 
 def read_logs(path: str | Path) -> list[dict[str, Any]]:
     with open(path, "r") as f:

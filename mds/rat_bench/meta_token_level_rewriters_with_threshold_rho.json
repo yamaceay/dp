@@ -1,0 +1,60 @@
+{
+  "columns": [
+    "method",
+    "params",
+    "split",
+    "P",
+    "TRIR",
+    "U",
+    "PU",
+    "D",
+    "D_text",
+    "T",
+    "GAIN",
+    "relative_gain"
+  ],
+  "rows": [
+    {
+      "method": "baseline",
+      "params": {},
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "dummy",
+      "params": {},
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    },
+    {
+      "method": "presidio",
+      "params": {},
+      "split": null,
+      "P": NaN,
+      "TRIR": NaN,
+      "U": NaN,
+      "PU": NaN,
+      "D": NaN,
+      "D_text": NaN,
+      "T": NaN,
+      "GAIN": NaN,
+      "relative_gain": NaN
+    }
+  ]
+}

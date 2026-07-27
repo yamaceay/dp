@@ -2,6 +2,16 @@ privacy_rat_bench_full|python run.py privacy --config configs/5_experiments/rat_
 privacy_rat_bench_full_deid|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_deid.yaml
 privacy_rat_bench_full_nobart|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_nobart.yaml
 privacy_rat_bench_full_deid_nobart|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_deid_nobart.yaml
+privacy_rat_bench_full_model_1|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_model_1.yaml
+privacy_rat_bench_full_model_2|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_model_2.yaml
+privacy_rat_bench_full_model_3|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_model_3.yaml
+privacy_rat_bench_full_model_4|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_model_4.yaml
+privacy_rat_bench_full_model_5|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_model_5.yaml
+privacy_rat_bench_full_nobart_model_1|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_nobart_model_1.yaml
+privacy_rat_bench_full_nobart_model_2|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_nobart_model_2.yaml
+privacy_rat_bench_full_nobart_model_3|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_nobart_model_3.yaml
+privacy_rat_bench_full_nobart_model_4|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_nobart_model_4.yaml
+privacy_rat_bench_full_nobart_model_5|python run.py privacy --config configs/5_experiments/rat_bench/privacy/full_nobart_model_5.yaml
 divergence_rat_bench_pp|python run.py divergence --config configs/5_experiments/rat_bench/divergence/pp.yaml
 divergence_rat_bench_bertscore|python run.py divergence --config configs/5_experiments/rat_bench/divergence/bertscore.yaml
 divergence_rat_bench_cosine|python run.py divergence --config configs/5_experiments/rat_bench/divergence/cosine.yaml

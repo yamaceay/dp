@@ -1,0 +1,24 @@
+{
+  "columns": [
+    "method",
+    "params",
+    "split"
+  ],
+  "rows": [
+    {
+      "method": "baseline",
+      "params": {},
+      "split": null
+    },
+    {
+      "method": "dummy",
+      "params": {},
+      "split": null
+    },
+    {
+      "method": "presidio",
+      "params": {},
+      "split": null
+    }
+  ]
+}

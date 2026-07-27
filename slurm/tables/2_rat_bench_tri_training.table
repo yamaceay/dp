@@ -1,2 +1,7 @@
 tri_rat_bench_full_deid|python tri_by_bk.py --mode train --training-in configs/2_tri_training/rat_bench/full_deid.yaml --run-name full_deid --set training.lr=5e-5 --set training.debug_tri=true
 tri_rat_bench_full|python tri_by_bk.py --mode train --training-in configs/2_tri_training/rat_bench/full.yaml --run-name full --set training.lr=5e-5 --set training.debug_tri=true
+tri_rat_bench_full_model_1|python tri_by_bk.py --mode train --training-in configs/2_tri_training/rat_bench/full.yaml --run-name full_model_1 --set training.lr=5e-5 --set training.debug_tri=true
+tri_rat_bench_full_model_2|python tri_by_bk.py --mode train --training-in configs/2_tri_training/rat_bench/full.yaml --run-name full_model_2 --set training.lr=5e-5 --set training.debug_tri=true
+tri_rat_bench_full_model_3|python tri_by_bk.py --mode train --training-in configs/2_tri_training/rat_bench/full.yaml --run-name full_model_3 --set training.lr=5e-5 --set training.debug_tri=true
+tri_rat_bench_full_model_4|python tri_by_bk.py --mode train --training-in configs/2_tri_training/rat_bench/full.yaml --run-name full_model_4 --set training.lr=5e-5 --set training.debug_tri=true
+tri_rat_bench_full_model_5|python tri_by_bk.py --mode train --training-in configs/2_tri_training/rat_bench/full.yaml --run-name full_model_5 --set training.lr=5e-5 --set training.debug_tri=true
