@@ -5,7 +5,7 @@ TABLE_FILE=""
 MAX_CONCURRENT=1
 MAX_TASKS=1
 INSTALL_FILE="scripts/install.sh"
-PARTITION="A100-40GB"
+PARTITION="H100"
 YES=0
 
 trim_whitespace() {
