@@ -5,7 +5,7 @@ TABLE_FILE=""
 MAX_CONCURRENT=1
 MAX_TASKS=1
 INSTALL_FILE="scripts/install.sh"
-PARTITION="RTXA6000"
+PARTITION="A100-40GB"
 YES=0
 
 trim_whitespace() {
@@ -108,7 +108,7 @@ cat > "$TARGET_FILE" <<EOF
 #SBATCH --partition=${PARTITION}
 #SBATCH --gpus=1
 #SBATCH --mem=40GB
-#SBATCH --time=4320
+#SBATCH --time=1440
 ${EXTRA_LINES}
 
 MAX_TASKS=${MAX_TASKS}
