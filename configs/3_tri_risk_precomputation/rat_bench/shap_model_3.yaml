@@ -1,7 +1,7 @@
 dataset: rat_bench
 data_in: data/rat_bench
 explainer: shap
-explainer_in: ../../../netscratch/yay/tri_pipelines/rat_bench/_checkpoints/full/full_model_3
+explainer_in: ../../../netscratch/yay/tri_pipelines/rat_bench/_checkpoints/full_deid/full_deid_model_3
 result_in: ../../../netscratch/yay/_ext_outputs/rat_bench/presidio/{run_timestamp}_rat_bench_presidio.jsonl
 save_to_jsonl: data/rat_bench/tri_risk/shap_model_3.jsonl
 sort_by: scores
