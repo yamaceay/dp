@@ -17,7 +17,6 @@ REQUIRES_FULL_DEID = [
     {"method": "dpmlm_shap", "params": ["epsilon", "k"]},
     {"method": "dpmlm_shap", "params": ["epsilon", "rho"]},
     {"method": "dpmlm_shap", "params": ["epsilon", "lambda"]},
-    {"method": "dpmlm_shap_no_presidio", "params": ["epsilon"]},
 ]
 
 STEP_1_PERF_PATTERN = re.compile(
@@ -34,7 +33,7 @@ STEP_1_LOG_DIRS: List[str] = [
     "logs/0_rat_bench_simple_anonymization",
     "logs/4_db_bio_further_anonymization",
     "logs/4_tab_further_anonymization",
-    "logs/4_rat_bench_further_anonymization"
+    "logs/4_rat_bench_further_anonymization",
 ]
 
 STEP_2_PERF_PATTERN = re.compile(
@@ -192,10 +191,10 @@ def run_step_1(root: Path) -> None:
             for row in extract_from_file(path):
                 if "db_bio" in str(directory):
                     dataset = "db_bio"
-                elif "tab" in str(directory):
-                    dataset = "tab"
                 elif "rat_bench" in str(directory):
                     dataset = "rat_bench"
+                elif "tab" in str(directory):
+                    dataset = "tab"
                 else:
                     continue
                 dataset_rows.setdefault(dataset, []).append(row)

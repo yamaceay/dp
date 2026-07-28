@@ -16,9 +16,7 @@ dataset_lengths = {
     "rat_bench": 300,
 }
 
-ignored_methods = [
-    "dpmlm_shap_no_presidio",
-]
+ignored_methods: list[str] = []
 
 def parse_privacy_profile_from_log_name(log_name: str) -> str | None:
     if re.search(r"^more\.jsonl$", log_name):
