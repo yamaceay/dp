@@ -76,3 +76,6 @@ logs/
 *.bak
 *.swp
 .cache/
+
+# HuggingFace cache
+hf_repos/
