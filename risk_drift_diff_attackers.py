@@ -1,10 +1,13 @@
 import argparse
 import json
+from collections import Counter
+from itertools import combinations
+from math import comb, factorial
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
-from scipy.stats import spearmanr, ttest_ind, wasserstein_distance
+from scipy.stats import spearmanr, wasserstein_distance
 
 from dp.utils.risk import _scores_to_inverse_probs
 
@@ -113,6 +116,31 @@ def per_record_spearman(
         if np.isfinite(corr):
             correlations.append(float(corr))
     return np.asarray(correlations, dtype=float), skipped
+
+
+def per_record_topk_jaccard(
+    a: dict[str, ShapRecord],
+    b: dict[str, ShapRecord],
+    uids: list[str],
+    k: int,
+) -> tuple[np.ndarray, int]:
+    """Per-record top-k Jaccard overlap: the k highest-scoring (highest-risk,
+    per the traversal-order convention in `load_shap`) tokens in `a` versus
+    in `b`, as |intersection| / |union| of the two top-k index sets. Only
+    defined over records with matching offsets and at least k tokens;
+    everything else is skipped and counted.
+    """
+    jaccards: list[float] = []
+    skipped = 0
+    for uid in uids:
+        a_rec, b_rec = a[uid], b[uid]
+        if not a_rec["offsets"] or a_rec["offsets"] != b_rec["offsets"] or len(a_rec["offsets"]) < k:
+            skipped += 1
+            continue
+        a_top = set(np.argsort(np.asarray(a_rec["scores"], dtype=float))[::-1][:k].tolist())
+        b_top = set(np.argsort(np.asarray(b_rec["scores"], dtype=float))[::-1][:k].tolist())
+        jaccards.append(len(a_top & b_top) / len(a_top | b_top))
+    return np.asarray(jaccards, dtype=float), skipped
 
 
 def allocation_dispersion(
@@ -238,17 +266,19 @@ def pairwise_distance_matrix(
     shap_by_model: dict[str, dict[str, ShapRecord]],
     model_ids: list[str],
     common_uids: list[str],
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    jaccard_k: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
     n = len(model_ids)
     mae_matrix = np.zeros((n, n), dtype=float)
     rmse_matrix = np.zeros((n, n), dtype=float)
     medae_matrix = np.zeros((n, n), dtype=float)
+    spearman_matrix = np.eye(n, dtype=float)
+    jaccard_matrix = np.eye(n, dtype=float)
     total_skipped = 0
     for i in range(n):
         for j in range(i + 1, n):
-            used_uids, mae, rmse, medae, skipped = per_record_alignment_metrics(
-                shap_by_model[model_ids[i]], shap_by_model[model_ids[j]], common_uids
-            )
+            a, b = shap_by_model[model_ids[i]], shap_by_model[model_ids[j]]
+            used_uids, mae, rmse, medae, skipped = per_record_alignment_metrics(a, b, common_uids)
             if mae.size == 0:
                 raise ValueError(
                     f"No offset-aligned records between {model_ids[i]} and {model_ids[j]} "
@@ -258,7 +288,17 @@ def pairwise_distance_matrix(
             rmse_matrix[i, j] = rmse_matrix[j, i] = float(rmse.mean())
             medae_matrix[i, j] = medae_matrix[j, i] = float(medae.mean())
             total_skipped += skipped
-    return mae_matrix, rmse_matrix, medae_matrix, total_skipped
+
+            rank_corr, _ = per_record_spearman(a, b, common_uids)
+            if rank_corr.size == 0:
+                raise ValueError(f"No records with >=2 tokens to compute Spearman for {model_ids[i]} vs {model_ids[j]}")
+            spearman_matrix[i, j] = spearman_matrix[j, i] = float(rank_corr.mean())
+
+            jaccard, _ = per_record_topk_jaccard(a, b, common_uids, jaccard_k)
+            if jaccard.size == 0:
+                raise ValueError(f"No records with >={jaccard_k} tokens to compute top-{jaccard_k} Jaccard for {model_ids[i]} vs {model_ids[j]}")
+            jaccard_matrix[i, j] = jaccard_matrix[j, i] = float(jaccard.mean())
+    return mae_matrix, rmse_matrix, medae_matrix, spearman_matrix, jaccard_matrix, total_skipped
 
 
 def within_cross_split(
@@ -276,73 +316,120 @@ def within_cross_split(
     return np.asarray(within, dtype=float), np.asarray(cross, dtype=float)
 
 
+def within_group_by_group(
+    model_ids: list[str],
+    group_of: dict[str, str],
+    matrix: np.ndarray,
+) -> dict[str, np.ndarray]:
+    """Within-group pairwise distances, kept separate per group (unlike
+    within_cross_split, which pools every group's own pairs into one "within"
+    bucket). Lets you check whether one group's models are internally more
+    scattered than the other's, rather than only a single pooled figure.
+    """
+    n = len(model_ids)
+    by_group: dict[str, list[float]] = {g: [] for g in set(group_of.values())}
+    for i in range(n):
+        for j in range(i + 1, n):
+            gi, gj = group_of[model_ids[i]], group_of[model_ids[j]]
+            if gi == gj:
+                by_group[gi].append(matrix[i, j])
+    return {g: np.asarray(v, dtype=float) for g, v in by_group.items()}
+
+
+MAX_EXACT_ASSIGNMENTS = 2_000_000
+
+
+def _assignment_count(n: int, group_sizes: list[int]) -> int:
+    total = 1
+    remaining = n
+    for size in group_sizes:
+        total *= comb(remaining, size)
+        remaining -= size
+    return total
+
+
+def _multiset_assignments(n: int, group_sizes: list[int]):
+    """Yield every distinct way to split n indices into groups of the given
+    sizes, as a length-n list of group indices per position.
+    """
+    def rec(remaining: list[int], sizes: list[int]):
+        if len(sizes) == 1:
+            yield [remaining]
+            return
+        for combo in combinations(remaining, sizes[0]):
+            rest = [i for i in remaining if i not in combo]
+            for tail in rec(rest, sizes[1:]):
+                yield [list(combo)] + tail
+
+    for groups in rec(list(range(n)), group_sizes):
+        labels = [0] * n
+        for group_index, idxs in enumerate(groups):
+            for i in idxs:
+                labels[i] = group_index
+        yield labels
+
+
+def _label_symmetry_factor(group_sizes: list[int]) -> int:
+    """Number of label assignments that are guaranteed to tie any given one,
+    purely from renaming which group index is called '0', '1', etc. — e.g.
+    with two equal-sized groups, swapping which side is "0" never changes
+    which pairs are within- vs. cross-group, so every split is counted twice
+    among the enumerated assignments. This sets the true resolution floor
+    (min count of "at least as extreme" assignments = this factor, however
+    extreme the data), which is 1 only when all group sizes are distinct.
+    """
+    factor = 1
+    for count in Counter(group_sizes).values():
+        factor *= factorial(count)
+    return factor
+
+
 def group_label_permutation_test(
     model_ids: list[str],
     group_of: dict[str, str],
     matrix: np.ndarray,
-    n_permutations: int,
-    seed: int,
-) -> tuple[float, float]:
-    """Two-sided permutation test on group labels: is the observed
-    mean(cross-group distance) - mean(within-group distance) more extreme than
-    under random relabelings of the same (fixed) distance matrix? This sidesteps
-    the fact that pairwise distances aren't independent samples, which a plain
-    t-test on within/cross values would silently assume away.
+) -> tuple[float, float, int, float]:
+    """Exact permutation test on group labels: is the observed
+    mean(cross-group distance) - mean(within-group distance) more extreme
+    than under every possible relabeling of the same (fixed) distance matrix
+    that preserves the original group sizes? With only a handful of models,
+    the full set of label assignments (n! / (k1! k2! ...)) is cheap to
+    enumerate exactly, which avoids both the independence assumption of a
+    t-test and the Monte Carlo noise/arbitrary sample count of a randomized
+    permutation test — and makes the achievable minimum p-value explicit
+    rather than hidden inside a chosen permutation count.
     """
     n = len(model_ids)
     idx_pairs = [(i, j) for i in range(n) for j in range(i + 1, n)]
-    labels = np.array([group_of[m] for m in model_ids])
+    group_names = sorted(set(group_of.values()))
+    group_sizes = [sum(1 for m in model_ids if group_of[m] == g) for g in group_names]
 
-    def stat(current_labels: np.ndarray) -> float:
+    total_assignments = _assignment_count(n, group_sizes)
+    if total_assignments > MAX_EXACT_ASSIGNMENTS:
+        raise SystemExit(
+            f"Exact permutation test would enumerate {total_assignments} label "
+            f"assignments (> {MAX_EXACT_ASSIGNMENTS}); group sizes are too large "
+            "for exact enumeration."
+        )
+
+    def stat(labels: list[int]) -> float:
         within: list[float] = []
         cross: list[float] = []
         for i, j in idx_pairs:
-            (within if current_labels[i] == current_labels[j] else cross).append(matrix[i, j])
+            (within if labels[i] == labels[j] else cross).append(matrix[i, j])
         return float(np.mean(cross) - np.mean(within))
 
-    observed = stat(labels)
-    rng = np.random.default_rng(seed)
-    perm_stats = np.empty(n_permutations, dtype=float)
-    for k in range(n_permutations):
-        perm_stats[k] = stat(rng.permutation(labels))
-    p_value = float(np.mean(np.abs(perm_stats) >= abs(observed)))
-    return observed, p_value
+    name_to_index = {name: i for i, name in enumerate(group_names)}
+    observed_labels = [name_to_index[group_of[m]] for m in model_ids]
+    observed = stat(observed_labels)
 
-
-def welch_ttest_and_power(
-    within: np.ndarray,
-    cross: np.ndarray,
-    alpha: float,
-) -> dict[str, float]:
-    """Standard two-sample t-test + Cohen's d + post hoc power at `alpha`,
-    treating within/cross distances as independent samples. This is an
-    approximation (the independence assumption doesn't strictly hold — see
-    group_label_permutation_test for the assumption-free version) but is
-    reported alongside it since it's the familiar/expected significance-test
-    format. "Post hoc power" (power computed from the observed effect size
-    after the fact, rather than a pre-registered target) is the standard term
-    for this — flagged explicitly since it's a weaker claim than a priori
-    power.
-    """
-    from statsmodels.stats.power import TTestIndPower
-
-    t_stat, p_value = ttest_ind(cross, within, equal_var=False)
-    pooled_std = np.sqrt((cross.var(ddof=1) + within.var(ddof=1)) / 2)
-    cohens_d = float((cross.mean() - within.mean()) / pooled_std) if pooled_std > 0 else 0.0
-    post_hoc_power = float(
-        TTestIndPower().power(
-            effect_size=abs(cohens_d),
-            nobs1=len(cross),
-            ratio=len(within) / len(cross) if len(cross) else 1.0,
-            alpha=alpha,
-        )
+    extreme = sum(
+        1 for labels in _multiset_assignments(n, group_sizes)
+        if abs(stat(labels)) >= abs(observed)
     )
-    return {
-        "t_stat": float(t_stat),
-        "p_value": float(p_value),
-        "cohens_d": cohens_d,
-        "post_hoc_power": post_hoc_power,
-    }
+    p_value = extreme / total_assignments
+    min_p_value = _label_symmetry_factor(group_sizes) / total_assignments
+    return observed, p_value, total_assignments, min_p_value
 
 
 def render_heatmap(
@@ -350,6 +437,7 @@ def render_heatmap(
     group_of: dict[str, str],
     matrix: np.ndarray,
     output_path: Path,
+    decimals: int = 5,
 ) -> None:
     import matplotlib.pyplot as plt
 
@@ -365,7 +453,7 @@ def render_heatmap(
     ax.set_yticklabels(ordered_ids, fontsize=8)
     for i in range(len(ordered_ids)):
         for j in range(len(ordered_ids)):
-            ax.text(j, i, f"{ordered_matrix[i, j]:.3f}", ha="center", va="center",
+            ax.text(j, i, f"{ordered_matrix[i, j]:.{decimals}f}", ha="center", va="center",
                      color="white", fontsize=6)
 
     group_sizes = [len(list(g)) for _, g in _groupby_preserve_order(
@@ -379,6 +467,53 @@ def render_heatmap(
 
     ax.set_title("Pairwise Mean Absolute Error (offset-aligned SHAP scores)")
     fig.colorbar(im, ax=ax, shrink=0.8)
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+
+
+def render_tsne(
+    model_ids: list[str],
+    group_of: dict[str, str],
+    matrix: np.ndarray,
+    output_path: Path,
+    seed: int,
+    perplexity: float | None = None,
+) -> None:
+    """2D t-SNE projection of the models from their pairwise MAE distance
+    matrix (metric="precomputed"), colored by group. With only a handful of
+    models per group, this is illustrative rather than a rigorous clustering
+    result — perplexity is capped well below its usual default (30) because
+    sklearn requires it to be smaller than the number of points.
+    """
+    import matplotlib.pyplot as plt
+    from sklearn.manifold import TSNE
+
+    n = len(model_ids)
+    if perplexity is None:
+        perplexity = max(1.0, min(30.0, (n - 1) / 3))
+
+    coords = TSNE(
+        n_components=2,
+        metric="precomputed",
+        init="random",
+        perplexity=perplexity,
+        random_state=seed,
+    ).fit_transform(matrix)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    group_names = sorted(set(group_of.values()))
+    cmap = plt.get_cmap("tab10")
+    for gi, group_name in enumerate(group_names):
+        idx = [i for i, m in enumerate(model_ids) if group_of[m] == group_name]
+        ax.scatter(coords[idx, 0], coords[idx, 1], label=group_name, color=cmap(gi), s=80)
+    for i, model_id in enumerate(model_ids):
+        ax.annotate(model_id, (coords[i, 0], coords[i, 1]), fontsize=7,
+                    xytext=(4, 4), textcoords="offset points")
+
+    ax.set_title(f"t-SNE of pairwise SHAP MAE distances (perplexity={perplexity:.1f})")
+    ax.legend()
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=150)
@@ -399,9 +534,12 @@ def analyze_groups(
     groups: dict[str, list[Path]],
     *,
     alpha: float,
-    n_permutations: int,
     seed: int,
+    jaccard_k: int,
     heatmap_out: Path | None,
+    heatmap_decimals: int,
+    tsne_out: Path | None,
+    tsne_perplexity: float | None,
     json_out: Path | None,
 ) -> None:
     shap_by_model, group_of, model_ids = load_group_shap(groups)
@@ -412,30 +550,56 @@ def analyze_groups(
     if not common_uids:
         raise SystemExit("No records common to every model — check that all shap.jsonl files cover the same dataset")
 
-    mae_matrix, rmse_matrix, medae_matrix, total_skipped = pairwise_distance_matrix(
-        shap_by_model, model_ids, common_uids
+    mae_matrix, rmse_matrix, medae_matrix, spearman_matrix, jaccard_matrix, total_skipped = pairwise_distance_matrix(
+        shap_by_model, model_ids, common_uids, jaccard_k
     )
     print(f"Records skipped due to offset mismatch (summed across all model pairs): {total_skipped}")
 
-    within, cross = within_cross_split(model_ids, group_of, mae_matrix)
+    metric_matrices = {
+        "MAE": mae_matrix,
+        "RMSE": rmse_matrix,
+        "MedAE": medae_matrix,
+        "Spearman": spearman_matrix,
+        f"Jaccard@{jaccard_k}": jaccard_matrix,
+    }
+    within_cross_by_metric: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    within_by_group_by_metric: dict[str, dict[str, np.ndarray]] = {}
 
-    print(f"\nWithin-group pairs (MAE): n={len(within)}, mean={within.mean():.6f}, std={within.std():.6f}")
-    print(f"Cross-group pairs (MAE):  n={len(cross)}, mean={cross.mean():.6f}, std={cross.std():.6f}")
+    for metric_name, matrix in metric_matrices.items():
+        w, c = within_cross_split(model_ids, group_of, matrix)
+        within_cross_by_metric[metric_name] = (w, c)
+        print(f"\nWithin-group pairs ({metric_name}): n={len(w)}, mean={w.mean():.6f}, std={w.std():.6f}")
+        print(f"Cross-group pairs ({metric_name}):  n={len(c)}, mean={c.mean():.6f}, std={c.std():.6f}")
 
-    observed, perm_p = group_label_permutation_test(model_ids, group_of, mae_matrix, n_permutations, seed)
-    print(f"\nGroup-label permutation test ({n_permutations} permutations, seed={seed}):")
-    print(f"  observed mean(cross) - mean(within) = {observed:.6f}")
-    print(f"  p-value = {perm_p:.6f} ({'significant' if perm_p < alpha else 'not significant'} at alpha={alpha})")
+        by_group = within_group_by_group(model_ids, group_of, matrix)
+        within_by_group_by_metric[metric_name] = by_group
+        print(f"Within-group pairs by group ({metric_name}):")
+        for group_name in sorted(by_group):
+            vals = by_group[group_name]
+            print(f"  {group_name}: n={len(vals)}, mean={vals.mean():.6f}, std={vals.std():.6f}")
 
-    ttest_result = welch_ttest_and_power(within, cross, alpha)
-    print(f"\nWelch's t-test on within vs cross distances (independence assumption approximate):")
-    print(f"  t-statistic = {ttest_result['t_stat']:.4f}, p-value = {ttest_result['p_value']:.6f} "
-          f"({'significant' if ttest_result['p_value'] < alpha else 'not significant'} at alpha={alpha})")
-    print(f"  Cohen's d = {ttest_result['cohens_d']:.4f}, post hoc power = {ttest_result['post_hoc_power']:.4f}")
+    # Spearman and Jaccard are similarity metrics (higher = more alike), unlike
+    # MAE/RMSE/MedAE (higher = more different); the permutation test uses
+    # |mean(cross) - mean(within)| so this sign flip doesn't need special-casing.
+    permutation_metrics = ["MAE", "Spearman", f"Jaccard@{jaccard_k}"]
+    permutation_results: dict[str, tuple[float, float, int, float]] = {}
+    for metric_name in permutation_metrics:
+        observed, perm_p, total_assignments, min_p = group_label_permutation_test(
+            model_ids, group_of, metric_matrices[metric_name]
+        )
+        permutation_results[metric_name] = (observed, perm_p, total_assignments, min_p)
+        print(f"\nGroup-label permutation test on {metric_name} (exact, {total_assignments} label assignments enumerated):")
+        print(f"  observed mean(cross) - mean(within) = {observed:.6f}")
+        print(f"  p-value = {perm_p:.6f} ({'significant' if perm_p < alpha else 'not significant'} at alpha={alpha}; "
+              f"minimum achievable p-value at this group size = {min_p:.6f})")
 
     if heatmap_out is not None:
-        render_heatmap(model_ids, group_of, mae_matrix, heatmap_out)
+        render_heatmap(model_ids, group_of, mae_matrix, heatmap_out, decimals=heatmap_decimals)
         print(f"\nHeatmap saved to {heatmap_out}")
+
+    if tsne_out is not None:
+        render_tsne(model_ids, group_of, mae_matrix, tsne_out, seed=seed, perplexity=tsne_perplexity)
+        print(f"t-SNE plot saved to {tsne_out}")
 
     if json_out is not None:
         json_out.parent.mkdir(parents=True, exist_ok=True)
@@ -447,11 +611,21 @@ def analyze_groups(
             "mae_matrix": mae_matrix.tolist(),
             "rmse_matrix": rmse_matrix.tolist(),
             "medae_matrix": medae_matrix.tolist(),
-            "within_group_distances": within.tolist(),
-            "cross_group_distances": cross.tolist(),
-            "permutation_test": {"observed_diff": observed, "p_value": perm_p,
-                                  "n_permutations": n_permutations, "seed": seed},
-            "welch_ttest": ttest_result,
+            "spearman_matrix": spearman_matrix.tolist(),
+            "jaccard_matrix": jaccard_matrix.tolist(),
+            "jaccard_k": jaccard_k,
+            "within_group_distances": {m: w.tolist() for m, (w, c) in within_cross_by_metric.items()},
+            "cross_group_distances": {m: c.tolist() for m, (w, c) in within_cross_by_metric.items()},
+            "within_group_distances_by_group": {
+                m: {g: v.tolist() for g, v in by_group.items()}
+                for m, by_group in within_by_group_by_metric.items()
+            },
+            "permutation_tests": {
+                metric_name: {"observed_diff": observed, "p_value": perm_p,
+                               "total_assignments": total_assignments,
+                               "min_achievable_p_value": min_p}
+                for metric_name, (observed, perm_p, total_assignments, min_p) in permutation_results.items()
+            },
             "alpha": alpha,
         }, indent=2))
         print(f"Full results saved to {json_out}")
@@ -487,9 +661,13 @@ def main() -> None:
         help="--group <name> <path1> [path2 ...], repeatable for each group",
     )
     groups_parser.add_argument("--alpha", type=float, default=0.05)
-    groups_parser.add_argument("--permutations", type=int, default=10000)
     groups_parser.add_argument("--seed", type=int, default=0)
+    groups_parser.add_argument("--jaccard-k", type=int, default=5,
+                                help="top-k tokens by SHAP score used for the Jaccard overlap metric")
     groups_parser.add_argument("--heatmap-out", type=Path, default=None)
+    groups_parser.add_argument("--heatmap-decimals", type=int, default=5)
+    groups_parser.add_argument("--tsne-out", type=Path, default=None)
+    groups_parser.add_argument("--tsne-perplexity", type=float, default=None)
     groups_parser.add_argument("--json-out", type=Path, default=None)
 
     args = parser.parse_args()
@@ -512,9 +690,12 @@ def main() -> None:
     analyze_groups(
         groups,
         alpha=args.alpha,
-        n_permutations=args.permutations,
         seed=args.seed,
+        jaccard_k=args.jaccard_k,
         heatmap_out=args.heatmap_out,
+        heatmap_decimals=args.heatmap_decimals,
+        tsne_out=args.tsne_out,
+        tsne_perplexity=args.tsne_perplexity,
         json_out=args.json_out,
     )
 
