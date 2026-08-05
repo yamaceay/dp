@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from dp.loaders.base import DatasetRecord
@@ -164,9 +165,54 @@ TAB_COUNTRY_GROUP_ORDER: List[str] = [
     "FRA-ESP-BEL-SMR",
 ]
 
+RAT_BENCH_STATE_REGIONS: Dict[str, str] = {
+    # US Census Bureau's four-region breakdown.
+    "Connecticut/CT": "Northeast", "Maine/ME": "Northeast", "Massachusetts/MA": "Northeast",
+    "New Hampshire/NH": "Northeast", "Rhode Island/RI": "Northeast", "Vermont/VT": "Northeast",
+    "New Jersey/NJ": "Northeast", "New York/NY": "Northeast", "Pennsylvania/PA": "Northeast",
+    "Illinois/IL": "Midwest", "Indiana/IN": "Midwest", "Michigan/MI": "Midwest",
+    "Ohio/OH": "Midwest", "Wisconsin/WI": "Midwest", "Iowa/IA": "Midwest",
+    "Kansas/KS": "Midwest", "Minnesota/MN": "Midwest", "Missouri/MO": "Midwest",
+    "Nebraska/NE": "Midwest", "North Dakota/ND": "Midwest", "South Dakota/SD": "Midwest",
+    "Delaware/DE": "South", "Florida/FL": "South", "Georgia/GA": "South",
+    "Maryland/MD": "South", "North Carolina/NC": "South", "South Carolina/SC": "South",
+    "Virginia/VA": "South", "District of Columbia/DC": "South", "West Virginia/WV": "South",
+    "Alabama/AL": "South", "Kentucky/KY": "South", "Mississippi/MS": "South",
+    "Tennessee/TN": "South", "Arkansas/AR": "South", "Louisiana/LA": "South",
+    "Oklahoma/OK": "South", "Texas/TX": "South",
+    "Arizona/AZ": "West", "Colorado/CO": "West", "Idaho/ID": "West",
+    "Montana/MT": "West", "Nevada/NV": "West", "New Mexico/NM": "West",
+    "Utah/UT": "West", "Wyoming/WY": "West", "Alaska/AK": "West",
+    "California/CA": "West", "Hawaii/HI": "West", "Oregon/OR": "West", "Washington/WA": "West",
+}
+RAT_BENCH_EDUCATION_GROUPS: Dict[str, str] = {
+    "No schooling completed": "no_schooling",
+    "Nursery school, preschool": "no_schooling",
+    "N/A (less than 3 years old)": "no_schooling",
+    "Grade 4": "secondary", "Grade 6": "secondary", "Grade 8": "secondary",
+    "Grade 10": "secondary", "Grade 11": "secondary", "12th grade - no diploma": "secondary",
+    "Regular high school diploma": "secondary", "GED or alternative credential": "secondary",
+    "Some college, but less than 1 year": "some_college",
+    "1 or more years of college credit, no degree": "some_college",
+    "Associate's degree": "some_college",
+    "Bachelor's degree": "bachelor",
+    "Master's degree": "master",
+    "Professional degree beyond a bachelor's degree": "master",
+    "Doctorate degree": "doctorate",
+}
+RAT_BENCH_EDUCATION_GROUP_ORDER: List[str] = [
+    "no_schooling", "secondary", "some_college", "bachelor", "master", "doctorate",
+]
+
+RAT_BENCH_BIRTH_DECADE_ORDER: List[str] = [f"{decade}s" for decade in range(1930, 2030, 10)]
+
 ORDINAL_LABEL_ORDERS: Dict[str, Dict[str, List[str]]] = {
     "reddit": {feature: list(order) for feature, (_, order) in ORDINAL_GROUPERS.items()},
     "tab": {"year_group": list(TAB_YEAR_GROUP_ORDER)},
+    "rat_bench": {
+        "educational_attainment_group": list(RAT_BENCH_EDUCATION_GROUP_ORDER),
+        "birth_decade": list(RAT_BENCH_BIRTH_DECADE_ORDER),
+    },
 }
 
 NOMINAL_GROUPERS: Dict[str, Callable[[str], str]] = {
@@ -261,6 +307,70 @@ def db_bio_l2(record: DatasetRecord) -> Optional[str]:
 def db_bio_l3(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("l3"))
 
+_RAT_BENCH_OCCUPATION_TYPE_RE = re.compile(r"TYPE:\s*(.+?),\s*DESCRIPTION:")
+_RAT_BENCH_DOB_YEAR_RE = re.compile(r"(\d{4})\s*$")
+
+
+def rat_bench_scenario(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("scenario"))
+
+
+def rat_bench_sex(record: DatasetRecord) -> Optional[str]:
+    value = text_value(record.metadata.get("profile_sex"))
+    return value.lower() if value else None
+
+
+def rat_bench_employment_status(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("profile_employment_status"))
+
+
+def rat_bench_citizenship_status(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("profile_citizenship_status"))
+
+
+def rat_bench_marital_status(record: DatasetRecord) -> Optional[str]:
+    return text_value(record.metadata.get("profile_marital_status"))
+
+
+def rat_bench_occupation_group(record: DatasetRecord) -> Optional[str]:
+    occupation = text_value(record.metadata.get("profile_occupation"))
+    if occupation is None:
+        return None
+    match = _RAT_BENCH_OCCUPATION_TYPE_RE.match(occupation)
+    return match.group(1) if match else occupation
+
+
+def rat_bench_educational_attainment_group(record: DatasetRecord) -> Optional[str]:
+    label = text_value(record.metadata.get("profile_educational_attainment"))
+    if label is None:
+        return None
+    group = RAT_BENCH_EDUCATION_GROUPS.get(label)
+    if group is None:
+        raise ValueError(f"Unknown RAT-Bench educational attainment label: {label}")
+    return group
+
+
+def rat_bench_state_region(record: DatasetRecord) -> Optional[str]:
+    label = text_value(record.metadata.get("profile_state_of_residence"))
+    if label is None:
+        return None
+    region = RAT_BENCH_STATE_REGIONS.get(label)
+    if region is None:
+        raise ValueError(f"Unknown RAT-Bench state label: {label}")
+    return region
+
+
+def rat_bench_birth_decade(record: DatasetRecord) -> Optional[str]:
+    dob = text_value(record.metadata.get("profile_date_of_birth"))
+    if dob is None:
+        return None
+    match = _RAT_BENCH_DOB_YEAR_RE.search(dob)
+    if match is None:
+        raise ValueError(f"Could not parse a year out of RAT-Bench date of birth: {dob}")
+    decade = (int(match.group(1)) // 10) * 10
+    return f"{decade}s"
+
+
 def yelp_is_positive(record: DatasetRecord) -> Optional[bool]:
     stars = record.metadata.get("stars")
     if stars is None:
@@ -299,8 +409,19 @@ DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
         "l3": db_bio_l3,
     },
     "yelp": {
-        "is_positive": yelp_is_positive, 
-    }
+        "is_positive": yelp_is_positive,
+    },
+    "rat_bench": {
+        "scenario": rat_bench_scenario,
+        "sex": rat_bench_sex,
+        "employment_status": rat_bench_employment_status,
+        "citizenship_status": rat_bench_citizenship_status,
+        "marital_status": rat_bench_marital_status,
+        "occupation_group": rat_bench_occupation_group,
+        "educational_attainment_group": rat_bench_educational_attainment_group,
+        "state_region": rat_bench_state_region,
+        "birth_decade": rat_bench_birth_decade,
+    },
 }
 
 

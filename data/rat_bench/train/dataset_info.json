@@ -1,0 +1,64 @@
+{
+  "builder_name": "json",
+  "citation": "",
+  "config_name": "english",
+  "dataset_name": "rat-bench",
+  "dataset_size": 4402094,
+  "description": "",
+  "download_size": 4549221,
+  "features": {
+    "id": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "profile": {
+      "_type": "Json"
+    },
+    "direct_identifiers": {
+      "_type": "Json"
+    },
+    "indirect_identifiers": {
+      "_type": "Json"
+    },
+    "features": {
+      "feature": {
+        "dtype": "string",
+        "_type": "Value"
+      },
+      "_type": "List"
+    },
+    "difficulty": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "prompt": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "scenario": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 8951315,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 4402094,
+      "num_examples": 300,
+      "dataset_name": "rat-bench"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}
