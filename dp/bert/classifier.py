@@ -24,7 +24,7 @@ from dp.bert.losses import compute_focal_loss
 class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
     def __init__(
         self,
-        encoder_lr: float,
+        encoder_lr: Optional[float] = None,
         head_lr: Optional[float] = None,
         model_name: str = "distilbert-base-uncased",
         batch_size: int = 8,
@@ -62,6 +62,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         training_poll_interval_seconds: float = 10.0,
         training_wait_timeout_seconds: Optional[float] = None,
         mark_existing_checkpoint_complete: bool = True,
+        seed: Optional[int] = None,
     ):
         SupervisedDownstreamHead.__init__(self, name="bert_classifier", primary_metric=primary_metric)
         BertHFPlumbing.__init__(self, device=device)
@@ -88,12 +89,12 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.model_name = model_name
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
-        if encoder_lr <= 0:
+        if encoder_lr is not None and encoder_lr <= 0:
             raise ValueError(f"encoder_lr must be positive, got {encoder_lr}")
         if head_lr is not None and head_lr <= 0:
             raise ValueError(f"head_lr must be positive, got {head_lr}")
-        self.encoder_lr = float(encoder_lr)
-        self.head_lr = float(head_lr) if head_lr is not None else float(encoder_lr)
+        self.encoder_lr = float(encoder_lr) if encoder_lr is not None else None
+        self.head_lr = float(head_lr) if head_lr is not None else (float(encoder_lr) if encoder_lr is not None else None)
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
         self.label_smoothing = float(label_smoothing)
@@ -125,6 +126,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.training_poll_interval_seconds = float(training_poll_interval_seconds)
         self.training_wait_timeout_seconds = float(training_wait_timeout_seconds) if training_wait_timeout_seconds is not None else None
         self.mark_existing_checkpoint_complete = bool(mark_existing_checkpoint_complete)
+        self.seed = int(seed) if seed is not None else None
         self._model: Optional[torch.nn.Module] = None
         self._label_list: Optional[List[str]] = None
         self._label_to_id: Optional[Dict[str, int]] = None
@@ -271,12 +273,15 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             pretraining_batch_size=self.pretraining_batch_size,
             pretraining_learning_rate=self.pretraining_learning_rate,
             pretraining_mlm_probability=self.pretraining_mlm_probability,
+            seed=self.seed,
         )
         self._load_tokenizer_with_fallback(model_name=self.model_name, init_checkpoint=self.init_checkpoint)
         self._maybe_enable_stopwords(self.mask_stopwords)
 
         self._model = self._create_model(len(self._label_list), other_label_id=other_label_id)
         def _train_impl() -> None:
+            if self.encoder_lr is None:
+                raise ValueError("encoder_lr is required for training but was not provided")
             train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
             val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
             train_dataset = EncodedDataset(train_encodings, train_encoded, label_dtype=torch.long)
@@ -340,6 +345,7 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
                 early_stop_threshold=self.early_stop_threshold,
                 save_checkpoints=self.save_checkpoints,
                 early_stopping_callback=custom_early_stopping,
+                seed=self.seed,
             )
             self._trainer.train()
             if self.save_checkpoints and early_stopping.best_metric is not None:

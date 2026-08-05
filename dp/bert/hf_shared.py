@@ -88,6 +88,7 @@ class BertHFPlumbing:
         pretraining_batch_size: int,
         pretraining_learning_rate: float,
         pretraining_mlm_probability: float,
+        seed: Optional[int] = None,
     ) -> None:
         self._active_checkpoint = None
         if not use_pretraining:
@@ -101,6 +102,7 @@ class BertHFPlumbing:
             batch_size=pretraining_batch_size,
             learning_rate=pretraining_learning_rate,
             mlm_probability=pretraining_mlm_probability,
+            seed=seed,
         )
 
     def _load_tokenizer_with_fallback(self, *, model_name: str, init_checkpoint: Optional[str]) -> None:
@@ -150,6 +152,7 @@ class BertHFPlumbing:
         save_checkpoints: bool = True,
         early_stopping_callback: Optional[TrainerCallback] = None,
         extra_callbacks: Optional[Sequence[TrainerCallback]] = None,
+        seed: Optional[int] = None,
     ) -> Tuple[Trainer, EarlyStoppingCallback]:
         output_dir = checkpoint_dir
         training_args = TrainingArguments(
@@ -168,6 +171,7 @@ class BertHFPlumbing:
             greater_is_better=(not spec.minimize_metric),
             max_grad_norm=gradient_clip,
             report_to="none",
+            seed=seed if seed is not None else 42,
         )
 
         steps_per_epoch = max(1, int(np.ceil(len(train_dataset) / batch_size)))
@@ -292,6 +296,7 @@ class BertHFPlumbing:
             fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:
             return False
+        os.write(fd, str(os.getpid()).encode())
         os.close(fd)
         return True
 
@@ -300,6 +305,19 @@ class BertHFPlumbing:
             path.unlink()
         except FileNotFoundError:
             return
+
+    def _is_lock_stale(self, path: Path) -> bool:
+        try:
+            pid_str = path.read_text(encoding="utf-8").strip()
+            if not pid_str:
+                return False
+            pid = int(pid_str)
+            os.kill(pid, 0)
+            return False
+        except (ValueError, FileNotFoundError):
+            return False
+        except OSError:
+            return True
 
     def _load_model_state_from_checkpoint(self, model: torch.nn.Module, checkpoint_dir: Path) -> bool:
         safetensors_file = checkpoint_dir / "model.safetensors"
@@ -339,16 +357,22 @@ class BertHFPlumbing:
         status = self._read_training_complete(status_path)
 
         if status is True and latest is not None and self._load_model_state_from_checkpoint(model, latest):
+            model.to(self.device)
             self._active_checkpoint = str(latest)
             return True, False
 
-        if status is None and mark_existing_complete and latest is not None:
+        if status is not True and mark_existing_complete and latest is not None:
             self._write_training_complete(status_path, True)
             if self._load_model_state_from_checkpoint(model, latest):
+                model.to(self.device)
                 self._active_checkpoint = str(latest)
                 return True, False
 
         owns_lock = self._acquire_training_lock(lock_path)
+        if not owns_lock and self._is_lock_stale(lock_path):
+            self._release_training_lock(lock_path)
+            owns_lock = self._acquire_training_lock(lock_path)
+
         if owns_lock:
             self._write_training_complete(status_path, False)
             return False, True
@@ -361,10 +385,17 @@ class BertHFPlumbing:
             latest = self._latest_checkpoint_dir(checkpoint_dir)
             status = self._read_training_complete(status_path)
             if status is True and latest is not None and self._load_model_state_from_checkpoint(model, latest):
+                model.to(self.device)
                 self._active_checkpoint = str(latest)
                 return True, False
             if wait_timeout_seconds is not None and (time.time() - started) >= float(wait_timeout_seconds):
                 raise TimeoutError(f"timed out waiting for completed model in {checkpoint_dir}")
+            if self._is_lock_stale(lock_path):
+                self._release_training_lock(lock_path)
+                owns_lock = self._acquire_training_lock(lock_path)
+                if owns_lock:
+                    self._write_training_complete(status_path, False)
+                    return False, True
             time.sleep(sleep_time)
 
     def _finalize_training_status(

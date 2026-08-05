@@ -148,6 +148,7 @@ def pretrain_backbone_with_mlm(
     batch_size: int = 8,
     learning_rate: float = 5e-5,
     mlm_probability: float = 0.15,
+    seed: Optional[int] = None,
 ) -> str:
     if not texts:
         raise ValueError("texts cannot be empty for MLM pretraining")
@@ -191,6 +192,7 @@ def pretrain_backbone_with_mlm(
         logging_strategy="epoch",
         save_strategy="no",
         report_to="none",
+        seed=seed if seed is not None else 42,
     )
     trainer = Trainer(
         model=mlm_model,

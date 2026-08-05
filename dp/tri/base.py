@@ -65,6 +65,7 @@ class TRIDetector:
         warmup_ratio: Optional[float] = None,
         init_checkpoint: Optional[str] = None,
         debug_tri: bool = False,
+        seed: Optional[int] = None,
     ) -> None:
         if not self.train_records:
             raise ValueError("No training data set. Call setup() first")
@@ -126,6 +127,7 @@ class TRIDetector:
             checkpoint_dir=f"{resolved_output_dir}/finetuning",
             pretraining_output_dir=f"{resolved_output_dir}/pretraining",
             init_checkpoint=init_checkpoint,
+            seed=seed,
         )
         train_texts = [record.text for record in self.train_records]
         train_labels = [record.name for record in self.train_records]
