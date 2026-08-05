@@ -41,9 +41,10 @@ def _compute_dummy_privacy(dataset: str) -> dict[str, float]:
         ("more", "more_mean_reciprocal_rank", "more_accuracy"),
         ("full", "full_mean_reciprocal_rank", "full_accuracy"),
     ]:
-        trir, mrr = _for_attacker(attacker)
-        result[mrr_key] = mrr
-        result[acc_key] = trir
+        if attacker in mrr_measures[dataset]:
+            trir, mrr = _for_attacker(attacker)
+            result[mrr_key] = mrr
+            result[acc_key] = trir
     return result
 
 
@@ -77,13 +78,19 @@ PARAMS_MANIFEST_PATH = OUTPUT_DIR / "params_manifest.json"
 TYPST_TABLES_MANIFEST_PATH = OUTPUT_DIR / "tables_manifest.json"
 INCLUDE_GROUPED_ROWS = False
 HIERARCHICAL_SPLIT_TABLES = True
-ENABLED_DATASETS = {"db_bio", "tab"}
+ENABLED_DATASETS = {"db_bio", "tab", "rat_bench"}
 
 dataset_lengths = {
     "db_bio": 2419,
     "tab": 1268,
+    "rat_bench": 300,
 }
 
+mrr_measures = {
+    "db_bio": ["full", "more", "exact"],
+    "tab": ["full", "more", "exact"],
+    "rat_bench": ["full"],
+}
 
 def read_logs(path: str | Path) -> list[dict[str, Any]]:
     with open(path, "r") as f:
@@ -314,8 +321,8 @@ class FlatDatasetLogs:
             "spacy",
             "manual",
             "baroud",
-            "petre",
-            "risk",
+            "petre_shap",
+            "risk_shap",
             "dpbart",
             "dpparaphrase",
             "dpprompt",
@@ -337,7 +344,7 @@ class FlatDatasetLogs:
                 normalized_params.append((param_name, (value_type_rank, value)))
 
             item["_sort_key"] = (method_index, tuple(normalized_params))
-        
+
         sorted_items = sorted(items, key=lambda x: x["_sort_key"])
         for item in sorted_items:
             del item["_sort_key"]
@@ -539,13 +546,11 @@ class MarkdownDatasetLogsWriter:
             return float("nan") if v is None or (isinstance(v, float) and math.isnan(v)) else float(v)
 
         def _gain_row(row: pd.Series) -> float:
-            rel_p  = _val(row, "rel_P")
-            rel_u  = _val(row, "rel_U")
-            rel_pu = _val(row, "rel_PU")
-            rel_d  = _val(row, "rel_D_text")
-            if any(math.isnan(v) for v in (rel_p, rel_u, rel_pu, rel_d)):
+            rel_p = _val(row, "rel_P")
+            rel_u = _val(row, "rel_U")
+            if any(math.isnan(v) for v in (rel_p, rel_u)):
                 return float("nan")
-            return (rel_u + rel_pu + (1.0 - rel_d) - 3.0 * rel_p) / 3.0
+            return rel_u - rel_p
 
         frame = frame.copy()
         frame["GAIN"] = frame.apply(_gain_row, axis=1)

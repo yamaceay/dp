@@ -17,7 +17,6 @@ REQUIRES_FULL_DEID = [
     {"method": "dpmlm_shap", "params": ["epsilon", "k"]},
     {"method": "dpmlm_shap", "params": ["epsilon", "rho"]},
     {"method": "dpmlm_shap", "params": ["epsilon", "lambda"]},
-    {"method": "dpmlm_shap_no_presidio", "params": ["epsilon"]},
 ]
 
 STEP_1_PERF_PATTERN = re.compile(
@@ -27,12 +26,14 @@ STEP_1_PERF_PATTERN = re.compile(
     r"\s*Average time per text:\s*([\d.]+)s",
 )
 STEP_1_OUTPUT_BLOCK_PATTERN = re.compile(r"Output written to:\s*(.*?\.jsonl)", re.DOTALL)
-STEP_1_DATASET_PATTERN = re.compile(r"_(db_bio|tab)_")
+STEP_1_DATASET_PATTERN = re.compile(r"_(db_bio|tab|rat_bench)_")
 STEP_1_LOG_DIRS: List[str] = [
     "logs/0_db_bio_simple_anonymization",
     "logs/0_tab_simple_anonymization",
+    "logs/0_rat_bench_simple_anonymization",
     "logs/4_db_bio_further_anonymization",
     "logs/4_tab_further_anonymization",
+    "logs/4_rat_bench_further_anonymization",
 ]
 
 STEP_2_PERF_PATTERN = re.compile(
@@ -41,23 +42,25 @@ STEP_2_PERF_PATTERN = re.compile(
 )
 STEP_2_NAME_PATTERN = re.compile(
     r"(?:Executing \(task_id=\d+\):|Base command:)\s*python data_for_tri\.py --config "
-    r"configs/1_tri_preprocessing/(db_bio|tab)/(full|full_deid)\.yaml"
+    r"configs/1_tri_preprocessing/(db_bio|tab|rat_bench)/(full|full_deid)\.yaml"
     r"(?:\s+--task_id(?:\s+\d+|\s+\{task_id\}))?"
 )
 STEP_2_LOG_DIRS: List[str] = [
     "logs/1_db_bio_tri_preprocessing",
     "logs/1_tab_tri_preprocessing",
+    "logs/1_rat_bench_tri_preprocessing",
 ]
 
 STEP_3_TRAIN_RUNTIME_PATTERN = re.compile(r"'train_runtime':\s*([0-9]+(?:\.[0-9]+)?)")
 STEP_3_NAME_PATTERN = re.compile(
     r"(?:Executing \(task_id=\d+\):|Base command:)\s*python tri_by_bk\.py --mode train --training-in "
-    r"configs/2_tri_training/(db_bio|tab)/(full|full_deid)\.yaml "
+    r"configs/2_tri_training/(db_bio|tab|rat_bench)/(full|full_deid)\.yaml "
     r"--run-name (?:(full|full_deid)) --set training.lr=5e-5 --set training.debug_tri=true"
 )
 STEP_3_LOG_DIRS: List[str] = [
     "logs/2_db_bio_tri_training",
     "logs/2_tab_tri_training",
+    "logs/2_rat_bench_tri_training",
 ]
 
 STEP_4_RISK_RUNTIME_PATTERN = re.compile(
@@ -66,11 +69,12 @@ STEP_4_RISK_RUNTIME_PATTERN = re.compile(
 )
 STEP_4_NAME_PATTERN = re.compile(
     r"(?:Executing \(task_id=\d+\):|Base command:)\s*python risk\.py --config "
-    r"configs/3_tri_risk_precomputation/(db_bio|tab)/shap\.yaml"
+    r"configs/3_tri_risk_precomputation/(db_bio|tab|rat_bench)/shap\.yaml"
 )
 STEP_4_LOG_DIRS: List[str] = [
     "logs/3_db_bio_risk_precomputation",
     "logs/3_tab_risk_precomputation",
+    "logs/3_rat_bench_risk_precomputation",
 ]
 
 def read_jsonl_rows(path: Path) -> List[Dict[str, Any]]:
@@ -117,7 +121,7 @@ def matches_exact_requirement(method: str, params: Dict[str, Any], requirement: 
 
 
 def run_step_0(root: Path) -> None:
-    for dataset in ["db_bio", "tab"]:
+    for dataset in ["db_bio", "tab", "rat_bench"]:
         anon_path = root / "logs" / "runtime" / dataset / "anon.jsonl"
         if not anon_path.is_file():
             print(f"skipping missing anon log: {anon_path}", file=sys.stderr)
@@ -187,6 +191,8 @@ def run_step_1(root: Path) -> None:
             for row in extract_from_file(path):
                 if "db_bio" in str(directory):
                     dataset = "db_bio"
+                elif "rat_bench" in str(directory):
+                    dataset = "rat_bench"
                 elif "tab" in str(directory):
                     dataset = "tab"
                 else:
