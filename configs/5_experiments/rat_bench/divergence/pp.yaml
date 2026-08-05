@@ -1,0 +1,16 @@
+dataset: rat_bench
+data_in: data/rat_bench
+annotations_in:
+  - ../../../netscratch/yay/_ext_outputs/rat_bench/dpmlm
+  - ../../../netscratch/yay/_ext_outputs/rat_bench/iter_dpmlm
+  - ../../../netscratch/yay/_ext_outputs/rat_bench/presidio
+  - ../../../netscratch/yay/_ext_outputs/rat_bench/spacy
+  - ../../../netscratch/yay/_ext_outputs/rat_bench/dpbart
+  - ../../../netscratch/yay/_ext_outputs/rat_bench/dpparaphrase
+  - ../../../netscratch/yay/_ext_outputs/rat_bench/dpprompt
+  - ../../../netscratch/yay/_ext_outputs/rat_bench/manual
+metric:
+  type: pp
+output:
+  format: jsonl
+  file: logs/divergence/rat_bench/pp.jsonl

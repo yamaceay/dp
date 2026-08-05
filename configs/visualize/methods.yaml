@@ -4,10 +4,15 @@ method_sets:
     methods:
       - method: "baseline"
         print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
       - method: "presidio"
         print_as: "Presidio"
       - method: "spacy"
         print_as: "SpaCy"
+      - method: "manual"
+        print_as: "Manual"
+        datasets: ["tab"]
       - method: "dpbart"
         print_as: "DP-BART"
         params: ["epsilon"]
@@ -28,6 +33,8 @@ method_sets:
   #   methods:
   #     - method: "baseline"
   #       print_as: "Original"
+  #     - method: "dummy"
+  #       print_as: "Dummy"
   #     - method: "presidio"
   #       print_as: "Presidio"
   #     - method: "dpmlm_uniform"
@@ -37,27 +44,55 @@ method_sets:
   #       print_as: "DP-MLM-X+Pr"
   #       params: ["epsilon"]
   - name: "token_level_rewriters_with_threshold_k"
+    datasets: ["tab", "db_bio", "rat_bench"]
     print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter k"
     methods:
       - method: "baseline"
         print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
       - method: "presidio"
         print_as: "Presidio"
       - method: "petre_shap"
+        datasets: ["tab", "db_bio"]
         print_as: "PETRE+Pr"
-        params_one_run: {"k": [2, 3, 5, 7, 10]}
+        params_one_run: {"k": [2, 3, 5, 7, 10, 15]}
       - method: "dpmlm_shap"
         print_as: "k-DP-MLM-X+Pr"
         params: ["epsilon"]
-        params_one_run: {"k": [2, 3, 5, 7, 10]}
+        params_one_run: {"k": [2, 3, 5, 7, 10, 15]}
+      - method: "dpmlm_shap"
+        print_as: "DP-MLM-X+Pr"
+        params: ["epsilon"]
+  - name: "token_level_rewriters_with_threshold_lambda"
+    datasets: ["tab"]
+    print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter lambda"
+    methods:
+      - method: "baseline"
+        print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
+      - method: "presidio"
+        print_as: "Presidio"
+      - method: "baroud"
+        print_as: "IPI+Pr"
+        params_one_run: {"lambda": [0.8, 0.9, 0.95, 0.98, 0.99]}
+        datasets: ["tab"]
+      - method: "dpmlm_shap"
+        print_as: "λ-DP-MLM-X+Pr"
+        params: ["epsilon"]
+        params_one_run: {"lambda": [0.8, 0.9, 0.95, 0.98, 0.99]}
       - method: "dpmlm_shap"
         print_as: "DP-MLM-X+Pr"
         params: ["epsilon"]
   - name: "token_level_rewriters_with_threshold_rho"
+    datasets: ["tab", "db_bio"]
     print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter rho"
     methods:
       - method: "baseline"
         print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
       - method: "presidio"
         print_as: "Presidio"
       - method: "risk_shap"
@@ -71,15 +106,20 @@ method_sets:
         print_as: "DP-MLM-X+Pr"
         params: ["epsilon"]
   - name: "token_level_rewriters_with_threshold_k_cross_dataset"
+    datasets: ["tab", "db_bio"]
     print_as: "DP Token-level rewriting methods with varying epsilon and limiting hyperparameter k, different attacker assumptions"
     split: "test"
     metrics:
+      - PU_acc
+      - PU_mae
       - P_exact
       - P_more
       - D_pp
     methods:
       - method: "baseline"
         print_as: "Original"
+      - method: "dummy"
+        print_as: "Dummy"
       - method: "presidio"
         print_as: "Presidio"
       - method: "petre_shap"

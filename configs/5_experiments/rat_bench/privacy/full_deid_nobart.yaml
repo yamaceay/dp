@@ -1,0 +1,12 @@
+dataset: rat_bench
+data_in: data/rat_bench
+annotations_in:
+  - ../../../netscratch/yay/_ext_outputs/rat_bench
+tri:
+  universal_tri_pipeline: ../../../netscratch/yay/tri_pipelines/rat_bench_nobart/_checkpoints/full_deid/full_deid
+  max_length: 512
+mask_token: "[MASK]"
+output:
+  format: jsonl
+  file: logs/privacy/rat_bench/full_deid_nobart.jsonl
+progress: false
