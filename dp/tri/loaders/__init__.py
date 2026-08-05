@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dp.tri.loaders.tab import TabAttackerDatasetAdapter
-from dp.tri.loaders.reddit import RedditAttackerDatasetAdapter
 from dp.tri.loaders.dbbio import DBBioAttackerDatasetAdapter
 from dp.tri.loaders.yelp import YelpAttackerDatasetAdapter
+from dp.tri.loaders._ratbench import RatBenchAttackerDatasetAdapter, RatBenchNoBartAttackerDatasetAdapter
 from dp.tri.loaders.base import (
     AttackerDatasetRecord,
     AttackerDatasetAdapter,
@@ -14,9 +14,10 @@ from dp.tri.loaders.base import (
 
 ATTACKER_ADAPTER_REGISTRY: dict[str, type[AttackerDatasetAdapter]] = {
     "tab": TabAttackerDatasetAdapter,
-    "reddit": RedditAttackerDatasetAdapter,
     "db_bio": DBBioAttackerDatasetAdapter,
     "yelp": YelpAttackerDatasetAdapter,
+    "rat_bench": RatBenchAttackerDatasetAdapter,
+    "rat_bench_nobart": RatBenchNoBartAttackerDatasetAdapter,
 }
 
 def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:
