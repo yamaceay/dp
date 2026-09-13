@@ -7,8 +7,10 @@ import numpy as np
 from dp.methods.anonymizer import AnonymizationResult
 from dp.loaders.base import TextAnnotation
 
+
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles NumPy types"""
+
     def default(self, o):
         if isinstance(o, (np.integer, np.int32, np.int64)):
             return int(o)
@@ -44,7 +46,9 @@ class JsonlOutputHandler(OutputHandler):
         idx = kwargs.get("idx", None)
         unique_name = kwargs.get("unique_name")
         hyperparams = kwargs.get("hyperparams")
-        variant_key = self._derive_variant_key_from_hyperparams(hyperparams) or self._derive_variant_key(result)
+        variant_key = self._derive_variant_key_from_hyperparams(
+            hyperparams
+        ) or self._derive_variant_key(result)
         stream = self._ensure_stream(dataset, model, variant_key, unique_name)
 
         record = {
@@ -54,12 +58,17 @@ class JsonlOutputHandler(OutputHandler):
 
         annotations: Dict[str, Any] = {}
         if result.annotations.spans:
-            annotations["spans"] = [self._serialize_annotation_minimal(ann) for ann in result.annotations.spans]
+            annotations["spans"] = [
+                self._serialize_annotation_minimal(ann)
+                for ann in result.annotations.spans
+            ]
         if result.annotations.token_edits:
-            annotations["token_edits"] = [te.to_dict() for te in result.annotations.token_edits]
+            annotations["token_edits"] = [
+                te.to_dict() for te in result.annotations.token_edits
+            ]
         if annotations:
             record["annotations"] = annotations
-        
+
         metadata = result.metadata
         if unique_name is not None:
             metadata = dict(metadata)
@@ -69,10 +78,10 @@ class JsonlOutputHandler(OutputHandler):
                 metadata = dict(metadata)
             metadata["hyperparams"] = self._convert_numpy_types(dict(hyperparams))
         record["metadata"] = metadata
-        
-        stream.write(json.dumps(record, ensure_ascii=False, cls=NumpyEncoder) + '\n')
+
+        stream.write(json.dumps(record, ensure_ascii=False, cls=NumpyEncoder) + "\n")
         stream.flush()
-    
+
     def close(self):
         for key, stream in self._streams.items():
             stream.close()
@@ -87,7 +96,9 @@ class JsonlOutputHandler(OutputHandler):
         path_str = pattern.format(dataset=dataset)
         return Path(path_str)
 
-    def _ensure_stream(self, dataset: str, model: str, variant_key: str, unique_name: Optional[str]):
+    def _ensure_stream(
+        self, dataset: str, model: str, variant_key: str, unique_name: Optional[str]
+    ):
         stream_key = (variant_key, unique_name)
         if stream_key in self._streams:
             return self._streams[stream_key]
@@ -102,7 +113,7 @@ class JsonlOutputHandler(OutputHandler):
         sanitized_suffix = suffix.replace(" ", "_")
         path = output_dir / f"{self.timestamp}{sanitized_suffix}"
         path = path.with_suffix(".jsonl")
-        handle = open(path, 'w', encoding='utf-8')
+        handle = open(path, "w", encoding="utf-8")
         self._streams[stream_key] = handle
         self._paths[stream_key] = path
         return handle
@@ -167,7 +178,9 @@ class JsonlOutputHandler(OutputHandler):
         for key in preferred_order:
             if key in normalized:
                 keys.append(key)
-        for key in sorted(k for k in normalized.keys() if k not in set(preferred_order)):
+        for key in sorted(
+            k for k in normalized.keys() if k not in set(preferred_order)
+        ):
             keys.append(key)
 
         pairs: List[str] = []
@@ -180,14 +193,22 @@ class JsonlOutputHandler(OutputHandler):
         if isinstance(value, float):
             return f"{value:.4f}".rstrip("0").rstrip(".")
         return str(value)
-    
+
     def _serialize_annotation_minimal(self, ann: TextAnnotation) -> Dict[str, Any]:
         """Serialize annotation with omitempty pattern, converting NumPy types to native Python"""
         data = {}
         if ann.start is not None:
-            data["start"] = int(ann.start) if isinstance(ann.start, (np.integer, np.int32, np.int64)) else ann.start
+            data["start"] = (
+                int(ann.start)
+                if isinstance(ann.start, (np.integer, np.int32, np.int64))
+                else ann.start
+            )
         if ann.end is not None:
-            data["end"] = int(ann.end) if isinstance(ann.end, (np.integer, np.int32, np.int64)) else ann.end
+            data["end"] = (
+                int(ann.end)
+                if isinstance(ann.end, (np.integer, np.int32, np.int64))
+                else ann.end
+            )
         if ann.label:
             data["label"] = ann.label
         if ann.text:
@@ -195,13 +216,17 @@ class JsonlOutputHandler(OutputHandler):
         if ann.replacement:
             data["replacement"] = ann.replacement
         if ann.confidence is not None:
-            data["confidence"] = float(ann.confidence) if isinstance(ann.confidence, (np.floating, np.float32, np.float64)) else ann.confidence
+            data["confidence"] = (
+                float(ann.confidence)
+                if isinstance(ann.confidence, (np.floating, np.float32, np.float64))
+                else ann.confidence
+            )
         if ann.annotator:
             data["annotator"] = ann.annotator
         if ann.metadata:
             data["metadata"] = self._convert_numpy_types(ann.metadata)
         return data
-    
+
     def _convert_numpy_types(self, obj):
         """Recursively convert NumPy types to native Python types"""
         if isinstance(obj, dict):

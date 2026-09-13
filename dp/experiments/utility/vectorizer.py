@@ -7,10 +7,12 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from transformers import AutoModel, AutoTokenizer
 import torch
+
 try:
     from sentence_transformers import SentenceTransformer
 except Exception:
     SentenceTransformer = None
+
 
 class SelfSupervisedFeatureExtractor(ABC):
     @abstractmethod
@@ -83,8 +85,14 @@ class TfidfTextVectorizer(SelfSupervisedFeatureExtractor):
     def clone(self) -> "SelfSupervisedFeatureExtractor":
         return TfidfTextVectorizer(**self.describe())
 
+
 class BERTVectorizer(SelfSupervisedFeatureExtractor):
-    def __init__(self, model_name: str = "roberta-base", batch_size: int = 32, device: str = "cpu"):
+    def __init__(
+        self,
+        model_name: str = "roberta-base",
+        batch_size: int = 32,
+        device: str = "cpu",
+    ):
         self.model_name = model_name
         self.batch_size = batch_size
         self.device = device
@@ -92,7 +100,11 @@ class BERTVectorizer(SelfSupervisedFeatureExtractor):
         self._model: Optional[Any] = None
 
     def describe(self) -> Dict[str, Any]:
-        return {"model_name": self.model_name, "batch_size": self.batch_size, "device": self.device}
+        return {
+            "model_name": self.model_name,
+            "batch_size": self.batch_size,
+            "device": self.device,
+        }
 
     def setup(self) -> "SelfSupervisedFeatureExtractor":
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
@@ -118,7 +130,9 @@ class BERTVectorizer(SelfSupervisedFeatureExtractor):
         all_embeddings: list[np.ndarray] = []
         for i in range(0, len(texts), self.batch_size):
             batch_texts = list(texts)[i : i + self.batch_size]
-            encodings = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt").to(self.device)
+            encodings = self._tokenizer(
+                batch_texts, padding=True, truncation=True, return_tensors="pt"
+            ).to(self.device)
             with torch.no_grad():
                 outputs = self._model(**encodings)
                 embeddings = outputs.last_hidden_state.mean(dim=1).cpu().numpy()
@@ -127,6 +141,7 @@ class BERTVectorizer(SelfSupervisedFeatureExtractor):
 
     def clone(self) -> "SelfSupervisedFeatureExtractor":
         return BERTVectorizer(**self.describe())
+
 
 class SentenceEmbeddingVectorizer(SelfSupervisedFeatureExtractor):
     def __init__(
@@ -159,19 +174,29 @@ class SentenceEmbeddingVectorizer(SelfSupervisedFeatureExtractor):
         if backend in {"sentence_transformers", "sentence-transformers", "sbert", "st"}:
             if SentenceTransformer is None:
                 raise RuntimeError("sentence-transformers is not available")
-            self._sentence_model = SentenceTransformer(self.model_name, device=self.device)
+            self._sentence_model = SentenceTransformer(
+                self.model_name, device=self.device
+            )
             self._backend = "sentence_transformers"
             return self
         if backend in {"transformers", "hf", "bert"}:
-            self._hf_vectorizer = BERTVectorizer(self.model_name, self.batch_size, self.device)
+            self._hf_vectorizer = BERTVectorizer(
+                self.model_name, self.batch_size, self.device
+            )
             self._hf_vectorizer.setup()
             self._backend = "transformers"
             return self
-        if SentenceTransformer is not None and self.model_name.startswith("sentence-transformers/"):
-            self._sentence_model = SentenceTransformer(self.model_name, device=self.device)
+        if SentenceTransformer is not None and self.model_name.startswith(
+            "sentence-transformers/"
+        ):
+            self._sentence_model = SentenceTransformer(
+                self.model_name, device=self.device
+            )
             self._backend = "sentence_transformers"
             return self
-        self._hf_vectorizer = BERTVectorizer(self.model_name, self.batch_size, self.device)
+        self._hf_vectorizer = BERTVectorizer(
+            self.model_name, self.batch_size, self.device
+        )
         self._hf_vectorizer.setup()
         self._backend = "transformers"
         return self
@@ -208,6 +233,7 @@ class SentenceEmbeddingVectorizer(SelfSupervisedFeatureExtractor):
     def clone(self) -> "SelfSupervisedFeatureExtractor":
         return SentenceEmbeddingVectorizer(**self.describe())
 
+
 FEATURE_EXTRACTOR_REGISTRY: Dict[str, type[SelfSupervisedFeatureExtractor]] = {
     "tfidf": TfidfTextVectorizer,
     "bert": BERTVectorizer,
@@ -235,5 +261,6 @@ class IdentityTextVectorizer(SelfSupervisedFeatureExtractor):
 
     def clone(self) -> "SelfSupervisedFeatureExtractor":
         return IdentityTextVectorizer()
+
 
 FEATURE_EXTRACTOR_REGISTRY["text"] = IdentityTextVectorizer

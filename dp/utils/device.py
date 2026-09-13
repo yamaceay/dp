@@ -1,6 +1,8 @@
 from typing import List, Optional, Union
 
 import torch
+
+
 def resolve_device(preferred: Optional[Union[str, int]] = None) -> str:
     device_selected: Optional[str] = None
     devices = available_devices()
@@ -21,9 +23,12 @@ def resolve_device(preferred: Optional[Union[str, int]] = None) -> str:
             device_selected = dev
             break
     if device_selected is None:
-        raise ValueError(f"Preferred device {preferred} is not available. Available devices: {devices}")
+        raise ValueError(
+            f"Preferred device {preferred} is not available. Available devices: {devices}"
+        )
     print(f"Selected device: {device_selected}")
     return device_selected
+
 
 def available_devices() -> List[str]:
     devices: List[str] = []

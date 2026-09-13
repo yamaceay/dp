@@ -17,7 +17,11 @@ class UntilKUnit(AnonymizerUnit):
         sort_by_risk: bool = True,
         **kwargs: Any,
     ) -> None:
-        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk, selector_name=self.SELECTOR_NAME)
+        super().__init__(
+            temperature=temperature,
+            sort_by_risk=sort_by_risk,
+            selector_name=self.SELECTOR_NAME,
+        )
         self._rank_evaluator = rank_evaluator
         self._target_label: Optional[int] = None
 
@@ -37,7 +41,9 @@ class UntilKUnit(AnonymizerUnit):
         threshold: Any,
         **context: Any,
     ) -> List[int]:
-        raise NotImplementedError("UntilKUnit uses custom anonymize() and does not implement select_indices()")
+        raise NotImplementedError(
+            "UntilKUnit uses custom anonymize() and does not implement select_indices()"
+        )
 
     def anonymize(
         self,
@@ -52,7 +58,9 @@ class UntilKUnit(AnonymizerUnit):
             return
 
         if self._threshold_name != "k":
-            raise ValueError(f"UntilKUnit requires threshold name 'k', got {self._threshold_name!r}")
+            raise ValueError(
+                f"UntilKUnit requires threshold name 'k', got {self._threshold_name!r}"
+            )
 
         if self._rank_evaluator is None:
             raise ValueError("UntilKUnit requires rank_evaluator to be set")
@@ -61,7 +69,7 @@ class UntilKUnit(AnonymizerUnit):
 
         if ledger is None:
             ledger = TokenLedger(text, offsets)
-        
+
         if prior_edits:
             ledger.apply_prior_edits(prior_edits)
 
@@ -69,14 +77,14 @@ class UntilKUnit(AnonymizerUnit):
         for idx in range(len(offsets)):
             if ledger.is_modified(idx):
                 processed.add(idx)
-        
+
         unprocessed = set(range(len(offsets))) - processed
         perturbed_count = 0
         k_values = self.order_thresholds(self._thresholds)
 
         current_text = ledger.render_offsets(text)
         current_rank = self._rank_evaluator(current_text, self._target_label)
-        
+
         for target_k in k_values:
             if current_rank >= target_k:
                 metadata = {
@@ -103,16 +111,18 @@ class UntilKUnit(AnonymizerUnit):
                     break
                 if idx not in unprocessed:
                     continue
-                
+
                 apply_fn(idx, ledger)
                 processed.add(idx)
                 unprocessed.discard(idx)
-                
+
                 if ledger.is_modified(idx):
                     perturbed_count += 1
                     new_indices.append(idx)
                     current_text = ledger.render_offsets(text)
-                    current_rank = self._rank_evaluator(current_text, self._target_label)
+                    current_rank = self._rank_evaluator(
+                        current_text, self._target_label
+                    )
 
             metadata = {
                 "selector": self.SELECTOR_NAME,

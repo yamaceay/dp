@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dp.tri.loaders.tab import TabAttackerDatasetAdapter
 from dp.tri.loaders.dbbio import DBBioAttackerDatasetAdapter
-from dp.tri.loaders._ratbench import RatBenchAttackerDatasetAdapter, RatBenchNoBartAttackerDatasetAdapter
+from dp.tri.loaders._ratbench import (
+    RatBenchAttackerDatasetAdapter,
+    RatBenchNoBartAttackerDatasetAdapter,
+)
 from dp.tri.loaders.base import (
     AttackerDatasetRecord,
     AttackerDatasetAdapter,
@@ -18,6 +21,7 @@ ATTACKER_ADAPTER_REGISTRY: dict[str, type[AttackerDatasetAdapter]] = {
     "rat_bench_nobart": RatBenchNoBartAttackerDatasetAdapter,
 }
 
+
 def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:
     """Instantiate an attacker dataset adapter by name."""
     key = (name or "").lower()
@@ -28,6 +32,7 @@ def get_attacker_adapter(name: str, **kwargs) -> AttackerDatasetAdapter:
         )
     adapter_cls = ATTACKER_ADAPTER_REGISTRY[key]
     return adapter_cls(**kwargs)
+
 
 __all__ = [
     "AttackerDatasetRecord",

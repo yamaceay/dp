@@ -5,6 +5,7 @@ from typing import Callable, Dict, Iterable, Iterator, List, Optional, Sequence,
 
 from dp.utils.token_edits import apply_token_edits
 
+
 @dataclass
 class TokenAddition:
     text: str
@@ -38,17 +39,21 @@ class GapEntry:
 
 class TokenLedger:
     def __init__(self, source_text: str, spans: Sequence[Tuple[int, int]]) -> None:
-        self._source_text = source_text
+        # self._source_text = source_text
         self._entries: List[TokenEntry] = []
         self._gaps: List[GapEntry] = []
-        
+
         sorted_spans = sorted(enumerate(spans), key=lambda x: x[1][0])
-        
+
         prev_end = 0
         for original_idx, (start, end) in sorted_spans:
             if start > prev_end:
-                self._gaps.append(GapEntry(start=prev_end, end=start, text=source_text[prev_end:start]))
-            
+                self._gaps.append(
+                    GapEntry(
+                        start=prev_end, end=start, text=source_text[prev_end:start]
+                    )
+                )
+
             self._entries.append(
                 TokenEntry(
                     index=original_idx,
@@ -59,9 +64,13 @@ class TokenLedger:
                 )
             )
             prev_end = end
-        
+
         if prev_end < len(source_text):
-            self._gaps.append(GapEntry(start=prev_end, end=len(source_text), text=source_text[prev_end:]))
+            self._gaps.append(
+                GapEntry(
+                    start=prev_end, end=len(source_text), text=source_text[prev_end:]
+                )
+            )
 
         self._active_edit_source: Optional[str] = None
         self._emit_edit_sources: bool = False
@@ -111,18 +120,18 @@ class TokenLedger:
     def iter_tokens(self) -> Iterator[str]:
         sorted_entries = sorted(self._entries, key=lambda e: e.start)
         gap_idx = 0
-        
+
         for entry in sorted_entries:
             if gap_idx < len(self._gaps) and self._gaps[gap_idx].start < entry.start:
                 yield self._gaps[gap_idx].text
                 gap_idx += 1
-            
+
             if entry.deleted:
                 continue
             yield entry.text
             for addition in entry.additions:
                 yield addition.text
-        
+
         if gap_idx < len(self._gaps):
             yield self._gaps[gap_idx].text
 
@@ -142,7 +151,11 @@ class TokenLedger:
         metadata: List[Dict[str, object]] = []
         for entry in self._entries:
             if entry.deleted:
-                item: Dict[str, object] = {"span": entry.span, "text": entry.original_text, "kind": "deleted"}
+                item: Dict[str, object] = {
+                    "span": entry.span,
+                    "text": entry.original_text,
+                    "kind": "deleted",
+                }
                 if self._emit_edit_sources and entry.edit_source is not None:
                     item["source"] = entry.edit_source
                 metadata.append(item)
@@ -154,7 +167,9 @@ class TokenLedger:
                 metadata.append(item)
             for addition in entry.additions:
                 item = {
-                    "span": (addition.start, addition.end) if addition.start is not None else None,
+                    "span": (addition.start, addition.end)
+                    if addition.start is not None
+                    else None,
                     "text": addition.text,
                     "kind": "added",
                 }
@@ -168,12 +183,12 @@ class TokenLedger:
         sorted_entries = sorted(self._entries, key=lambda e: e.start)
         result_cursor = 0
         gap_idx = 0
-        
+
         for entry in sorted_entries:
             if gap_idx < len(self._gaps) and self._gaps[gap_idx].start < entry.start:
                 result_cursor += len(self._gaps[gap_idx].text)
                 gap_idx += 1
-            
+
             if entry.deleted:
                 item: Dict[str, object] = {
                     "span": (result_cursor, result_cursor),
@@ -184,10 +199,10 @@ class TokenLedger:
                     item["source"] = entry.edit_source
                 metadata.append(item)
                 continue
-            
+
             result_start = result_cursor
             result_end = result_start + len(entry.text)
-            
+
             if entry.text != entry.original_text:
                 item = {
                     "span": (result_start, result_end),
@@ -198,9 +213,9 @@ class TokenLedger:
                 if self._emit_edit_sources and entry.edit_source is not None:
                     item["source"] = entry.edit_source
                 metadata.append(item)
-            
+
             result_cursor = result_end
-            
+
             for addition in entry.additions:
                 add_start = result_cursor
                 add_end = add_start + len(addition.text)
@@ -213,7 +228,7 @@ class TokenLedger:
                     item["source"] = addition.source
                 metadata.append(item)
                 result_cursor = add_end
-        
+
         return metadata
 
     def surviving_spans(self) -> Iterable[Tuple[int, int]]:
@@ -231,7 +246,7 @@ class TokenLedger:
             edit_start = int(span_raw[0])
             edit_end = int(span_raw[1])
             replacement = str(edit.get("text", ""))
-            
+
             for i, entry in enumerate(self._entries):
                 if entry.end <= edit_start or entry.start >= edit_end:
                     continue

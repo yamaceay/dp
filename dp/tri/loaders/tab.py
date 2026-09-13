@@ -5,10 +5,15 @@ from tqdm import tqdm
 
 from dp.loaders.base import DatasetRecord
 from dp.loaders._tab import TabDatasetAdapter
-from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord, _normalize_texts
+from dp.tri.loaders.base import (
+    AttackerDatasetAdapter,
+    AttackerDatasetRecord,
+    _normalize_texts,
+)
 from dp.utils.chunking import TokenAwareChunker
 from dp.utils.rewriter import BartRewriter
 from dp.utils.device import resolve_device
+
 
 class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
     def __init__(
@@ -44,26 +49,32 @@ class TabAttackerDatasetAdapter(AttackerDatasetAdapter):
         )
         self.set_rewriter(rewriter)
         self.rewriter_kwargs = {
-            "max_length": rewriter_max_length, 
-            "min_length": rewriter_min_length, 
-            "do_sample": do_sample, 
-            "top_k": top_k, 
-            "top_p": top_p, 
+            "max_length": rewriter_max_length,
+            "min_length": rewriter_min_length,
+            "do_sample": do_sample,
+            "top_k": top_k,
+            "top_p": top_p,
             "temperature": temperature,
         }
         self.rewrite_background = rewrite_background
         self.chunker = TokenAwareChunker(
-                tokenizer=self.rewriter.rewriting_pipeline.tokenizer,
-                max_tokens=max_background_tokens,
-            )
+            tokenizer=self.rewriter.rewriting_pipeline.tokenizer,
+            max_tokens=max_background_tokens,
+        )
         self.n_train_samples = n_train_samples
         self.n_eval_samples = n_eval_samples
 
     def prepare_eval_texts(self, record: DatasetRecord) -> List[str]:
-        return [self.rewriter.rewrite(text=record.text, **self.rewriter_kwargs) for _ in range(self.n_eval_samples)]
+        return [
+            self.rewriter.rewrite(text=record.text, **self.rewriter_kwargs)
+            for _ in range(self.n_eval_samples)
+        ]
 
     def prepare_train_texts(self, record: DatasetRecord) -> List[str]:
-        return [self.rewriter.rewrite(text=record.text, **self.rewriter_kwargs) for _ in range(self.n_train_samples)]
+        return [
+            self.rewriter.rewrite(text=record.text, **self.rewriter_kwargs)
+            for _ in range(self.n_train_samples)
+        ]
 
     def iter_records(self, progress: bool = False) -> List[AttackerDatasetRecord]:
         iterator = list(self.adapter.iter_records())

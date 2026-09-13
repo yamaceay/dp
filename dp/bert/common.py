@@ -19,7 +19,13 @@ from transformers import (
 
 
 class EarlyStoppingCallback(TrainerCallback):
-    def __init__(self, early_stopping_patience: int, early_stopping_threshold: float | None, metric_name: str, minimize: bool):
+    def __init__(
+        self,
+        early_stopping_patience: int,
+        early_stopping_threshold: float | None,
+        metric_name: str,
+        minimize: bool,
+    ):
         self.patience = early_stopping_patience
         self.threshold = early_stopping_threshold
         self.metric_name = metric_name
@@ -33,16 +39,26 @@ class EarlyStoppingCallback(TrainerCallback):
         if current is None:
             return
         if self.threshold is None:
-            improved = (current < self.best_metric) if self.minimize else (current > self.best_metric)
+            improved = (
+                (current < self.best_metric)
+                if self.minimize
+                else (current > self.best_metric)
+            )
             if improved:
                 self.best_metric = current
                 self.wait = 0
                 control.should_save = True
             return
-        if (self.minimize and current <= self.threshold) or (not self.minimize and current >= self.threshold):
+        if (self.minimize and current <= self.threshold) or (
+            not self.minimize and current >= self.threshold
+        ):
             control.should_training_stop = True
             return
-        improved = (current < self.best_metric) if self.minimize else (current > self.best_metric)
+        improved = (
+            (current < self.best_metric)
+            if self.minimize
+            else (current > self.best_metric)
+        )
         if improved:
             self.best_metric = current
             self.wait = 0
@@ -83,11 +99,17 @@ class ExternalEvalEarlyStoppingCallback(TrainerCallback):
         self.last_metrics = normalized
         current = normalized.get(self.metric_name)
         if current is None:
-            raise ValueError(f"External evaluator did not return metric '{self.metric_name}'")
+            raise ValueError(
+                f"External evaluator did not return metric '{self.metric_name}'"
+            )
         payload = ", ".join(f"{k}={v:.6f}" for k, v in sorted(normalized.items()))
         print(f"{self.label} monitor: {payload}")
         if self.threshold is None:
-            improved = (current < self.best_metric) if self.minimize else (current > self.best_metric)
+            improved = (
+                (current < self.best_metric)
+                if self.minimize
+                else (current > self.best_metric)
+            )
             if improved:
                 self.best_metric = current
                 self.wait = 0
@@ -96,10 +118,16 @@ class ExternalEvalEarlyStoppingCallback(TrainerCallback):
                 if self.wait >= self.patience:
                     control.should_training_stop = True
             return
-        if (self.minimize and current <= self.threshold) or (not self.minimize and current >= self.threshold):
+        if (self.minimize and current <= self.threshold) or (
+            not self.minimize and current >= self.threshold
+        ):
             control.should_training_stop = True
             return
-        improved = (current < self.best_metric) if self.minimize else (current > self.best_metric)
+        improved = (
+            (current < self.best_metric)
+            if self.minimize
+            else (current > self.best_metric)
+        )
         if improved:
             self.best_metric = current
             self.wait = 0
@@ -119,7 +147,11 @@ def mask_stopword_tokens(
         token_ids = encodings["input_ids"][idx]
         attention_mask = encodings["attention_mask"][idx]
         for token_pos in range(len(token_ids)):
-            token_id = token_ids[token_pos].item() if hasattr(token_ids[token_pos], "item") else token_ids[token_pos]
+            token_id = (
+                token_ids[token_pos].item()
+                if hasattr(token_ids[token_pos], "item")
+                else token_ids[token_pos]
+            )
             token_str = tokenizer.convert_ids_to_tokens(token_id)
             normalized_token = token_str.lower().strip("#").replace("##", "")
             if normalized_token in stopwords:
@@ -182,7 +214,9 @@ def pretrain_backbone_with_mlm(
         return_tensors="pt",
     )
     dataset = MaskedLMDataset(encodings)
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm_probability=mlm_probability)
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer, mlm_probability=mlm_probability
+    )
     pretrain_dir = Path(output_dir) / "pretraining"
     args = TrainingArguments(
         output_dir=str(pretrain_dir),
@@ -230,7 +264,9 @@ def build_optimizer_and_scheduler(
     if warmup_ratio is not None and (warmup_ratio < 0.0 or warmup_ratio >= 1.0):
         raise ValueError(f"warmup_ratio must be in [0, 1), got {warmup_ratio}")
     if num_training_steps <= 0:
-        raise ValueError(f"num_training_steps must be positive, got {num_training_steps}")
+        raise ValueError(
+            f"num_training_steps must be positive, got {num_training_steps}"
+        )
 
     encoder_params = []
     head_params = []
@@ -243,9 +279,13 @@ def build_optimizer_and_scheduler(
             head_params.append(param)
     param_groups = []
     if encoder_params:
-        param_groups.append({"params": encoder_params, "lr": encoder_lr, "weight_decay": weight_decay})
+        param_groups.append(
+            {"params": encoder_params, "lr": encoder_lr, "weight_decay": weight_decay}
+        )
     if head_params:
-        param_groups.append({"params": head_params, "lr": head_lr, "weight_decay": weight_decay})
+        param_groups.append(
+            {"params": head_params, "lr": head_lr, "weight_decay": weight_decay}
+        )
     if not param_groups:
         raise ValueError("No trainable parameters found for optimizer")
 
@@ -259,14 +299,22 @@ def build_optimizer_and_scheduler(
     else:
         raise ValueError(f"Unknown optimizer_type: {optimizer_type}")
 
-    warmup = warmup_steps if warmup_steps > 0 else int(num_training_steps * (warmup_ratio or 0.0))
+    warmup = (
+        warmup_steps
+        if warmup_steps > 0
+        else int(num_training_steps * (warmup_ratio or 0.0))
+    )
     scheduler_key = scheduler_type.lower().strip()
     if scheduler_key == "constant":
         scheduler = get_constant_schedule(optimizer)
     elif scheduler_key == "linear":
-        scheduler = get_linear_schedule_with_warmup(optimizer, warmup, num_training_steps)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, warmup, num_training_steps
+        )
     elif scheduler_key == "cosine":
-        scheduler = get_cosine_schedule_with_warmup(optimizer, warmup, num_training_steps)
+        scheduler = get_cosine_schedule_with_warmup(
+            optimizer, warmup, num_training_steps
+        )
     else:
         raise ValueError(f"Unknown scheduler_type: {scheduler_type}")
     return optimizer, scheduler

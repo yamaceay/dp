@@ -46,7 +46,7 @@ Logs from each stage are merged into analysis-ready artifacts by `merge_logs.py`
 | `baroud` | Masking | Trainable PII detector with a confidence threshold |
 | `risk` | Masking | Risk-scored masking until cumulative risk falls below a target |
 | `petre`, `iter_petre` | k-anonymity | Iterative masking until TRI attacker rank reaches a target |
-| `dpmlm`, `iter_dpmlm` | DP rewriting | Risk-aware DP masked language model (DP-MLM-X) |
+| `dpmlm`, `iter_dpmlm` | DP rewriting | Uniform & Risk-aware DP masked language models (DP-MLM, DP-MLM-X) |
 | `dpbart` | DP rewriting | Gaussian noise on BART encoder logits |
 | `dpprompt` | DP rewriting | Prompted seq2seq with clipped logits |
 | `dpparaphrase` | DP rewriting | Autoregressive rewriting with DP noise |
@@ -72,7 +72,7 @@ git clone https://github.com/yamaceay/dp.git
 cd dp
 uv sync
 source .venv/bin/activate
-python -m spacy download en_core_web_sm
+python -m spacy download en_core_web_sm # for spacy model
 ```
 
 See `pyproject.toml` for the exact dependency versions.
@@ -81,7 +81,7 @@ See `pyproject.toml` for the exact dependency versions.
 
 ## Data Preparation
 
-Datasets are not shipped with the repository due to size. Expected layout:
+Datasets are shipped with the repository. Expected layout:
 
 | Dataset | Path |
 |---------|------|

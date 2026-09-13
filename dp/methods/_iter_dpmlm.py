@@ -21,7 +21,9 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
             raise ValueError("T must be a positive integer or math.inf")
         self.T = T
 
-    def _compute_current_offsets(self, ledger: TokenLedger, n: int) -> List[Tuple[int, int]]:
+    def _compute_current_offsets(
+        self, ledger: TokenLedger, n: int
+    ) -> List[Tuple[int, int]]:
         result: List[Optional[Tuple[int, int]]] = [None] * n
         sorted_entries = sorted(ledger._entries, key=lambda e: e.start)
         cursor = 0
@@ -54,7 +56,9 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
         current_text = ledger.render_offsets(original_text)
         current_offsets = self._compute_current_offsets(ledger, n)
 
-        surviving = [(i, current_offsets[i]) for i in range(n) if not ledger.entry(i).deleted]
+        surviving = [
+            (i, current_offsets[i]) for i in range(n) if not ledger.entry(i).deleted
+        ]
         if not surviving:
             return np.zeros(n, dtype=float)
 
@@ -82,7 +86,9 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
             return
         top = sorted(unprocessed, key=lambda i: float(shap_scores[i]), reverse=True)[:5]
         refresh_marker = " [refreshed]" if refreshed else ""
-        tokens = [f"{text[offsets[i][0]:offsets[i][1]]}({shap_scores[i]:.4f})" for i in top]
+        tokens = [
+            f"{text[offsets[i][0] : offsets[i][1]]}({shap_scores[i]:.4f})" for i in top
+        ]
         print(
             f"[iter_dpmlm][verbose] record={record_ref} step={step}{refresh_marker} "
             f"remaining={len(unprocessed)} top5={tokens}"
@@ -100,7 +106,9 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
         remaining_budget = eps_val * n - sum(spent_budgets)
         if not unprocessed_by_score:
             return max(remaining_budget, 1e-8)
-        scores = np.array([float(shap_scores[i]) for i in unprocessed_by_score], dtype=float)
+        scores = np.array(
+            [float(shap_scores[i]) for i in unprocessed_by_score], dtype=float
+        )
         weights = _scores_to_inverse_probs(scores, temperature=self.risk_temperature)
         idx_pos = unprocessed_by_score.index(idx)
         return float(remaining_budget * weights[idx_pos])
@@ -172,7 +180,9 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
             hp_out[threshold_type] = threshold
 
         private_text = ledger.render_offsets(original_text)
-        token_edits = [TokenEdit.from_mapping(e) for e in ledger.result_edits_metadata()]
+        token_edits = [
+            TokenEdit.from_mapping(e) for e in ledger.result_edits_metadata()
+        ]
 
         if used_precomputed:
             explainer_name = "PrecomputedRisk"
@@ -256,7 +266,9 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
         for hp in combos:
             eps_val = hp.get("epsilon")
             if eps_val is None:
-                raise ValueError("IterDPMlmAnonymizer requires epsilon via Buckets (EpsilonParam)")
+                raise ValueError(
+                    "IterDPMlmAnonymizer requires epsilon via Buckets (EpsilonParam)"
+                )
             combos_by_epsilon.setdefault(float(eps_val), []).append(hp)
 
         if self._unit is None:
@@ -278,7 +290,11 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
                 processed: set = set()
 
                 if isinstance(self._unit, UntilKUnit):
-                    k_vals = sorted(set(int(hp["k"]) for hp in eps_combos if hp.get("k") is not None))
+                    k_vals = sorted(
+                        set(
+                            int(hp["k"]) for hp in eps_combos if hp.get("k") is not None
+                        )
+                    )
                     if not k_vals:
                         raise ValueError(
                             "IterDPMlmAnonymizer using until_k selector requires KParams buckets"
@@ -298,19 +314,33 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
 
                     for target_k in k_vals:
                         matching_hp = next(
-                            (hp for hp in eps_combos if int(hp.get("k", -1)) == target_k),
+                            (
+                                hp
+                                for hp in eps_combos
+                                if int(hp.get("k", -1)) == target_k
+                            ),
                             eps_combos[0],
                         )
 
                         if current_rank >= target_k:
-                            outputs.append(self._build_output(
-                                hp=matching_hp, ledger=ledger, original_text=text,
-                                offsets=offsets, eps_val=eps_val, used_precomputed=used_precomputed,
-                                runtime_stats=runtime_stats,
-                                threshold_type="k", threshold=target_k,
-                                extra_meta={"rank": current_rank, "selector": "until_k",
-                                            "processed_count": len(processed)},
-                            ))
+                            outputs.append(
+                                self._build_output(
+                                    hp=matching_hp,
+                                    ledger=ledger,
+                                    original_text=text,
+                                    offsets=offsets,
+                                    eps_val=eps_val,
+                                    used_precomputed=used_precomputed,
+                                    runtime_stats=runtime_stats,
+                                    threshold_type="k",
+                                    threshold=target_k,
+                                    extra_meta={
+                                        "rank": current_rank,
+                                        "selector": "until_k",
+                                        "processed_count": len(processed),
+                                    },
+                                )
+                            )
                             continue
 
                         while unprocessed and current_rank < target_k:
@@ -324,8 +354,13 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
 
                             record_ref = record_uid or record_name or "<unknown>"
                             self._print_step_risk_scores(
-                                step_count, shap_scores, unprocessed, text, offsets,
-                                record_ref, needs_refresh,
+                                step_count,
+                                shap_scores,
+                                unprocessed,
+                                text,
+                                offsets,
+                                record_ref,
+                                needs_refresh,
                             )
 
                             candidates = sorted(
@@ -340,7 +375,13 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
                             )
 
                             self._apply_token_iterative(
-                                idx, ledger, text, n, eps_for_token, masked_spans, runtime_stats
+                                idx,
+                                ledger,
+                                text,
+                                n,
+                                eps_for_token,
+                                masked_spans,
+                                runtime_stats,
                             )
                             spent_budgets.append(eps_for_token)
                             processed.add(idx)
@@ -349,16 +390,28 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
 
                             if ledger.is_modified(idx):
                                 current_text = ledger.render_offsets(text)
-                                current_rank = rank_evaluator(current_text, target_label_id)
+                                current_rank = rank_evaluator(
+                                    current_text, target_label_id
+                                )
 
-                        outputs.append(self._build_output(
-                            hp=matching_hp, ledger=ledger, original_text=text,
-                            offsets=offsets, eps_val=eps_val, used_precomputed=used_precomputed,
-                            runtime_stats=runtime_stats,
-                            threshold_type="k", threshold=target_k,
-                            extra_meta={"rank": current_rank, "selector": "until_k",
-                                        "processed_count": len(processed)},
-                        ))
+                        outputs.append(
+                            self._build_output(
+                                hp=matching_hp,
+                                ledger=ledger,
+                                original_text=text,
+                                offsets=offsets,
+                                eps_val=eps_val,
+                                used_precomputed=used_precomputed,
+                                runtime_stats=runtime_stats,
+                                threshold_type="k",
+                                threshold=target_k,
+                                extra_meta={
+                                    "rank": current_rank,
+                                    "selector": "until_k",
+                                    "processed_count": len(processed),
+                                },
+                            )
+                        )
 
                 else:
                     shap_scores = static_shap_scores
@@ -376,8 +429,13 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
 
                         record_ref = record_uid or record_name or "<unknown>"
                         self._print_step_risk_scores(
-                            step_count, shap_scores, unprocessed_set, text, offsets,
-                            record_ref, needs_refresh,
+                            step_count,
+                            shap_scores,
+                            unprocessed_set,
+                            text,
+                            offsets,
+                            record_ref,
+                            needs_refresh,
                         )
 
                         candidates = sorted(
@@ -392,19 +450,32 @@ class IterDPMlmAnonymizer(DPMlmAnonymizer):
                         )
 
                         self._apply_token_iterative(
-                            idx, ledger, text, n, eps_for_token, masked_spans, runtime_stats
+                            idx,
+                            ledger,
+                            text,
+                            n,
+                            eps_for_token,
+                            masked_spans,
+                            runtime_stats,
                         )
                         spent_budgets.append(eps_for_token)
                         unprocessed_set.discard(idx)
                         step_count += 1
 
-                    outputs.append(self._build_output(
-                        hp=eps_combos[0], ledger=ledger, original_text=text,
-                        offsets=offsets, eps_val=eps_val, used_precomputed=used_precomputed,
-                        runtime_stats=runtime_stats,
-                        threshold_type=None, threshold=None,
-                        extra_meta={"selector": "all", "processed_count": n},
-                    ))
+                    outputs.append(
+                        self._build_output(
+                            hp=eps_combos[0],
+                            ledger=ledger,
+                            original_text=text,
+                            offsets=offsets,
+                            eps_val=eps_val,
+                            used_precomputed=used_precomputed,
+                            runtime_stats=runtime_stats,
+                            threshold_type=None,
+                            threshold=None,
+                            extra_meta={"selector": "all", "processed_count": n},
+                        )
+                    )
 
             finally:
                 clear_memory()

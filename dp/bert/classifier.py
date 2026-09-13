@@ -64,22 +64,36 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         mark_existing_checkpoint_complete: bool = True,
         seed: Optional[int] = None,
     ):
-        SupervisedDownstreamHead.__init__(self, name="bert_classifier", primary_metric=primary_metric)
+        SupervisedDownstreamHead.__init__(
+            self, name="bert_classifier", primary_metric=primary_metric
+        )
         BertHFPlumbing.__init__(self, device=device)
         if loss_type not in {"cross_entropy", "focal"}:
             raise ValueError(f"Unknown loss_type: {loss_type}")
         if focal_gamma < 0:
             raise ValueError(f"focal_gamma must be >= 0, got {focal_gamma}")
-        if focal_ignore_pt is not None and (focal_ignore_pt <= 0.0 or focal_ignore_pt >= 1.0):
-            raise ValueError(f"focal_ignore_pt must be in (0, 1), got {focal_ignore_pt}")
+        if focal_ignore_pt is not None and (
+            focal_ignore_pt <= 0.0 or focal_ignore_pt >= 1.0
+        ):
+            raise ValueError(
+                f"focal_ignore_pt must be in (0, 1), got {focal_ignore_pt}"
+            )
         if pretraining_epochs <= 0:
-            raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
+            raise ValueError(
+                f"pretraining_epochs must be positive, got {pretraining_epochs}"
+            )
         if pretraining_batch_size is not None and pretraining_batch_size <= 0:
-            raise ValueError(f"pretraining_batch_size must be positive, got {pretraining_batch_size}")
+            raise ValueError(
+                f"pretraining_batch_size must be positive, got {pretraining_batch_size}"
+            )
         if pretraining_learning_rate <= 0:
-            raise ValueError(f"pretraining_learning_rate must be positive, got {pretraining_learning_rate}")
+            raise ValueError(
+                f"pretraining_learning_rate must be positive, got {pretraining_learning_rate}"
+            )
         if pretraining_mlm_probability <= 0.0 or pretraining_mlm_probability >= 1.0:
-            raise ValueError(f"pretraining_mlm_probability must be in (0, 1), got {pretraining_mlm_probability}")
+            raise ValueError(
+                f"pretraining_mlm_probability must be in (0, 1), got {pretraining_mlm_probability}"
+            )
         if weight_decay < 0:
             raise ValueError(f"weight_decay must be >= 0, got {weight_decay}")
         if warmup_ratio is not None and (warmup_ratio < 0.0 or warmup_ratio >= 1.0):
@@ -94,11 +108,17 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         if head_lr is not None and head_lr <= 0:
             raise ValueError(f"head_lr must be positive, got {head_lr}")
         self.encoder_lr = float(encoder_lr) if encoder_lr is not None else None
-        self.head_lr = float(head_lr) if head_lr is not None else (float(encoder_lr) if encoder_lr is not None else None)
+        self.head_lr = (
+            float(head_lr)
+            if head_lr is not None
+            else (float(encoder_lr) if encoder_lr is not None else None)
+        )
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
         self.label_smoothing = float(label_smoothing)
-        self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
+        self.early_stop_threshold = (
+            float(early_stop_threshold) if early_stop_threshold is not None else None
+        )
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir
@@ -109,10 +129,16 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.loss_type = str(loss_type)
         self.focal_gamma = float(focal_gamma)
         self.focal_alpha = float(focal_alpha) if focal_alpha is not None else None
-        self.focal_ignore_pt = float(focal_ignore_pt) if focal_ignore_pt is not None else None
+        self.focal_ignore_pt = (
+            float(focal_ignore_pt) if focal_ignore_pt is not None else None
+        )
         self.use_pretraining = bool(use_pretraining)
         self.pretraining_epochs = int(pretraining_epochs)
-        self.pretraining_batch_size = int(pretraining_batch_size) if pretraining_batch_size is not None else self.batch_size
+        self.pretraining_batch_size = (
+            int(pretraining_batch_size)
+            if pretraining_batch_size is not None
+            else self.batch_size
+        )
         self.pretraining_learning_rate = float(pretraining_learning_rate)
         self.pretraining_mlm_probability = float(pretraining_mlm_probability)
         self.optimizer_type = str(optimizer_type)
@@ -124,7 +150,11 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.training_status_file = str(training_status_file)
         self.wait_for_training_completion = bool(wait_for_training_completion)
         self.training_poll_interval_seconds = float(training_poll_interval_seconds)
-        self.training_wait_timeout_seconds = float(training_wait_timeout_seconds) if training_wait_timeout_seconds is not None else None
+        self.training_wait_timeout_seconds = (
+            float(training_wait_timeout_seconds)
+            if training_wait_timeout_seconds is not None
+            else None
+        )
         self.mark_existing_checkpoint_complete = bool(mark_existing_checkpoint_complete)
         self.seed = int(seed) if seed is not None else None
         self._model: Optional[torch.nn.Module] = None
@@ -134,7 +164,9 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
 
     def _create_model(self, num_labels: int, other_label_id: Optional[int] = None):
         checkpoint_source = self._active_checkpoint or self.init_checkpoint
-        base_model = load_backbone_with_optional_checkpoint(self.model_name, checkpoint_source)
+        base_model = load_backbone_with_optional_checkpoint(
+            self.model_name, checkpoint_source
+        )
 
         hidden_size = base_model.config.hidden_size
         loss_type = self.loss_type
@@ -143,7 +175,11 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         focal_gamma = self.focal_gamma
         focal_alpha = self.focal_alpha
         focal_ignore_pt = self.focal_ignore_pt
-        other_scale = math.log(float(self.other_count)) if other_label_id is not None and self.other_count > 1 else 0.0
+        other_scale = (
+            math.log(float(self.other_count))
+            if other_label_id is not None and self.other_count > 1
+            else 0.0
+        )
 
         class ClassifierModel(torch.nn.Module):
             def __init__(self, base, hidden_size, num_labels):
@@ -153,7 +189,9 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
                 self.classifier = torch.nn.Linear(hidden_size, num_labels)
 
             def forward(self, input_ids, attention_mask, labels=None):
-                outputs = self.base_model(input_ids=input_ids, attention_mask=attention_mask)
+                outputs = self.base_model(
+                    input_ids=input_ids, attention_mask=attention_mask
+                )
                 hidden = outputs.last_hidden_state[:, 0, :]
                 raw_logits = self.classifier(hidden)
                 logits = raw_logits
@@ -178,7 +216,11 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
                                 mask = labels == cls
                                 if mask.any():
                                     per_class.append(base_loss[mask].mean())
-                            macro_loss = torch.stack(per_class).mean() if per_class else base_loss_mean
+                            macro_loss = (
+                                torch.stack(per_class).mean()
+                                if per_class
+                                else base_loss_mean
+                            )
                             loss = base_loss_mean + macro_loss_weight * macro_loss
                         else:
                             loss = base_loss_mean
@@ -194,7 +236,11 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
                         )
                         if focal_ignore_pt is not None and mask is not None:
                             denom = mask.sum()
-                            base_loss_mean = (base_loss.sum() / denom) if denom > 0 else base_loss.mean() * 0.0
+                            base_loss_mean = (
+                                (base_loss.sum() / denom)
+                                if denom > 0
+                                else base_loss.mean() * 0.0
+                            )
                         else:
                             base_loss_mean = base_loss.mean()
                         if macro_loss_weight > 0:
@@ -212,7 +258,11 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
                                         per_class.append(cls_loss.sum() / denom)
                                 else:
                                     per_class.append(cls_loss.mean())
-                            macro_loss = torch.stack(per_class).mean() if per_class else base_loss_mean
+                            macro_loss = (
+                                torch.stack(per_class).mean()
+                                if per_class
+                                else base_loss_mean
+                            )
                             loss = base_loss_mean + macro_loss_weight * macro_loss
                         else:
                             loss = base_loss_mean
@@ -253,7 +303,9 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         if self.other_label is not None:
             other_label_id = self._label_to_id.get(self.other_label)
             if other_label_id is None:
-                raise ValueError(f"Configured other_label '{self.other_label}' not present in training labels")
+                raise ValueError(
+                    f"Configured other_label '{self.other_label}' not present in training labels"
+                )
 
         train_encoded = label_encoder.transform(train_labels)
         val_encoded = label_encoder.transform(val_labels)
@@ -275,30 +327,57 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             pretraining_mlm_probability=self.pretraining_mlm_probability,
             seed=self.seed,
         )
-        self._load_tokenizer_with_fallback(model_name=self.model_name, init_checkpoint=self.init_checkpoint)
+        self._load_tokenizer_with_fallback(
+            model_name=self.model_name, init_checkpoint=self.init_checkpoint
+        )
         self._maybe_enable_stopwords(self.mask_stopwords)
 
-        self._model = self._create_model(len(self._label_list), other_label_id=other_label_id)
+        self._model = self._create_model(
+            len(self._label_list), other_label_id=other_label_id
+        )
+
         def _train_impl() -> None:
             if self.encoder_lr is None:
-                raise ValueError("encoder_lr is required for training but was not provided")
-            train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
-            val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
-            train_dataset = EncodedDataset(train_encodings, train_encoded, label_dtype=torch.long)
-            val_dataset = EncodedDataset(val_encodings, val_encoded, label_dtype=torch.long)
+                raise ValueError(
+                    "encoder_lr is required for training but was not provided"
+                )
+            train_encodings = self._encode_texts(
+                train_texts, mask_stopwords=self.mask_stopwords
+            )
+            val_encodings = self._encode_texts(
+                val_texts, mask_stopwords=self.mask_stopwords
+            )
+            train_dataset = EncodedDataset(
+                train_encodings, train_encoded, label_dtype=torch.long
+            )
+            val_dataset = EncodedDataset(
+                val_encodings, val_encoded, label_dtype=torch.long
+            )
 
             def compute_metrics(eval_pred: EvalPrediction):
                 from sklearn.metrics import precision_recall_fscore_support
+
                 logits = eval_pred.predictions
                 labels = eval_pred.label_ids
                 preds = np.argmax(logits, axis=1)
 
-                per_class_precision, per_class_recall, per_class_f1, per_class_support = precision_recall_fscore_support(
+                (
+                    per_class_precision,
+                    per_class_recall,
+                    per_class_f1,
+                    per_class_support,
+                ) = precision_recall_fscore_support(
                     labels, preds, average=None, zero_division=0
                 )
                 valid_mask = per_class_support > 0
-                macro_f1 = float(per_class_f1[valid_mask].mean()) if valid_mask.any() else 0.0
-                balanced_acc = float(per_class_recall[valid_mask].mean()) if valid_mask.any() else 0.0
+                macro_f1 = (
+                    float(per_class_f1[valid_mask].mean()) if valid_mask.any() else 0.0
+                )
+                balanced_acc = (
+                    float(per_class_recall[valid_mask].mean())
+                    if valid_mask.any()
+                    else 0.0
+                )
                 overall_acc = float((preds == labels).mean())
 
                 return {
@@ -349,9 +428,12 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
             )
             self._trainer.train()
             if self.save_checkpoints and early_stopping.best_metric is not None:
-                print(f"Restored best model with macro_f1: {early_stopping.best_metric:.4f}")
+                print(
+                    f"Restored best model with macro_f1: {early_stopping.best_metric:.4f}"
+                )
             elif early_stopping.best_metric is not None:
                 print(f"Best observed macro_f1: {early_stopping.best_metric:.4f}")
+
         reused = self._run_training_with_reuse(
             model=self._model,
             checkpoint_dir=self.checkpoint_dir,
@@ -398,7 +480,9 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
 
     def _predict_logits_with_split_aggregation(self, texts: list[str]) -> np.ndarray:
         trainer = getattr(self, "_trainer", None)
-        trainer_tokenizer = getattr(trainer, "tokenizer", None) if trainer is not None else None
+        trainer_tokenizer = (
+            getattr(trainer, "tokenizer", None) if trainer is not None else None
+        )
         tokenizer = trainer_tokenizer or self._tokenizer
         if tokenizer is None:
             raise RuntimeError("Tokenizer is not initialized")
@@ -419,7 +503,9 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         else:
             window_tokens = int(split_tokens_value)
 
-        split_overlap_value = getattr(self, "split_overlap_tokens", getattr(self, "split_overlap", 0))
+        split_overlap_value = getattr(
+            self, "split_overlap_tokens", getattr(self, "split_overlap", 0)
+        )
         overlap_tokens: int = int(split_overlap_value)
 
         trainer_args = getattr(trainer, "args", None) if trainer is not None else None
@@ -461,23 +547,32 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         chunk_logits = torch.cat(logits_parts, dim=0)
         chunk_to_doc = torch.cat(map_parts, dim=0)
 
-        doc_logits = torch.zeros((len(texts), chunk_logits.shape[1]), dtype=chunk_logits.dtype)
+        doc_logits = torch.zeros(
+            (len(texts), chunk_logits.shape[1]), dtype=chunk_logits.dtype
+        )
         doc_logits.index_add_(0, chunk_to_doc, chunk_logits)
         return doc_logits.numpy()
 
     def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
         from sklearn.metrics import precision_recall_fscore_support
+
         predictions = self.predict(x)
         y_arr = np.array(y)
         pred_arr = np.array(predictions)
         unique_labels = sorted(set(y) | set(predictions))
-        per_class_precision, per_class_recall, per_class_f1, per_class_support = precision_recall_fscore_support(
-            y, predictions, labels=unique_labels, average=None, zero_division=0
+        per_class_precision, per_class_recall, per_class_f1, per_class_support = (
+            precision_recall_fscore_support(
+                y, predictions, labels=unique_labels, average=None, zero_division=0
+            )
         )
         valid_mask = per_class_support > 0
         macro_f1 = float(per_class_f1[valid_mask].mean()) if valid_mask.any() else 0.0
-        balanced_acc = float(per_class_recall[valid_mask].mean()) if valid_mask.any() else 0.0
-        worst_class_recall = float(per_class_recall[valid_mask].min()) if valid_mask.any() else 0.0
+        balanced_acc = (
+            float(per_class_recall[valid_mask].mean()) if valid_mask.any() else 0.0
+        )
+        worst_class_recall = (
+            float(per_class_recall[valid_mask].min()) if valid_mask.any() else 0.0
+        )
         overall_acc = float(np.mean(y_arr == pred_arr))
         return {
             "macro_f1": macro_f1,
@@ -513,12 +608,16 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         torch.save(payload, checkpoint_path)
         self._tokenizer.save_pretrained(str(output_dir))
         with (output_dir / "label_mapping.json").open("w", encoding="utf-8") as f:
-            json.dump({label: idx for idx, label in enumerate(self._label_list)}, f, indent=2)
+            json.dump(
+                {label: idx for idx, label in enumerate(self._label_list)}, f, indent=2
+            )
 
     def load(self, model_dir: str) -> None:
         checkpoint_path = Path(model_dir) / "bert_classifier.pt"
         if not checkpoint_path.exists():
-            raise FileNotFoundError(f"Bert classifier checkpoint not found: {checkpoint_path}")
+            raise FileNotFoundError(
+                f"Bert classifier checkpoint not found: {checkpoint_path}"
+            )
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         checkpoint_model_name = checkpoint.get("model_name")
         if isinstance(checkpoint_model_name, str) and checkpoint_model_name:
@@ -530,14 +629,22 @@ class BertClassifierHead(SupervisedDownstreamHead, BertHFPlumbing):
         self._label_to_id = {label: idx for idx, label in enumerate(self._label_list)}
         self._id_to_label = {idx: label for idx, label in enumerate(self._label_list)}
         checkpoint_other_label = checkpoint.get("other_label")
-        self.other_label = str(checkpoint_other_label) if checkpoint_other_label is not None else None
+        self.other_label = (
+            str(checkpoint_other_label) if checkpoint_other_label is not None else None
+        )
         checkpoint_other_count = checkpoint.get("other_count", 1)
         if not isinstance(checkpoint_other_count, int) or checkpoint_other_count <= 0:
             raise ValueError("Invalid other_count in bert classifier checkpoint")
         self.other_count = int(checkpoint_other_count)
         self._tokenizer = AutoTokenizer.from_pretrained(model_dir)
-        other_label_id = self._label_to_id.get(self.other_label) if self.other_label is not None else None
-        self._model = self._create_model(len(self._label_list), other_label_id=other_label_id)
+        other_label_id = (
+            self._label_to_id.get(self.other_label)
+            if self.other_label is not None
+            else None
+        )
+        self._model = self._create_model(
+            len(self._label_list), other_label_id=other_label_id
+        )
         state_dict = checkpoint.get("model_state_dict")
         if not isinstance(state_dict, dict):
             raise ValueError("Invalid model_state_dict in bert classifier checkpoint")

@@ -14,14 +14,18 @@ from dp.loaders.base import TextAnnotation, TextAnnotations, TokenEdit
 class IterPetreAnonymizer(PetreAnonymizer):
     MODEL_NAME = "iter_petre"
 
-    def __init__(self, *args, T: Union[int, float] = math.inf, verbose: bool = False, **kwargs) -> None:
+    def __init__(
+        self, *args, T: Union[int, float] = math.inf, verbose: bool = False, **kwargs
+    ) -> None:
         super().__init__(*args, **kwargs)
         if T != math.inf and (not isinstance(T, int) or T < 1):
             raise ValueError("T must be a positive integer or math.inf")
         self.T = T
         self.verbose = bool(verbose)
 
-    def _compute_current_offsets(self, ledger: TokenLedger, n: int) -> List[Tuple[int, int]]:
+    def _compute_current_offsets(
+        self, ledger: TokenLedger, n: int
+    ) -> List[Tuple[int, int]]:
         result: List[Optional[Tuple[int, int]]] = [None] * n
         sorted_entries = sorted(ledger._entries, key=lambda e: e.start)
         cursor = 0
@@ -52,7 +56,9 @@ class IterPetreAnonymizer(PetreAnonymizer):
         current_text = ledger.render_offsets(original_text)
         current_offsets = self._compute_current_offsets(ledger, n)
 
-        surviving = [(i, current_offsets[i]) for i in range(n) if not ledger.entry(i).deleted]
+        surviving = [
+            (i, current_offsets[i]) for i in range(n) if not ledger.entry(i).deleted
+        ]
         if not surviving:
             return np.zeros(n, dtype=float)
 
@@ -80,7 +86,9 @@ class IterPetreAnonymizer(PetreAnonymizer):
             return
         top = sorted(unprocessed, key=lambda i: float(shap_scores[i]), reverse=True)[:5]
         refresh_marker = " [refreshed]" if refreshed else ""
-        tokens = [f"{text[offsets[i][0]:offsets[i][1]]}({shap_scores[i]:.4f})" for i in top]
+        tokens = [
+            f"{text[offsets[i][0] : offsets[i][1]]}({shap_scores[i]:.4f})" for i in top
+        ]
         print(
             f"[iter_petre][verbose] record={record_ref} step={step}{refresh_marker} "
             f"remaining={len(unprocessed)} top5={tokens}"
@@ -122,7 +130,9 @@ class IterPetreAnonymizer(PetreAnonymizer):
             hp_out[threshold_type] = threshold
 
         private_text = ledger.render_offsets(original_text)
-        token_edits = [TokenEdit.from_mapping(e) for e in ledger.result_edits_metadata()]
+        token_edits = [
+            TokenEdit.from_mapping(e) for e in ledger.result_edits_metadata()
+        ]
 
         if used_precomputed:
             explainer_name = "PrecomputedRisk"
@@ -172,7 +182,10 @@ class IterPetreAnonymizer(PetreAnonymizer):
         if precomputed_offsets is not None:
             offsets = precomputed_offsets
         else:
-            offsets = [(start, end) for start, end, _ in self.splitter.tokenize_with_spans(text)]
+            offsets = [
+                (start, end)
+                for start, end, _ in self.splitter.tokenize_with_spans(text)
+            ]
         n = len(offsets)
 
         static_shap_scores: Optional[np.ndarray] = None
@@ -210,12 +223,19 @@ class IterPetreAnonymizer(PetreAnonymizer):
                 current_rank = rank_evaluator(current_text, target_label_id)
 
                 if current_rank >= target_k:
-                    outputs.append(self._build_output(
-                        hp=hp, ledger=ledger, original_text=text, offsets=offsets,
-                        threshold_type="k", threshold=target_k,
-                        used_precomputed=used_precomputed, runtime_stats=runtime_stats,
-                        extra_meta={"rank": current_rank, "processed_count": 0},
-                    ))
+                    outputs.append(
+                        self._build_output(
+                            hp=hp,
+                            ledger=ledger,
+                            original_text=text,
+                            offsets=offsets,
+                            threshold_type="k",
+                            threshold=target_k,
+                            used_precomputed=used_precomputed,
+                            runtime_stats=runtime_stats,
+                            extra_meta={"rank": current_rank, "processed_count": 0},
+                        )
+                    )
                     continue
 
                 while unprocessed and current_rank < target_k:
@@ -229,8 +249,13 @@ class IterPetreAnonymizer(PetreAnonymizer):
 
                     record_ref = record_uid or record_name or "<unknown>"
                     self._print_step_risk_scores(
-                        step_count, shap_scores, unprocessed, text, offsets,
-                        record_ref, needs_refresh,
+                        step_count,
+                        shap_scores,
+                        unprocessed,
+                        text,
+                        offsets,
+                        record_ref,
+                        needs_refresh,
                     )
 
                     candidates = sorted(
@@ -248,12 +273,22 @@ class IterPetreAnonymizer(PetreAnonymizer):
                         current_text = ledger.render_offsets(text)
                         current_rank = rank_evaluator(current_text, target_label_id)
 
-                outputs.append(self._build_output(
-                    hp=hp, ledger=ledger, original_text=text, offsets=offsets,
-                    threshold_type="k", threshold=target_k,
-                    used_precomputed=used_precomputed, runtime_stats=runtime_stats,
-                    extra_meta={"rank": current_rank, "processed_count": n - len(unprocessed)},
-                ))
+                outputs.append(
+                    self._build_output(
+                        hp=hp,
+                        ledger=ledger,
+                        original_text=text,
+                        offsets=offsets,
+                        threshold_type="k",
+                        threshold=target_k,
+                        used_precomputed=used_precomputed,
+                        runtime_stats=runtime_stats,
+                        extra_meta={
+                            "rank": current_rank,
+                            "processed_count": n - len(unprocessed),
+                        },
+                    )
+                )
 
             finally:
                 clear_memory()

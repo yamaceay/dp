@@ -15,14 +15,10 @@ from dp.utils.selector.base import AnonymizerUnit, ApplyFn
 from dp.utils.precomputed_risk import align_precomputed_risk_scores
 
 
-class PetreAnonymizer(Anonymizer):   
+class PetreAnonymizer(Anonymizer):
     MODEL_NAME = "petre"
-    def __init__(
-        self,
-        *args,
-        mask_text: str = "[MASK]",
-        **kwargs
-    ):
+
+    def __init__(self, *args, mask_text: str = "[MASK]", **kwargs):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
 
         self.mask_text = mask_text
@@ -92,9 +88,9 @@ class PetreAnonymizer(Anonymizer):
         if idx < 0 or idx >= len(self.dataset_records):
             raise IndexError(f"Index {idx} is out of bounds")
         record = self.dataset_records[idx]
-        
+
         masked_spans = record.spans or []
-        
+
         return self.anonymize_any_text(
             record.text,
             *args,
@@ -108,7 +104,9 @@ class PetreAnonymizer(Anonymizer):
     def _target_label_id_for_record(self, record_name: Optional[str]) -> int:
         if not record_name:
             raise ValueError("record_name is required for TRI rank evaluation")
-        mapping, source = load_tri_label_mapping(self._explainer, self._tri_label_mapping, self._tri_label_mapping_source)
+        mapping, source = load_tri_label_mapping(
+            self._explainer, self._tri_label_mapping, self._tri_label_mapping_source
+        )
         self._tri_label_mapping = mapping
         self._tri_label_mapping_source = source
         if record_name not in mapping:
@@ -123,7 +121,9 @@ class PetreAnonymizer(Anonymizer):
         predict_entries = getattr(self._explainer, "predict_entries", None)
         pipe = getattr(self._explainer, "pipeline", None)
         if predict_entries is None and pipe is None:
-            raise ValueError("Explainer predictions are not available for rank evaluation")
+            raise ValueError(
+                "Explainer predictions are not available for rank evaluation"
+            )
 
         def rank_evaluator(current_text: str, target_label: int) -> int:
             target = f"LABEL_{int(target_label)}"
@@ -133,7 +133,11 @@ class PetreAnonymizer(Anonymizer):
                 entries = pipe([current_text], batch_size=1)[0]
             if not isinstance(entries, list) or not entries:
                 raise ValueError("TRI pipeline returned no predictions")
-            scored = [e for e in entries if isinstance(e, dict) and "label" in e and "score" in e]
+            scored = [
+                e
+                for e in entries
+                if isinstance(e, dict) and "label" in e and "score" in e
+            ]
             if not scored:
                 raise ValueError("TRI pipeline returned invalid predictions")
             scored.sort(key=lambda e: float(e["score"]), reverse=True)
@@ -173,7 +177,9 @@ class PetreAnonymizer(Anonymizer):
             return None
         return np.asarray(values, dtype=float)
 
-    def _resolve_risk_uid(self, text: str, record_name: Optional[str], record_uid: Optional[str] = None) -> Optional[str]:
+    def _resolve_risk_uid(
+        self, text: str, record_name: Optional[str], record_uid: Optional[str] = None
+    ) -> Optional[str]:
         if record_uid and record_uid in self._risk_scores_by_uid:
             return record_uid
         if record_name and record_name in self._risk_scores_by_uid:
@@ -212,6 +218,7 @@ class PetreAnonymizer(Anonymizer):
             ledger.replace(idx, self.mask_text)
             runtime_stats["masked"] += 1
             runtime_stats["total"] += 1
+
         return apply_fn
 
     def _collect_risk_scores(
@@ -222,19 +229,32 @@ class PetreAnonymizer(Anonymizer):
         record_uid: Optional[str] = None,
         critical_indices: Optional[Sequence[int]] = None,
     ) -> Tuple[np.ndarray, bool]:
-        precomputed_scores = self._lookup_precomputed_scores(text, offsets, record_name, record_uid=record_uid, indices=critical_indices)
+        precomputed_scores = self._lookup_precomputed_scores(
+            text, offsets, record_name, record_uid=record_uid, indices=critical_indices
+        )
         if precomputed_scores is not None:
             return precomputed_scores, True
 
-        critical_offsets = offsets if critical_indices is None else [offsets[i] for i in critical_indices]
+        critical_offsets = (
+            offsets
+            if critical_indices is None
+            else [offsets[i] for i in critical_indices]
+        )
         from dp.utils.explainer.uniform import UniformExplainer
-        if self._explainer is not None and isinstance(self._explainer, UniformExplainer):
+
+        if self._explainer is not None and isinstance(
+            self._explainer, UniformExplainer
+        ):
             scores = self._explainer.explain(text, critical_offsets)
             return scores, False
 
-        raise NotImplementedError("PetreAnonymizer requires precomputed risk scores for each record.")
+        raise NotImplementedError(
+            "PetreAnonymizer requires precomputed risk scores for each record."
+        )
 
-    def _is_token_masked(self, token_start: int, token_end: int, masked_spans: Sequence[TextAnnotation]) -> bool:
+    def _is_token_masked(
+        self, token_start: int, token_end: int, masked_spans: Sequence[TextAnnotation]
+    ) -> bool:
         for span in masked_spans:
             if token_start >= span.start and token_end <= span.end:
                 return True
@@ -252,7 +272,7 @@ class PetreAnonymizer(Anonymizer):
     ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not text or not text.strip():
             return []
-        
+
         if masked_spans is None:
             masked_spans = []
 
@@ -261,19 +281,26 @@ class PetreAnonymizer(Anonymizer):
 
         for hp in combos:
             try:
-                precomputed_offsets = self._resolve_precomputed_offsets(record_name, record_uid)
+                precomputed_offsets = self._resolve_precomputed_offsets(
+                    record_name, record_uid
+                )
                 if precomputed_offsets is None:
-                    raise ValueError("PetreAnonymizer requires precomputed offsets for each record")
+                    raise ValueError(
+                        "PetreAnonymizer requires precomputed offsets for each record"
+                    )
                 else:
                     offsets = precomputed_offsets
 
                 from dp.utils.selector.until_k_selector import UntilKUnit
+
                 if self._unit is None or not isinstance(self._unit, UntilKUnit):
                     self._unit = UntilKUnit()
 
                 k_val = hp.get("k")
                 if k_val is None:
-                    raise ValueError("PetreAnonymizer using until_k selector requires KParams buckets")
+                    raise ValueError(
+                        "PetreAnonymizer using until_k selector requires KParams buckets"
+                    )
                 self._unit.set_thresholds([int(k_val)], name="k")
 
                 target_label_id = self._target_label_id_for_record(record_name)
@@ -283,7 +310,9 @@ class PetreAnonymizer(Anonymizer):
                 context: Dict[str, Any] = {"record_name": record_name}
                 used_precomputed = False
 
-                risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name, record_uid=record_uid)
+                risk_scores, used_precomputed = self._collect_risk_scores(
+                    text, offsets, record_name, record_uid=record_uid
+                )
                 if risk_scores.size and len(risk_scores) == len(offsets):
                     self._unit.set_risk_scores(risk_scores)
 
@@ -301,7 +330,9 @@ class PetreAnonymizer(Anonymizer):
                     masked_spans,
                 )
 
-                for step in self._unit.anonymize(text, offsets, apply_fn, ledger, **context):
+                for step in self._unit.anonymize(
+                    text, offsets, apply_fn, ledger, **context
+                ):
                     hp_with_threshold = {**hp}
                     threshold = step.threshold
 
@@ -314,23 +345,28 @@ class PetreAnonymizer(Anonymizer):
                         **runtime_stats,
                         **step.metadata,
                     }
-                    token_edits = [TokenEdit.from_mapping(e) for e in ledger.result_edits_metadata()]
+                    token_edits = [
+                        TokenEdit.from_mapping(e)
+                        for e in ledger.result_edits_metadata()
+                    ]
                     if used_precomputed:
                         metadata["explainer"] = "PrecomputedRisk"
                     elif self._explainer is not None:
                         metadata["explainer"] = self._explainer.__class__.__name__
 
-                    outputs.append((
-                        hp_with_threshold,
-                        AnonymizationResult(
-                            text=private_text,
-                            annotations=TextAnnotations(
-                                spans=[],
-                                token_edits=token_edits,
+                    outputs.append(
+                        (
+                            hp_with_threshold,
+                            AnonymizationResult(
+                                text=private_text,
+                                annotations=TextAnnotations(
+                                    spans=[],
+                                    token_edits=token_edits,
+                                ),
+                                metadata=metadata,
                             ),
-                            metadata=metadata,
-                        ),
-                    ))
+                        )
+                    )
 
             finally:
                 clear_memory()

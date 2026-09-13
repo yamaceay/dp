@@ -16,8 +16,12 @@ def _normalize_names(values: Iterable[str]) -> Set[str]:
     return names
 
 
-def _collect_names(dataset: str, data_in: str, max_records: Optional[int] = None) -> Set[str]:
-    adapter = get_adapter(dataset, data=dataset, data_in=data_in, max_records=max_records)
+def _collect_names(
+    dataset: str, data_in: str, max_records: Optional[int] = None
+) -> Set[str]:
+    adapter = get_adapter(
+        dataset, data=dataset, data_in=data_in, max_records=max_records
+    )
     names: Set[str] = set()
     for record in adapter.iter_records():
         name = str(record.name).strip()
@@ -28,12 +32,19 @@ def _collect_names(dataset: str, data_in: str, max_records: Optional[int] = None
 
 class SensitiveIndividualSelector(ABC):
     @abstractmethod
-    def select_individuals(self, total_individuals: Iterable[str], *args: Any, **kwargs: Any) -> Set[str]:
+    def select_individuals(
+        self, total_individuals: Iterable[str], *args: Any, **kwargs: Any
+    ) -> Set[str]:
         raise NotImplementedError
 
 
 class TabSensitiveIndividualSelector(SensitiveIndividualSelector):
-    def select_individuals(self, total_individuals: Iterable[str], subset_file: str, subset_max_records: Optional[int] = None) -> Set[str]:
+    def select_individuals(
+        self,
+        total_individuals: Iterable[str],
+        subset_file: str,
+        subset_max_records: Optional[int] = None,
+    ) -> Set[str]:
         subset_file = str(Path(str(subset_file)).expanduser())
         source_names = _collect_names("tab", subset_file, subset_max_records)
         total = _normalize_names(total_individuals)
@@ -41,7 +52,12 @@ class TabSensitiveIndividualSelector(SensitiveIndividualSelector):
 
 
 class DBBioSensitiveIndividualSelector(SensitiveIndividualSelector):
-    def select_individuals(self, total_individuals: Iterable[str], subset_file: str, subset_max_records: Optional[int] = None) -> Set[str]:
+    def select_individuals(
+        self,
+        total_individuals: Iterable[str],
+        subset_file: str,
+        subset_max_records: Optional[int] = None,
+    ) -> Set[str]:
         subset_file = str(Path(str(subset_file)).expanduser())
         source_names = _collect_names("db_bio", subset_file, subset_max_records)
         total = _normalize_names(total_individuals)
@@ -62,4 +78,3 @@ def get_sensitive_selector(name: str) -> SensitiveIndividualSelector:
             f"Available selectors: {sorted(SENSITIVE_SELECTOR_REGISTRY.keys())}"
         )
     return SENSITIVE_SELECTOR_REGISTRY[key]()
-

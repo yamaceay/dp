@@ -63,31 +63,70 @@ TAB_COUNTRY_GROUP_ORDER: List[str] = [
 
 RAT_BENCH_STATE_REGIONS: Dict[str, str] = {
     # US Census Bureau's four-region breakdown.
-    "Connecticut/CT": "Northeast", "Maine/ME": "Northeast", "Massachusetts/MA": "Northeast",
-    "New Hampshire/NH": "Northeast", "Rhode Island/RI": "Northeast", "Vermont/VT": "Northeast",
-    "New Jersey/NJ": "Northeast", "New York/NY": "Northeast", "Pennsylvania/PA": "Northeast",
-    "Illinois/IL": "Midwest", "Indiana/IN": "Midwest", "Michigan/MI": "Midwest",
-    "Ohio/OH": "Midwest", "Wisconsin/WI": "Midwest", "Iowa/IA": "Midwest",
-    "Kansas/KS": "Midwest", "Minnesota/MN": "Midwest", "Missouri/MO": "Midwest",
-    "Nebraska/NE": "Midwest", "North Dakota/ND": "Midwest", "South Dakota/SD": "Midwest",
-    "Delaware/DE": "South", "Florida/FL": "South", "Georgia/GA": "South",
-    "Maryland/MD": "South", "North Carolina/NC": "South", "South Carolina/SC": "South",
-    "Virginia/VA": "South", "District of Columbia/DC": "South", "West Virginia/WV": "South",
-    "Alabama/AL": "South", "Kentucky/KY": "South", "Mississippi/MS": "South",
-    "Tennessee/TN": "South", "Arkansas/AR": "South", "Louisiana/LA": "South",
-    "Oklahoma/OK": "South", "Texas/TX": "South",
-    "Arizona/AZ": "West", "Colorado/CO": "West", "Idaho/ID": "West",
-    "Montana/MT": "West", "Nevada/NV": "West", "New Mexico/NM": "West",
-    "Utah/UT": "West", "Wyoming/WY": "West", "Alaska/AK": "West",
-    "California/CA": "West", "Hawaii/HI": "West", "Oregon/OR": "West", "Washington/WA": "West",
+    "Connecticut/CT": "Northeast",
+    "Maine/ME": "Northeast",
+    "Massachusetts/MA": "Northeast",
+    "New Hampshire/NH": "Northeast",
+    "Rhode Island/RI": "Northeast",
+    "Vermont/VT": "Northeast",
+    "New Jersey/NJ": "Northeast",
+    "New York/NY": "Northeast",
+    "Pennsylvania/PA": "Northeast",
+    "Illinois/IL": "Midwest",
+    "Indiana/IN": "Midwest",
+    "Michigan/MI": "Midwest",
+    "Ohio/OH": "Midwest",
+    "Wisconsin/WI": "Midwest",
+    "Iowa/IA": "Midwest",
+    "Kansas/KS": "Midwest",
+    "Minnesota/MN": "Midwest",
+    "Missouri/MO": "Midwest",
+    "Nebraska/NE": "Midwest",
+    "North Dakota/ND": "Midwest",
+    "South Dakota/SD": "Midwest",
+    "Delaware/DE": "South",
+    "Florida/FL": "South",
+    "Georgia/GA": "South",
+    "Maryland/MD": "South",
+    "North Carolina/NC": "South",
+    "South Carolina/SC": "South",
+    "Virginia/VA": "South",
+    "District of Columbia/DC": "South",
+    "West Virginia/WV": "South",
+    "Alabama/AL": "South",
+    "Kentucky/KY": "South",
+    "Mississippi/MS": "South",
+    "Tennessee/TN": "South",
+    "Arkansas/AR": "South",
+    "Louisiana/LA": "South",
+    "Oklahoma/OK": "South",
+    "Texas/TX": "South",
+    "Arizona/AZ": "West",
+    "Colorado/CO": "West",
+    "Idaho/ID": "West",
+    "Montana/MT": "West",
+    "Nevada/NV": "West",
+    "New Mexico/NM": "West",
+    "Utah/UT": "West",
+    "Wyoming/WY": "West",
+    "Alaska/AK": "West",
+    "California/CA": "West",
+    "Hawaii/HI": "West",
+    "Oregon/OR": "West",
+    "Washington/WA": "West",
 }
 RAT_BENCH_EDUCATION_GROUPS: Dict[str, str] = {
     "No schooling completed": "no_schooling",
     "Nursery school, preschool": "no_schooling",
     "N/A (less than 3 years old)": "no_schooling",
-    "Grade 4": "secondary", "Grade 6": "secondary", "Grade 8": "secondary",
-    "Grade 10": "secondary", "Grade 11": "secondary", "12th grade - no diploma": "secondary",
-    "Regular high school diploma": "secondary", "GED or alternative credential": "secondary",
+    "Grade 4": "secondary",
+    "Grade 6": "secondary",
+    "Grade 8": "secondary",
+    "Grade 10": "secondary",
+    "Grade 11": "secondary",
+    "12th grade - no diploma": "secondary",
+    "Regular high school diploma": "secondary",
+    "GED or alternative credential": "secondary",
     "Some college, but less than 1 year": "some_college",
     "1 or more years of college credit, no degree": "some_college",
     "Associate's degree": "some_college",
@@ -97,10 +136,17 @@ RAT_BENCH_EDUCATION_GROUPS: Dict[str, str] = {
     "Doctorate degree": "doctorate",
 }
 RAT_BENCH_EDUCATION_GROUP_ORDER: List[str] = [
-    "no_schooling", "secondary", "some_college", "bachelor", "master", "doctorate",
+    "no_schooling",
+    "secondary",
+    "some_college",
+    "bachelor",
+    "master",
+    "doctorate",
 ]
 
-RAT_BENCH_BIRTH_DECADE_ORDER: List[str] = [f"{decade}s" for decade in range(1930, 2030, 10)]
+RAT_BENCH_BIRTH_DECADE_ORDER: List[str] = [
+    f"{decade}s" for decade in range(1930, 2030, 10)
+]
 
 ORDINAL_LABEL_ORDERS: Dict[str, Dict[str, List[str]]] = {
     "tab": {"year_group": list(TAB_YEAR_GROUP_ORDER)},
@@ -109,6 +155,7 @@ ORDINAL_LABEL_ORDERS: Dict[str, Dict[str, List[str]]] = {
         "birth_decade": list(RAT_BENCH_BIRTH_DECADE_ORDER),
     },
 }
+
 
 def tab_country(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("country"))
@@ -124,27 +171,40 @@ def tab_year(record: DatasetRecord) -> Optional[int]:
         return None
     return int_value(value)
 
+
 def tab_legal_branch(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("legal_branch"))
+
 
 def tab_articles(record: DatasetRecord) -> Optional[List[str]]:
     value = record.metadata.get("articles")
     if isinstance(value, (list, tuple, set)):
-        articles = sorted(list(set([text_value(item) for item in value])), key=lambda x: int_value(x) if x and x.isdigit() else float('inf'))
+        articles = sorted(
+            list(set([text_value(item) for item in value])),
+            key=lambda x: int_value(x) if x and x.isdigit() else float("inf"),
+        )
         return ",".join([a for a in articles if a is not None])
     raise ValueError("Articles metadata is not a list.")
+
 
 def tab_year_groups(record: DatasetRecord, year_groups: List[str] | None = None) -> str:
     groups = year_groups or TAB_YEAR_GROUP_ORDER
     year = record.metadata.get("year")
-    bounds = [(int(g.split("-")[0]), int(g.split("-")[1])) if "-" in g else (int(g), int(g)) for g in groups]
-    mapping = {c: g for g, (start, end) in zip(groups, bounds) for c in range(start, end + 1)}
+    bounds = [
+        (int(g.split("-")[0]), int(g.split("-")[1])) if "-" in g else (int(g), int(g))
+        for g in groups
+    ]
+    mapping = {
+        c: g for g, (start, end) in zip(groups, bounds) for c in range(start, end + 1)
+    }
     if year not in mapping:
         raise ValueError(f"Year {year} not in any defined year groups.")
     return mapping[year]
 
 
-def tab_country_groups(record: DatasetRecord, region_groups: List[str] | None = None) -> str:
+def tab_country_groups(
+    record: DatasetRecord, region_groups: List[str] | None = None
+) -> str:
     groups = region_groups or TAB_COUNTRY_GROUP_ORDER
     region = record.metadata.get("country")
     mapping = {c: g for g in groups for c in g.split("-")}
@@ -154,14 +214,18 @@ def tab_country_groups(record: DatasetRecord, region_groups: List[str] | None = 
 def db_bio_label(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("label"))
 
+
 def db_bio_l1(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("l1"))
+
 
 def db_bio_l2(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("l2"))
 
+
 def db_bio_l3(record: DatasetRecord) -> Optional[str]:
     return text_value(record.metadata.get("l3"))
+
 
 _RAT_BENCH_OCCUPATION_TYPE_RE = re.compile(r"TYPE:\s*(.+?),\s*DESCRIPTION:")
 _RAT_BENCH_DOB_YEAR_RE = re.compile(r"(\d{4})\s*$")
@@ -222,9 +286,12 @@ def rat_bench_birth_decade(record: DatasetRecord) -> Optional[str]:
         return None
     match = _RAT_BENCH_DOB_YEAR_RE.search(dob)
     if match is None:
-        raise ValueError(f"Could not parse a year out of RAT-Bench date of birth: {dob}")
+        raise ValueError(
+            f"Could not parse a year out of RAT-Bench date of birth: {dob}"
+        )
     decade = (int(match.group(1)) // 10) * 10
     return f"{decade}s"
+
 
 DERIVE_REGISTRY: Dict[str, Dict[str, Callable[[DatasetRecord], Any]]] = {
     "tab": {
@@ -259,5 +326,7 @@ def get_getter(dataset: str, key: str) -> Callable[[DatasetRecord], Any]:
     if dataset not in DERIVE_REGISTRY:
         raise ValueError(f"Unknown dataset '{dataset}' for derive getters.")
     if key not in DERIVE_REGISTRY[dataset]:
-        raise ValueError(f"Unknown key '{key}' for dataset '{dataset}' in derive getters.")
+        raise ValueError(
+            f"Unknown key '{key}' for dataset '{dataset}' in derive getters."
+        )
     return DERIVE_REGISTRY[dataset][key]

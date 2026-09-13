@@ -3,6 +3,7 @@ from dp.methods.anonymizer import AnonymizationResult, Anonymizer
 from dp.methods.constants import Buckets, buckets_to_dicts, BucketDict
 from dp.loaders.base import TextAnnotation, TextAnnotations
 
+
 class PresidioAnonymizer(Anonymizer):
     MODEL_NAME = "presidio"
 
@@ -22,7 +23,9 @@ class PresidioAnonymizer(Anonymizer):
                 self._analyzer = None
                 self._presidio_available = False
 
-    def anonymize_any_text(self, text: str, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
+    def anonymize_any_text(
+        self, text: str, *args, buckets: Buckets = [], **kwargs
+    ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not getattr(self, "_presidio_available", False) or self._analyzer is None:
             hp = {} if not buckets else buckets_to_dicts(buckets)[0]
             return [
@@ -52,14 +55,16 @@ class PresidioAnonymizer(Anonymizer):
             replacement = f"[{r.entity_type}]"
             result_start = result_cursor + len(prefix)
             result_end = result_start + len(replacement)
-            spans.append(TextAnnotation(
-                start=result_start,
-                end=result_end,
-                label=r.entity_type,
-                text=text[start:end],
-                replacement=replacement,
-                annotator="presidio"
-            ))
+            spans.append(
+                TextAnnotation(
+                    start=result_start,
+                    end=result_end,
+                    label=r.entity_type,
+                    text=text[start:end],
+                    replacement=replacement,
+                    annotator="presidio",
+                )
+            )
             out_parts.append(prefix)
             out_parts.append(replacement)
             result_cursor = result_end

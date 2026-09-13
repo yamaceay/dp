@@ -20,7 +20,9 @@ from dp.loaders.derive import DERIVE_REGISTRY
 
 DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "experiments"
 _INT_PATTERN = re.compile(r"^[+-]?\d+$")
-_FLOAT_PATTERN = re.compile(r"^[+-]?(?:(?:\d+\.\d*)|(?:\d*\.\d+)|(?:\d+))(?:[eE][+-]?\d+)?$")
+_FLOAT_PATTERN = re.compile(
+    r"^[+-]?(?:(?:\d+\.\d*)|(?:\d*\.\d+)|(?:\d+))(?:[eE][+-]?\d+)?$"
+)
 
 
 def ensure_sequence(obj: Any) -> List[Any]:
@@ -119,7 +121,9 @@ def build_vectorizer_from_config(payload: Any) -> SelfSupervisedFeatureExtractor
     raise ValueError(f"unsupported vectorizer '{name}'")
 
 
-def select_records(records: List[DatasetRecord], criteria: Dict[str, Any]) -> List[DatasetRecord]:
+def select_records(
+    records: List[DatasetRecord], criteria: Dict[str, Any]
+) -> List[DatasetRecord]:
     selected: List[DatasetRecord] = []
     for record in records:
         criteria_satisfied = True
@@ -155,7 +159,11 @@ def align_evaluation_texts(
 ) -> Dict[str, Dict[str, str]]:
     mapping = build_utility_evaluation_texts(index_to_key, sources)
     selected = {str(r.uid) for r in records}
-    return {name: {k: v for k, v in m.items() if str(k) in selected} for name, m in mapping.items() if m}
+    return {
+        name: {k: v for k, v in m.items() if str(k) in selected}
+        for name, m in mapping.items()
+        if m
+    }
 
 
 def build_utility_target(params: Dict[str, Any], dataset: str) -> UtilitySpec:
@@ -181,11 +189,15 @@ def build_utility_target(params: Dict[str, Any], dataset: str) -> UtilitySpec:
     try:
         mode = UtilityTarget.Mode(ttype)
     except Exception:
-        raise ValueError("target.type must be one of: binary, nominal, ordinal, cardinal")
+        raise ValueError(
+            "target.type must be one of: binary, nominal, ordinal, cardinal"
+        )
     if mode is UtilityTarget.Mode.ORDINAL and not enum:
         derived_order = list(getter(str(key)))
         if derived_order is None:
-            raise ValueError("ordinal target requires target.enum or a derive-defined label order")
+            raise ValueError(
+                "ordinal target requires target.enum or a derive-defined label order"
+            )
         enum = derived_order
     if enum:
         allowed = set(enum)
@@ -200,6 +212,18 @@ def build_utility_target(params: Dict[str, Any], dataset: str) -> UtilitySpec:
 
         getter = wrapped_getter
     label_order = enum if mode is UtilityTarget.Mode.ORDINAL else None
-    built = UtilityTarget(name=str(key), source=str(dataset), mode=mode, getter=getter, label_order=label_order)
+    built = UtilityTarget(
+        name=str(key),
+        source=str(dataset),
+        mode=mode,
+        getter=getter,
+        label_order=label_order,
+    )
     v_name, h_name = MODE_TO_MODEL[mode]
-    return UtilitySpec(dataset=str(dataset), target_key=str(key), target=built, default_vectorizer=v_name, default_head=h_name)
+    return UtilitySpec(
+        dataset=str(dataset),
+        target_key=str(key),
+        target=built,
+        default_vectorizer=v_name,
+        default_head=h_name,
+    )

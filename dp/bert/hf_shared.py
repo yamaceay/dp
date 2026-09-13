@@ -9,7 +9,13 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import torch
-from transformers import AutoModel, AutoTokenizer, Trainer, TrainingArguments, TrainerCallback
+from transformers import (
+    AutoModel,
+    AutoTokenizer,
+    Trainer,
+    TrainingArguments,
+    TrainerCallback,
+)
 
 from dp.bert.common import (
     EarlyStoppingCallback,
@@ -20,7 +26,9 @@ from dp.bert.common import (
 from dp.utils.device import resolve_device
 
 
-def load_backbone_with_optional_checkpoint(model_name: str, checkpoint_source: Optional[str]) -> Any:
+def load_backbone_with_optional_checkpoint(
+    model_name: str, checkpoint_source: Optional[str]
+) -> Any:
     base_model = AutoModel.from_pretrained(model_name)
     if checkpoint_source:
         checkpoint_path = Path(checkpoint_source)
@@ -28,6 +36,7 @@ def load_backbone_with_optional_checkpoint(model_name: str, checkpoint_source: O
         pytorch_file = checkpoint_path / "pytorch_model.bin"
         if safetensors_file.exists():
             from safetensors.torch import load_file
+
             state_dict = load_file(str(safetensors_file))
             base_model.load_state_dict(state_dict, strict=False)
         elif pytorch_file.exists():
@@ -38,12 +47,16 @@ def load_backbone_with_optional_checkpoint(model_name: str, checkpoint_source: O
                 checkpoint_model = AutoModel.from_pretrained(checkpoint_source)
                 base_model.load_state_dict(checkpoint_model.state_dict(), strict=False)
             except Exception as exc:
-                print(f"WARNING: failed to load init_checkpoint from {checkpoint_source}: {exc}")
+                print(
+                    f"WARNING: failed to load init_checkpoint from {checkpoint_source}: {exc}"
+                )
     return base_model
 
 
 class EncodedDataset(torch.utils.data.Dataset):
-    def __init__(self, encodings: Dict[str, torch.Tensor], labels: Any, label_dtype: torch.dtype):
+    def __init__(
+        self, encodings: Dict[str, torch.Tensor], labels: Any, label_dtype: torch.dtype
+    ):
         self.encodings = encodings
         self.labels = labels
         self.label_dtype = label_dtype
@@ -105,7 +118,9 @@ class BertHFPlumbing:
             seed=seed,
         )
 
-    def _load_tokenizer_with_fallback(self, *, model_name: str, init_checkpoint: Optional[str]) -> None:
+    def _load_tokenizer_with_fallback(
+        self, *, model_name: str, init_checkpoint: Optional[str]
+    ) -> None:
         tokenizer_source = self._active_checkpoint or init_checkpoint or model_name
         try:
             self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
@@ -119,14 +134,22 @@ class BertHFPlumbing:
         from dp.utils.stopwords import DEFAULT_STOPWORDS
 
         self._stopwords = DEFAULT_STOPWORDS
-        print(f"Stopword masking enabled: {len(self._stopwords)} stopwords will be masked")
+        print(
+            f"Stopword masking enabled: {len(self._stopwords)} stopwords will be masked"
+        )
 
-    def _encode_texts(self, texts: Sequence[str], *, mask_stopwords: bool) -> Dict[str, torch.Tensor]:
+    def _encode_texts(
+        self, texts: Sequence[str], *, mask_stopwords: bool
+    ) -> Dict[str, torch.Tensor]:
         if self._tokenizer is None:
             raise RuntimeError("Tokenizer not initialized")
-        enc = self._tokenizer(list(texts), padding=True, truncation=True, return_tensors="pt")
+        enc = self._tokenizer(
+            list(texts), padding=True, truncation=True, return_tensors="pt"
+        )
         if mask_stopwords:
-            enc = mask_stopword_tokens(self._tokenizer, self._stopwords, enc, list(texts))
+            enc = mask_stopword_tokens(
+                self._tokenizer, self._stopwords, enc, list(texts)
+            )
         return enc
 
     def _make_trainer(
@@ -227,9 +250,13 @@ class BertHFPlumbing:
         with torch.no_grad():
             for i in range(0, len(texts), batch_size):
                 batch_texts = list(texts[i : i + batch_size])
-                enc = self._tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt")
+                enc = self._tokenizer(
+                    batch_texts, padding=True, truncation=True, return_tensors="pt"
+                )
                 if mask_stopwords:
-                    enc = mask_stopword_tokens(self._tokenizer, self._stopwords, enc, batch_texts)
+                    enc = mask_stopword_tokens(
+                        self._tokenizer, self._stopwords, enc, batch_texts
+                    )
                 enc = {k: v.to(self._model_device(model)) for k, v in enc.items()}
                 out = model(**enc)
                 outputs.append(out)
@@ -319,7 +346,9 @@ class BertHFPlumbing:
         except OSError:
             return True
 
-    def _load_model_state_from_checkpoint(self, model: torch.nn.Module, checkpoint_dir: Path) -> bool:
+    def _load_model_state_from_checkpoint(
+        self, model: torch.nn.Module, checkpoint_dir: Path
+    ) -> bool:
         safetensors_file = checkpoint_dir / "model.safetensors"
         pytorch_file = checkpoint_dir / "pytorch_model.bin"
         state_dict: Optional[Dict[str, Any]] = None
@@ -356,7 +385,11 @@ class BertHFPlumbing:
         latest = self._latest_checkpoint_dir(checkpoint_dir)
         status = self._read_training_complete(status_path)
 
-        if status is True and latest is not None and self._load_model_state_from_checkpoint(model, latest):
+        if (
+            status is True
+            and latest is not None
+            and self._load_model_state_from_checkpoint(model, latest)
+        ):
             model.to(self.device)
             self._active_checkpoint = str(latest)
             return True, False
@@ -384,12 +417,20 @@ class BertHFPlumbing:
         while True:
             latest = self._latest_checkpoint_dir(checkpoint_dir)
             status = self._read_training_complete(status_path)
-            if status is True and latest is not None and self._load_model_state_from_checkpoint(model, latest):
+            if (
+                status is True
+                and latest is not None
+                and self._load_model_state_from_checkpoint(model, latest)
+            ):
                 model.to(self.device)
                 self._active_checkpoint = str(latest)
                 return True, False
-            if wait_timeout_seconds is not None and (time.time() - started) >= float(wait_timeout_seconds):
-                raise TimeoutError(f"timed out waiting for completed model in {checkpoint_dir}")
+            if wait_timeout_seconds is not None and (time.time() - started) >= float(
+                wait_timeout_seconds
+            ):
+                raise TimeoutError(
+                    f"timed out waiting for completed model in {checkpoint_dir}"
+                )
             if self._is_lock_stale(lock_path):
                 self._release_training_lock(lock_path)
                 owns_lock = self._acquire_training_lock(lock_path)

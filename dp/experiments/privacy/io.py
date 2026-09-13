@@ -85,13 +85,17 @@ def build_privacy_evaluation_dataset_from_indexed_texts(
     text_by_uid: Dict[str, str] = {}
     for record in indexed_dataset:
         if not record.uid:
-            raise ValueError("Reference record has empty uid during indexed privacy alignment")
+            raise ValueError(
+                "Reference record has empty uid during indexed privacy alignment"
+            )
         text_by_uid[record.uid] = record.text
 
     dataset: List[DatasetRecord] = []
     for record in target_records:
         if not record.uid:
-            raise ValueError("Target split record has empty uid during indexed privacy alignment")
+            raise ValueError(
+                "Target split record has empty uid during indexed privacy alignment"
+            )
         if record.uid not in text_by_uid:
             raise ValueError(f"Missing anonymized text for target uid={record.uid}")
         dataset.append(
@@ -169,21 +173,31 @@ def read_indexed_texts_from_jsonl(path: Path) -> List[tuple[int | None, str]]:
             try:
                 payload = json.loads(entry)
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON on line {line_number} in {path}") from exc
+                raise ValueError(
+                    f"Invalid JSON on line {line_number} in {path}"
+                ) from exc
             text = payload.get("text")
             if not isinstance(text, str):
-                raise ValueError(f"Missing string 'text' on line {line_number} in {path}")
+                raise ValueError(
+                    f"Missing string 'text' on line {line_number} in {path}"
+                )
             idx_value = payload.get("idx")
             if idx_value is None:
                 raise ValueError(f"Missing 'idx' on line {line_number} in {path}")
             try:
                 index = int(idx_value)
             except Exception as exc:
-                raise ValueError(f"Invalid integer 'idx' on line {line_number} in {path}: {idx_value}") from exc
+                raise ValueError(
+                    f"Invalid integer 'idx' on line {line_number} in {path}: {idx_value}"
+                ) from exc
             if index < 0:
-                raise ValueError(f"Negative 'idx' on line {line_number} in {path}: {index}")
+                raise ValueError(
+                    f"Negative 'idx' on line {line_number} in {path}: {index}"
+                )
             if index in seen_indices:
-                raise ValueError(f"Duplicate 'idx'={index} on line {line_number} in {path}")
+                raise ValueError(
+                    f"Duplicate 'idx'={index} on line {line_number} in {path}"
+                )
             seen_indices.add(index)
             rows.append((index, text))
     return rows

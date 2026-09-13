@@ -59,7 +59,9 @@ def _fit_model(
     model.fit(train_x, train_y)
 
 
-def _score_difference(baseline: Dict[str, float], current: Dict[str, float]) -> Dict[str, float]:
+def _score_difference(
+    baseline: Dict[str, float], current: Dict[str, float]
+) -> Dict[str, float]:
     drops: Dict[str, float] = {}
     for name, value in baseline.items():
         if name in current:
@@ -88,16 +90,30 @@ def _compute_dummy_metric_against_train_predictor(
                 first_index[label] = index
                 counts[label] = 0
             counts[label] = counts[label] + 1
-        mode_label = min(counts.keys(), key=lambda label: (-counts[label], first_index[label]))
-        accuracy = float(np.mean(np.asarray([1.0 if label == mode_label else 0.0 for label in eval_labels], dtype=float)))
+        mode_label = min(
+            counts.keys(), key=lambda label: (-counts[label], first_index[label])
+        )
+        accuracy = float(
+            np.mean(
+                np.asarray(
+                    [1.0 if label == mode_label else 0.0 for label in eval_labels],
+                    dtype=float,
+                )
+            )
+        )
         return "acc", accuracy
     if mode is UtilityTarget.Mode.ORDINAL:
         if not label_order:
             return None
         label_to_rank = {str(label): index for index, label in enumerate(label_order)}
         try:
-            train_values = np.asarray([float(label_to_rank[str(label)]) for label in train_labels], dtype=float)
-            eval_values = np.asarray([float(label_to_rank[str(label)]) for label in eval_labels], dtype=float)
+            train_values = np.asarray(
+                [float(label_to_rank[str(label)]) for label in train_labels],
+                dtype=float,
+            )
+            eval_values = np.asarray(
+                [float(label_to_rank[str(label)]) for label in eval_labels], dtype=float
+            )
         except KeyError:
             return None
         train_median = float(np.median(train_values))
@@ -173,7 +189,9 @@ def _build_components_runtime(
         raise ValueError(f"unknown vectorizer '{resolved_vectorizer}'")
     if resolved_head not in DOWNSTREAM_HEAD_REGISTRY:
         raise ValueError(f"unknown head '{resolved_head}'")
-    vectorizer = FEATURE_EXTRACTOR_REGISTRY[resolved_vectorizer](**dict(vectorizer_kwargs))
+    vectorizer = FEATURE_EXTRACTOR_REGISTRY[resolved_vectorizer](
+        **dict(vectorizer_kwargs)
+    )
     model = DOWNSTREAM_HEAD_REGISTRY[resolved_head](**dict(head_kwargs))
     return vectorizer, model
 
@@ -218,12 +236,25 @@ def _fit_and_eval_single_runtime(
         x_val = vectorizer.transform(list(val_texts)) if val_texts else x_train
         y_val = list(val_labels) if val_labels else list(train_labels)
         _fit_model(model, x_train, list(train_labels), x_val, y_val)
-        train_metrics = {k: float(v) for k, v in model.evaluate(x_train, list(train_labels)).items()}
+        train_metrics = {
+            k: float(v) for k, v in model.evaluate(x_train, list(train_labels)).items()
+        }
         val_metrics = {k: float(v) for k, v in model.evaluate(x_val, y_val).items()}
         x_test = vectorizer.transform(list(test_texts)) if test_texts else None
-        test_metrics = {k: float(v) for k, v in model.evaluate(x_test, list(test_labels)).items()} if x_test is not None else {}
+        test_metrics = (
+            {k: float(v) for k, v in model.evaluate(x_test, list(test_labels)).items()}
+            if x_test is not None
+            else {}
+        )
         x_overall = vectorizer.transform(list(overall_texts)) if overall_texts else None
-        overall_metrics = {k: float(v) for k, v in model.evaluate(x_overall, list(overall_labels)).items()} if x_overall is not None else {}
+        overall_metrics = (
+            {
+                k: float(v)
+                for k, v in model.evaluate(x_overall, list(overall_labels)).items()
+            }
+            if x_overall is not None
+            else {}
+        )
         return {
             "train": train_metrics,
             "val": val_metrics,
@@ -272,7 +303,9 @@ def _fit_and_eval_single_isolated(payload: Dict[str, Any]) -> Dict[str, Any]:
     message = out_queue.get()
     process.join()
     if process.exitcode != 0:
-        raise RuntimeError(f"isolated evaluation process failed with exit code {process.exitcode}")
+        raise RuntimeError(
+            f"isolated evaluation process failed with exit code {process.exitcode}"
+        )
     if not isinstance(message, dict) or not bool(message.get("ok")):
         error_message = "unknown isolated evaluation failure"
         if isinstance(message, dict):
@@ -392,7 +425,9 @@ def _pick_tuned_head_kwargs(
         )
         val_metrics = eval_result.get("val", {})
         score = float(val_metrics.get(primary_metric, 0.0))
-        trials.append({"value": value, "val_metrics": dict(val_metrics), "score": score})
+        trials.append(
+            {"value": value, "val_metrics": dict(val_metrics), "score": score}
+        )
         if best_val is None:
             best_val = score
             best_kwargs = candidate_kwargs
@@ -444,10 +479,20 @@ def run_utility_experiment(
     if not train_keys or not test_keys:
         raise ValueError("fixed split requires non-empty train and test splits")
 
-    train_keys, original_train_texts, original_train_labels = _subset_by_keys(train_keys, original_text_by_key, label_by_key)
-    val_keys, original_val_texts, original_val_labels = _subset_by_keys(val_keys, original_text_by_key, label_by_key)
-    test_keys, original_test_texts, original_test_labels = _subset_by_keys(test_keys, original_text_by_key, label_by_key)
-    all_keys_order = [key for key in (train_keys + val_keys + test_keys) if key in label_by_key and key in original_text_by_key]
+    train_keys, original_train_texts, original_train_labels = _subset_by_keys(
+        train_keys, original_text_by_key, label_by_key
+    )
+    val_keys, original_val_texts, original_val_labels = _subset_by_keys(
+        val_keys, original_text_by_key, label_by_key
+    )
+    test_keys, original_test_texts, original_test_labels = _subset_by_keys(
+        test_keys, original_text_by_key, label_by_key
+    )
+    all_keys_order = [
+        key
+        for key in (train_keys + val_keys + test_keys)
+        if key in label_by_key and key in original_text_by_key
+    ]
     all_texts = [original_text_by_key[key] for key in all_keys_order]
     all_labels = [label_by_key[key] for key in all_keys_order]
     if not original_train_texts or not original_test_texts:
@@ -463,7 +508,11 @@ def run_utility_experiment(
         dummy_strategy = "none"
 
     dummy_metric_name: str | None = None
-    dummy_metric_values: Dict[str, float | None] = {"train": None, "test": None, "overall": None}
+    dummy_metric_values: Dict[str, float | None] = {
+        "train": None,
+        "test": None,
+        "overall": None,
+    }
     for split_name, eval_labels in (
         ("train", original_train_labels),
         ("test", original_test_labels),
@@ -508,25 +557,27 @@ def run_utility_experiment(
             baseline_ckpt_dir = tempfile.mkdtemp(prefix="utility_baseline_")
             baseline_head_kwargs["checkpoint_dir"] = baseline_ckpt_dir
         try:
-            selected_head_kwargs, selected_val_metrics, baseline_eval, tuning_trials = _pick_tuned_head_kwargs(
-                base_head_kwargs=baseline_head_kwargs,
-                tune_param=config.tune_param,
-                tune_values=config.tune_values,
-                spec=spec,
-                vectorizer_name=vectorizer_name,
-                vectorizer_kwargs=vectorizer_kwargs,
-                head_name=head_name,
-                identifier=identifier,
-                primary_metric=primary_metric,
-                train_texts=original_train_texts,
-                train_labels=original_train_labels,
-                val_texts=original_val_texts,
-                val_labels=original_val_labels,
-                test_texts=original_test_texts,
-                test_labels=original_test_labels,
-                overall_texts=all_texts,
-                overall_labels=all_labels,
-                random_state=config.random_state,
+            selected_head_kwargs, selected_val_metrics, baseline_eval, tuning_trials = (
+                _pick_tuned_head_kwargs(
+                    base_head_kwargs=baseline_head_kwargs,
+                    tune_param=config.tune_param,
+                    tune_values=config.tune_values,
+                    spec=spec,
+                    vectorizer_name=vectorizer_name,
+                    vectorizer_kwargs=vectorizer_kwargs,
+                    head_name=head_name,
+                    identifier=identifier,
+                    primary_metric=primary_metric,
+                    train_texts=original_train_texts,
+                    train_labels=original_train_labels,
+                    val_texts=original_val_texts,
+                    val_labels=original_val_labels,
+                    test_texts=original_test_texts,
+                    test_labels=original_test_labels,
+                    overall_texts=all_texts,
+                    overall_labels=all_labels,
+                    random_state=config.random_state,
+                )
             )
         finally:
             if baseline_ckpt_dir is not None:
@@ -537,7 +588,9 @@ def run_utility_experiment(
         baseline_test_metrics = dict(baseline_eval.get("test", {}))
         baseline_overall_metrics = dict(baseline_eval.get("overall", {}))
 
-    if evaluation_texts is None and (evaluation_sources is None or index_to_key is None):
+    if evaluation_texts is None and (
+        evaluation_sources is None or index_to_key is None
+    ):
         raise ValueError("evaluation input is required")
 
     evaluations: Dict[str, Dict[str, Any]] = {}
@@ -556,7 +609,9 @@ def run_utility_experiment(
             return
         if evaluation_sources is None or index_to_key is None:
             return
-        yield from iter_utility_evaluation_texts(index_to_key, evaluation_sources, selected_keys=selected_keys)
+        yield from iter_utility_evaluation_texts(
+            index_to_key, evaluation_sources, selected_keys=selected_keys
+        )
 
     if protocol == "pseudo_utility":
         _set_global_seed(_stable_seed(config.random_state, "pseudo_utility_shared"))
@@ -572,15 +627,47 @@ def run_utility_experiment(
         shared_model.setup()
         shared_vectorizer.fit(list(original_train_texts))
         shared_x_train = shared_vectorizer.transform(list(original_train_texts))
-        shared_x_val = shared_vectorizer.transform(list(original_val_texts)) if original_val_texts else shared_x_train
-        shared_y_val = list(original_val_labels) if original_val_labels else list(original_train_labels)
-        _fit_model(shared_model, shared_x_train, list(original_train_labels), shared_x_val, shared_y_val)
-        shared_train_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_train, list(original_train_labels)).items()}
-        shared_val_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_val, shared_y_val).items()}
+        shared_x_val = (
+            shared_vectorizer.transform(list(original_val_texts))
+            if original_val_texts
+            else shared_x_train
+        )
+        shared_y_val = (
+            list(original_val_labels)
+            if original_val_labels
+            else list(original_train_labels)
+        )
+        _fit_model(
+            shared_model,
+            shared_x_train,
+            list(original_train_labels),
+            shared_x_val,
+            shared_y_val,
+        )
+        shared_train_metrics = {
+            k: float(v)
+            for k, v in shared_model.evaluate(
+                shared_x_train, list(original_train_labels)
+            ).items()
+        }
+        shared_val_metrics = {
+            k: float(v)
+            for k, v in shared_model.evaluate(shared_x_val, shared_y_val).items()
+        }
         shared_x_test = shared_vectorizer.transform(list(original_test_texts))
-        baseline_test_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_test, list(original_test_labels)).items()}
+        baseline_test_metrics = {
+            k: float(v)
+            for k, v in shared_model.evaluate(
+                shared_x_test, list(original_test_labels)
+            ).items()
+        }
         shared_x_overall = shared_vectorizer.transform(list(all_texts))
-        baseline_overall_metrics = {k: float(v) for k, v in shared_model.evaluate(shared_x_overall, list(all_labels)).items()}
+        baseline_overall_metrics = {
+            k: float(v)
+            for k, v in shared_model.evaluate(
+                shared_x_overall, list(all_labels)
+            ).items()
+        }
         if not baseline_train_metrics:
             baseline_train_metrics = dict(shared_train_metrics)
         if not baseline_val_metrics:
@@ -588,10 +675,20 @@ def run_utility_experiment(
 
     try:
         for name, mapping in _iter_evaluations():
-            train_keys_a, anon_train_texts, anon_train_labels = _subset_by_keys(train_keys, mapping, label_by_key)
-            val_keys_a, anon_val_texts, anon_val_labels = _subset_by_keys(val_keys, mapping, label_by_key)
-            test_keys_a, anon_test_texts, anon_test_labels = _subset_by_keys(test_keys, mapping, label_by_key)
-            all_keys_a = [key for key in (train_keys_a + val_keys_a + test_keys_a) if key in mapping and key in label_by_key]
+            train_keys_a, anon_train_texts, anon_train_labels = _subset_by_keys(
+                train_keys, mapping, label_by_key
+            )
+            val_keys_a, anon_val_texts, anon_val_labels = _subset_by_keys(
+                val_keys, mapping, label_by_key
+            )
+            test_keys_a, anon_test_texts, anon_test_labels = _subset_by_keys(
+                test_keys, mapping, label_by_key
+            )
+            all_keys_a = [
+                key
+                for key in (train_keys_a + val_keys_a + test_keys_a)
+                if key in mapping and key in label_by_key
+            ]
             anon_all_texts = [mapping[key] for key in all_keys_a]
             anon_all_labels = [label_by_key[key] for key in all_keys_a]
 
@@ -602,12 +699,22 @@ def run_utility_experiment(
                 val_metrics = dict(shared_val_metrics)
                 if anon_test_texts:
                     x_test = shared_vectorizer.transform(list(anon_test_texts))
-                    test_metrics = {k: float(v) for k, v in shared_model.evaluate(x_test, list(anon_test_labels)).items()}
+                    test_metrics = {
+                        k: float(v)
+                        for k, v in shared_model.evaluate(
+                            x_test, list(anon_test_labels)
+                        ).items()
+                    }
                 else:
                     test_metrics = {}
                 if anon_all_texts:
                     x_overall = shared_vectorizer.transform(list(anon_all_texts))
-                    overall_metrics = {k: float(v) for k, v in shared_model.evaluate(x_overall, list(anon_all_labels)).items()}
+                    overall_metrics = {
+                        k: float(v)
+                        for k, v in shared_model.evaluate(
+                            x_overall, list(anon_all_labels)
+                        ).items()
+                    }
                 else:
                     overall_metrics = {}
             else:
@@ -621,10 +728,30 @@ def run_utility_experiment(
                         "test_total": len(test_keys),
                         "available": len(anon_all_texts),
                         "valid": False,
-                        "train_results": {"metrics": {}, "drops": {}, "matched": len(anon_train_texts), "total": len(train_keys)},
-                        "val_results": {"metrics": {}, "drops": {}, "matched": len(anon_val_texts), "total": len(val_keys)},
-                        "test_results": {"metrics": {}, "drops": {}, "matched": len(anon_test_texts), "total": len(test_keys)},
-                        "overall_results": {"metrics": {}, "drops": {}, "matched": len(anon_all_texts), "total": len(all_keys_order)},
+                        "train_results": {
+                            "metrics": {},
+                            "drops": {},
+                            "matched": len(anon_train_texts),
+                            "total": len(train_keys),
+                        },
+                        "val_results": {
+                            "metrics": {},
+                            "drops": {},
+                            "matched": len(anon_val_texts),
+                            "total": len(val_keys),
+                        },
+                        "test_results": {
+                            "metrics": {},
+                            "drops": {},
+                            "matched": len(anon_test_texts),
+                            "total": len(test_keys),
+                        },
+                        "overall_results": {
+                            "metrics": {},
+                            "drops": {},
+                            "matched": len(anon_all_texts),
+                            "total": len(all_keys_order),
+                        },
                         "grouped_results": {},
                         "utility": {"error": "missing_anonymized_split_records"},
                     }
@@ -645,8 +772,12 @@ def run_utility_experiment(
                     "identifier": identifier,
                     "train_texts": anon_train_texts,
                     "train_labels": anon_train_labels,
-                    "val_texts": anon_val_texts if anon_val_texts else original_val_texts,
-                    "val_labels": anon_val_labels if anon_val_labels else original_val_labels,
+                    "val_texts": anon_val_texts
+                    if anon_val_texts
+                    else original_val_texts,
+                    "val_labels": anon_val_labels
+                    if anon_val_labels
+                    else original_val_labels,
                     "test_texts": anon_test_texts,
                     "test_labels": anon_test_labels,
                     "overall_texts": anon_all_texts,
@@ -664,14 +795,20 @@ def run_utility_experiment(
                 overall_metrics = dict(eval_result.get("overall", {}))
 
             metrics_primary = dict(test_metrics)
-            drops_primary = _score_difference(baseline_test_metrics, metrics_primary) if metrics_primary else {}
+            drops_primary = (
+                _score_difference(baseline_test_metrics, metrics_primary)
+                if metrics_primary
+                else {}
+            )
             if primary_metric and primary_metric in metrics_primary:
                 primary_scores.append(float(metrics_primary[primary_metric]))
 
             evaluations[name] = {
                 "metrics": metrics_primary,
                 "drops": drops_primary,
-                "train_matched": len(train_keys) if protocol == "pseudo_utility" else len(anon_train_texts),
+                "train_matched": len(train_keys)
+                if protocol == "pseudo_utility"
+                else len(anon_train_texts),
                 "train_total": len(train_keys),
                 "test_matched": len(anon_test_texts),
                 "test_total": len(test_keys),
@@ -680,13 +817,17 @@ def run_utility_experiment(
                 "train_results": {
                     "metrics": train_metrics,
                     "drops": _score_difference(baseline_train_metrics, train_metrics),
-                    "matched": len(train_keys) if protocol == "pseudo_utility" else len(anon_train_texts),
+                    "matched": len(train_keys)
+                    if protocol == "pseudo_utility"
+                    else len(anon_train_texts),
                     "total": len(train_keys),
                 },
                 "val_results": {
                     "metrics": val_metrics,
                     "drops": _score_difference(baseline_val_metrics, val_metrics),
-                    "matched": len(val_keys) if protocol == "pseudo_utility" else len(anon_val_texts),
+                    "matched": len(val_keys)
+                    if protocol == "pseudo_utility"
+                    else len(anon_val_texts),
                     "total": len(val_keys),
                 },
                 "test_results": {
@@ -697,7 +838,9 @@ def run_utility_experiment(
                 },
                 "overall_results": {
                     "metrics": overall_metrics,
-                    "drops": _score_difference(baseline_overall_metrics, overall_metrics),
+                    "drops": _score_difference(
+                        baseline_overall_metrics, overall_metrics
+                    ),
                     "matched": len(anon_all_texts),
                     "total": len(all_keys_order),
                 },
@@ -728,8 +871,16 @@ def run_utility_experiment(
         "head": str(head_name or spec.default_head),
         "vectorizer_kwargs": dict(vectorizer_kwargs),
         "head_kwargs": dict(selected_head_kwargs),
-        "split_sizes": {"train": len(train_keys), "val": len(val_keys), "test": len(test_keys)},
-        "target": {"dataset": spec.dataset, "key": spec.target_key, "mode": spec.target.mode.value},
+        "split_sizes": {
+            "train": len(train_keys),
+            "val": len(val_keys),
+            "test": len(test_keys),
+        },
+        "target": {
+            "dataset": spec.dataset,
+            "key": spec.target_key,
+            "mode": spec.target.mode.value,
+        },
         "random_state": int(config.random_state),
     }
     setup_hash = hashlib.sha1(repr(setup_material).encode("utf-8")).hexdigest()

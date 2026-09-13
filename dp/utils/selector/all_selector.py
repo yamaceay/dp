@@ -38,10 +38,10 @@ class AllUnit(AnonymizerUnit):
 
         if ledger is None:
             ledger = TokenLedger(text, offsets)
-        
+
         if prior_edits:
             ledger.apply_prior_edits(prior_edits)
-        
+
         processed: set[int] = set()
         for idx in range(len(offsets)):
             if ledger.is_modified(idx):

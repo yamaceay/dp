@@ -6,14 +6,19 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from dp.experiments.divergence.base import DivergenceMetric, TextDivergenceExperiment
-from dp.experiments.utility.vectorizer import SentenceEmbeddingVectorizer, SelfSupervisedFeatureExtractor
+from dp.experiments.utility.vectorizer import (
+    SentenceEmbeddingVectorizer,
+    SelfSupervisedFeatureExtractor,
+)
 
 
 class CosineSimilarityMetric(DivergenceMetric):
     def __init__(self, vectorizer: Optional[SelfSupervisedFeatureExtractor] = None):
         super().__init__("cosine")
         if vectorizer is None:
-            vectorizer = SentenceEmbeddingVectorizer(model_name="sentence-transformers/all-MiniLM-L6-v2")
+            vectorizer = SentenceEmbeddingVectorizer(
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
         self._template = vectorizer.clone()
         self._vectorizer: Optional[SelfSupervisedFeatureExtractor] = None
 
@@ -25,7 +30,9 @@ class CosineSimilarityMetric(DivergenceMetric):
         vectorizer.fit(list(references.values()))
         self._vectorizer = vectorizer
 
-    def similarities(self, references: Sequence[str], candidates: Sequence[str]) -> List[float]:
+    def similarities(
+        self, references: Sequence[str], candidates: Sequence[str]
+    ) -> List[float]:
         if self._vectorizer is None:
             raise RuntimeError("cosine similarity metric is not prepared")
         ref_matrix = self._vectorizer.transform(list(references))

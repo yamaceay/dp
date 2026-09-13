@@ -16,7 +16,11 @@ class PIIOnlyUnit(AnonymizerUnit):
         sort_by_risk: bool = True,
         **kwargs: Any,
     ) -> None:
-        super().__init__(temperature=temperature, sort_by_risk=sort_by_risk, selector_name=self.SELECTOR_NAME)
+        super().__init__(
+            temperature=temperature,
+            sort_by_risk=sort_by_risk,
+            selector_name=self.SELECTOR_NAME,
+        )
         if pii_detector is None:
             raise ValueError("PIIOnlyUnit requires a PIIDetector instance")
         self.pii_detector = pii_detector

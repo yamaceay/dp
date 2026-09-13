@@ -8,7 +8,14 @@ from typing import Any, Dict, Iterable, List, Optional
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
 
 # Priority order when picking which direct identifier anchors a record's name.
-_DIRECT_KEY_PRIORITY = ["name", "email", "phone number", "SSN", "address", "credit card number"]
+_DIRECT_KEY_PRIORITY = [
+    "name",
+    "email",
+    "phone number",
+    "SSN",
+    "address",
+    "credit card number",
+]
 _EMAIL_TOKEN_RE = re.compile(r"[._]+")
 _TRAILING_DIGITS_RE = re.compile(r"\d+$")
 
@@ -94,7 +101,9 @@ class RatBenchDatasetAdapter(DatasetAdapter):
     HF_CONFIG = "english"
 
     def __init__(self, *args, **kwargs):
-        data_in: Optional[str] = kwargs.get("data_in") or (args[1] if len(args) > 1 else None)
+        data_in: Optional[str] = kwargs.get("data_in") or (
+            args[1] if len(args) > 1 else None
+        )
         local_path = Path(data_in) if data_in else None
         use_local = local_path is not None and local_path.exists()
 
@@ -115,7 +124,9 @@ class RatBenchDatasetAdapter(DatasetAdapter):
         try:
             from datasets import load_dataset, load_from_disk
         except ImportError as exc:
-            raise RuntimeError("pip install datasets is required for RatBenchDatasetAdapter") from exc
+            raise RuntimeError(
+                "pip install datasets is required for RatBenchDatasetAdapter"
+            ) from exc
 
         if local_path is not None:
             ds = load_from_disk(str(local_path))
@@ -135,8 +146,12 @@ class RatBenchDatasetAdapter(DatasetAdapter):
         for idx in range(len(self._dataset)):
             row = dict(self._dataset[idx])
             row["profile"] = _parse_py_literal(row.get("profile") or {})
-            row["direct_identifiers"] = _parse_py_literal(row.get("direct_identifiers") or {})
-            row["indirect_identifiers"] = _parse_py_literal(row.get("indirect_identifiers") or {})
+            row["direct_identifiers"] = _parse_py_literal(
+                row.get("direct_identifiers") or {}
+            )
+            row["indirect_identifiers"] = _parse_py_literal(
+                row.get("indirect_identifiers") or {}
+            )
             rows.append(row)
 
         names_by_row = self._assign_names(rows)
@@ -166,7 +181,9 @@ class RatBenchDatasetAdapter(DatasetAdapter):
             )
 
     @staticmethod
-    def _identifier_spans(direct: Dict[str, Any], indirect: Dict[str, Any], text: str) -> List[TextAnnotation]:
+    def _identifier_spans(
+        direct: Dict[str, Any], indirect: Dict[str, Any], text: str
+    ) -> List[TextAnnotation]:
         # RAT-Bench gives attribute/value pairs, not character offsets. We search
         # for each value's literal occurrence in `text` (direct identifiers like
         # names/emails/phones usually appear verbatim; coded indirect identifiers
@@ -207,7 +224,9 @@ class RatBenchDatasetAdapter(DatasetAdapter):
         return names
 
     @staticmethod
-    def _cluster_by_identity(rows: List[Dict[str, Any]], indices: List[int]) -> List[List[int]]:
+    def _cluster_by_identity(
+        rows: List[Dict[str, Any]], indices: List[int]
+    ) -> List[List[int]]:
         # Union-find over the rows sharing an id, linking two rows only when
         # their profiles actually agree wherever they overlap (>=2 shared keys).
         parent = {i: i for i in indices}
@@ -232,7 +251,10 @@ class RatBenchDatasetAdapter(DatasetAdapter):
         clusters: Dict[int, List[int]] = {}
         for i in indices:
             clusters.setdefault(find(i), []).append(i)
-        return sorted(clusters.values(), key=lambda c: min(rows[i].get("difficulty", 0) for i in c))
+        return sorted(
+            clusters.values(),
+            key=lambda c: min(rows[i].get("difficulty", 0) for i in c),
+        )
 
     @staticmethod
     def _cluster_descriptor(rows: List[Dict[str, Any]], cluster: List[int]) -> str:

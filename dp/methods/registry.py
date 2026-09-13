@@ -35,8 +35,7 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
     "spacy": ModelCapabilities(),
     "presidio": ModelCapabilities(),
     "manual": ModelCapabilities(
-        must_use_dataset=True, 
-        must_use_annotations=True,
+        must_use_dataset=True,
     ),
     "baroud": ModelCapabilities(must_use_pii_selector=True),
     "risk": ModelCapabilities(
@@ -44,33 +43,24 @@ MODEL_CAPABILITIES: Dict[str, ModelCapabilities] = {
         must_use_scoring=True,
     ),
     "petre": ModelCapabilities(
-        must_use_dataset=True, 
-        can_use_k_selector=True,
-        can_use_annotations=True,
+        must_use_dataset=True,
         must_use_scoring=True,
     ),
-    "dpbart": ModelCapabilities(can_work_token_level=False),
-    "dpparaphrase": ModelCapabilities(can_work_token_level=False),
-    "dpprompt": ModelCapabilities(can_work_token_level=False),
+    "dpbart": ModelCapabilities(),
+    "dpparaphrase": ModelCapabilities(),
+    "dpprompt": ModelCapabilities(),
     "dpmlm": ModelCapabilities(
-        can_use_dataset=True,
-        can_use_pii_selector=True,
-        can_use_risk_selector=True,
-        can_use_k_selector=True,
         can_use_scoring=True,
     ),
     "iter_dpmlm": ModelCapabilities(
-        can_use_dataset=True,
-        can_use_k_selector=True,
         can_use_scoring=True,
     ),
     "iter_petre": ModelCapabilities(
         must_use_dataset=True,
-        can_use_k_selector=True,
-        can_use_annotations=True,
         must_use_scoring=True,
     ),
 }
+
 
 def get_capabilities(model_name: str) -> ModelCapabilities:
     if model_name not in MODEL_CAPABILITIES:

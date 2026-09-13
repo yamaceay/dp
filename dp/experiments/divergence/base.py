@@ -22,7 +22,9 @@ class DivergenceMetric(ABC):
         return
 
     @abstractmethod
-    def similarities(self, references: Sequence[str], candidates: Sequence[str]) -> List[float]:
+    def similarities(
+        self, references: Sequence[str], candidates: Sequence[str]
+    ) -> List[float]:
         raise NotImplementedError
 
     def metadata(self) -> Dict[str, Any]:
@@ -66,7 +68,9 @@ class TextDivergenceExperiment(Experiment, ABC):
                 "metadata": metadata,
             }
         if not filtered:
-            raise ValueError("evaluation_datasets must contain at least one non-empty dataset")
+            raise ValueError(
+                "evaluation_datasets must contain at least one non-empty dataset"
+            )
         self.original_texts = dict(original_texts)
         self.evaluation_datasets = filtered
         self.record_info = dict(record_info)
@@ -81,7 +85,9 @@ class TextDivergenceExperiment(Experiment, ABC):
         evaluations: Dict[str, Dict[str, Any]] = {}
         divergence_means: List[float] = []
         total_records = len(self.original_texts)
-        for name, payload in tqdm(self.evaluation_datasets.items(), desc="Evaluating datasets"):
+        for name, payload in tqdm(
+            self.evaluation_datasets.items(), desc="Evaluating datasets"
+        ):
             texts = payload["texts"]
             total = payload["total"]
             matched_keys = [key for key in self.original_texts if key in texts]
@@ -99,8 +105,13 @@ class TextDivergenceExperiment(Experiment, ABC):
             candidates = [texts[key] for key in matched_keys]
             similarities = self.metric.similarities(references, candidates)
             divergence_values = [1.0 - value for value in similarities]
-            similarity_map = {key: float(similarities[idx]) for idx, key in enumerate(matched_keys)}
-            divergence_map = {key: float(divergence_values[idx]) for idx, key in enumerate(matched_keys)}
+            similarity_map = {
+                key: float(similarities[idx]) for idx, key in enumerate(matched_keys)
+            }
+            divergence_map = {
+                key: float(divergence_values[idx])
+                for idx, key in enumerate(matched_keys)
+            }
             summary = self._summarize(similarities, divergence_values)
             evaluations[name] = {
                 "similarity": similarity_map,
@@ -112,7 +123,11 @@ class TextDivergenceExperiment(Experiment, ABC):
             }
             if summary:
                 divergence_means.append(summary["divergence_mean"])
-        score_value = float(sum(divergence_means) / len(divergence_means)) if divergence_means else 0.0
+        score_value = (
+            float(sum(divergence_means) / len(divergence_means))
+            if divergence_means
+            else 0.0
+        )
         metrics = {
             "records": self.record_info,
             "original": {

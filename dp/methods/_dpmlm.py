@@ -17,8 +17,9 @@ from dp.utils.selector.base import AnonymizerUnit, ApplyFn
 from dp.utils.chunking import TokenAwareChunker
 
 
-class DPMlmAnonymizer(Anonymizer):   
+class DPMlmAnonymizer(Anonymizer):
     MODEL_NAME = "dpmlm"
+
     def __init__(
         self,
         *args,
@@ -36,7 +37,7 @@ class DPMlmAnonymizer(Anonymizer):
         dpmlm_chunk_overlap_tokens: int = 0,
         dpmlm_chunking: Optional[Dict[str, Any]] = None,
         verbose: bool = False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
 
@@ -55,7 +56,9 @@ class DPMlmAnonymizer(Anonymizer):
             raise ValueError("dpmlm_chunking must be a mapping")
         chunking_enabled = chunking_cfg.get("enabled", enable_dpmlm_chunking)
         chunking_max_tokens = chunking_cfg.get("max_tokens", dpmlm_chunk_max_tokens)
-        chunking_overlap_tokens = chunking_cfg.get("overlap_tokens", dpmlm_chunk_overlap_tokens)
+        chunking_overlap_tokens = chunking_cfg.get(
+            "overlap_tokens", dpmlm_chunk_overlap_tokens
+        )
         self.enable_dpmlm_chunking = bool(chunking_enabled)
         self.dpmlm_chunk_max_tokens = max(1, int(chunking_max_tokens))
         self.dpmlm_chunk_overlap_tokens = max(0, int(chunking_overlap_tokens))
@@ -89,10 +92,17 @@ class DPMlmAnonymizer(Anonymizer):
             from nltk.tokenize.treebank import TreebankWordDetokenizer
 
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_checkpoint)
-            self.model = AutoModelForMaskedLM.from_pretrained(self.model_checkpoint).to(self.device)
-            self.detokenizer = TreebankWordDetokenizer()
+            self.model = AutoModelForMaskedLM.from_pretrained(self.model_checkpoint).to(
+                self.device
+            )
+            # self.detokenizer = TreebankWordDetokenizer()
             model_max_length = getattr(self.tokenizer, "model_max_length", None)
-            if model_max_length is None or not isinstance(model_max_length, int) or model_max_length <= 0 or model_max_length > 100000:
+            if (
+                model_max_length is None
+                or not isinstance(model_max_length, int)
+                or model_max_length <= 0
+                or model_max_length > 100000
+            ):
                 model_max_length = 512
             self.mlm_max_length = int(model_max_length)
             self._token_chunker = TokenAwareChunker(
@@ -102,7 +112,9 @@ class DPMlmAnonymizer(Anonymizer):
             )
 
         except ImportError as exc:
-            raise ImportError("Required packages not found. Install with: uv pip install transformers nltk") from exc
+            raise ImportError(
+                "Required packages not found. Install with: uv pip install transformers nltk"
+            ) from exc
 
     def set_unit(self, unit: AnonymizerUnit) -> None:
         self._unit = unit
@@ -140,7 +152,11 @@ class DPMlmAnonymizer(Anonymizer):
                     "DPMlmAnonymizer received precomputed risk_scores but has no dataset records; "
                     "run in dataset mode (use --indices) so risk scores can be matched to records"
                 )
-            self.set_risk_scores(risk_scores, records=self.dataset_records or None, absolute_risk=absolute_risk)
+            self.set_risk_scores(
+                risk_scores,
+                records=self.dataset_records or None,
+                absolute_risk=absolute_risk,
+            )
 
     def anonymize_from_dataset(
         self,
@@ -152,9 +168,9 @@ class DPMlmAnonymizer(Anonymizer):
         if idx < 0 or idx >= len(self.dataset_records):
             raise IndexError(f"Index {idx} is out of bounds")
         record = self.dataset_records[idx]
-        
+
         masked_spans = record.spans or []
-        
+
         return self.anonymize_any_text(
             record.text,
             *args,
@@ -168,11 +184,15 @@ class DPMlmAnonymizer(Anonymizer):
     def _target_label_id_for_record(self, record_name: Optional[str]) -> int:
         if not record_name:
             raise ValueError("record_name is required for TRI rank evaluation")
-        mapping, source = load_tri_label_mapping(self._explainer, self._tri_label_mapping, self._tri_label_mapping_source)
+        mapping, source = load_tri_label_mapping(
+            self._explainer, self._tri_label_mapping, self._tri_label_mapping_source
+        )
         self._tri_label_mapping = mapping
         self._tri_label_mapping_source = source
         if record_name not in mapping:
-            raise ValueError(f"record_name {record_name!r} not present in TRI label mapping")
+            raise ValueError(
+                f"record_name {record_name!r} not present in TRI label mapping"
+            )
         return int(mapping[record_name])
 
     def _make_rank_evaluator(self) -> Callable[[str, int], int]:
@@ -189,7 +209,11 @@ class DPMlmAnonymizer(Anonymizer):
             entries = pipe([current_text], batch_size=1)[0]
             if not isinstance(entries, list) or not entries:
                 raise ValueError("TRI pipeline returned no predictions")
-            scored = [e for e in entries if isinstance(e, dict) and "label" in e and "score" in e]
+            scored = [
+                e
+                for e in entries
+                if isinstance(e, dict) and "label" in e and "score" in e
+            ]
             if not scored:
                 raise ValueError("TRI pipeline returned invalid predictions")
             scored.sort(key=lambda e: float(e["score"]), reverse=True)
@@ -208,7 +232,9 @@ class DPMlmAnonymizer(Anonymizer):
             offsets.append((start, end))
         return tokens, offsets
 
-    def _dpmlm_chunk_for_offset(self, sentence: str, offset: Tuple[int, int]) -> Tuple[str, Tuple[int, int]]:
+    def _dpmlm_chunk_for_offset(
+        self, sentence: str, offset: Tuple[int, int]
+    ) -> Tuple[str, Tuple[int, int]]:
         if not self.enable_dpmlm_chunking:
             return sentence, offset
         chunk = self._token_chunker.centered_chunk(sentence, offset)
@@ -230,81 +256,94 @@ class DPMlmAnonymizer(Anonymizer):
         exclude_original: bool = False,
     ) -> str:
         sentence_for_mask, local_offset = self._dpmlm_chunk_for_offset(sentence, offset)
-        masked_sentence = self._replace_token(sentence_for_mask, self.tokenizer.mask_token, local_offset)
+        masked_sentence = self._replace_token(
+            sentence_for_mask, self.tokenizer.mask_token, local_offset
+        )
         if masked_sentence == sentence_for_mask:
-            raise ValueError(f"Token {token} not found in sentence during masking: {sentence_for_mask}")
+            raise ValueError(
+                f"Token {token} not found in sentence during masking: {sentence_for_mask}"
+            )
 
-        input_ids = self.tokenizer.encode(masked_sentence, add_special_tokens=True, truncation=True, max_length=self.mlm_max_length)
-        
+        input_ids = self.tokenizer.encode(
+            masked_sentence,
+            add_special_tokens=True,
+            truncation=True,
+            max_length=self.mlm_max_length,
+        )
+
         try:
             mask_pos = input_ids.index(self.tokenizer.mask_token_id)
         except ValueError:
             return token
-        
+
         model_input = torch.tensor(input_ids).reshape(1, -1).to(self.device)
-        
+
         with torch.no_grad():
             output = self.model(model_input)
-        
+
         logits = output[0].squeeze().detach().cpu().numpy()
         mask_logits = logits[mask_pos]
-        
+
         if exclude_original:
             original_ids = self.tokenizer.encode(token, add_special_tokens=False)
             for oid in original_ids:
                 if 0 <= oid < len(mask_logits):
                     mask_logits[oid] = float("-inf")
-        
+
         if self.use_temperature:
             temperature = 2 * self.sensitivity / epsilon
             mask_logits = np.clip(mask_logits, self.clip_min, self.clip_max)
             mask_logits = mask_logits / temperature
-            
+
             scores = torch.softmax(torch.from_numpy(mask_logits), dim=0)
 
             chosen_idx = np.random.choice(len(mask_logits), p=scores.numpy())
             return self.tokenizer.decode(chosen_idx).strip()
         else:
-            top_tokens = torch.topk(torch.from_numpy(mask_logits), k=self.k_candidates, dim=0)[1]
+            top_tokens = torch.topk(
+                torch.from_numpy(mask_logits), k=self.k_candidates, dim=0
+            )[1]
             return self.tokenizer.decode(top_tokens[0].item()).strip()
 
-    def _generate_additional_token(
-        self,
-        text: str,
-        epsilon: float
-    ) -> str:
+    def _generate_additional_token(self, text: str, epsilon: float) -> str:
         masked_text = text + " " + self.tokenizer.mask_token
-        
-        input_ids = self.tokenizer.encode(masked_text, add_special_tokens=True, truncation=True, max_length=512)
-        
+
+        input_ids = self.tokenizer.encode(
+            masked_text, add_special_tokens=True, truncation=True, max_length=512
+        )
+
         try:
             mask_pos = input_ids.index(self.tokenizer.mask_token_id)
         except ValueError:
             return ""
-        
+
         model_input = torch.tensor(input_ids).reshape(1, -1).to(self.device)
-        
+
         with torch.no_grad():
             output = self.model(model_input)
-        
+
         logits = output[0].squeeze().detach().cpu().numpy()
         mask_logits = logits[mask_pos]
-        
+
         if self.use_temperature:
             temperature = 2 * self.sensitivity / epsilon
             mask_logits = np.clip(mask_logits, self.clip_min, self.clip_max)
             mask_logits = mask_logits / temperature
-            
+
             scores = torch.softmax(torch.from_numpy(mask_logits), dim=0)
             scores = scores / scores.sum()
-            
+
             chosen_idx = np.random.choice(len(mask_logits), p=scores.numpy())
             return self.tokenizer.decode(chosen_idx).strip()
         else:
-            top_tokens = torch.topk(torch.from_numpy(mask_logits), k=self.k_candidates, dim=0)[1]
+            top_tokens = torch.topk(
+                torch.from_numpy(mask_logits), k=self.k_candidates, dim=0
+            )[1]
             return self.tokenizer.decode(top_tokens[0].item()).strip()
 
-    def _replace_token(self, text: str, replacement: str, offset: Tuple[int, int]) -> str:
+    def _replace_token(
+        self, text: str, replacement: str, offset: Tuple[int, int]
+    ) -> str:
         start, end = offset
         return text[:start] + replacement + text[end:]
 
@@ -337,7 +376,9 @@ class DPMlmAnonymizer(Anonymizer):
             return None
         return np.asarray(values, dtype=float)
 
-    def _resolve_risk_uid(self, text: str, record_name: Optional[str], record_uid: Optional[str] = None) -> Optional[str]:
+    def _resolve_risk_uid(
+        self, text: str, record_name: Optional[str], record_uid: Optional[str] = None
+    ) -> Optional[str]:
         if record_uid and record_uid in self._risk_scores_by_uid:
             return record_uid
         if record_name and record_name in self._risk_scores_by_uid:
@@ -367,7 +408,7 @@ class DPMlmAnonymizer(Anonymizer):
         def apply_fn(idx: int, ledger: TokenLedger) -> None:
             if idx >= len(offsets):
                 return
-            
+
             entry = ledger.entry(idx)
             token = entry.original_text
             token_start, token_end = entry.start, entry.end
@@ -394,7 +435,9 @@ class DPMlmAnonymizer(Anonymizer):
             epsilon_val = epsilon
             if token_epsilons is not None and idx < len(token_epsilons):
                 epsilon_val = float(token_epsilons[idx])
-            private_token = self._privatize_token(text, token, (token_start, token_end), epsilon_val)
+            private_token = self._privatize_token(
+                text, token, (token_start, token_end), epsilon_val
+            )
 
             original_text_span = text[token_start:token_end]
             if len(private_token) == len(original_text_span):
@@ -415,7 +458,9 @@ class DPMlmAnonymizer(Anonymizer):
             if self.add_probability > 0:
                 while np.random.rand() < self.add_probability:
                     context_text = ledger.render_offsets(text)
-                    additional_token = self._generate_additional_token(context_text, epsilon_val)
+                    additional_token = self._generate_additional_token(
+                        context_text, epsilon_val
+                    )
                     if not additional_token:
                         break
                     ledger.add_after(idx, additional_token)
@@ -449,17 +494,28 @@ class DPMlmAnonymizer(Anonymizer):
         record_uid: Optional[str] = None,
         critical_indices: Optional[Sequence[int]] = None,
     ) -> Tuple[np.ndarray, bool]:
-        precomputed_scores = self._lookup_precomputed_scores(text, offsets, record_name, record_uid=record_uid, indices=critical_indices)
+        precomputed_scores = self._lookup_precomputed_scores(
+            text, offsets, record_name, record_uid=record_uid, indices=critical_indices
+        )
         if precomputed_scores is not None:
             return precomputed_scores, True
 
-        critical_offsets = offsets if critical_indices is None else [offsets[i] for i in critical_indices]
+        critical_offsets = (
+            offsets
+            if critical_indices is None
+            else [offsets[i] for i in critical_indices]
+        )
         from dp.utils.explainer.uniform import UniformExplainer
-        if self._explainer is not None and isinstance(self._explainer, UniformExplainer):
+
+        if self._explainer is not None and isinstance(
+            self._explainer, UniformExplainer
+        ):
             scores = self._explainer.explain(text, critical_offsets)
             return scores, False
 
-        raise NotImplementedError("DPMlmAnonymizer requires precomputed risk scores for each record.")
+        raise NotImplementedError(
+            "DPMlmAnonymizer requires precomputed risk scores for each record."
+        )
 
     def _print_verbose_risk_tokens(
         self,
@@ -481,7 +537,7 @@ class DPMlmAnonymizer(Anonymizer):
         )
         print(f"[dpmlm][verbose] record={record_ref} risky tokens:")
         for token_idx, ((start, end), score) in ranked:
-            token = text[int(start):int(end)]
+            token = text[int(start) : int(end)]
             print(f"Token nr. {token_idx}: {token} ({float(score):.3f})")
 
     def _print_verbose_chunking_summary(
@@ -515,7 +571,9 @@ class DPMlmAnonymizer(Anonymizer):
             return
         record_ref = record_uid or record_name or "<unknown>"
         if token_epsilons is None or token_epsilons.size == 0:
-            print(f"[dpmlm][verbose] record={record_ref} epsilon_base={float(epsilon):.6f} token_epsilons=none")
+            print(
+                f"[dpmlm][verbose] record={record_ref} epsilon_base={float(epsilon):.6f} token_epsilons=none"
+            )
             return
         values = token_epsilons.astype(float)
         q10, q50, q90 = np.quantile(values, [0.10, 0.50, 0.90])
@@ -539,8 +597,14 @@ class DPMlmAnonymizer(Anonymizer):
         if not self.verbose:
             return
         record_ref = record_uid or record_name or "<unknown>"
-        epsilon_values_str = [f"{float(v):.6f}" for v in sorted(set(float(v) for v in epsilon_values))]
-        if epsilon_token_count > 0 and epsilon_token_min is not None and epsilon_token_max is not None:
+        epsilon_values_str = [
+            f"{float(v):.6f}" for v in sorted(set(float(v) for v in epsilon_values))
+        ]
+        if (
+            epsilon_token_count > 0
+            and epsilon_token_min is not None
+            and epsilon_token_max is not None
+        ):
             epsilon_token_mean = epsilon_token_sum / float(epsilon_token_count)
             epsilon_token_summary = (
                 f"n={int(epsilon_token_count)},min={float(epsilon_token_min):.6f},"
@@ -579,7 +643,7 @@ class DPMlmAnonymizer(Anonymizer):
     ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         if not text or not text.strip():
             return []
-        
+
         if masked_spans is None:
             masked_spans = []
 
@@ -594,7 +658,9 @@ class DPMlmAnonymizer(Anonymizer):
         for hp in combos:
             eps_val = hp.get("epsilon")
             if eps_val is None:
-                raise ValueError("DPMlmAnonymizer requires epsilon via Buckets (EpsilonParam)")
+                raise ValueError(
+                    "DPMlmAnonymizer requires epsilon via Buckets (EpsilonParam)"
+                )
             combos_by_epsilon.setdefault(float(eps_val), []).append(hp)
 
         debug_epsilon_values: List[float] = []
@@ -605,7 +671,9 @@ class DPMlmAnonymizer(Anonymizer):
 
         for eps_val, eps_combos in combos_by_epsilon.items():
             try:
-                precomputed_offsets = self._resolve_precomputed_offsets(record_name, record_uid)
+                precomputed_offsets = self._resolve_precomputed_offsets(
+                    record_name, record_uid
+                )
                 if precomputed_offsets is None:
                     _, offsets = self._tokenize(text)
                 else:
@@ -619,22 +687,39 @@ class DPMlmAnonymizer(Anonymizer):
 
                 if self._unit is None:
                     from dp.utils.selector.all_selector import AllUnit
+
                     self._unit = AllUnit()
 
                 if isinstance(self._unit, UntilKUnit):
-                    k_vals = [int(hp.get("k")) for hp in eps_combos if hp.get("k") is not None]
+                    k_vals = [
+                        int(hp.get("k")) for hp in eps_combos if hp.get("k") is not None
+                    ]
                     if not k_vals:
-                        raise ValueError("DPMlmAnonymizer using until_k selector requires KParams buckets")
+                        raise ValueError(
+                            "DPMlmAnonymizer using until_k selector requires KParams buckets"
+                        )
                     self._unit.set_thresholds(k_vals, name="k")
                 elif isinstance(self._unit, ByRiskUnit):
-                    rho_vals = [float(hp.get("rho")) for hp in eps_combos if hp.get("rho") is not None]
+                    rho_vals = [
+                        float(hp.get("rho"))
+                        for hp in eps_combos
+                        if hp.get("rho") is not None
+                    ]
                     if not rho_vals:
-                        raise ValueError("DPMlmAnonymizer using by_risk selector requires RhoParams buckets")
+                        raise ValueError(
+                            "DPMlmAnonymizer using by_risk selector requires RhoParams buckets"
+                        )
                     self._unit.set_thresholds(rho_vals, name="rho")
                 elif isinstance(self._unit, PIIOnlyUnit):
-                    lambda_vals = [float(hp.get("lambda")) for hp in eps_combos if hp.get("lambda") is not None]
+                    lambda_vals = [
+                        float(hp.get("lambda"))
+                        for hp in eps_combos
+                        if hp.get("lambda") is not None
+                    ]
                     if not lambda_vals:
-                        raise ValueError("DPMlmAnonymizer using pii_only selector requires LambdaParams buckets")
+                        raise ValueError(
+                            "DPMlmAnonymizer using pii_only selector requires LambdaParams buckets"
+                        )
                     self._unit.set_thresholds(lambda_vals, name="lambda")
 
                 if isinstance(self._unit, UntilKUnit):
@@ -644,7 +729,9 @@ class DPMlmAnonymizer(Anonymizer):
                 context: Dict[str, Any] = {"record_name": record_name}
                 used_precomputed = False
 
-                risk_scores, used_precomputed = self._collect_risk_scores(text, offsets, record_name, record_uid=record_uid)
+                risk_scores, used_precomputed = self._collect_risk_scores(
+                    text, offsets, record_name, record_uid=record_uid
+                )
                 if risk_scores.size and len(risk_scores) == len(offsets):
                     self._unit.set_risk_scores(risk_scores)
                 self._print_verbose_risk_tokens(
@@ -658,11 +745,16 @@ class DPMlmAnonymizer(Anonymizer):
                 token_epsilons: Optional[np.ndarray] = None
                 if risk_scores.size and len(risk_scores) == len(offsets):
                     from dp.utils.explainer.uniform import UniformExplainer
-                    if self._explainer is not None and isinstance(self._explainer, UniformExplainer):
+
+                    if self._explainer is not None and isinstance(
+                        self._explainer, UniformExplainer
+                    ):
                         weights = np.ones_like(risk_scores, dtype=float)
                         weights = weights / float(len(weights))
                     else:
-                        weights = _scores_to_inverse_probs(risk_scores, temperature=self.risk_temperature)
+                        weights = _scores_to_inverse_probs(
+                            risk_scores, temperature=self.risk_temperature
+                        )
                     token_epsilons = eps_val * weights * len(weights)
 
                 self._print_verbose_epsilon_distribution(
@@ -678,9 +770,15 @@ class DPMlmAnonymizer(Anonymizer):
                     local_max = float(values.max())
                     debug_epsilon_token_count += int(values.size)
                     debug_epsilon_token_sum += float(values.sum())
-                    if debug_epsilon_token_min is None or local_min < debug_epsilon_token_min:
+                    if (
+                        debug_epsilon_token_min is None
+                        or local_min < debug_epsilon_token_min
+                    ):
                         debug_epsilon_token_min = local_min
-                    if debug_epsilon_token_max is None or local_max > debug_epsilon_token_max:
+                    if (
+                        debug_epsilon_token_max is None
+                        or local_max > debug_epsilon_token_max
+                    ):
                         debug_epsilon_token_max = local_max
 
                 runtime_stats: Dict[str, int] = {
@@ -692,7 +790,7 @@ class DPMlmAnonymizer(Anonymizer):
                     "skipped_masked": 0,
                     "same_token": 0,
                 }
-                
+
                 ledger = TokenLedger(text, offsets)
 
                 apply_fn = self._make_apply_fn(
@@ -708,10 +806,12 @@ class DPMlmAnonymizer(Anonymizer):
                         apply_fn, ledger, offsets, self.max_retry_rounds
                     )
 
-                for step in self._unit.anonymize(text, offsets, apply_fn, ledger, **context):
+                for step in self._unit.anonymize(
+                    text, offsets, apply_fn, ledger, **context
+                ):
                     threshold = step.threshold
                     threshold_type = step.threshold_type
-                    
+
                     matching_hp = None
                     for hp in eps_combos:
                         if threshold_type == "k" and hp.get("k") == threshold:
@@ -720,17 +820,23 @@ class DPMlmAnonymizer(Anonymizer):
                         elif threshold_type == "rho" and hp.get("rho") == threshold:
                             matching_hp = hp
                             break
-                        elif threshold_type == "lambda" and hp.get("lambda") == threshold:
+                        elif (
+                            threshold_type == "lambda" and hp.get("lambda") == threshold
+                        ):
                             matching_hp = hp
                             break
-                    
+
                     if matching_hp is None:
-                        matching_hp = eps_combos[0] if eps_combos else {"epsilon": eps_val}
-                    
+                        matching_hp = (
+                            eps_combos[0] if eps_combos else {"epsilon": eps_val}
+                        )
+
                     hp_with_threshold = {**matching_hp}
                     if threshold is not None:
                         if threshold_type not in {"lambda", "rho", "k"}:
-                            raise ValueError(f"Unknown threshold name: {threshold_type!r}")
+                            raise ValueError(
+                                f"Unknown threshold name: {threshold_type!r}"
+                            )
                         hp_with_threshold[threshold_type] = threshold
 
                     private_text = step.text
@@ -745,23 +851,28 @@ class DPMlmAnonymizer(Anonymizer):
                         **step.metadata,
                     }
                     metadata["total"] = int(len(offsets))
-                    token_edits = [TokenEdit.from_mapping(e) for e in ledger.result_edits_metadata()]
+                    token_edits = [
+                        TokenEdit.from_mapping(e)
+                        for e in ledger.result_edits_metadata()
+                    ]
                     if used_precomputed:
                         metadata["explainer"] = "PrecomputedRisk"
                     elif self._explainer is not None:
                         metadata["explainer"] = self._explainer.__class__.__name__
 
-                    outputs.append((
-                        hp_with_threshold,
-                        AnonymizationResult(
-                            text=private_text,
-                            annotations=TextAnnotations(
-                                spans=[],
-                                token_edits=token_edits,
+                    outputs.append(
+                        (
+                            hp_with_threshold,
+                            AnonymizationResult(
+                                text=private_text,
+                                annotations=TextAnnotations(
+                                    spans=[],
+                                    token_edits=token_edits,
+                                ),
+                                metadata=metadata,
                             ),
-                            metadata=metadata,
-                        ),
-                    ))
+                        )
+                    )
 
             finally:
                 clear_memory()

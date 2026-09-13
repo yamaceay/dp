@@ -4,7 +4,11 @@ from typing import Optional, Union, Iterable
 from tqdm import tqdm
 
 from dp.loaders import get_adapter
-from dp.tri.loaders.base import AttackerDatasetAdapter, AttackerDatasetRecord, _normalize_texts
+from dp.tri.loaders.base import (
+    AttackerDatasetAdapter,
+    AttackerDatasetRecord,
+    _normalize_texts,
+)
 from dp.utils.rewriter import BartRewriter
 from dp.utils.device import resolve_device
 from dp.loaders.annotations import apply_annotations
@@ -66,22 +70,40 @@ class _RatBenchAttackerDatasetAdapterBase(AttackerDatasetAdapter):
         records_list = list(self.adapter.iter_records())
         iterator = iter(records_list)
         if progress:
-            iterator = tqdm(records_list, desc="Processing attacker records", total=len(records_list))
+            iterator = tqdm(
+                records_list,
+                desc="Processing attacker records",
+                total=len(records_list),
+            )
         for idx, record in enumerate(iterator):
             modified_record = record
-            if self._starting_anonymizations_by_idx is not None and idx < len(self._starting_anonymizations_by_idx):
+            if self._starting_anonymizations_by_idx is not None and idx < len(
+                self._starting_anonymizations_by_idx
+            ):
                 anns = self._starting_anonymizations_by_idx[idx]
                 if anns:
                     modified_record = record.copy()
-                    modified_record.text = apply_annotations(record.text, anns, mask_text=self._starting_replacement)
+                    modified_record.text = apply_annotations(
+                        record.text, anns, mask_text=self._starting_replacement
+                    )
             if self._cache_map is not None and modified_record.name in self._cache_map:
                 ext = self._cache_map.get(modified_record.name, {})
                 train_texts = _normalize_texts(ext.get("train_texts", []))
                 eval_texts = _normalize_texts(ext.get("eval_texts", []))
                 test_texts = _normalize_texts(ext.get("test_texts", []))
             elif self.USE_BART:
-                train_texts = [self.rewriter.rewrite(text=modified_record.text, **self.rewriter_kwargs) for _ in range(self.n_train_samples)]
-                eval_texts = [self.rewriter.rewrite(text=modified_record.text, **self.rewriter_kwargs) for _ in range(self.n_eval_samples)]
+                train_texts = [
+                    self.rewriter.rewrite(
+                        text=modified_record.text, **self.rewriter_kwargs
+                    )
+                    for _ in range(self.n_train_samples)
+                ]
+                eval_texts = [
+                    self.rewriter.rewrite(
+                        text=modified_record.text, **self.rewriter_kwargs
+                    )
+                    for _ in range(self.n_eval_samples)
+                ]
                 test_texts = []
             else:
                 train_texts = [modified_record.text] * self.n_train_samples

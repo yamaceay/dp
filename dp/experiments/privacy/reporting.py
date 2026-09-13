@@ -49,9 +49,13 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
             {
                 "type": "experiment",
                 "score": {
-                    "mean": 0.0, 
-                    "mean_reciprocal_rank": sum(1 / r.rank for r in report.original_ranks) / len(report.original_ranks),
-                    "accuracy": sum(r.rank == 1 for r in report.original_ranks) / len(report.original_ranks),
+                    "mean": 0.0,
+                    "mean_reciprocal_rank": sum(
+                        1 / r.rank for r in report.original_ranks
+                    )
+                    / len(report.original_ranks),
+                    "accuracy": sum(r.rank == 1 for r in report.original_ranks)
+                    / len(report.original_ranks),
                 },
                 "original_record_count": report.original_record_count,
             }
@@ -60,8 +64,10 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
             records.append(self._rank_record("original_rank", entry))
         for evaluation in report.evaluations:
             privacy_metrics = {
-                "mean_reciprocal_rank": sum(1 / r.rank for r in evaluation.ranks) / len(evaluation.ranks),
-                "accuracy": sum(r.rank == 1 for r in evaluation.ranks) / len(evaluation.ranks),
+                "mean_reciprocal_rank": sum(1 / r.rank for r in evaluation.ranks)
+                / len(evaluation.ranks),
+                "accuracy": sum(r.rank == 1 for r in evaluation.ranks)
+                / len(evaluation.ranks),
             }
             records.append(
                 {
@@ -72,16 +78,22 @@ class JsonLinesPrivacyReportOutputter(PrivacyReportOutputter):
                     "summary": {
                         **(evaluation.summary or {}),
                         **privacy_metrics,
-                    }
+                    },
                 }
             )
             for entry in evaluation.ranks:
-                records.append(self._rank_record("evaluation_rank", entry, evaluation.name))
-        serialized = "\n".join(json.dumps(record, ensure_ascii=False) for record in records)
+                records.append(
+                    self._rank_record("evaluation_rank", entry, evaluation.name)
+                )
+        serialized = "\n".join(
+            json.dumps(record, ensure_ascii=False) for record in records
+        )
         self.sink(serialized)
 
     @staticmethod
-    def _rank_record(record_type: str, entry: RankEntry, evaluation: Optional[str] = None) -> Dict[str, Any]:
+    def _rank_record(
+        record_type: str, entry: RankEntry, evaluation: Optional[str] = None
+    ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "type": record_type,
             "key": entry.key,
@@ -160,7 +172,8 @@ def build_privacy_report(
     return PrivacyExperimentReport(
         score={
             "mean": 0.0,
-            "mean_reciprocal_rank": sum(1 / r.rank for r in original_ranks) / len(original_ranks),
+            "mean_reciprocal_rank": sum(1 / r.rank for r in original_ranks)
+            / len(original_ranks),
             "accuracy": sum(r.rank == 1 for r in original_ranks) / len(original_ranks),
         },
         original_record_count=original_record_count,

@@ -39,8 +39,12 @@ class PerturbationPercentageDivergence(TextDivergenceExperiment):
 
     @staticmethod
     def _compute_pp(metadata: Dict[str, Any]) -> float:
-        perturbed = PerturbationPercentageDivergence._as_non_negative_int(metadata.get("perturbed", metadata.get("masked")))
-        total = PerturbationPercentageDivergence._as_non_negative_int(metadata.get("total"))
+        perturbed = PerturbationPercentageDivergence._as_non_negative_int(
+            metadata.get("perturbed", metadata.get("masked"))
+        )
+        total = PerturbationPercentageDivergence._as_non_negative_int(
+            metadata.get("total")
+        )
         if total <= 0:
             return 0.0
         value = float(perturbed) / float(total)
@@ -58,15 +62,30 @@ class PerturbationPercentageDivergence(TextDivergenceExperiment):
         total_records = len(self.original_texts)
 
         for name, payload in self.evaluation_datasets.items():
-            if name in ["spacy", "presidio", "manual", "dpbart", "dpprompt", "dpparaphrase"]:
-                print(f"Skipping evaluation for {name} as it is a known method with expected metadata format.")
+            if name in [
+                "spacy",
+                "presidio",
+                "manual",
+                "dpbart",
+                "dpprompt",
+                "dpparaphrase",
+            ]:
+                print(
+                    f"Skipping evaluation for {name} as it is a known method with expected metadata format."
+                )
                 continue
-            metadata_by_key: Dict[str, Dict[str, Any]] = dict(payload.get("metadata", {}))
+            metadata_by_key: Dict[str, Dict[str, Any]] = dict(
+                payload.get("metadata", {})
+            )
             total = payload.get("total")
             if total is None:
-                print(f"Evaluation dataset '{name}' is missing 'total' in payload, skipping.")
+                print(
+                    f"Evaluation dataset '{name}' is missing 'total' in payload, skipping."
+                )
                 continue
-            matched_keys = [key for key in self.original_texts if key in metadata_by_key]
+            matched_keys = [
+                key for key in self.original_texts if key in metadata_by_key
+            ]
             if not matched_keys:
                 evaluations[name] = {
                     "similarity": {},
@@ -80,8 +99,12 @@ class PerturbationPercentageDivergence(TextDivergenceExperiment):
 
             pp_values = [self._compute_pp(metadata_by_key[key]) for key in matched_keys]
             similarities = [1.0 - value for value in pp_values]
-            similarity_map = {key: float(similarities[idx]) for idx, key in enumerate(matched_keys)}
-            divergence_map = {key: float(pp_values[idx]) for idx, key in enumerate(matched_keys)}
+            similarity_map = {
+                key: float(similarities[idx]) for idx, key in enumerate(matched_keys)
+            }
+            divergence_map = {
+                key: float(pp_values[idx]) for idx, key in enumerate(matched_keys)
+            }
             summary = self._summarize_pp(pp_values)
             evaluations[name] = {
                 "similarity": similarity_map,
@@ -94,7 +117,11 @@ class PerturbationPercentageDivergence(TextDivergenceExperiment):
             if summary:
                 divergence_means.append(summary["divergence_mean"])
 
-        score_value = float(sum(divergence_means) / len(divergence_means)) if divergence_means else 0.0
+        score_value = (
+            float(sum(divergence_means) / len(divergence_means))
+            if divergence_means
+            else 0.0
+        )
         metrics = {
             "records": self.record_info,
             "original": {

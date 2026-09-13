@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import glob
 import json
 
-from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations
+from dp.loaders.base import DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,11 @@ def load_result_records(path: str) -> List[ResultRecord]:
             if not isinstance(metadata, dict):
                 raise ValueError(f"metadata must be an object at line {line_num}")
             annotations = _parse_text_annotations(payload, line_num)
-            records.append(ResultRecord(idx=idx, text=text, annotations=annotations, metadata=metadata))
+            records.append(
+                ResultRecord(
+                    idx=idx, text=text, annotations=annotations, metadata=metadata
+                )
+            )
     return records
 
 
@@ -64,9 +68,14 @@ def build_dataset_from_results(
     max_records: Optional[int] = None,
 ) -> Tuple[List[DatasetRecord], List[int]]:
     result_records = load_result_records(result_path)
-    
+
     valid_indices = None
-    if original_records is not None and (start is not None or end is not None or step is not None or max_records is not None):
+    if original_records is not None and (
+        start is not None
+        or end is not None
+        or step is not None
+        or max_records is not None
+    ):
         total_original = len(original_records)
         slice_start = start if start is not None else 0
         slice_end = end if end is not None else total_original
@@ -74,21 +83,23 @@ def build_dataset_from_results(
         valid_indices = set(range(slice_start, slice_end, slice_step))
         if max_records is not None:
             valid_indices = set(list(valid_indices)[:max_records])
-    
+
     dataset_records: List[DatasetRecord] = []
     source_indices: List[int] = []
     for pos, result in enumerate(result_records):
         idx = result.idx if result.idx is not None else pos
         if idx < 0:
             raise ValueError("Result record idx must be non-negative")
-        
+
         if valid_indices is not None and idx not in valid_indices:
             continue
-        
+
         original = None
         if original_records is not None:
             if idx >= len(original_records):
-                raise ValueError(f"Result idx {idx} is out of range for original records")
+                raise ValueError(
+                    f"Result idx {idx} is out of range for original records"
+                )
             original = original_records[idx]
         dataset_records.append(_merge_result_record(result, original))
         source_indices.append(idx)
@@ -128,13 +139,17 @@ def _parse_text_annotations(payload: Dict[str, Any], line_num: int) -> TextAnnot
         try:
             token_edits.append(TokenEdit.from_mapping(item))
         except Exception as exc:
-            raise ValueError(f"Invalid token_edit at line {line_num} (item {item_idx})") from exc
+            raise ValueError(
+                f"Invalid token_edit at line {line_num} (item {item_idx})"
+            ) from exc
     return TextAnnotations(spans=spans, token_edits=token_edits)
 
 
 def _parse_text_annotation(obj: object, line_num: int, span_idx: int) -> TextAnnotation:
     if not isinstance(obj, dict):
-        raise ValueError(f"Invalid annotation span at line {line_num} (span {span_idx})")
+        raise ValueError(
+            f"Invalid annotation span at line {line_num} (span {span_idx})"
+        )
     if "start" not in obj or "end" not in obj:
         raise ValueError(f"Missing start/end at line {line_num} (span {span_idx})")
     start = obj["start"]
@@ -145,24 +160,36 @@ def _parse_text_annotation(obj: object, line_num: int, span_idx: int) -> TextAnn
         raise ValueError(f"Invalid span at line {line_num} (span {span_idx})")
     label = obj.get("label")
     if label is not None and not isinstance(label, str):
-        raise ValueError(f"label must be a string or null at line {line_num} (span {span_idx})")
+        raise ValueError(
+            f"label must be a string or null at line {line_num} (span {span_idx})"
+        )
     text = obj.get("text")
     if text is not None and not isinstance(text, str):
-        raise ValueError(f"text must be a string or null at line {line_num} (span {span_idx})")
+        raise ValueError(
+            f"text must be a string or null at line {line_num} (span {span_idx})"
+        )
     replacement = obj.get("replacement")
     if replacement is not None and not isinstance(replacement, str):
-        raise ValueError(f"replacement must be a string or null at line {line_num} (span {span_idx})")
+        raise ValueError(
+            f"replacement must be a string or null at line {line_num} (span {span_idx})"
+        )
     confidence = obj.get("confidence")
     if confidence is not None and not isinstance(confidence, (int, float)):
-        raise ValueError(f"confidence must be a number or null at line {line_num} (span {span_idx})")
+        raise ValueError(
+            f"confidence must be a number or null at line {line_num} (span {span_idx})"
+        )
     annotator = obj.get("annotator")
     if annotator is not None and not isinstance(annotator, str):
-        raise ValueError(f"annotator must be a string or null at line {line_num} (span {span_idx})")
+        raise ValueError(
+            f"annotator must be a string or null at line {line_num} (span {span_idx})"
+        )
     metadata = obj.get("metadata")
     if metadata is None:
         metadata = {}
     if not isinstance(metadata, dict):
-        raise ValueError(f"metadata must be an object at line {line_num} (span {span_idx})")
+        raise ValueError(
+            f"metadata must be an object at line {line_num} (span {span_idx})"
+        )
     return TextAnnotation(
         start=start,
         end=end,
@@ -185,15 +212,17 @@ def _merge_result_record(
     if isinstance(result.metadata, dict):
         metadata.update(result.metadata)
     if result.annotations.token_edits:
-        metadata["prior_token_edits"] = [te.to_dict() for te in result.annotations.token_edits]
-    
+        metadata["prior_token_edits"] = [
+            te.to_dict() for te in result.annotations.token_edits
+        ]
+
     if original is not None:
         metadata["original_text"] = original.text
-    
+
     spans_out: Optional[List[TextAnnotation]] = None
     if result.annotations.spans:
         spans_out = list(result.annotations.spans)
-    
+
     uid = ""
     name = ""
     if original is not None:

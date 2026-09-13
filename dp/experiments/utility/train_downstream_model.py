@@ -10,7 +10,11 @@ import yaml
 from dp.loaders.base import DatasetRecord
 from dp.loaders.derive import get_getter
 from dp.tri.base import TRIDetector
-from dp.tri.loaders import ATTACKER_ADAPTER_REGISTRY, AttackerDatasetRecord, get_attacker_adapter
+from dp.tri.loaders import (
+    ATTACKER_ADAPTER_REGISTRY,
+    AttackerDatasetRecord,
+    get_attacker_adapter,
+)
 
 available_datasets = list(ATTACKER_ADAPTER_REGISTRY.keys())
 
@@ -37,7 +41,12 @@ def _parse_scalar(raw: str) -> Any:
     if lowered == "false":
         return False
     try:
-        if value.startswith("0") and len(value) > 1 and value[1].isdigit() and not value.startswith("0."):
+        if (
+            value.startswith("0")
+            and len(value) > 1
+            and value[1].isdigit()
+            and not value.startswith("0.")
+        ):
             raise ValueError
         return int(value)
     except ValueError:
@@ -65,13 +74,17 @@ def _apply_set_overrides(cfg: dict[str, Any], overrides: Optional[list[str]]) ->
         cur: Any = cfg
         for part in parts[:-1]:
             if not isinstance(cur, dict):
-                raise ValueError(f"Invalid --set path (not a mapping at '{part}'): {key_raw}")
+                raise ValueError(
+                    f"Invalid --set path (not a mapping at '{part}'): {key_raw}"
+                )
             nxt = cur.get(part)
             if nxt is None:
                 nxt = {}
                 cur[part] = nxt
             if not isinstance(nxt, dict):
-                raise ValueError(f"Invalid --set path (existing non-mapping at '{part}'): {key_raw}")
+                raise ValueError(
+                    f"Invalid --set path (existing non-mapping at '{part}'): {key_raw}"
+                )
             cur = nxt
         if not isinstance(cur, dict):
             raise ValueError(f"Invalid --set path (not a mapping): {key_raw}")
@@ -170,10 +183,12 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
     }
     return cfg
 
+
 def _label_from_record(dataset: str, key: str, record: DatasetRecord) -> Optional[str]:
     getter = get_getter(dataset, key)
     value = getter(record)
     return None if value is None else str(value)
+
 
 def _inject_labels_as_names(
     records: List[AttackerDatasetRecord],
@@ -199,9 +214,14 @@ def _inject_labels_as_names(
         )
     return out
 
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Train TRI downstream classifier with label injection")
-    parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate", "predict"])
+    parser = argparse.ArgumentParser(
+        description="Train TRI downstream classifier with label injection"
+    )
+    parser.add_argument(
+        "--mode", type=str, default="train", choices=["train", "evaluate", "predict"]
+    )
 
     parser.add_argument("--training-in", type=str, default=None)
     parser.add_argument("--output-root", type=str, default=None)
@@ -213,7 +233,9 @@ def main() -> int:
         default=None,
     )
 
-    parser.add_argument("--dataset", type=str, default="tab", choices=available_datasets)
+    parser.add_argument(
+        "--dataset", type=str, default="tab", choices=available_datasets
+    )
     parser.add_argument("--data_path", type=str, default=None)
     parser.add_argument("--model_name", type=str, default="distilbert-base-uncased")
     parser.add_argument("--max_records", type=int, default=None)
@@ -226,9 +248,23 @@ def main() -> int:
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--attacker_extensions", type=str, default=None)
     parser.add_argument("--early_stop_threshold", type=float, default=None)
-    parser.add_argument("--eval_on_original", action="store_true", help="Also evaluate on original record text (in addition to deidentified/rewritten)")
-    parser.add_argument("--init_from", type=str, default=None, help="Path to base TRI checkpoint to reuse encoder weights from")
-    parser.add_argument("--label_key", type=str, default=None, help="Label getter key from derive registry (e.g., 'feature_label', 'country', 'year')")
+    parser.add_argument(
+        "--eval_on_original",
+        action="store_true",
+        help="Also evaluate on original record text (in addition to deidentified/rewritten)",
+    )
+    parser.add_argument(
+        "--init_from",
+        type=str,
+        default=None,
+        help="Path to base TRI checkpoint to reuse encoder weights from",
+    )
+    parser.add_argument(
+        "--label_key",
+        type=str,
+        default=None,
+        help="Label getter key from derive registry (e.g., 'feature_label', 'country', 'year')",
+    )
 
     args = parser.parse_args()
 
@@ -256,7 +292,11 @@ def main() -> int:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = args.run_name or cfg.get("run_name") or timestamp
-        output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(cfg["output_root"]).resolve()
+        output_root = (
+            Path(args.output_root).expanduser().resolve()
+            if args.output_root
+            else Path(cfg["output_root"]).resolve()
+        )
         model_path: Path = (output_root / str(run_name)).resolve()
     else:
         if args.data_path is None:
@@ -278,21 +318,38 @@ def main() -> int:
         label_key = args.label_key
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
+        output_root = (
+            Path(args.output_root).expanduser().resolve()
+            if args.output_root
+            else Path(f"models/tri_pipelines/{dataset}").resolve()
+        )
         run_name = args.run_name or timestamp
-        model_path = Path(args.model_path).expanduser().resolve() if args.model_path else (output_root / run_name).resolve()
+        model_path = (
+            Path(args.model_path).expanduser().resolve()
+            if args.model_path
+            else (output_root / run_name).resolve()
+        )
 
-    adapter = get_attacker_adapter(dataset, data=dataset, data_in=str(data_path), max_records=max_records)
+    adapter = get_attacker_adapter(
+        dataset, data=dataset, data_in=str(data_path), max_records=max_records
+    )
     if attacker_extensions:
         adapter.load_cache_from_jsonl(str(attacker_extensions))
     base_records: List[AttackerDatasetRecord] = list(adapter.iter_records())
     if not label_key:
-        raise SystemExit("--label_key is required (or provide 'label_key' in training config)")
+        raise SystemExit(
+            "--label_key is required (or provide 'label_key' in training config)"
+        )
     records = _inject_labels_as_names(base_records, dataset, label_key)
     if not records:
         raise SystemExit("No records loaded")
 
-    tri = TRIDetector(dataset_name=dataset, model_name=model_name, max_length=max_length, device=device)
+    tri = TRIDetector(
+        dataset_name=dataset,
+        model_name=model_name,
+        max_length=max_length,
+        device=device,
+    )
 
     if args.mode == "train":
         tri.setup(records=records)
@@ -327,10 +384,18 @@ def main() -> int:
         print(results)
         return 0
 
-    sample_records = tri.eval_records[:5] if len(tri.eval_records) >= 5 else tri.eval_records
+    sample_records = (
+        tri.eval_records[:5] if len(tri.eval_records) >= 5 else tri.eval_records
+    )
     predictions = tri.predict(sample_records)
-    print([{ "uid": uid, "top": max(probs.items(), key=lambda x: x[1])[0] } for uid, probs in list(predictions.items())[:5]])
+    print(
+        [
+            {"uid": uid, "top": max(probs.items(), key=lambda x: x[1])[0]}
+            for uid, probs in list(predictions.items())[:5]
+        ]
+    )
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

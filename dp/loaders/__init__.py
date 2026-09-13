@@ -5,7 +5,13 @@ Adapters provide a consistent way to access dataset records with a unique
 identifier, raw text, optional annotations, and optional utility metadata.
 """
 
-from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, TextAnnotations, TokenEdit
+from dp.loaders.base import (
+    DatasetAdapter,
+    DatasetRecord,
+    TextAnnotation,
+    TextAnnotations,
+    TokenEdit,
+)
 
 from dp.loaders._tab import TabDatasetAdapter
 
@@ -42,6 +48,7 @@ if DBBioDatasetAdapter is not None:
 if RatBenchDatasetAdapter is not None:
     ADAPTER_REGISTRY["rat_bench"] = RatBenchDatasetAdapter
 
+
 def get_adapter(name: str, **kwargs) -> DatasetAdapter:
     """Instantiate a dataset adapter by name."""
     key = (name or "").lower()
@@ -52,6 +59,7 @@ def get_adapter(name: str, **kwargs) -> DatasetAdapter:
         )
     adapter_cls = ADAPTER_REGISTRY[key]
     return adapter_cls(**kwargs)
+
 
 __all__ = [
     "DatasetAdapter",

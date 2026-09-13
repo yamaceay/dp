@@ -78,17 +78,29 @@ class TRIDetector:
         if learning_rate <= 0:
             raise ValueError(f"learning_rate must be positive, got {learning_rate}")
         if use_pretraining and pretraining_epochs <= 0:
-            raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
-        if early_stop_threshold is not None and (early_stop_threshold <= 0.0 or early_stop_threshold > 1.0):
-            raise ValueError(f"early_stop_threshold must be in (0, 1], got {early_stop_threshold}")
+            raise ValueError(
+                f"pretraining_epochs must be positive, got {pretraining_epochs}"
+            )
+        if early_stop_threshold is not None and (
+            early_stop_threshold <= 0.0 or early_stop_threshold > 1.0
+        ):
+            raise ValueError(
+                f"early_stop_threshold must be in (0, 1], got {early_stop_threshold}"
+            )
         if early_stop_patience is not None and early_stop_patience <= 0:
-            raise ValueError(f"early_stop_patience must be positive, got {early_stop_patience}")
+            raise ValueError(
+                f"early_stop_patience must be positive, got {early_stop_patience}"
+            )
         if loss_type not in {"cross_entropy", "focal"}:
             raise ValueError(f"Unknown loss_type: {loss_type}")
         if focal_gamma < 0:
             raise ValueError(f"focal_gamma must be >= 0, got {focal_gamma}")
-        if focal_ignore_pt is not None and (focal_ignore_pt <= 0.0 or focal_ignore_pt >= 1.0):
-            raise ValueError(f"focal_ignore_pt must be in (0, 1), got {focal_ignore_pt}")
+        if focal_ignore_pt is not None and (
+            focal_ignore_pt <= 0.0 or focal_ignore_pt >= 1.0
+        ):
+            raise ValueError(
+                f"focal_ignore_pt must be in (0, 1), got {focal_ignore_pt}"
+            )
         if weight_decay < 0:
             raise ValueError(f"weight_decay must be >= 0, got {weight_decay}")
         if warmup_steps < 0:
@@ -99,7 +111,9 @@ class TRIDetector:
         resolved_output_dir = output_dir
         if resolved_output_dir is None:
             if not self.dataset_name:
-                raise ValueError("dataset_name must be set when output_dir is not provided")
+                raise ValueError(
+                    "dataset_name must be set when output_dir is not provided"
+                )
             resolved_output_dir = f"models/tri_pipelines/{self.dataset_name}"
         Path(resolved_output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -110,7 +124,9 @@ class TRIDetector:
             encoder_lr=learning_rate,
             device=str(self.device),
             early_stop_threshold=early_stop_threshold,
-            early_stop_patience=(early_stop_patience if early_stop_patience is not None else 2),
+            early_stop_patience=(
+                early_stop_patience if early_stop_patience is not None else 2
+            ),
             loss_type=loss_type,
             focal_gamma=focal_gamma,
             focal_alpha=focal_alpha,
@@ -135,12 +151,14 @@ class TRIDetector:
         eval_labels = [record.name for record in self.eval_records]
         stop_evaluator = None
         if debug_tri and self.test_records:
+
             def stop_evaluator_fn() -> Dict[str, float]:
                 metrics = self.evaluate_ranking(self.test_records)
                 return {
                     "mrr": float(metrics["mrr"]),
                     "acc": float(metrics["acc"]),
                 }
+
             stop_evaluator = stop_evaluator_fn
         self.classifier.fit(
             train_texts,
@@ -174,7 +192,9 @@ class TRIDetector:
         resolved_model_path = model_path
         if resolved_model_path is None:
             if not self.dataset_name:
-                raise ValueError("dataset_name must be set when model_path is not provided")
+                raise ValueError(
+                    "dataset_name must be set when model_path is not provided"
+                )
             resolved_model_path = f"models/tri_pipelines/{self.dataset_name}"
         model_dir = Path(resolved_model_path)
         if not model_dir.exists():
@@ -205,7 +225,9 @@ class TRIDetector:
             return {}
         if self.classifier is None:
             raise ValueError("Model not initialized. Train or load a model first.")
-        probabilities = self.classifier.predict_proba([record.text for record in records])
+        probabilities = self.classifier.predict_proba(
+            [record.text for record in records]
+        )
         return {
             (record.uid or str(idx)): scores
             for idx, (record, scores) in enumerate(zip(records, probabilities))
@@ -321,9 +343,15 @@ class TRIDetector:
                 train_texts = [strip_stopwords(text) for text in train_texts]
                 eval_texts = [strip_stopwords(text) for text in eval_texts]
                 test_texts = [strip_stopwords(text) for text in test_texts]
-            self.train_records.extend(DatasetRecord(text=text, name=name_raw) for text in train_texts)
-            self.eval_records.extend(DatasetRecord(text=text, name=name_raw) for text in eval_texts)
-            self.test_records.extend(DatasetRecord(text=text, name=name_raw) for text in test_texts)
+            self.train_records.extend(
+                DatasetRecord(text=text, name=name_raw) for text in train_texts
+            )
+            self.eval_records.extend(
+                DatasetRecord(text=text, name=name_raw) for text in eval_texts
+            )
+            self.test_records.extend(
+                DatasetRecord(text=text, name=name_raw) for text in test_texts
+            )
         if not self.train_records:
             raise ValueError("No training records built from attacker records")
         if not self.eval_records:

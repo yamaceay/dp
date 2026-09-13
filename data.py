@@ -105,8 +105,6 @@ if __name__ == "__main__":
     selected_value_getters = parse_selected_getters(args.select, value_getters)
 
     unique_values: Dict[str, Dict[object, int]] = {}
-    sum_text_length = 0
-    max_text_length = 0
     all_text_lengths = []
 
     records_to_process = enumerate(dataset.iter_records())

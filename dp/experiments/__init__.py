@@ -12,15 +12,18 @@ class ExperimentResult:
 
 class Experiment(ABC):
     def __init__(self, *args, **kwargs):
-        self.setup_complete = False
-        self.cleanup_complete = False
-    
+        # self.setup_complete = False
+        # self.cleanup_complete = False
+        pass
+
     def setup(self, *args, **kwargs):
-        self.setup_complete = True
-    
+        # self.setup_complete = True
+        pass
+
     @abstractmethod
     def run(self, *args, **kwargs) -> ExperimentResult:
         raise NotImplementedError()
-    
+
     def cleanup(self):
-        self.cleanup_complete = True
+        # self.cleanup_complete = True
+        pass

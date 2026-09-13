@@ -10,16 +10,20 @@ from dp.utils.tasking import apply_task_template
 
 OutputCallback = Callable[[str], None]
 
+
 def build_output_sink(output_file: Optional[str]) -> OutputCallback:
     if not output_file:
         return print
     path = Path(output_file).expanduser()
+
     def sink(content: str) -> None:
         normalized = content if content.endswith("\n") else f"{content}\n"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(normalized, encoding="utf-8")
         print(f"Report written to {path}")
+
     return sink
+
 
 def _first_text(*values: Any) -> str:
     for value in values:
@@ -37,7 +41,10 @@ def _first_text(*values: Any) -> str:
                 return text
     return ""
 
-def collect_jsonl_sources(*paths: str, task_id: Optional[int] = None) -> Dict[str, Path]:
+
+def collect_jsonl_sources(
+    *paths: str, task_id: Optional[int] = None
+) -> Dict[str, Path]:
     resolved_paths: List[Path] = []
     for raw in paths:
         rendered = apply_task_template(raw, task_id) if isinstance(raw, str) else raw

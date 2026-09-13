@@ -48,17 +48,27 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         training_wait_timeout_seconds: Optional[float] = None,
         mark_existing_checkpoint_complete: bool = True,
     ):
-        SupervisedDownstreamHead.__init__(self, name="bert_ordinal", primary_metric=primary_metric)
+        SupervisedDownstreamHead.__init__(
+            self, name="bert_ordinal", primary_metric=primary_metric
+        )
         BertHFPlumbing.__init__(self, device=device)
 
         if pretraining_epochs <= 0:
-            raise ValueError(f"pretraining_epochs must be positive, got {pretraining_epochs}")
+            raise ValueError(
+                f"pretraining_epochs must be positive, got {pretraining_epochs}"
+            )
         if pretraining_batch_size is not None and pretraining_batch_size <= 0:
-            raise ValueError(f"pretraining_batch_size must be positive, got {pretraining_batch_size}")
+            raise ValueError(
+                f"pretraining_batch_size must be positive, got {pretraining_batch_size}"
+            )
         if pretraining_learning_rate <= 0:
-            raise ValueError(f"pretraining_learning_rate must be positive, got {pretraining_learning_rate}")
+            raise ValueError(
+                f"pretraining_learning_rate must be positive, got {pretraining_learning_rate}"
+            )
         if pretraining_mlm_probability <= 0.0 or pretraining_mlm_probability >= 1.0:
-            raise ValueError(f"pretraining_mlm_probability must be in (0, 1), got {pretraining_mlm_probability}")
+            raise ValueError(
+                f"pretraining_mlm_probability must be in (0, 1), got {pretraining_mlm_probability}"
+            )
         if weight_decay is not None and weight_decay < 0:
             raise ValueError(f"weight_decay must be >= 0, got {weight_decay}")
         if warmup_ratio is not None and (warmup_ratio < 0.0 or warmup_ratio >= 1.0):
@@ -72,10 +82,16 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.batch_size = int(batch_size)
         self.epochs = int(epochs)
         self.encoder_lr = float(encoder_lr) if encoder_lr is not None else None
-        self.head_lr = float(head_lr) if head_lr is not None else (float(encoder_lr) if encoder_lr is not None else None)
+        self.head_lr = (
+            float(head_lr)
+            if head_lr is not None
+            else (float(encoder_lr) if encoder_lr is not None else None)
+        )
         self.warmup_steps = int(warmup_steps)
         self.gradient_clip = float(gradient_clip)
-        self.early_stop_threshold = float(early_stop_threshold) if early_stop_threshold is not None else None
+        self.early_stop_threshold = (
+            float(early_stop_threshold) if early_stop_threshold is not None else None
+        )
         self.early_stop_patience = int(early_stop_patience)
         self.init_checkpoint = init_checkpoint
         self.checkpoint_dir = checkpoint_dir
@@ -87,13 +103,21 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         self.warmup_ratio = float(warmup_ratio) if warmup_ratio is not None else None
         self.use_pretraining = bool(use_pretraining)
         self.pretraining_epochs = int(pretraining_epochs)
-        self.pretraining_batch_size = int(pretraining_batch_size) if pretraining_batch_size is not None else self.batch_size
+        self.pretraining_batch_size = (
+            int(pretraining_batch_size)
+            if pretraining_batch_size is not None
+            else self.batch_size
+        )
         self.pretraining_learning_rate = float(pretraining_learning_rate)
         self.pretraining_mlm_probability = float(pretraining_mlm_probability)
         self.training_status_file = str(training_status_file)
         self.wait_for_training_completion = bool(wait_for_training_completion)
         self.training_poll_interval_seconds = float(training_poll_interval_seconds)
-        self.training_wait_timeout_seconds = float(training_wait_timeout_seconds) if training_wait_timeout_seconds is not None else None
+        self.training_wait_timeout_seconds = (
+            float(training_wait_timeout_seconds)
+            if training_wait_timeout_seconds is not None
+            else None
+        )
         self.mark_existing_checkpoint_complete = bool(mark_existing_checkpoint_complete)
 
         self._model: Optional[torch.nn.Module] = None
@@ -113,7 +137,9 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
             ) from exc
 
         checkpoint_source = self._active_checkpoint or self.init_checkpoint
-        base_model = load_backbone_with_optional_checkpoint(self.model_name, checkpoint_source)
+        base_model = load_backbone_with_optional_checkpoint(
+            self.model_name, checkpoint_source
+        )
 
         class OrdinalModel(torch.nn.Module):
             def __init__(self, base: torch.nn.Module, hidden_size: int, n_classes: int):
@@ -124,13 +150,17 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
                 self.num_classes = n_classes
 
             def forward(self, input_ids, attention_mask, labels=None):
-                outputs = self.base_model(input_ids=input_ids, attention_mask=attention_mask)
+                outputs = self.base_model(
+                    input_ids=input_ids, attention_mask=attention_mask
+                )
                 hidden = outputs.last_hidden_state[:, 0, :]
                 logits = self.coral(hidden)
 
                 loss = None
                 if labels is not None:
-                    levels = levels_from_labelbatch(labels.long(), num_classes=self.num_classes).to(logits.device)
+                    levels = levels_from_labelbatch(
+                        labels.long(), num_classes=self.num_classes
+                    ).to(logits.device)
                     loss = coral_loss(logits, levels)
 
                 return {"loss": loss, "logits": logits}
@@ -138,31 +168,48 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         hidden_size = int(base_model.config.hidden_size)
         return OrdinalModel(base_model, hidden_size, num_classes)
 
-    def _prepare_targets(self, train_labels: Sequence[Any], val_labels: Sequence[Any], union_labels: Sequence[Any]):
+    def _prepare_targets(
+        self,
+        train_labels: Sequence[Any],
+        val_labels: Sequence[Any],
+        union_labels: Sequence[Any],
+    ):
         from collections import Counter
 
         if self._label_order is None:
             unique_labels = sorted(set(union_labels), key=str)
             self._label_order = [str(label) for label in unique_labels]
-        self._label_to_index = {label: idx for idx, label in enumerate(self._label_order)}
-        self._index_to_label = {idx: label for idx, label in enumerate(self._label_order)}
+        self._label_to_index = {
+            label: idx for idx, label in enumerate(self._label_order)
+        }
+        self._index_to_label = {
+            idx: label for idx, label in enumerate(self._label_order)
+        }
 
-        train_encoded = np.array([self._label_to_index[str(label)] for label in train_labels], dtype=np.int64)
-        val_encoded = np.array([self._label_to_index[str(label)] for label in val_labels], dtype=np.int64)
+        train_encoded = np.array(
+            [self._label_to_index[str(label)] for label in train_labels], dtype=np.int64
+        )
+        val_encoded = np.array(
+            [self._label_to_index[str(label)] for label in val_labels], dtype=np.int64
+        )
         num_classes = len(self._label_order)
 
         print(f"Training on {len(train_labels)} samples: {dict(Counter(train_labels))}")
         print(f"Validating on {len(val_labels)} samples: {dict(Counter(val_labels))}")
         return train_encoded, val_encoded, num_classes
 
-    def fit(self, x_train: Any, y_train: Sequence[Any], x_val: Any, y_val: Sequence[Any]) -> None:
+    def fit(
+        self, x_train: Any, y_train: Sequence[Any], x_val: Any, y_val: Sequence[Any]
+    ) -> None:
         train_texts = list(x_train)
         val_texts = list(x_val)
         train_labels = list(y_train)
         val_labels = list(y_val)
         self._active_checkpoint = None
 
-        train_targets, val_targets, num_classes = self._prepare_targets(train_labels, val_labels, train_labels + val_labels)
+        train_targets, val_targets, num_classes = self._prepare_targets(
+            train_labels, val_labels, train_labels + val_labels
+        )
         self._num_classes = num_classes
 
         self._maybe_pretrain(
@@ -176,17 +223,30 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
             pretraining_learning_rate=self.pretraining_learning_rate,
             pretraining_mlm_probability=self.pretraining_mlm_probability,
         )
-        self._load_tokenizer_with_fallback(model_name=self.model_name, init_checkpoint=self.init_checkpoint)
+        self._load_tokenizer_with_fallback(
+            model_name=self.model_name, init_checkpoint=self.init_checkpoint
+        )
         self._maybe_enable_stopwords(self.mask_stopwords)
 
         self._model = self._create_model(num_classes)
+
         def _train_impl() -> None:
             if self.encoder_lr is None:
-                raise ValueError("encoder_lr is required for training but was not provided")
-            train_encodings = self._encode_texts(train_texts, mask_stopwords=self.mask_stopwords)
-            val_encodings = self._encode_texts(val_texts, mask_stopwords=self.mask_stopwords)
-            train_dataset = EncodedDataset(train_encodings, train_targets, label_dtype=torch.long)
-            val_dataset = EncodedDataset(val_encodings, val_targets, label_dtype=torch.long)
+                raise ValueError(
+                    "encoder_lr is required for training but was not provided"
+                )
+            train_encodings = self._encode_texts(
+                train_texts, mask_stopwords=self.mask_stopwords
+            )
+            val_encodings = self._encode_texts(
+                val_texts, mask_stopwords=self.mask_stopwords
+            )
+            train_dataset = EncodedDataset(
+                train_encodings, train_targets, label_dtype=torch.long
+            )
+            val_dataset = EncodedDataset(
+                val_encodings, val_targets, label_dtype=torch.long
+            )
 
             def compute_metrics(eval_pred: EvalPrediction) -> Dict[str, float]:
                 logits = np.asarray(eval_pred.predictions)
@@ -199,9 +259,13 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
                 for cls in unique_classes:
                     mask = labels == cls
                     if mask.sum() > 0:
-                        per_class_mae.append(float(np.abs(labels[mask] - class_preds[mask]).mean()))
+                        per_class_mae.append(
+                            float(np.abs(labels[mask] - class_preds[mask]).mean())
+                        )
 
-                macro_mae = float(np.mean(per_class_mae)) if per_class_mae else float("inf")
+                macro_mae = (
+                    float(np.mean(per_class_mae)) if per_class_mae else float("inf")
+                )
                 overall_mae = float(np.mean(np.abs(labels - class_preds)))
                 return {"macro_mae": macro_mae, "mae": overall_mae}
 
@@ -234,9 +298,12 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
             )
             self._trainer.train()
             if self.save_checkpoints and early_stopping.best_metric is not None:
-                print(f"Restored best model with macro_mae: {early_stopping.best_metric:.4f}")
+                print(
+                    f"Restored best model with macro_mae: {early_stopping.best_metric:.4f}"
+                )
             elif early_stopping.best_metric is not None:
                 print(f"Best observed macro_mae: {early_stopping.best_metric:.4f}")
+
         reused = self._run_training_with_reuse(
             model=self._model,
             checkpoint_dir=self.checkpoint_dir,
@@ -276,7 +343,9 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         predictions = self.predict(x)
         if self._label_to_index is not None:
             y_encoded = np.array([self._label_to_index[str(label)] for label in y])
-            pred_encoded = np.array([self._label_to_index[str(label)] for label in predictions])
+            pred_encoded = np.array(
+                [self._label_to_index[str(label)] for label in predictions]
+            )
             unique_classes = sorted(self._label_to_index.values())
         else:
             y_encoded = np.array(y, dtype=int)
@@ -289,9 +358,15 @@ class BertOrdinalHead(SupervisedDownstreamHead, BertHFPlumbing):
         for cls in unique_classes:
             mask = y_encoded == cls
             if mask.sum() > 0:
-                per_class_mae.append(float(np.abs(y_encoded[mask] - pred_encoded[mask]).mean()))
-                per_class_recall.append(float((y_encoded[mask] == pred_encoded[mask]).mean()))
-                per_class_within1.append(float((np.abs(y_encoded[mask] - pred_encoded[mask]) <= 1).mean()))
+                per_class_mae.append(
+                    float(np.abs(y_encoded[mask] - pred_encoded[mask]).mean())
+                )
+                per_class_recall.append(
+                    float((y_encoded[mask] == pred_encoded[mask]).mean())
+                )
+                per_class_within1.append(
+                    float((np.abs(y_encoded[mask] - pred_encoded[mask]) <= 1).mean())
+                )
 
         macro_mae = float(np.mean(per_class_mae)) if per_class_mae else float("inf")
         macro_within1 = float(np.mean(per_class_within1)) if per_class_within1 else 0.0

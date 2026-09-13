@@ -29,18 +29,27 @@ from dp.experiments.divergence.io import (
     build_original_texts,
     build_record_info,
 )
-from dp.experiments.divergence.reporting import build_divergence_report, create_divergence_outputter
+from dp.experiments.divergence.reporting import (
+    build_divergence_report,
+    create_divergence_outputter,
+)
 from dp.experiments.privacy.io import (
     build_privacy_evaluation_dataset_from_indexed_texts,
     build_privacy_evaluation_dataset_from_texts,
     read_indexed_texts_from_jsonl,
     read_texts_from_jsonl,
 )
-from dp.experiments.privacy.reporting import build_privacy_report, create_privacy_outputter
+from dp.experiments.privacy.reporting import (
+    build_privacy_report,
+    create_privacy_outputter,
+)
 from dp.experiments.privacy_annotations import TextPrivacyExperiment
 from dp.experiments.utility.base import TextUtilityExperiment
 from dp.experiments.utility.utility_runtime import UtilityConfig, run_utility_experiment
-from dp.experiments.utility.reporting import build_utility_report, create_utility_outputter
+from dp.experiments.utility.reporting import (
+    build_utility_report,
+    create_utility_outputter,
+)
 from dp.experiments.utils import build_output_sink, collect_jsonl_sources
 from dp.loaders import DatasetRecord, get_adapter
 from dp.loaders.derive import get_getter
@@ -101,14 +110,27 @@ class PrivacyCtx(NamedTuple):
     annotations_splitted: bool = False
 
 
-def load_records(dataset: str, data_in: Optional[str], max_records: Optional[int], split: Optional[str] = None) -> List[DatasetRecord]:
-    adapter = get_adapter(dataset, data=dataset, data_in=data_in, max_records=max_records, split=split)
+def load_records(
+    dataset: str,
+    data_in: Optional[str],
+    max_records: Optional[int],
+    split: Optional[str] = None,
+) -> List[DatasetRecord]:
+    adapter = get_adapter(
+        dataset, data=dataset, data_in=data_in, max_records=max_records, split=split
+    )
     return list(adapter.iter_records())
 
 
-def _build_index_to_key(dataset: str, data_in: Optional[str], max_records: Optional[int]) -> Dict[int, str]:
-    adapter = get_adapter(dataset, data=dataset, data_in=data_in, max_records=max_records)
-    return {idx: _record_key(rec, idx) for idx, rec in enumerate(adapter.iter_records())}
+def _build_index_to_key(
+    dataset: str, data_in: Optional[str], max_records: Optional[int]
+) -> Dict[int, str]:
+    adapter = get_adapter(
+        dataset, data=dataset, data_in=data_in, max_records=max_records
+    )
+    return {
+        idx: _record_key(rec, idx) for idx, rec in enumerate(adapter.iter_records())
+    }
 
 
 def _parse_optional_task_id(value: Any) -> Optional[int]:
@@ -163,13 +185,17 @@ def _require_fields(params: ConfigDict, required: Sequence[str]) -> None:
 
 
 def _resolve_annotations(params: ConfigDict) -> List[str]:
-    values = ensure_sequence(params.get("annotations")) + ensure_sequence(params.get("annotations_in"))
+    values = ensure_sequence(params.get("annotations")) + ensure_sequence(
+        params.get("annotations_in")
+    )
     return list(dict.fromkeys(values))
 
 
 def _debug_print_target(spec: Any, params: ConfigDict) -> None:
     payload = params.get("target")
-    print(f"Utility target: dataset={spec.dataset} key={spec.target_key} mode={spec.target.mode.value}")
+    print(
+        f"Utility target: dataset={spec.dataset} key={spec.target_key} mode={spec.target.mode.value}"
+    )
     if isinstance(payload, dict):
         enum_vals = ensure_sequence(payload.get("enum"))
         if enum_vals:
@@ -185,7 +211,9 @@ def _debug_print_records(spec: Any, records: Sequence[DatasetRecord]) -> None:
     print(f"Target distribution: {dict(dist)}")
 
 
-def _resolve_utility_components(spec: Any, params: ConfigDict) -> Tuple[str | None, Dict[str, Any], str | None, Dict[str, Any]]:
+def _resolve_utility_components(
+    spec: Any, params: ConfigDict
+) -> Tuple[str | None, Dict[str, Any], str | None, Dict[str, Any]]:
     vec_name, vec_kwargs = parse_component_config(params.get("vectorizer"))
     head_name, head_kwargs = parse_component_config(params.get("head"))
     if not head_name or not vec_name:
@@ -241,7 +269,12 @@ def _render_component_paths(value: Any, task_id: Optional[int]) -> Any:
     return _resolve_checkpoint_template(rendered)
 
 
-def _debug_print_components(vec_name: str | None, vec_kwargs: Dict[str, Any], head_name: str | None, head_kwargs: Dict[str, Any]) -> None:
+def _debug_print_components(
+    vec_name: str | None,
+    vec_kwargs: Dict[str, Any],
+    head_name: str | None,
+    head_kwargs: Dict[str, Any],
+) -> None:
     print(f"Vectorizer: name={vec_name or 'auto'} params={vec_kwargs}")
     print(f"Head: name={head_name or 'auto'} params={head_kwargs}")
 
@@ -286,7 +319,9 @@ def _prepare_utility(params: ConfigDict) -> UtilityCtx:
     output_format = str(params.get("output_format", "text"))
     output_file = params.get("output_file")
     if isinstance(source_splits, list) and source_splits:
-        main_split = next((s for s in source_splits if "path" not in s and "split" not in s), None)
+        main_split = next(
+            (s for s in source_splits if "path" not in s and "split" not in s), None
+        )
         if isinstance(main_split, dict) and main_split.get("val") is not None:
             try:
                 test_size = float(main_split.get("val"))
@@ -322,18 +357,36 @@ def _prepare_divergence(params: ConfigDict) -> DivergenceCtx:
     dataset = str(params.get("dataset"))
     data_in = str(apply_task_template(str(params.get("data_in")), task_id))
     split_value = params.get("split")
-    split = apply_task_template(split_value, task_id) if isinstance(split_value, str) else None
+    split = (
+        apply_task_template(split_value, task_id)
+        if isinstance(split_value, str)
+        else None
+    )
     metric_type, metric_params = parse_metric_config(params.get("metric"))
     max_records = params.get("max_records")
     output_format = str(params.get("output_format", "text"))
     output_file = params.get("output_file")
-    return DivergenceCtx(dataset, data_in, split, annotations, metric_type, metric_params, max_records, output_format, output_file, task_id)
+    return DivergenceCtx(
+        dataset,
+        data_in,
+        split,
+        annotations,
+        metric_type,
+        metric_params,
+        max_records,
+        output_format,
+        output_file,
+        task_id,
+    )
 
 
 def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
     tri_cfg = params.get("tri")
     if isinstance(tri_cfg, dict):
-        if "universal_tri_pipeline" in tri_cfg and "universal_tri_pipeline" not in params:
+        if (
+            "universal_tri_pipeline" in tri_cfg
+            and "universal_tri_pipeline" not in params
+        ):
             params["universal_tri_pipeline"] = tri_cfg["universal_tri_pipeline"]
         if "max_length" in tri_cfg and "tri_max_length" not in params:
             params["tri_max_length"] = tri_cfg["max_length"]
@@ -345,8 +398,14 @@ def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
     dataset = str(params.get("dataset"))
     data_in = str(apply_task_template(str(params.get("data_in")), task_id))
     split_value = params.get("split")
-    split = apply_task_template(split_value, task_id) if isinstance(split_value, str) else None
-    tri_pipeline = str(apply_task_template(str(params.get("universal_tri_pipeline")), task_id))
+    split = (
+        apply_task_template(split_value, task_id)
+        if isinstance(split_value, str)
+        else None
+    )
+    tri_pipeline = str(
+        apply_task_template(str(params.get("universal_tri_pipeline")), task_id)
+    )
     max_records = params.get("max_records")
     mask_token = str(params.get("mask_token", "[MASK]"))
     tri_max_length = int(params.get("tri_max_length", 512))
@@ -360,19 +419,48 @@ def _prepare_privacy(params: ConfigDict) -> PrivacyCtx:
     output_format = str(params.get("output_format", "text"))
     output_file = params.get("output_file")
     annotations_splitted = bool(params.get("annotations_splitted", False))
-    return PrivacyCtx(dataset, data_in, split, annotations, tri_pipeline, max_records, mask_token, tri_max_length, tri_device, bool(progress), output_format, output_file, task_id, annotations_splitted)
+    return PrivacyCtx(
+        dataset,
+        data_in,
+        split,
+        annotations,
+        tri_pipeline,
+        max_records,
+        mask_token,
+        tri_max_length,
+        tri_device,
+        bool(progress),
+        output_format,
+        output_file,
+        task_id,
+        annotations_splitted,
+    )
 
 
-def build_divergence_experiment(metric_type: str, metric_params: Dict[str, Any]) -> TextDivergenceExperiment:
+def build_divergence_experiment(
+    metric_type: str, metric_params: Dict[str, Any]
+) -> TextDivergenceExperiment:
     if not metric_type:
         raise ValueError("divergence metric type is required")
     if metric_type == "bertscore":
-        allowed = {"model_type", "language", "batch_size", "device", "rescale_with_baseline"}
+        allowed = {
+            "model_type",
+            "language",
+            "batch_size",
+            "device",
+            "rescale_with_baseline",
+        }
         kwargs = {key: metric_params[key] for key in allowed if key in metric_params}
         return BERTScoreDivergence(**kwargs)
     if metric_type == "cosine":
-        vectorizer_config = metric_params["vectorizer"] if "vectorizer" in metric_params else None
-        vectorizer = build_vectorizer_from_config(vectorizer_config) if vectorizer_config is not None else None
+        vectorizer_config = (
+            metric_params["vectorizer"] if "vectorizer" in metric_params else None
+        )
+        vectorizer = (
+            build_vectorizer_from_config(vectorizer_config)
+            if vectorizer_config is not None
+            else None
+        )
         return CosineSimilarityDivergence(vectorizer=vectorizer)
     if metric_type == "pp":
         return PerturbationPercentageDivergence()
@@ -383,7 +471,9 @@ def build_divergence_experiment(metric_type: str, metric_params: Dict[str, Any])
     raise ValueError(f"unsupported divergence metric '{metric_type}'")
 
 
-def map_record_key_to_group_label(records: List[DatasetRecord], dataset: str, group_by: str) -> Dict[str, Any]:
+def map_record_key_to_group_label(
+    records: List[DatasetRecord], dataset: str, group_by: str
+) -> Dict[str, Any]:
     group_getter = get_getter(dataset, group_by)
     mapping: Dict[str, Any] = {}
     for index, record in enumerate(records):
@@ -412,7 +502,9 @@ def _dedupe_records(records: Sequence[DatasetRecord]) -> List[DatasetRecord]:
     return out
 
 
-def _resolve_split_keys(ctx: UtilityCtx, params: ConfigDict) -> Tuple[Dict[str, List[str]], List[DatasetRecord]]:
+def _resolve_split_keys(
+    ctx: UtilityCtx, params: ConfigDict
+) -> Tuple[Dict[str, List[str]], List[DatasetRecord]]:
     split_cfg = ctx.source_splits if isinstance(ctx.source_splits, list) else []
     role_records: Dict[str, List[DatasetRecord]] = {"train": [], "val": [], "test": []}
     loaded_union: List[DatasetRecord] = []
@@ -435,7 +527,9 @@ def _resolve_split_keys(ctx: UtilityCtx, params: ConfigDict) -> Tuple[Dict[str, 
         if not active:
             continue
         role = max(active, key=lambda name: weights[name])
-        source_records = load_records(ctx.dataset, source_path, params.get("max_records"), split=source_split)
+        source_records = load_records(
+            ctx.dataset, source_path, params.get("max_records"), split=source_split
+        )
         source_records = select_records(source_records, ctx.selection_criteria)
         if not source_records:
             continue
@@ -443,7 +537,9 @@ def _resolve_split_keys(ctx: UtilityCtx, params: ConfigDict) -> Tuple[Dict[str, 
         loaded_union.extend(source_records)
 
     if not role_records["test"] and ctx.split:
-        test_records = load_records(ctx.dataset, ctx.data_in, params.get("max_records"), split=ctx.split)
+        test_records = load_records(
+            ctx.dataset, ctx.data_in, params.get("max_records"), split=ctx.split
+        )
         test_records = select_records(test_records, ctx.selection_criteria)
         role_records["test"].extend(test_records)
         loaded_union.extend(test_records)
@@ -453,7 +549,9 @@ def _resolve_split_keys(ctx: UtilityCtx, params: ConfigDict) -> Tuple[Dict[str, 
 
     deduped_union = _dedupe_records(loaded_union)
     if not deduped_union:
-        fallback = load_records(ctx.dataset, ctx.data_in, params.get("max_records"), split=ctx.split)
+        fallback = load_records(
+            ctx.dataset, ctx.data_in, params.get("max_records"), split=ctx.split
+        )
         fallback = select_records(fallback, ctx.selection_criteria)
         deduped_union = _dedupe_records(fallback)
 
@@ -472,7 +570,9 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     if not ctx.annotations:
         raise ValueError("annotations are required")
     include_cm = bool(params.get("include_confusion_matrix", False))
-    records = load_records(ctx.dataset, ctx.data_in, params.get("max_records"), split=ctx.split)
+    records = load_records(
+        ctx.dataset, ctx.data_in, params.get("max_records"), split=ctx.split
+    )
     maybe_group_mapping = None
     if ctx.debug:
         _debug_print_target(ctx.spec, params)
@@ -480,11 +580,17 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     if not records:
         raise RuntimeError("no records selected by criteria")
     if ctx.group_by:
-        maybe_group_mapping = map_record_key_to_group_label(records, ctx.dataset, ctx.group_by)
+        maybe_group_mapping = map_record_key_to_group_label(
+            records, ctx.dataset, ctx.group_by
+        )
     if ctx.debug:
         _debug_print_records(ctx.spec, records)
     if ctx.dry_run:
-        coverage = sum(1 for record in records if ctx.spec.target.value(record) is not None and record.text)
+        coverage = sum(
+            1
+            for record in records
+            if ctx.spec.target.value(record) is not None and record.text
+        )
         print(f"Records loaded: {len(records)}")
         print(f"Target coverage: {coverage}")
         return
@@ -495,9 +601,13 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
     split_keys, split_records = _resolve_split_keys(ctx, params)
     records = split_records or records
     if ctx.annotations_splitted and ctx.split:
-        index_to_key = {idx: _record_key(rec, idx) for idx, rec in enumerate(split_only_records)}
+        index_to_key = {
+            idx: _record_key(rec, idx) for idx, rec in enumerate(split_only_records)
+        }
     else:
-        index_to_key = _build_index_to_key(ctx.dataset, ctx.data_in, params.get("max_records"))
+        index_to_key = _build_index_to_key(
+            ctx.dataset, ctx.data_in, params.get("max_records")
+        )
     protocol = str(params.get("protocol", "utility")).strip().lower() or "utility"
     evaluation_texts = None
     if protocol not in {"utility", "pseudo_utility"}:
@@ -511,11 +621,17 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
             for name, mapping in evaluation_texts.items():
                 count = len(mapping)
                 sample = next(iter(mapping.values()), "")
-                sig = hashlib.sha1(sample.encode("utf-8")).hexdigest()[:16] if sample else ""
+                sig = (
+                    hashlib.sha1(sample.encode("utf-8")).hexdigest()[:16]
+                    if sample
+                    else ""
+                )
                 print(f"- {name}: count={count} sample_sig={sig}")
     if evaluation_texts is not None and not evaluation_texts:
         raise RuntimeError("no anonymized texts aligned with dataset records")
-    vec_name, vec_kwargs, head_name, head_kwargs = _resolve_utility_components(ctx.spec, params)
+    vec_name, vec_kwargs, head_name, head_kwargs = _resolve_utility_components(
+        ctx.spec, params
+    )
     vec_kwargs = _render_component_paths(vec_kwargs, ctx.task_id)
     head_kwargs = _render_component_paths(head_kwargs, ctx.task_id)
     if ctx.debug:
@@ -527,8 +643,12 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         head_kwargs=head_kwargs,
         identifier=ctx.identifier,
     )
-    resolved_model_name = str(getattr(model, "name", head_name or ctx.spec.default_head))
-    resolved_primary_metric = str(getattr(model, "primary_metric", head_kwargs.get("primary_metric", "")))
+    resolved_model_name = str(
+        getattr(model, "name", head_name or ctx.spec.default_head)
+    )
+    resolved_primary_metric = str(
+        getattr(model, "primary_metric", head_kwargs.get("primary_metric", ""))
+    )
     if protocol in {"utility", "pseudo_utility"}:
         model.cleanup()
         vectorizer.cleanup()
@@ -592,11 +712,15 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
             train_ratio = float(entry.get("train", 0))
             val_ratio = float(entry.get("val", 0))
             if train_ratio + val_ratio > 1:
-                raise ValueError(f"train + val ratios must be <= 1, got {train_ratio} + {val_ratio}")
+                raise ValueError(
+                    f"train + val ratios must be <= 1, got {train_ratio} + {val_ratio}"
+                )
             if train_ratio < 0 or val_ratio < 0:
                 raise ValueError("ratios must be >= 0")
 
-            source_records = load_records(ctx.dataset, source_path, params.get("max_records"), split=source_split)
+            source_records = load_records(
+                ctx.dataset, source_path, params.get("max_records"), split=source_split
+            )
             source_records = select_records(source_records, ctx.selection_criteria)
             if not source_records:
                 continue
@@ -625,7 +749,9 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
                     test_size=val_ratio / (train_ratio + val_ratio),
                     random_state=ctx.random_state,
                 )
-                train_mask, val_mask = next(splitter.split(valid_indices_array, labels_array))
+                train_mask, val_mask = next(
+                    splitter.split(valid_indices_array, labels_array)
+                )
                 train_indices = valid_indices_array[train_mask]
                 val_indices = valid_indices_array[val_mask]
             elif train_ratio > 0:
@@ -661,7 +787,9 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         filtered_train_texts: List[str] = []
         filtered_train_labels: List[Any] = []
         filtered_train_uids: List[str] = []
-        for text, label, uid in zip(train_texts_override, train_labels_override, train_uids):
+        for text, label, uid in zip(
+            train_texts_override, train_labels_override, train_uids
+        ):
             if uid in test_uid_set:
                 continue
             filtered_train_texts.append(text)
@@ -685,7 +813,9 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         if train_uids and test_uids:
             overlap = set(train_uids) & set(test_uids)
             if overlap:
-                print(f"\nWARNING: Overlap between train and val: {len(overlap)} records")
+                print(
+                    f"\nWARNING: Overlap between train and val: {len(overlap)} records"
+                )
             else:
                 print("\nNo overlap between train and val: disjoint sets")
 
@@ -712,7 +842,6 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         if train_texts_override:
             print(f"Training override size: {len(train_texts_override)}")
         x_train = getattr(experiment, "_x_train", None)
-        lbls_train = getattr(experiment, "_train_labels", [])
         lbls_test = getattr(experiment, "_test_labels", [])
         print(f"Eval split sizes: train={train_sz} test={test_sz}")
         try:
@@ -729,7 +858,9 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
                 print(f"X_train shape: {arr.shape}")
             try:
                 vals = arr.toarray() if hasattr(arr, "toarray") else np.asarray(arr)
-                print(f"X_train stats: mean={float(np.nanmean(vals)):.6f} std={float(np.nanstd(vals)):.6f}")
+                print(
+                    f"X_train stats: mean={float(np.nanmean(vals)):.6f} std={float(np.nanstd(vals)):.6f}"
+                )
             except Exception:
                 pass
         try:
@@ -750,8 +881,14 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
                 print(f"Predictions distribution: {dict(dist_preds_train)}")
                 print(f"True distribution: {dict(dist_true_train)}")
                 try:
-                    all_labels_set = getattr(mdl, "_label_order", None) or sorted(list(set(train_labels_override)))
-                    cm_train = confusion_matrix(train_labels_override, preds_train_override, labels=all_labels_set)
+                    all_labels_set = getattr(mdl, "_label_order", None) or sorted(
+                        list(set(train_labels_override))
+                    )
+                    cm_train = confusion_matrix(
+                        train_labels_override,
+                        preds_train_override,
+                        labels=all_labels_set,
+                    )
                     print(f"Confusion matrix shape: {cm_train.shape}")
                     print(cm_train)
                 except Exception:
@@ -766,7 +903,9 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
                 pass
         if test_sz > 0:
             try:
-                x_test_dbg = getattr(experiment, "_vectorizer", None).transform(getattr(experiment, "_test_texts", []))
+                x_test_dbg = getattr(experiment, "_vectorizer", None).transform(
+                    getattr(experiment, "_test_texts", [])
+                )
                 preds_dbg = getattr(experiment, "_model", None).predict(x_test_dbg)
                 dist_preds = Counter([str(p) for p in preds_dbg])
                 dist_true = Counter([str(y) for y in lbls_test])
@@ -775,13 +914,17 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
                 print(f"True distribution: {dict(dist_true)}")
                 try:
                     mdl_val = getattr(experiment, "_model", None)
-                    all_labels_set = getattr(mdl_val, "_label_order", None) or sorted(list(set(lbls_test)))
+                    all_labels_set = getattr(mdl_val, "_label_order", None) or sorted(
+                        list(set(lbls_test))
+                    )
                     cm = confusion_matrix(lbls_test, preds_dbg, labels=all_labels_set)
                     print(f"Confusion matrix shape: {cm.shape}")
                     print(cm)
                 except Exception:
                     pass
-                eval_metrics = getattr(experiment, "_model", None).evaluate(x_test_dbg, lbls_test)
+                eval_metrics = getattr(experiment, "_model", None).evaluate(
+                    x_test_dbg, lbls_test
+                )
                 print(f"Evaluation metrics: {eval_metrics}")
                 import torch
 
@@ -792,7 +935,9 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
         try:
             all_texts_dbg = [rec.text for rec in getattr(experiment, "_records", [])]
             lbls_all = list(getattr(experiment, "_labels", []))
-            x_all_dbg = getattr(experiment, "_vectorizer", None).transform(all_texts_dbg)
+            x_all_dbg = getattr(experiment, "_vectorizer", None).transform(
+                all_texts_dbg
+            )
             preds_all = getattr(experiment, "_model", None).predict(x_all_dbg)
             dist_preds_all = Counter([str(p) for p in preds_all])
             dist_true_all = Counter([str(y) for y in lbls_all])
@@ -804,7 +949,8 @@ def handle_utility(args: Any, config: ConfigDict) -> None:
                 cm_all = confusion_matrix(
                     lbls_all,
                     preds_all,
-                    labels=getattr(mdl_all, "_label_order", None) or sorted(list(set(lbls_all))),
+                    labels=getattr(mdl_all, "_label_order", None)
+                    or sorted(list(set(lbls_all))),
                 )
                 print(f"Full confusion matrix shape: {cm_all.shape}")
                 print(cm_all)
@@ -840,7 +986,11 @@ def handle_divergence(args: Any, config: ConfigDict) -> None:
         raise RuntimeError("no anonymized output files discovered")
     div_index_to_key = _build_index_to_key(ctx.dataset, ctx.data_in, ctx.max_records)
     evaluation_inputs = build_divergence_evaluation_inputs(div_index_to_key, sources)
-    evaluation_inputs = {name: payload for name, payload in evaluation_inputs.items() if payload.get("texts")}
+    evaluation_inputs = {
+        name: payload
+        for name, payload in evaluation_inputs.items()
+        if payload.get("texts")
+    }
     if not evaluation_inputs:
         raise RuntimeError("no anonymized outputs aligned with dataset records")
     record_info = build_record_info(records)
@@ -876,12 +1026,18 @@ def handle_privacy(args: Any, config: ConfigDict) -> None:
     if ctx.annotations_splitted and ctx.split:
         for name, path in sources.items():
             texts = read_texts_from_jsonl(path)
-            print(f"Privacy alignment source={name} mode=splitted rows={len(texts)} split_records={len(records)}")
-            dataset_records = build_privacy_evaluation_dataset_from_texts(records, texts)
+            print(
+                f"Privacy alignment source={name} mode=splitted rows={len(texts)} split_records={len(records)}"
+            )
+            dataset_records = build_privacy_evaluation_dataset_from_texts(
+                records, texts
+            )
             evaluation_datasets[name] = dataset_records
             evaluation_counts[name] = len(dataset_records)
     else:
-        reference_records = load_records(ctx.dataset, ctx.data_in, ctx.max_records, split=None)
+        reference_records = load_records(
+            ctx.dataset, ctx.data_in, ctx.max_records, split=None
+        )
         if not reference_records:
             raise RuntimeError("no reference records loaded")
         for name, path in sources.items():

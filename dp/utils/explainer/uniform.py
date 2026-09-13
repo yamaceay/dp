@@ -2,6 +2,7 @@ from typing import Sequence, Tuple
 import numpy as np
 from dp.utils.explainer.base import TokenExplainer
 
+
 class UniformExplainer(TokenExplainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

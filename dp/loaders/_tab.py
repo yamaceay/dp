@@ -5,7 +5,13 @@ import re
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation, load_concat_split_indices
+from dp.loaders.base import (
+    DatasetAdapter,
+    DatasetRecord,
+    TextAnnotation,
+    load_concat_split_indices,
+)
+
 
 class TabDatasetAdapter(DatasetAdapter):
     DEFAULT_SPLIT_ORDER: List[str] = ["test", "val", "train"]
@@ -25,7 +31,9 @@ class TabDatasetAdapter(DatasetAdapter):
     def _load_records(self, source: Path) -> List[dict]:
         if source.is_dir():
             ordered_names = ["echr_test.json", "echr_dev.json", "echr_train.json"]
-            files = [source / name for name in ordered_names if (source / name).is_file()]
+            files = [
+                source / name for name in ordered_names if (source / name).is_file()
+            ]
             if not files:
                 raise ValueError(f"No TAB json files found in directory '{source}'")
             records: List[dict] = []
@@ -77,7 +85,9 @@ class TabDatasetAdapter(DatasetAdapter):
                 metadata=metadata,
             )
 
-    def _read_annotations(self, annotations_raw: Optional[List[dict]]) -> Optional[List[TextAnnotation]]:
+    def _read_annotations(
+        self, annotations_raw: Optional[List[dict]]
+    ) -> Optional[List[TextAnnotation]]:
         if not annotations_raw:
             return None
         annotations_processed = []
@@ -92,10 +102,13 @@ class TabDatasetAdapter(DatasetAdapter):
                     label=mention.get("entity_type"),
                     text=mention.get("span_text"),
                     annotator=annotator,
-                    metadata=mention.get("metadata", {
-                        "identifier_type": mention.get("identifier_type"),
-                        "confidential_status": mention.get("confidential_status"),
-                    }),
+                    metadata=mention.get(
+                        "metadata",
+                        {
+                            "identifier_type": mention.get("identifier_type"),
+                            "confidential_status": mention.get("confidential_status"),
+                        },
+                    ),
                 )
                 annotations_processed.append(annotation)
         return annotations_processed
@@ -107,4 +120,6 @@ class TabDatasetAdapter(DatasetAdapter):
                 split_names=self.DEFAULT_SPLIT_ORDER,
                 deduplicate=False,
             )
-        return load_concat_split_indices(data_name=str(self.data), split_names=[str(self.split)], deduplicate=False)
+        return load_concat_split_indices(
+            data_name=str(self.data), split_names=[str(self.split)], deduplicate=False
+        )

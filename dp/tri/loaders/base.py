@@ -7,9 +7,12 @@ import json
 
 from dp.loaders.base import DatasetAdapter, DatasetRecord, TextAnnotation
 
+
 class RewriterProtocol(Protocol):
     rewriting_pipeline: Any
+
     def rewrite(self, text: str, **kwargs) -> str: ...
+
 
 @dataclass
 class AttackerDatasetRecord:
@@ -17,6 +20,7 @@ class AttackerDatasetRecord:
     train_texts: List[str] = field(default_factory=list)
     eval_texts: List[str] = field(default_factory=list)
     test_texts: List[str] = field(default_factory=list)
+
 
 class AttackerDatasetAdapter:
     def __init__(
@@ -26,7 +30,9 @@ class AttackerDatasetAdapter:
     ) -> None:
         self.adapter = adapter
         self._cache_map: Optional[Dict[str, Dict[str, Any]]] = None
-        self._starting_anonymizations_by_idx: Optional[List[List[TextAnnotation]]] = None
+        self._starting_anonymizations_by_idx: Optional[List[List[TextAnnotation]]] = (
+            None
+        )
         self._starting_replacement: Optional[str] = None
 
     def set_rewriter(self, rewriter: RewriterProtocol) -> None:
@@ -70,17 +76,22 @@ class AttackerDatasetAdapter:
         mapping = load_attacker_extensions_jsonl(path)
         self.set_cache(cache_map=mapping)
 
+
 def merge_records(
     grouped_train_texts: Dict[str, List[str]],
     grouped_eval_texts: Dict[str, List[str]],
     grouped_test_texts: Optional[Dict[str, List[str]]] = None,
 ) -> Iterable[DatasetRecord]:
-    common_names = set(grouped_train_texts.keys()).intersection(set(grouped_eval_texts.keys()))
+    common_names = set(grouped_train_texts.keys()).intersection(
+        set(grouped_eval_texts.keys())
+    )
     attacker_records: List[AttackerDatasetRecord] = []
     for name in common_names:
         train_texts = grouped_train_texts.get(name, [])
         eval_texts = grouped_eval_texts.get(name, [])
-        test_texts = [] if grouped_test_texts is None else grouped_test_texts.get(name, [])
+        test_texts = (
+            [] if grouped_test_texts is None else grouped_test_texts.get(name, [])
+        )
         attacker_records.append(
             AttackerDatasetRecord(
                 name=name,
@@ -91,7 +102,10 @@ def merge_records(
         )
     return attacker_records
 
-def save_attacker_extensions_jsonl(path: str, records: Iterable[AttackerDatasetRecord]) -> None:
+
+def save_attacker_extensions_jsonl(
+    path: str, records: Iterable[AttackerDatasetRecord]
+) -> None:
     out_path = Path(path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
@@ -124,6 +138,7 @@ def load_attacker_extensions_jsonl(path: str) -> Dict[str, Dict[str, Any]]:
             }
     return mapping
 
+
 def _normalize_texts(raw: Any) -> List[str]:
     if raw is None:
         return []
@@ -138,8 +153,10 @@ def _normalize_texts(raw: Any) -> List[str]:
         return out
     raise ValueError("Unsupported texts value")
 
+
 _PRESIDIO_ANALYZER = None
 _PRESIDIO_ANONYMIZER = None
+
 
 def presidio_anonymize(
     text: str,
@@ -158,7 +175,9 @@ def presidio_anonymize(
                 from presidio_analyzer import AnalyzerEngine
                 from presidio_anonymizer import AnonymizerEngine
             except ImportError as e:
-                raise ImportError("Presidio packages are required: presidio-analyzer, presidio-anonymizer") from e
+                raise ImportError(
+                    "Presidio packages are required: presidio-analyzer, presidio-anonymizer"
+                ) from e
             _PRESIDIO_ANALYZER = AnalyzerEngine()
             _PRESIDIO_ANONYMIZER = AnonymizerEngine()
         analyzer = analyzer or _PRESIDIO_ANALYZER
@@ -169,8 +188,13 @@ def presidio_anonymize(
         from presidio_anonymizer.entities import OperatorConfig
     except ImportError as e:
         raise ImportError("Presidio anonymizer entities not available") from e
-    operators = {t: OperatorConfig(operator_name="replace", params={"new_value": replacement}) for t in entity_types}
-    anonymized = anonymizer.anonymize(text=text, analyzer_results=results, operators=operators)
+    operators = {
+        t: OperatorConfig(operator_name="replace", params={"new_value": replacement})
+        for t in entity_types
+    }
+    anonymized = anonymizer.anonymize(
+        text=text, analyzer_results=results, operators=operators
+    )
     out = getattr(anonymized, "text", None) or getattr(anonymized, "result", None)
     if not isinstance(out, str):
         raise ValueError("Unexpected anonymizer result format")

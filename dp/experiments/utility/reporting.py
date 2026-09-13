@@ -89,22 +89,37 @@ class JsonLinesUtilityReportOutputter(UtilityReportOutputter):
                     "grouped_results": evaluation.grouped_results,
                 }
             )
-        serialized = "\n".join(json.dumps(record, ensure_ascii=False) for record in records)
+        serialized = "\n".join(
+            json.dumps(record, ensure_ascii=False) for record in records
+        )
         self.sink(serialized)
 
 
-def build_utility_report(result: ExperimentResult, sources: Dict[str, Path]) -> UtilityExperimentReport:
+def build_utility_report(
+    result: ExperimentResult, sources: Dict[str, Path]
+) -> UtilityExperimentReport:
     metrics = result.metrics or {}
     model_name = str(metrics.get("model", ""))
     primary_metric = str(metrics.get("primary_metric", ""))
     baseline_payload = metrics.get("baseline", {}) or {}
     baseline_metrics_raw = baseline_payload.get("metrics", {}) or {}
-    baseline_metrics = {name: float(value) for name, value in baseline_metrics_raw.items()}
+    baseline_metrics = {
+        name: float(value) for name, value in baseline_metrics_raw.items()
+    }
     baseline_train = int(baseline_payload.get("train_size", 0))
     baseline_test = int(baseline_payload.get("test_size", 0))
-    baseline_train_metrics = {key: float(value) for key, value in (baseline_payload.get("train_metrics", {}) or {}).items()}
-    baseline_test_metrics = {key: float(value) for key, value in (baseline_payload.get("test_metrics", {}) or {}).items()}
-    baseline_overall_metrics = {key: float(value) for key, value in (baseline_payload.get("overall_metrics", {}) or {}).items()}
+    baseline_train_metrics = {
+        key: float(value)
+        for key, value in (baseline_payload.get("train_metrics", {}) or {}).items()
+    }
+    baseline_test_metrics = {
+        key: float(value)
+        for key, value in (baseline_payload.get("test_metrics", {}) or {}).items()
+    }
+    baseline_overall_metrics = {
+        key: float(value)
+        for key, value in (baseline_payload.get("overall_metrics", {}) or {}).items()
+    }
     baseline_dummy = baseline_payload.get("dummy", {}) or {}
     if not isinstance(baseline_dummy, dict):
         raise ValueError("baseline.dummy must be a mapping")

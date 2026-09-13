@@ -9,6 +9,7 @@ from dp.loaders.base import DatasetRecord
 from dp.tri.base import TRIDetector
 from dp.utils.device import resolve_device
 
+
 class TextPrivacyExperiment(Experiment):
     def __init__(
         self,
@@ -48,7 +49,9 @@ class TextPrivacyExperiment(Experiment):
             key: list(value) for key, value in evaluation_datasets.items() if value
         }
         if not filtered_evaluations:
-            raise ValueError("evaluation_datasets must contain at least one non-empty dataset")
+            raise ValueError(
+                "evaluation_datasets must contain at least one non-empty dataset"
+            )
         self.dataset_name = dataset_name
         self.original_dataset = list(original_dataset)
         self.evaluation_datasets = filtered_evaluations
@@ -80,7 +83,9 @@ class TextPrivacyExperiment(Experiment):
         if not self.detector:
             raise RuntimeError("setup must be completed before run")
         evaluations: Dict[str, Dict[str, Any]] = {}
-        for name, records in tqdm(self.evaluation_datasets.items(), desc="Evaluating datasets"):
+        for name, records in tqdm(
+            self.evaluation_datasets.items(), desc="Evaluating datasets"
+        ):
             ranks = self._compute_ranks(records, keys=self.record_keys, **kwargs)
             deltas = self._compute_rank_deltas(ranks)
             evaluations[name] = {
@@ -119,7 +124,7 @@ class TextPrivacyExperiment(Experiment):
         self.original_dataset = []
         self.evaluation_datasets = {}
         self.original_ranks = {}
-        self.original_candidates = {}
+        # self.original_candidates = {}
         self.record_keys = []
         self.record_info = {}
         self.target_candidate_names = set()
@@ -185,7 +190,9 @@ class TextPrivacyExperiment(Experiment):
                 names.add(record.name)
         return names
 
-    def _rank_for_name(self, name: str, ordered: List[tuple[str, float]]) -> Optional[int]:
+    def _rank_for_name(
+        self, name: str, ordered: List[tuple[str, float]]
+    ) -> Optional[int]:
         for position, (candidate, _) in enumerate(ordered, start=1):
             if candidate == name:
                 return position
@@ -198,7 +205,9 @@ class TextPrivacyExperiment(Experiment):
                 deltas[uid] = anonymized_ranks[uid] - original_rank
         return deltas
 
-    def _summarize_rank_deltas(self, deltas: Dict[str, int]) -> Optional[Dict[str, Any]]:
+    def _summarize_rank_deltas(
+        self, deltas: Dict[str, int]
+    ) -> Optional[Dict[str, Any]]:
         if not deltas:
             return None
         values = list(deltas.values())

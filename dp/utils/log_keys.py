@@ -39,5 +39,7 @@ def normalize_source_key(source_path: str, dataset: str) -> str:
     return method + ((sep + params) if sep else "")
 
 
-def parse_method_and_params_from_source_path(source_path: str, dataset: str) -> tuple[str, dict[str, Any]]:
+def parse_method_and_params_from_source_path(
+    source_path: str, dataset: str
+) -> tuple[str, dict[str, Any]]:
     return parse_params_from_key(normalize_source_key(source_path, dataset))

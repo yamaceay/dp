@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 import numpy as np
 
+
 class TokenExplainer:
     def __init__(self, *args, **kwargs):
         pass
@@ -10,7 +11,12 @@ class TokenExplainer:
     def explain(self, text: str, offsets: Sequence[Tuple[int, int]]) -> np.ndarray:
         raise NotImplementedError("TokenExplainer is a stub.")
 
-def load_tri_label_mapping(explainer: TokenExplainer, label_mapping: Optional[Dict[str, int]] = None, label_mapping_source: Optional[str] = None) -> Dict[str, int]:
+
+def load_tri_label_mapping(
+    explainer: TokenExplainer,
+    label_mapping: Optional[Dict[str, int]] = None,
+    label_mapping_source: Optional[str] = None,
+) -> Dict[str, int]:
     if explainer is None:
         raise ValueError("It is required to load TRI label mapping")
     model_name = getattr(explainer, "model_name", None)

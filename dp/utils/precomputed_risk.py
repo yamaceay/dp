@@ -18,7 +18,9 @@ class PrecomputedRiskEntry:
     ordered_scores: np.ndarray
 
 
-def _record_state_by_key(records: Optional[Sequence[DatasetRecord]]) -> Dict[str, Tuple[str, List[Dict[str, object]]]]:
+def _record_state_by_key(
+    records: Optional[Sequence[DatasetRecord]],
+) -> Dict[str, Tuple[str, List[Dict[str, object]]]]:
     if not records:
         return {}
     state: Dict[str, Tuple[str, List[Dict[str, object]]]] = {}
@@ -75,24 +77,34 @@ def align_precomputed_risk_scores(
         if not span_map:
             continue
 
-        order = sorted(range(len(raw_spans)), key=lambda i: (raw_spans[i][0], raw_spans[i][1]))
+        order = sorted(
+            range(len(raw_spans)), key=lambda i: (raw_spans[i][0], raw_spans[i][1])
+        )
         ordered_spans = [raw_spans[i] for i in order]
         ordered_scores = [raw_scores[i] for i in order]
 
         state = state_by_key.get(str(uid))
         if state is not None:
             text, prior_edits = state
-            splitter_spans = [(start, end) for start, end, _ in splitter.tokenize_with_spans(text)]
+            splitter_spans = [
+                (start, end) for start, end, _ in splitter.tokenize_with_spans(text)
+            ]
             if not set(ordered_spans).issubset(set(splitter_spans)):
                 if not prior_edits:
-                    raise ValueError(f"Risk offsets for uid {uid!r} do not align with record text")
+                    raise ValueError(
+                        f"Risk offsets for uid {uid!r} do not align with record text"
+                    )
                 mapped_spans = map_offsets_to_result(ordered_spans, prior_edits)
                 mapped_scores: Dict[Span, float] = {}
                 for mapped_span, original_span in zip(mapped_spans, ordered_spans):
                     if mapped_span in mapped_scores:
-                        raise ValueError(f"Duplicate mapped span {mapped_span} for uid {uid!r}")
+                        raise ValueError(
+                            f"Duplicate mapped span {mapped_span} for uid {uid!r}"
+                        )
                     mapped_scores[mapped_span] = span_map[original_span]
-                mapped_offsets = sorted(mapped_scores.keys(), key=lambda span: (span[0], span[1]))
+                mapped_offsets = sorted(
+                    mapped_scores.keys(), key=lambda span: (span[0], span[1])
+                )
                 mapped_ordered_scores = [mapped_scores[span] for span in mapped_offsets]
                 resolved[str(uid)] = PrecomputedRiskEntry(
                     span_scores=mapped_scores,

@@ -6,19 +6,23 @@ from dp.loaders.base import TextAnnotation, TextAnnotations
 
 spacy_models = ["en_core_web_lg", "en_core_web_sm"]
 
+
 class SpacyAnonymizer(Anonymizer):
     MODEL_NAME = "spacy"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, model=self.MODEL_NAME, **kwargs)
 
         try:
             import spacy
         except Exception:
-            raise ImportError("spaCy is not installed. Please install it with 'uv pip install spacy'.")
+            raise ImportError(
+                "spaCy is not installed. Please install it with 'uv pip install spacy'."
+            )
 
         model_loaded = False
         for model in spacy_models:
-            try:    
+            try:
                 self._nlp = spacy.load(model)
                 model_loaded = True
                 break
@@ -38,14 +42,26 @@ class SpacyAnonymizer(Anonymizer):
                         continue
 
         if not model_loaded:
-            raise ImportError("Could not download spaCy models. Please install one of: " + ", ".join(spacy_models))
+            raise ImportError(
+                "Could not download spaCy models. Please install one of: "
+                + ", ".join(spacy_models)
+            )
 
-    def anonymize_any_text(self, text: str, labels: List[str] = None, *args, buckets: Buckets = [], **kwargs) -> List[Tuple[BucketDict, AnonymizationResult]]:
+    def anonymize_any_text(
+        self,
+        text: str,
+        labels: List[str] = None,
+        *args,
+        buckets: Buckets = [],
+        **kwargs,
+    ) -> List[Tuple[BucketDict, AnonymizationResult]]:
         entities = self._extract_entities(text, labels)
         hp = {} if not buckets else buckets_to_dicts(buckets)[0]
         return [(hp, self._anonymize_entities(text, entities))]
 
-    def _extract_entities(self, text: str, labels: Optional[List[str]]) -> List[TextAnnotation]:
+    def _extract_entities(
+        self, text: str, labels: Optional[List[str]]
+    ) -> List[TextAnnotation]:
         doc = self._nlp(text or "")
         entities: List[TextAnnotation] = []
         for ent in doc.ents:
@@ -73,18 +89,20 @@ class SpacyAnonymizer(Anonymizer):
         last = 0
         result_cursor = 0
         for ann in filtered:
-            prefix = text[last:ann.start]
+            prefix = text[last : ann.start]
             replacement = f"[{ann.label}]"
             result_start = result_cursor + len(prefix)
             result_end = result_start + len(replacement)
-            result_spans.append(TextAnnotation(
-                start=result_start,
-                end=result_end,
-                label=ann.label,
-                text=ann.text,
-                replacement=replacement,
-                annotator="spacy",
-            ))
+            result_spans.append(
+                TextAnnotation(
+                    start=result_start,
+                    end=result_end,
+                    label=ann.label,
+                    text=ann.text,
+                    replacement=replacement,
+                    annotator="spacy",
+                )
+            )
             out_parts.append(prefix)
             out_parts.append(replacement)
             result_cursor = result_end

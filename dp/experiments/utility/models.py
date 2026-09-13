@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 from dp.experiments.utility.base import UtilityTarget
-from dp.experiments.utility.vectorizer import SelfSupervisedFeatureExtractor, FEATURE_EXTRACTOR_REGISTRY
+from dp.experiments.utility.vectorizer import (
+    SelfSupervisedFeatureExtractor,
+    FEATURE_EXTRACTOR_REGISTRY,
+)
 from dp.bert import SupervisedDownstreamHead
 from dp.experiments.utility.downstream import DOWNSTREAM_HEAD_REGISTRY
 

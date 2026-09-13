@@ -32,8 +32,13 @@ class BERTScoreMetric(DivergenceMetric):
             rescale_with_baseline=self.rescale_with_baseline,
         )
 
-    def similarities(self, references: Sequence[str], candidates: Sequence[str]) -> List[float]:
-        kwargs: Dict[str, Any] = {"batch_size": self.batch_size, "rescale_with_baseline": self.rescale_with_baseline}
+    def similarities(
+        self, references: Sequence[str], candidates: Sequence[str]
+    ) -> List[float]:
+        kwargs: Dict[str, Any] = {
+            "batch_size": self.batch_size,
+            "rescale_with_baseline": self.rescale_with_baseline,
+        }
         if self.model_type is not None:
             kwargs["model_type"] = self.model_type
         if self.language is not None:

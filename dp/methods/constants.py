@@ -5,27 +5,22 @@ from itertools import product
 PII_CLASSIFIER_MODEL_LIST: List[str] = ["baroud"]
 RISK_MASKER_MODEL_LIST: List[str] = ["risk"]
 
+
 @dataclass
 class ModelCapabilities:
-    can_work_token_level: bool = True
-
     must_use_dataset: bool = False
-    can_use_dataset: bool = False
     must_use_pii_selector: bool = False
-    can_use_pii_selector: bool = False
     must_use_risk_selector: bool = False
-    can_use_risk_selector: bool = False
     must_use_k_selector: bool = False
-    can_use_k_selector: bool = False
-    must_use_annotations: bool = False
-    can_use_annotations: bool = False
     must_use_scoring: bool = False
     can_use_scoring: bool = False
+
 
 @dataclass
 class MultiParams:
     def values(self):
         pass
+
 
 @dataclass
 class KParams(MultiParams):
@@ -34,7 +29,8 @@ class KParams(MultiParams):
 
     def values(self):
         return sorted(self.ks)
-    
+
+
 @dataclass
 class RhoParams(MultiParams):
     rhos: List[float]
@@ -42,7 +38,8 @@ class RhoParams(MultiParams):
 
     def values(self):
         return reversed(sorted(self.rhos))
-    
+
+
 @dataclass
 class LambdaParams(MultiParams):
     lambdas: List[float]
@@ -51,10 +48,12 @@ class LambdaParams(MultiParams):
     def values(self):
         return reversed(sorted(self.lambdas))
 
+
 @dataclass
 class SingleParam:
     def value(self):
         pass
+
 
 @dataclass
 class EpsilonParam(SingleParam):
@@ -64,7 +63,9 @@ class EpsilonParam(SingleParam):
     def value(self):
         return self.epsilon
 
+
 Buckets = List[Union[MultiParams, SingleParam]]
+
 
 class BucketDict(dict):
     def encode(self) -> str:
@@ -83,6 +84,7 @@ class BucketDict(dict):
             else:
                 parts.append(f"{key}={val}")
         return "?" + "&".join(parts) if parts else ""
+
 
 def buckets_to_dicts(buckets: Buckets) -> List[BucketDict]:
     if not buckets:

@@ -79,7 +79,9 @@ class JsonLinesDivergenceReportOutputter(DivergenceReportOutputter):
                         "divergence": entry.divergence,
                     }
                 )
-        serialized = "\n".join(json.dumps(record, ensure_ascii=False) for record in records)
+        serialized = "\n".join(
+            json.dumps(record, ensure_ascii=False) for record in records
+        )
         self.sink(serialized)
 
 
@@ -137,7 +139,9 @@ def build_divergence_report(
     )
 
 
-def create_divergence_outputter(fmt: str, sink: OutputCallback) -> DivergenceReportOutputter:
+def create_divergence_outputter(
+    fmt: str, sink: OutputCallback
+) -> DivergenceReportOutputter:
     if fmt == "jsonl":
         return JsonLinesDivergenceReportOutputter(sink)
     raise ValueError(f"Unsupported output format '{fmt}'")

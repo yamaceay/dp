@@ -212,7 +212,6 @@ def _draw_panel(ax, high, near_zero, low, title):
 
     tokens = [tok for tok, _, _ in display]
     scores  = np.array([sc  for _, sc, _ in display])
-    alphas  = [a   for _, _, a in display]
     colors  = [_color(tok, alpha) for (tok, _, alpha) in display]
 
     y = np.arange(len(display))

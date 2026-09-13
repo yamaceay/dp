@@ -7,7 +7,13 @@ from typing import Dict, Iterable, List, Optional, Union
 
 from datasets import Dataset, DatasetDict, load_dataset
 
-from dp.loaders.base import DatasetAdapter, DatasetRecord, load_concat_split_indices, load_split_indices
+from dp.loaders.base import (
+    DatasetAdapter,
+    DatasetRecord,
+    load_concat_split_indices,
+    load_split_indices,
+)
+
 
 class DBBioDatasetAdapter(DatasetAdapter):
     """Adapter for the DB-Bio legal dataset."""
@@ -26,7 +32,9 @@ class DBBioDatasetAdapter(DatasetAdapter):
                 dataset = load_dataset("arrow", data_files={"data": str(self.data_in)})
                 self._dataset = dataset["data"]
         except Exception as exc:  # pragma: no cover
-            raise RuntimeError(f"Failed to load DB-Bio dataset from {self.data_in}") from exc
+            raise RuntimeError(
+                f"Failed to load DB-Bio dataset from {self.data_in}"
+            ) from exc
         self._split_indices = self._resolve_split_indices()
 
     def __len__(self) -> int:
@@ -46,7 +54,9 @@ class DBBioDatasetAdapter(DatasetAdapter):
         total = len(records_list)
         for idx in self._split_indices:
             if idx >= total:
-                raise ValueError(f"Split index {idx} out of range for DB-Bio dataset (size={total})")
+                raise ValueError(
+                    f"Split index {idx} out of range for DB-Bio dataset (size={total})"
+                )
         split_records = ((idx, records_list[idx]) for idx in self._split_indices)
         for _, record in self._slice_records(split_records):
             yield record
@@ -61,7 +71,9 @@ class DBBioDatasetAdapter(DatasetAdapter):
             for record in self._iter_split(self._dataset, None):
                 yield record
 
-    def _iter_split(self, dataset: Dataset, split_name: Optional[str]) -> Iterable[DatasetRecord]:
+    def _iter_split(
+        self, dataset: Dataset, split_name: Optional[str]
+    ) -> Iterable[DatasetRecord]:
         for idx, row in enumerate(dataset):
             if isinstance(row, dict):
                 data = row
@@ -72,7 +84,9 @@ class DBBioDatasetAdapter(DatasetAdapter):
             name = data.get("people")
             label = data.get("label")
             if uid is None or name is None or label is None:
-                raise ValueError(f"Missing required fields in DB-Bio record at index {idx}")
+                raise ValueError(
+                    f"Missing required fields in DB-Bio record at index {idx}"
+                )
             name_unique = f"{name} ({label})"
             metadata = {
                 "label": label,
@@ -128,5 +142,6 @@ class DBBioDatasetAdapter(DatasetAdapter):
             split_names=self.DEFAULT_SPLIT_ORDER,
             deduplicate=True,
         )
+
 
 __all__ = ["DBBioDatasetAdapter"]

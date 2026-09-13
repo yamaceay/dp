@@ -53,18 +53,26 @@ class TextAnnotations:
     spans: list[TextAnnotation] = field(default_factory=list)
     token_edits: list[TokenEdit] = field(default_factory=list)
 
+
 @dataclass
 class TextAnnotation:
     """Representation of a text annotation."""
 
     start: int
     end: int
-    label: Optional[str] = None # only used if category-specific annotations
-    text: Optional[str] = None # only used if we want to store the original text span for verbosity
-    replacement: Optional[str] = None # only used if we want to store the replacement text for verbosity
-    confidence: Optional[float] = None # only used if the annotation is a prediction
-    annotator: Optional[str] = None # only used if we want to store who made the annotation
+    label: Optional[str] = None  # only used if category-specific annotations
+    text: Optional[str] = (
+        None  # only used if we want to store the original text span for verbosity
+    )
+    replacement: Optional[str] = (
+        None  # only used if we want to store the replacement text for verbosity
+    )
+    confidence: Optional[float] = None  # only used if the annotation is a prediction
+    annotator: Optional[str] = (
+        None  # only used if we want to store who made the annotation
+    )
     metadata: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class DatasetRecord:
@@ -80,19 +88,23 @@ class DatasetRecord:
 class DatasetAdapter:
     """Base adapter providing a unified interface across datasets."""
 
-    def __init__(self, 
-                 data: Optional[str] = None, 
-                 data_in: Optional[str] = None, 
-                 max_records: Optional[int] = None, 
-                 start: Optional[int] = None, 
-                 end: Optional[int] = None, 
-                 step: Optional[int] = None,
-                 split: Optional[str] = None):
+    def __init__(
+        self,
+        data: Optional[str] = None,
+        data_in: Optional[str] = None,
+        max_records: Optional[int] = None,
+        start: Optional[int] = None,
+        end: Optional[int] = None,
+        step: Optional[int] = None,
+        split: Optional[str] = None,
+    ):
         if data_in is None:
             raise ValueError("data_in must point to a JSONL file")
         data_path = Path(data_in)
         if not data_path.exists():
-            raise ValueError(f"data_in path '{data_in}' does not exist or is not a file")
+            raise ValueError(
+                f"data_in path '{data_in}' does not exist or is not a file"
+            )
         self.data = data
         self.data_in = data_in
         self.max_records = max_records
@@ -114,9 +126,14 @@ class DatasetAdapter:
 
     def _slice_records(self, iterable: Iterable[Any]) -> Iterable[Any]:
         """Apply slicing (start/end/step) before enforcing max_records."""
-        return slice_records(iterable, self.start, self.end, self.step, self.max_records)
+        return slice_records(
+            iterable, self.start, self.end, self.step, self.max_records
+        )
 
-def slice_records(iterable: Iterable[Any], start: int, end: int, step: int, max_records: int) -> Iterable[Any]:
+
+def slice_records(
+    iterable: Iterable[Any], start: int, end: int, step: int, max_records: int
+) -> Iterable[Any]:
     start = 0 if start is None else start
     stop = end
     step = 1 if step is None else step
@@ -126,7 +143,9 @@ def slice_records(iterable: Iterable[Any], start: int, end: int, step: int, max_
     return sliced
 
 
-def resolve_split_file(data_name: Optional[str], split: Optional[str]) -> Optional[Path]:
+def resolve_split_file(
+    data_name: Optional[str], split: Optional[str]
+) -> Optional[Path]:
     if split is None:
         return None
     split_value = str(split).strip()
@@ -167,7 +186,9 @@ def resolve_split_file(data_name: Optional[str], split: Optional[str]) -> Option
     raise ValueError(f"Split file not found for dataset '{dataset}': {split_value}")
 
 
-def load_split_indices(data_name: Optional[str], split: Optional[str]) -> Optional[List[int]]:
+def load_split_indices(
+    data_name: Optional[str], split: Optional[str]
+) -> Optional[List[int]]:
     split_path = resolve_split_file(data_name=data_name, split=split)
     if split_path is None:
         return None
@@ -180,9 +201,13 @@ def load_split_indices(data_name: Optional[str], split: Optional[str]) -> Option
             try:
                 value = int(raw)
             except ValueError as exc:
-                raise ValueError(f"Invalid integer in split file {split_path}:{line_no}: {raw!r}") from exc
+                raise ValueError(
+                    f"Invalid integer in split file {split_path}:{line_no}: {raw!r}"
+                ) from exc
             if value < 0:
-                raise ValueError(f"Split index must be non-negative in {split_path}:{line_no}")
+                raise ValueError(
+                    f"Split index must be non-negative in {split_path}:{line_no}"
+                )
             values.append(value)
     return values
 
@@ -207,7 +232,9 @@ def load_concat_split_indices(
     for split_name in split_names:
         indices = load_split_indices(data_name=data_name, split=split_name)
         if indices is None:
-            raise ValueError(f"Missing split indices for dataset '{data_name}': {split_name}")
+            raise ValueError(
+                f"Missing split indices for dataset '{data_name}': {split_name}"
+            )
         concatenated.extend(indices)
     if deduplicate:
         return stable_unique_indices(concatenated)

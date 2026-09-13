@@ -12,7 +12,6 @@ GridKey = str
 
 @dataclass
 class RuntimeConfigSet:
-    base_config: Dict[str, Any] = field(default_factory=dict)
     k_values: List[int] = field(default_factory=list)
     epsilon_value: float = None
     pii_confidence_values: List[float] = field(default_factory=list)
@@ -58,7 +57,9 @@ def _read_yaml(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as reader:
         data = yaml.safe_load(reader) or {}
         if not isinstance(data, dict):
-            raise ValueError(f"Runtime config '{path}' must contain a mapping at the root")
+            raise ValueError(
+                f"Runtime config '{path}' must contain a mapping at the root"
+            )
         return data
 
 
@@ -79,7 +80,9 @@ CASTERS: Dict[str, Callable[[Any], Any]] = {
 }
 
 
-def _aggregate_configs(configs: Iterable[tuple[str, Dict[str, Any]]]) -> RuntimeConfigSet:
+def _aggregate_configs(
+    configs: Iterable[tuple[str, Dict[str, Any]]],
+) -> RuntimeConfigSet:
     base: Dict[str, Any] = {}
     numeric_values: Dict[str, List[Any]] = {
         "k": [],
@@ -106,9 +109,10 @@ def _aggregate_configs(configs: Iterable[tuple[str, Dict[str, Any]]]) -> Runtime
                 continue
             _merge_scalar(base, key, value, path)
     return RuntimeConfigSet(
-        base_config=base,
         k_values=numeric_values["k"],
-        epsilon_value=numeric_values["epsilon"][0] if numeric_values["epsilon"] else None,
+        epsilon_value=numeric_values["epsilon"][0]
+        if numeric_values["epsilon"]
+        else None,
         pii_confidence_values=numeric_values["pii_confidence"],
         risk_tolerance_values=numeric_values["risk_tolerance"],
         sources=sources,
@@ -122,7 +126,9 @@ def _merge_scalar(container: Dict[str, Any], key: str, value: Any, source: str) 
     existing = container[key]
     if existing == value:
         return
-    raise ValueError(f"Runtime setting '{key}' from '{source}' conflicts with previous value")
+    raise ValueError(
+        f"Runtime setting '{key}' from '{source}' conflicts with previous value"
+    )
 
 
 def _merge_numeric_list(

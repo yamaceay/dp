@@ -6,7 +6,13 @@ from sklearn.metrics import f1_score, mean_squared_error, r2_score
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.preprocessing import LabelEncoder
 
-from dp.bert import SupervisedDownstreamHead, BertClassifierHead, BertOrdinalHead, BertRegressorHead
+from dp.bert import (
+    SupervisedDownstreamHead,
+    BertClassifierHead,
+    BertOrdinalHead,
+    BertRegressorHead,
+)
+
 
 class LogisticClassifier(SupervisedDownstreamHead):
     def __init__(
@@ -50,6 +56,7 @@ class LogisticClassifier(SupervisedDownstreamHead):
     def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
         predictions = self.predict(x)
         label_count = len(set(y))
+
         def _is_numeric(vals: Sequence[Any]) -> bool:
             try:
                 for v in set(vals):
@@ -57,6 +64,7 @@ class LogisticClassifier(SupervisedDownstreamHead):
                 return True
             except Exception:
                 return False
+
         average = "binary" if label_count == 2 and _is_numeric(y) else "macro"
         f1 = float(f1_score(y, predictions, average=average, zero_division=0))
         accuracy = float(np.mean(np.array(y) == np.array(predictions)))
@@ -64,6 +72,7 @@ class LogisticClassifier(SupervisedDownstreamHead):
 
     def cleanup(self) -> None:
         self._estimator = None
+
 
 class LinearRegressor(SupervisedDownstreamHead):
     def __init__(self, primary_metric: str = "r2"):
@@ -106,8 +115,12 @@ class LinearOrdinalRegressor(SupervisedDownstreamHead):
 
     def setup(self) -> None:
         self._estimator = LinearRegression()
-        self._label_to_index = {label: index for index, label in enumerate(self._label_order)}
-        self._index_to_label = {index: label for label, index in self._label_to_index.items()}
+        self._label_to_index = {
+            label: index for index, label in enumerate(self._label_order)
+        }
+        self._index_to_label = {
+            index: label for label, index in self._label_to_index.items()
+        }
 
     def _encode_labels(self, y: Sequence[Any]) -> np.ndarray:
         if not self._label_order:
@@ -154,7 +167,9 @@ class LinearOrdinalRegressor(SupervisedDownstreamHead):
                 continue
             abs_err = np.abs(y_encoded[mask] - pred_encoded[mask])
             per_class_mae.append(float(abs_err.mean()))
-            per_class_recall.append(float((y_encoded[mask] == pred_encoded[mask]).mean()))
+            per_class_recall.append(
+                float((y_encoded[mask] == pred_encoded[mask]).mean())
+            )
             per_class_within1.append(float((abs_err <= 1).mean()))
         macro_mae = float(np.mean(per_class_mae)) if per_class_mae else float("inf")
         macro_within1 = float(np.mean(per_class_within1)) if per_class_within1 else 0.0
@@ -174,15 +189,22 @@ class LinearOrdinalRegressor(SupervisedDownstreamHead):
         self._label_to_index = {}
         self._index_to_label = {}
 
+
 class FeedForwardClassifier(SupervisedDownstreamHead):
-    def __init__(self, mlp_params: Optional[Dict[str, Any]] = None, primary_metric: str = "f1"):
+    def __init__(
+        self, mlp_params: Optional[Dict[str, Any]] = None, primary_metric: str = "f1"
+    ):
         super().__init__(name="feedforward_classifier", primary_metric=primary_metric)
         self._estimator: Optional[MLPClassifier] = None
         self._mlp_params: Dict[str, Any] = dict(mlp_params or {})
         self._label_encoder: Optional[LabelEncoder] = None
 
     def setup(self) -> None:
-        defaults: Dict[str, Any] = {"hidden_layer_sizes": (128, 64), "activation": "relu", "max_iter": 200}
+        defaults: Dict[str, Any] = {
+            "hidden_layer_sizes": (128, 64),
+            "activation": "relu",
+            "max_iter": 200,
+        }
         params = {**defaults, **self._mlp_params}
         self._estimator = MLPClassifier(**params)
 
@@ -203,6 +225,7 @@ class FeedForwardClassifier(SupervisedDownstreamHead):
     def evaluate(self, x: Any, y: Sequence[Any]) -> Dict[str, float]:
         predictions = self.predict(x)
         label_count = len(set(y))
+
         def _is_numeric(vals: Sequence[Any]) -> bool:
             try:
                 for v in set(vals):
@@ -210,6 +233,7 @@ class FeedForwardClassifier(SupervisedDownstreamHead):
                 return True
             except Exception:
                 return False
+
         average = "binary" if label_count == 2 and _is_numeric(y) else "macro"
         f1 = float(f1_score(y, predictions, average=average, zero_division=0))
         accuracy = float(np.mean(np.array(y) == np.array(predictions)))
@@ -218,14 +242,21 @@ class FeedForwardClassifier(SupervisedDownstreamHead):
     def cleanup(self) -> None:
         self._estimator = None
 
+
 class FeedForwardRegressor(SupervisedDownstreamHead):
-    def __init__(self, mlp_params: Optional[Dict[str, Any]] = None, primary_metric: str = "r2"):
+    def __init__(
+        self, mlp_params: Optional[Dict[str, Any]] = None, primary_metric: str = "r2"
+    ):
         super().__init__(name="feedforward_regressor", primary_metric=primary_metric)
         self._estimator: Optional[MLPRegressor] = None
         self._mlp_params: Dict[str, Any] = dict(mlp_params or {})
 
     def setup(self) -> None:
-        defaults: Dict[str, Any] = {"hidden_layer_sizes": (128, 64), "activation": "relu", "max_iter": 500}
+        defaults: Dict[str, Any] = {
+            "hidden_layer_sizes": (128, 64),
+            "activation": "relu",
+            "max_iter": 500,
+        }
         params = {**defaults, **self._mlp_params}
         self._estimator = MLPRegressor(**params)
 

@@ -9,7 +9,10 @@ from bert_score import score
 from sklearn.metrics.pairwise import cosine_similarity
 
 from dp.experiments import Experiment, ExperimentResult
-from dp.experiments.utility.vectorizer import SentenceEmbeddingVectorizer, SelfSupervisedFeatureExtractor
+from dp.experiments.utility.vectorizer import (
+    SentenceEmbeddingVectorizer,
+    SelfSupervisedFeatureExtractor,
+)
 
 
 class DivergenceMetric(ABC):
@@ -26,7 +29,9 @@ class DivergenceMetric(ABC):
         return
 
     @abstractmethod
-    def similarities(self, references: Sequence[str], candidates: Sequence[str]) -> List[float]:
+    def similarities(
+        self, references: Sequence[str], candidates: Sequence[str]
+    ) -> List[float]:
         raise NotImplementedError
 
     def metadata(self) -> Dict[str, Any]:
@@ -68,7 +73,9 @@ class TextDivergenceExperiment(Experiment, ABC):
                 "total": total,
             }
         if not filtered:
-            raise ValueError("evaluation_datasets must contain at least one non-empty dataset")
+            raise ValueError(
+                "evaluation_datasets must contain at least one non-empty dataset"
+            )
         self.original_texts = dict(original_texts)
         self.evaluation_datasets = filtered
         self.record_info = dict(record_info)
@@ -101,8 +108,13 @@ class TextDivergenceExperiment(Experiment, ABC):
             candidates = [texts[key] for key in matched_keys]
             similarities = self.metric.similarities(references, candidates)
             divergence_values = [1.0 - value for value in similarities]
-            similarity_map = {key: float(similarities[idx]) for idx, key in enumerate(matched_keys)}
-            divergence_map = {key: float(divergence_values[idx]) for idx, key in enumerate(matched_keys)}
+            similarity_map = {
+                key: float(similarities[idx]) for idx, key in enumerate(matched_keys)
+            }
+            divergence_map = {
+                key: float(divergence_values[idx])
+                for idx, key in enumerate(matched_keys)
+            }
             summary = self._summarize(similarities, divergence_values)
             evaluations[name] = {
                 "similarity": similarity_map,
@@ -114,7 +126,11 @@ class TextDivergenceExperiment(Experiment, ABC):
             }
             if summary:
                 divergence_means.append(summary["divergence_mean"])
-        score_value = float(sum(divergence_means) / len(divergence_means)) if divergence_means else 0.0
+        score_value = (
+            float(sum(divergence_means) / len(divergence_means))
+            if divergence_means
+            else 0.0
+        )
         metrics = {
             "records": self.record_info,
             "original": {
@@ -184,8 +200,13 @@ class BERTScoreMetric(DivergenceMetric):
             rescale_with_baseline=self.rescale_with_baseline,
         )
 
-    def similarities(self, references: Sequence[str], candidates: Sequence[str]) -> List[float]:
-        kwargs: Dict[str, Any] = {"batch_size": self.batch_size, "rescale_with_baseline": self.rescale_with_baseline}
+    def similarities(
+        self, references: Sequence[str], candidates: Sequence[str]
+    ) -> List[float]:
+        kwargs: Dict[str, Any] = {
+            "batch_size": self.batch_size,
+            "rescale_with_baseline": self.rescale_with_baseline,
+        }
         if self.model_type is not None:
             kwargs["model_type"] = self.model_type
         if self.language is not None:
@@ -210,7 +231,9 @@ class CosineSimilarityMetric(DivergenceMetric):
     def __init__(self, vectorizer: Optional[SelfSupervisedFeatureExtractor] = None):
         super().__init__("cosine")
         if vectorizer is None:
-            vectorizer = SentenceEmbeddingVectorizer(model_name="sentence-transformers/all-MiniLM-L6-v2")
+            vectorizer = SentenceEmbeddingVectorizer(
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
         self._template = vectorizer.clone()
         self._vectorizer: Optional[SelfSupervisedFeatureExtractor] = None
 
@@ -222,7 +245,9 @@ class CosineSimilarityMetric(DivergenceMetric):
         vectorizer.fit(list(references.values()))
         self._vectorizer = vectorizer
 
-    def similarities(self, references: Sequence[str], candidates: Sequence[str]) -> List[float]:
+    def similarities(
+        self, references: Sequence[str], candidates: Sequence[str]
+    ) -> List[float]:
         if self._vectorizer is None:
             raise RuntimeError("cosine similarity metric is not prepared")
         ref_matrix = self._vectorizer.transform(list(references))

@@ -127,8 +127,8 @@ def validate_offsets(
     return {
         "ok": False,
         "mismatch_at": i,
-        "applied_slice": applied[ctx_start:i + 20],
-        "target_slice": target_text[ctx_start:i + 20],
+        "applied_slice": applied[ctx_start : i + 20],
+        "target_slice": target_text[ctx_start : i + 20],
         "applied_len": len(applied),
         "target_len": len(target_text),
     }
@@ -238,7 +238,7 @@ def map_original_offset_to_result(
             break
         if kind == "deleted":
             if end <= orig_start:
-                delta -= (end - start)
+                delta -= end - start
         elif kind == "replaced":
             if end <= orig_start:
                 delta += len(text) - (end - start)
@@ -256,6 +256,8 @@ def map_offsets_to_result(
     for start, end in offsets:
         mapped_span = map_original_offset_to_result(start, end, edits)
         if mapped_span is None:
-            raise ValueError(f"Unable to map offset ({start}, {end}) to result coordinates")
+            raise ValueError(
+                f"Unable to map offset ({start}, {end}) to result coordinates"
+            )
         mapped.append(mapped_span)
     return mapped

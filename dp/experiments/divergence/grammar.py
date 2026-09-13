@@ -37,6 +37,7 @@ def _word_count(text: str) -> int:
 def _split_sentences(text: str) -> List[str]:
     try:
         import nltk
+
         try:
             sentences = nltk.sent_tokenize(text)
         except LookupError:
@@ -69,7 +70,10 @@ class GrammaticalCorrectnessMetric(DivergenceMetric):
         if self._model is None:
             try:
                 import torch  # noqa: F401
-                from transformers import AutoModelForSequenceClassification, AutoTokenizer
+                from transformers import (
+                    AutoModelForSequenceClassification,
+                    AutoTokenizer,
+                )
             except ImportError as exc:
                 raise ImportError("pip install torch transformers") from exc
             self._tokenizer = AutoTokenizer.from_pretrained(COLA_MODEL)
@@ -78,7 +82,9 @@ class GrammaticalCorrectnessMetric(DivergenceMetric):
         return self._tokenizer, self._model
 
     def clone(self) -> "GrammaticalCorrectnessMetric":
-        return GrammaticalCorrectnessMetric(variant=self.variant, language=self.language)
+        return GrammaticalCorrectnessMetric(
+            variant=self.variant, language=self.language
+        )
 
     def _acceptability(self, text: str) -> float:
         import torch
@@ -109,7 +115,9 @@ class GrammaticalCorrectnessMetric(DivergenceMetric):
             return self._gc_sg(text)
         return self._gc_wg(text)
 
-    def similarities(self, references: Sequence[str], candidates: Sequence[str]) -> List[float]:
+    def similarities(
+        self, references: Sequence[str], candidates: Sequence[str]
+    ) -> List[float]:
         # references are ignored — GC is an intrinsic quality metric
         return [self.gc(c) for c in candidates]
 
@@ -136,9 +144,11 @@ class GrammaticalCorrectnessDivergence(TextDivergenceExperiment):
     """
 
     def __init__(self, variant: str = "wg", language: str = "en-US") -> None:
-        super().__init__(GrammaticalCorrectnessMetric(variant=variant, language=language))
+        super().__init__(
+            GrammaticalCorrectnessMetric(variant=variant, language=language)
+        )
         self._variant = variant
-        self._language = language
+        # self._language = language
 
     def run(self, **kwargs: Any) -> ExperimentResult:
         if not self.metric:
@@ -200,4 +210,6 @@ class GrammaticalCorrectnessDivergence(TextDivergenceExperiment):
             "metric": self.metric_metadata.get("name"),
             "metric_metadata": self.metric_metadata,
         }
-        return ExperimentResult(score=score_value, metrics=metrics, metadata=dict(self.metric_metadata))
+        return ExperimentResult(
+            score=score_value, metrics=metrics, metadata=dict(self.metric_metadata)
+        )

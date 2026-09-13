@@ -8,6 +8,7 @@ import numpy as np
 
 from dp.utils.token_ledger import TokenLedger
 
+
 @dataclass
 class AnonymizationStep:
     threshold_type: Optional[str]
@@ -22,7 +23,12 @@ ApplyFn = Callable[[int, TokenLedger], None]
 
 
 class AnonymizerUnit(ABC):
-    def __init__(self, temperature: float = 1.0, sort_by_risk: bool = True, selector_name: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        temperature: float = 1.0,
+        sort_by_risk: bool = True,
+        selector_name: Optional[str] = None,
+    ) -> None:
         self._thresholds: List[Any] = []
         self._threshold_name: Optional[str] = None
         self._risk_scores: Optional[np.ndarray] = None
@@ -77,7 +83,7 @@ class AnonymizerUnit(ABC):
 
         if ledger is None:
             ledger = TokenLedger(text, offsets)
-        
+
         if prior_edits:
             ledger.apply_prior_edits(prior_edits)
 
@@ -85,7 +91,7 @@ class AnonymizerUnit(ABC):
         for idx in range(len(offsets)):
             if ledger.is_modified(idx):
                 processed.add(idx)
-        
+
         ordered = self.order_thresholds(self._thresholds)
 
         for threshold in ordered:
@@ -100,7 +106,7 @@ class AnonymizerUnit(ABC):
 
             metadata: Dict[str, Any] = {
                 "selector": self._selector_name,
-                "processed_count": len(processed)
+                "processed_count": len(processed),
             }
             yield AnonymizationStep(
                 threshold_type=self._threshold_name,

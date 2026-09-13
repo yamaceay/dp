@@ -3,8 +3,8 @@ from dp.utils.explainer.uniform import UniformExplainer
 from dp.utils.explainer.shap import ShapExplainer, ShapType
 
 __all__ = [
-    "TokenExplainer", 
-    "UniformExplainer", 
+    "TokenExplainer",
+    "UniformExplainer",
     "ShapExplainer",
     "ShapType",
 ]
