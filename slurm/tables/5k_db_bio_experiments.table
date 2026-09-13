@@ -1,8 +1,0 @@
-privacy_db_bio_k              |python run.py privacy --config configs/5_experiments/db_bio/privacy/exact_k.yaml
-privacy_db_bio_more_k         |python run.py privacy --config configs/5_experiments/db_bio/privacy/more_k.yaml
-privacy_db_bio_full_k         |python run.py privacy --config configs/5_experiments/db_bio/privacy/full_k.yaml
-divergence_db_bio_pp_k        |python run.py divergence --config configs/5_experiments/db_bio/divergence/pp_k.yaml
-divergence_db_bio_bertscore_k |python run.py divergence --config configs/5_experiments/db_bio/divergence/bertscore_k.yaml
-divergence_db_bio_cosine_k    |python run.py divergence --config configs/5_experiments/db_bio/divergence/cosine_k.yaml
-pseudo_utility_db_bio_label_k |python run.py utility --config configs/5_experiments/db_bio/pseudo_utility/label_k.yaml
-utility_db_bio_label_k        |python run.py utility --config configs/5_experiments/db_bio/utility/label_k.yaml

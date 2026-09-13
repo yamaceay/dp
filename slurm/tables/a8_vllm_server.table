@@ -1,1 +1,0 @@
-vllm_server|bash -lc export\ HF_HOME=/netscratch/\$USER/hf-cache\;\ export\ HUGGINGFACE_HUB_CACHE=/netscratch/\$USER/hf-cache\;\ python\ vllm/server.py\ --host\ 0.0.0.0\ --port\ 18082\ --server-info-file\ logs/vllm_server.json\ --registry-file\ logs/vllm_endpoints.json\ --max-endpoints\ 4

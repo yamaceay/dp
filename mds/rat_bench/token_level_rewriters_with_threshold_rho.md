@@ -1,5 +1,0 @@
-| method   | params   | split   |
-|:---------|:---------|:--------|
-| baseline | {}       |         |
-| dummy    | {}       |         |
-| presidio | {}       |         |
