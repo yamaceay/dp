@@ -61,7 +61,6 @@ Method configs live in `configs/model/<method>/`; runtime parameter sweeps live 
 |---------|-------------|
 | **TAB** | ECHR case documents with PII span annotations and utility labels (year, countries). |
 | **DB-Bio** | Wikipedia biographies of public figures with DBpedia class labels. |
-| **Yelp** | Business reviews used as an additional privacy/utility benchmark. |
 | **RAT-Bench** | Benchmark used for the BART vs. no-BART background-knowledge ablation. |
 
 ---
@@ -88,7 +87,6 @@ Datasets are not shipped with the repository due to size. Expected layout:
 |---------|------|
 | TAB | `data/tab/echr_{train,dev,test}.json` |
 | DB-Bio | `data/db_bio/` (Hugging Face `dataset_dict`, `train`/`validation`/`test`) |
-| Yelp | `data/yelp/` |
 | RAT-Bench | `data/rat_bench/`, `data/rat_bench_nobart/` |
 
 ---

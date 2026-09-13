@@ -70,7 +70,6 @@ _SCALE_BY_BASELINE: list[tuple[str, str]] = [
     ("T_anon_avg_s", "rel_T_anon_avg_s"),
 ]
 OUTPUT_DIR = Path("mds")
-REDDIT_UTILITY_OUTPUT_PATH = OUTPUT_DIR / "reddit_utility.json"
 METHOD_SETS_CONFIG_PATH = Path("configs/visualize/methods.yaml")
 DATASET_SETS_CONFIG_PATH = Path("configs/visualize/datasets.yaml")
 PARAM_SETS_CONFIG_PATH = Path("configs/visualize/params.yaml")
@@ -221,38 +220,6 @@ class LogMetricsEnricher:
             utility_metrics["utility_nominal_raw_acc"] = nominal_raw_sum / nominal_raw_count
             utility_metrics["_utility_nominal_raw_count"] = nominal_raw_count
         return utility_metrics
-
-class RedditUtilityByHardness:
-    def __init__(self, data: list[dict[str, Any]]):
-        self.data = data
-        self.filtered_data = self.filter()
-        self.grouped_data = self.group()
-
-    def filter(self):
-        filtered_data = []
-        for item in self.data:
-            if item['dataset'] == 'reddit' and 'group' in item and 'utility' in item:
-                filtered_data.append(item)
-        return filtered_data
-
-    def group(self):
-        groups = {}
-        for item in self.filtered_data:
-            group = item['group']
-            metrics = item['utility']
-            method_and_params = item["method"]
-            if item["params"]:
-                method_and_params += "?" + "&".join(f"{k}={v}" for k, v in item["params"].items())
-            for feature, metric_value in metrics.items():
-                if feature.startswith("_"):
-                    feature = feature[1:]
-                keys = ["macro_f1", "f1", "macro_mae", "mae", "acc", "count"]
-                for key in keys:
-                    if feature.endswith("_" + key):
-                        feature = feature[:-len(key) - 1]
-                        groups.setdefault(group, {}).setdefault(feature, {}).setdefault(key, {}).setdefault(method_and_params, metric_value)
-                        break
-        return groups
 
 
 class FlatDatasetLogs:

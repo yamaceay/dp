@@ -152,8 +152,6 @@ def main() -> None:
     data_kwargs = {k: resolved[k] for k in data_keys}
     dataset_name = data_kwargs.pop("data")
     adapter_kwargs = dict(**data_kwargs)
-    if dataset_name in {"reddit", "yelp"}:
-        adapter_kwargs["need_to_deidentify"] = resolved['deidentify']
     adapter = get_attacker_adapter(dataset_name, **adapter_kwargs)
 
     original_records = list(adapter.adapter.iter_records())

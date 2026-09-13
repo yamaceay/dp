@@ -170,25 +170,7 @@ def _load_training_config(project_root: Path, config_path: Path) -> dict[str, An
     }
     return cfg
 
-def _flatten_reddit_metadata(meta: Dict[str, Any], feature: Optional[str]) -> Dict[str, Any]:
-    flat = dict(meta or {})
-    if feature:
-        flat["feature"] = feature
-    persona = {}
-    if isinstance(meta.get("persona"), dict):
-        persona = dict(meta["persona"])  # type: ignore[index]
-    if feature and feature in persona:
-        flat[f"persona_{feature}"] = persona[feature]
-    return flat
-
-def _label_from_record(dataset: str, key: str, record: DatasetRecord, feature: Optional[str], group: bool) -> Optional[str]:
-    if dataset == "reddit":
-        tmp_meta = _flatten_reddit_metadata(record.metadata, feature)
-        tmp = DatasetRecord(text=record.text, uid=record.uid, name=record.name, spans=record.spans, metadata=tmp_meta)
-        getter_key = key if group else ("feature_label_exact" if key.startswith("feature_label") else key)
-        getter = get_getter(dataset, getter_key)
-        value = getter(tmp)
-        return None if value is None else str(value)
+def _label_from_record(dataset: str, key: str, record: DatasetRecord) -> Optional[str]:
     getter = get_getter(dataset, key)
     value = getter(record)
     return None if value is None else str(value)
@@ -197,17 +179,13 @@ def _inject_labels_as_names(
     records: List[AttackerDatasetRecord],
     dataset: str,
     label_key: str,
-    feature: Optional[str],
-    group_labels: bool,
 ) -> List[AttackerDatasetRecord]:
     out: List[AttackerDatasetRecord] = []
     for r in records:
-        label = _label_from_record(dataset, label_key, r, feature, group_labels)
+        label = _label_from_record(dataset, label_key, r)
         if label is None or not str(label).strip():
             continue
         meta = dict(r.metadata or {})
-        if dataset == "reddit" and feature:
-            meta = _flatten_reddit_metadata(meta, feature)
         out.append(
             AttackerDatasetRecord(
                 text=r.text,
@@ -251,8 +229,6 @@ def main() -> int:
     parser.add_argument("--eval_on_original", action="store_true", help="Also evaluate on original record text (in addition to deidentified/rewritten)")
     parser.add_argument("--init_from", type=str, default=None, help="Path to base TRI checkpoint to reuse encoder weights from")
     parser.add_argument("--label_key", type=str, default=None, help="Label getter key from derive registry (e.g., 'feature_label', 'country', 'year')")
-    parser.add_argument("--feature", type=str, default=None, help="Feature name for reddit when using feature-based keys (e.g., 'sex')")
-    parser.add_argument("--group_labels", action="store_true", help="Group labels when supported by the getter (defaults to true in config mode)")
 
     args = parser.parse_args()
 
@@ -277,8 +253,6 @@ def main() -> int:
         early_stop_threshold = training.get("early_stop_threshold")
         init_from = cfg.get("init_from")
         label_key = cfg.get("label_key")
-        feature = cfg.get("feature")
-        group_labels = bool(cfg.get("group_labels", True))
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = args.run_name or cfg.get("run_name") or timestamp
@@ -302,8 +276,6 @@ def main() -> int:
         early_stop_threshold = args.early_stop_threshold
         init_from = args.init_from
         label_key = args.label_key
-        feature = args.feature
-        group_labels = bool(args.group_labels or False)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_root = Path(args.output_root).expanduser().resolve() if args.output_root else Path(f"models/tri_pipelines/{dataset}").resolve()
@@ -316,7 +288,7 @@ def main() -> int:
     base_records: List[AttackerDatasetRecord] = list(adapter.iter_records())
     if not label_key:
         raise SystemExit("--label_key is required (or provide 'label_key' in training config)")
-    records = _inject_labels_as_names(base_records, dataset, label_key, feature, group_labels)
+    records = _inject_labels_as_names(base_records, dataset, label_key)
     if not records:
         raise SystemExit("No records loaded")
 

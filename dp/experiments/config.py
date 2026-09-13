@@ -15,7 +15,7 @@ from dp.experiments.utility.vectorizer import (
     TfidfTextVectorizer,
 )
 from dp.loaders import DatasetRecord
-from dp.loaders.derive import DERIVE_REGISTRY, get_ordinal_label_order
+from dp.loaders.derive import DERIVE_REGISTRY
 
 
 DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "experiments"
@@ -183,13 +183,7 @@ def build_utility_target(params: Dict[str, Any], dataset: str) -> UtilitySpec:
     except Exception:
         raise ValueError("target.type must be one of: binary, nominal, ordinal, cardinal")
     if mode is UtilityTarget.Mode.ORDINAL and not enum:
-        feature_value = None
-        selection = params.get("selection_criteria")
-        if isinstance(selection, dict):
-            raw_feature = selection.get("feature")
-            if raw_feature is not None:
-                feature_value = str(raw_feature).strip() or None
-        derived_order = get_ordinal_label_order(str(dataset), str(key), feature=feature_value)
+        derived_order = list(getter(str(key)))
         if derived_order is None:
             raise ValueError("ordinal target requires target.enum or a derive-defined label order")
         enum = derived_order
