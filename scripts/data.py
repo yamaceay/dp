@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from typing import Callable, Dict, List, Optional
 from dp.loaders import ADAPTER_REGISTRY
 from dp.loaders.derive import DERIVE_REGISTRY

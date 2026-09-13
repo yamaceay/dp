@@ -7,14 +7,18 @@ For each record shows three groups (top-to-bottom):
 De-identified token text is extracted from presidio/{ds}.jsonl.
 
 Usage:
-    python plot_shap_tokens.py          # both datasets
-    python plot_shap_tokens.py tab
-    python plot_shap_tokens.py db_bio
+    python scripts/plot_shap_tokens.py          # both datasets
+    python scripts/plot_shap_tokens.py tab
+    python scripts/plot_shap_tokens.py db_bio
 """
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import json
 import os
-import sys
 
 import matplotlib
 matplotlib.use("Agg")

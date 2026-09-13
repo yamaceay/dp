@@ -29,11 +29,11 @@ Each experiment follows these ordered stages:
 
 1. **De-identification**: mask direct identifiers (names, locations) using Presidio before further processing.
 2. **TRI model training**: fine-tune a `distilbert-base-uncased` classifier to re-identify individuals from text.
-3. **Risk precomputation**: run SHAP attribution over the TRI model to assign per-token risk scores (`risk.py`).
+3. **Risk precomputation**: run SHAP attribution over the TRI model to assign per-token risk scores (`scripts/risk.py`).
 4. **Anonymization**: apply the selected method using the risk scores and configured stopping conditions.
-5. **Evaluation**: measure privacy (MRR, TRIR), utility (accuracy, MAE), and divergence (cosine similarity, BERTScore, PP) via `run.py`.
+5. **Evaluation**: measure privacy (MRR, TRIR), utility (accuracy, MAE), and divergence (cosine similarity, BERTScore, PP) via `scripts/run.py`.
 
-Logs from each stage are merged into analysis-ready artifacts by `merge_logs.py` and `transform_logs.py`.
+Logs from each stage are merged into analysis-ready artifacts by `scripts/merge_logs.py` and `scripts/transform_logs.py`.
 
 ---
 
@@ -94,7 +94,7 @@ Datasets are shipped with the repository. Expected layout:
 ## Running Anonymization
 
 ```bash
-python model.py \
+python scripts/model.py \
   --data tab \
   --data_in data/tab/echr_test.json \
   --model dpmlm \
@@ -110,9 +110,9 @@ On HPC, see the Slurm job tables in `slurm/tables/` for full experiment batches.
 ## Evaluation
 
 ```bash
-python run.py privacy --config configs/5_experiments/tab/privacy/shap.yaml
-python run.py utility --config configs/5_experiments/tab/utility/shap.yaml
-python run.py divergence --config configs/5_experiments/tab/divergence/shap.yaml
+python scripts/run.py privacy --config configs/5_experiments/tab/privacy/shap.yaml
+python scripts/run.py utility --config configs/5_experiments/tab/utility/shap.yaml
+python scripts/run.py divergence --config configs/5_experiments/tab/divergence/shap.yaml
 ```
 
-`run.py` reads anonymized JSONL outputs, computes metrics, and writes structured logs consumed by `merge_logs.py` and the tables under `mds/`.
+`scripts/run.py` reads anonymized JSONL outputs, computes metrics, and writes structured logs consumed by `scripts/merge_logs.py` and the tables under `mds/`.
